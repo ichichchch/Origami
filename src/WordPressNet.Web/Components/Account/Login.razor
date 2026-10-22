@@ -1,0 +1,139 @@
+@page "/account/login"
+@using System.ComponentModel.DataAnnotations
+@using System.Data.Common
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using WordPressNet.Web.Models
+@using WordPressNet.Web.Services
+@using Microsoft.AspNetCore.RateLimiting
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@inject NavigationManager Navigation
+
+<PageTitle>管理員登入</PageTitle>
+
+<h1>管理員登入</h1>
+<p>僅限網站管理員。帳號初始化及密碼恢復須由伺服器端管理命令執行。</p>
+
+@if (errorMessage is not null)
+{
+    <p role="alert">@errorMessage</p>
+}
+
+@* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
+<EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div>
+        <label for="username">帳號</label>
+        <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
+    </div>
+    <div>
+        <label for="password">密碼</label>
+        @* Form mapping reads this field on POST; never bind or render its submitted value. *@
+        <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
+    </div>
+    <button type="submit">登入</button>
+</EditForm>
+
+@code {
+    private const string LoginFailure = "無法登入。請確認帳號密碼，或稍後再試。";
+    private const string ThrottledMessage = "嘗試次數過多，請稍後再試。";
+    private string? errorMessage;
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [SupplyParameterFromForm(FormName = "account-login")]
+    private LoginInput Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+        if (HttpContext is null)
+        {
+            // Safety net if a parent accidentally tries to render this page in a circuit.
+            Navigation.NavigateTo("/account/login", forceLoad: true);
+            return;
+        }
+        HttpContext.Response.Headers.CacheControl = "no-store";
+    }
+
+    private async Task LoginAsync()
+    {
+        var context = HttpContext;
+        if (context is null || !HttpMethods.IsPost(context.Request.Method) || context.Response.HasStarted)
+        {
+            Navigation.NavigateTo("/account/login", forceLoad: true);
+            return;
+        }
+
+        // The sign-in page is a component, so endpoint rate-limit metadata never applies.
+        // The attempt limit is therefore enforced here, next to the sign-in itself.
+        var throttle = context.RequestServices.GetRequiredService<LoginThrottle>();
+        var clientKey = ThrottleKey(context, Input.Username);
+        if (throttle.IsBlocked(clientKey))
+        {
+            Input.Password = string.Empty;
+            errorMessage = ThrottledMessage;
+            if (!context.Response.HasStarted) context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            return;
+        }
+
+        // Resolve only in an active HTTP request: never inject SignInManager into a circuit.
+        var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
+        Microsoft.AspNetCore.Identity.SignInResult result;
+        try
+        {
+            result = await signInManager.PasswordSignInAsync(
+                Input.Username.Trim(), Input.Password, isPersistent: false, lockoutOnFailure: true);
+        }
+        catch (DbUpdateException)
+        {
+            Input.Password = string.Empty;
+            errorMessage = LoginFailure;
+            return;
+        }
+        catch (DbException)
+        {
+            Input.Password = string.Empty;
+            errorMessage = LoginFailure;
+            return;
+        }
+
+        Input.Password = string.Empty;
+        if (result.Succeeded)
+        {
+            throttle.Reset(clientKey);
+            // Never consume a caller-provided return URL. Cookies need a full HTTP navigation.
+            Navigation.NavigateTo("/admin/posts", forceLoad: true);
+            return;
+        }
+        // Do not disclose whether the username exists, is locked out, or is otherwise blocked.
+        throttle.RegisterFailure(clientKey);
+        errorMessage = LoginFailure;
+    }
+
+    private void ClearPassword() => Input.Password = string.Empty;
+
+    // The limit applies to one account from one client, so an unrelated account or a
+    // different client is never blocked by another user's failures.
+    private static string ThrottleKey(HttpContext context, string username)
+    {
+        var address = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var account = username.Trim().ToLowerInvariant();
+        return account.Length == 0 ? "anonymous|" + address : account + "|" + address;
+    }
+
+    public sealed class LoginInput
+    {
+        [Required(ErrorMessage = "請輸入帳號。")]
+        [StringLength(AdminProvisioner.MaximumUserNameLength, ErrorMessage = "帳號過長。")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "請輸入密碼。")]
+        [StringLength(AdminProvisioner.MaximumPasswordLength, ErrorMessage = "密碼過長。")]
+        public string Password { get; set; } = string.Empty;
+    }
+}

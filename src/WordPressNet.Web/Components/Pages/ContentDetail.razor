@@ -1,0 +1,72 @@
+@page "/posts/{Slug}"
+@page "/pages/{Slug}"
+@inject ContentService Content
+@inject MarkdownService Markdown
+@inject NavigationManager Navigation
+@inject ILogger<ContentDetail> Logger
+
+<PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
+@if (_error is not null)
+{
+    <section class="empty-state" role="alert"><h1>暫時無法載入</h1><p>@_error</p><a href="/">回到首頁</a></section>
+}
+else if (_content is not null)
+{
+    <article class="reading-column">
+        <a class="back-link" href="/">← 回到首頁</a>
+        <header class="article-heading">
+            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")</p>
+            <h1>@_content.Title</h1>
+            @if (_content.Kind == ContentKind.Post)
+            {
+                <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString("yyyy 年 MM 月 dd 日") <span class="sr-only">UTC</span></time>
+                @if (_content.Categories.Count > 0)
+                {
+                    <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <span class="chip">@category</span> }</div>
+                }
+            }
+        </header>
+        <div class="prose">@((MarkupString)_html)</div>
+        @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
+        {
+            <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <span class="tag"># @tag</span> }</footer>
+        }
+    </article>
+}
+else
+{
+    <p role="status">正在載入內容…</p>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private PublicContent? _content;
+    private string _html = "";
+    private string? _error;
+    protected override async Task OnParametersSetAsync()
+    {
+        _content = null;
+        _html = "";
+        _error = null;
+        try
+        {
+            var kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("pages/", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
+            _content = await Content.GetPublishedAsync(kind, Slug, HttpContext?.RequestAborted ?? default);
+            if (_content is null)
+            {
+                if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+                Navigation.NotFound();
+                return;
+            }
+            _html = Markdown.Render(_content.Markdown);
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Public content unavailable");
+            _error = "目前無法讀取這篇內容，請稍後再試。";
+            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
+        }
+    }
+}

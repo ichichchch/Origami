@@ -1,0 +1,73 @@
+@page "/admin/media"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject MediaService MediaService
+
+<PageTitle>媒體庫 · 內容管理</PageTitle>
+<UnsavedGuard Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">用圖片說故事</p><h1>媒體庫</h1><p>上傳圖片，隨時在文章或頁面中使用。</p></div></div>
+<p class="notice privacy-notice"><strong>圖片一律公開。</strong>所有上傳圖片（包含草稿中的圖片）都可透過網址存取。撤回或刪除內容不會隱藏圖片，請勿上傳私人資料。</p>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+<section class="panel upload-panel">
+    <div><h2>上傳新圖片</h2><p>選取後即上傳。每次一張，單張上限 @(Limits.UploadBytes / 1024 / 1024) MB。</p><p class="field-help">支援 JPEG、PNG、WebP（不含動畫）；實際格式與圖片大小由伺服器驗證。不接受 SVG。</p></div>
+    <div class="upload-control"><label for="media-upload" class="sr-only">選取要上傳的圖片</label><InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp" disabled="@Blocked" />@if (_uploadName is not null) { <p role="status">正在上傳：@_uploadName</p> }</div>
+</section>
+@if (_uploaded is not null)
+{
+    <section class="notice notice-success"><p>最近上傳：<strong>@_uploaded.OriginalName</strong></p><p>在編輯器點選「插入圖片」，或複製下方 Markdown：</p><label class="sr-only" for="uploaded-markdown">最近上傳圖片的 Markdown</label><input id="uploaded-markdown" class="code-input" value="@_uploaded.Markdown" readonly /></section>
+}
+@if (Error is not null && !LoginRequired) { <button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入媒體列表</button> }
+<section class="panel media-library" aria-busy="@Busy.ToString().ToLowerInvariant()">
+    <div class="panel-toolbar"><h2>所有圖片 <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">依上傳時間排序</span></div>
+    @if (_result is not null)
+    {
+        @if (_result.Items.Count == 0)
+        {
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>為文字添一點畫面</h2><p>上傳第一張圖片，開始建立媒體庫。</p></div>
+        }
+        else
+        {
+            <div class="media-grid">
+            @foreach (var item in _result.Items)
+            {
+                <article class="media-card" @key="item.Id"><a href="@item.Url" target="_blank" rel="noopener" aria-label="@("開啟原圖：" + item.OriginalName)"><img src="@item.Url" alt="@item.OriginalName" loading="lazy" /></a><div class="media-details"><h3>@item.OriginalName</h3><p>@item.Width × @item.Height · @Size(item.Size)</p><p>@item.UploadedAt.ToString("yyyy.MM.dd HH:mm") UTC</p><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
+            }
+            </div>
+        }
+        <nav class="pagination" aria-label="媒體分頁"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></nav>
+    }
+</section>
+
+@code {
+    private int _page = 1;
+    private PagedResult<MediaItem>? _result;
+    private MediaItem? _uploaded;
+    private string? _uploadName;
+    protected override Task OnInitializedAsync() => Load();
+    private Task<bool> Load() => RunAsync(async ct => { _result = await MediaService.ListAsync(_page, ct: ct); });
+    private async Task Move(int delta)
+    {
+        if (Blocked) return;
+        var previousPage = _page;
+        _page += delta;
+        if (!await Load()) _page = previousPage;
+    }
+    private async Task Upload(InputFileChangeEventArgs args)
+    {
+        if (Blocked) return;
+        await RunAsync(async ct =>
+        {
+            var file = args.File;
+            if (file.Size > Limits.UploadBytes) throw new CmsException($"圖片超過 {Limits.UploadBytes / 1024 / 1024} MB 上限，請選擇較小的檔案。");
+            _uploadName = file.Name;
+            await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
+            _uploaded = await MediaService.UploadAsync(stream, file.Name, ct);
+            _page = 1;
+            _result = await MediaService.ListAsync(_page, ct: ct);
+        }, "圖片已上傳，現在可在編輯器中插入。");
+        _uploadName = null;
+    }
+    private static string Size(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.#} KB";
+}

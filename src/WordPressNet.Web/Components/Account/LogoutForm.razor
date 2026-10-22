@@ -1,0 +1,5 @@
+@* Always a normal HTTP POST, including when rendered inside an interactive circuit. *@
+<form action="/account/logout" method="post" data-enhance="false">
+    <AntiforgeryToken />
+    <button type="submit">登出</button>
+</form>

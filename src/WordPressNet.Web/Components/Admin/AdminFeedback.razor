@@ -1,0 +1,25 @@
+@if (Busy)
+{
+    <p class="operation-status" role="status" aria-live="polite"><span class="busy-dot" aria-hidden="true"></span>處理中，請稍候…</p>
+}
+@if (!string.IsNullOrEmpty(Error))
+{
+    <div class="notice notice-error" role="alert">
+        <p>@Error</p>
+        @if (LoginRequired)
+        {
+            <a href="/account/login" data-enhance-nav="false">重新登入</a>
+        }
+    </div>
+}
+@if (!string.IsNullOrEmpty(Notice))
+{
+    <p class="notice notice-success" role="status">@Notice</p>
+}
+
+@code {
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool LoginRequired { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Notice { get; set; }
+}

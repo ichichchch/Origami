@@ -1,0 +1,85 @@
+@page "/admin/posts"
+@page "/admin/pages"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject ContentService Content
+@inject NavigationManager Navigation
+
+<PageTitle>@(Label) · 內容管理</PageTitle>
+<div class="page-heading">
+    <div><p class="eyebrow">內容管理</p><h1>@(Label)</h1><p>@(Kind == ContentKind.Post ? "整理想法，讓每一篇文章找到讀者。" : "建立關於、聯絡方式等長期使用的內容。")</p></div>
+    <a class="button" href="@(ListPath + "/new")">＋ 新增@(Kind == ContentKind.Post ? "文章" : "頁面")</a>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Error is not null && !LoginRequired)
+{
+    <button class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">重新載入列表</button>
+}
+@if (_pendingDelete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-description">
+        <h2 id="delete-title">永久刪除「@_pendingDelete.Title」？</h2>
+        <p id="delete-description">刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開。</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteAsync">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">取消</button></div>
+    </section>
+}
+@if (_result is not null)
+{
+    <section class="panel" aria-busy="@Busy.ToString().ToLowerInvariant()">
+        <div class="panel-toolbar"><h2>全部@(Label) <span class="count">@_result.Total</span></h2><span class="muted">依最後更新排序 · UTC</span></div>
+        @if (_result.Items.Count == 0)
+        {
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>從第一個想法開始</h2><p>這一頁尚無內容。新增草稿，準備好再發布。</p><a href="@(ListPath + "/new")">建立@(Kind == ContentKind.Post ? "文章" : "頁面") →</a></div>
+        }
+        else
+        {
+            <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col">標題 / 網址</th><th scope="col">狀態</th><th scope="col">最後更新</th><th scope="col">操作</th></tr></thead><tbody>
+            @foreach (var item in _result.Items)
+            {
+                <tr @key="item.Id"><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status == ContentStatus.Published ? "已發布" : "草稿")</span></td><td class="date-cell">@item.UpdatedAt.ToString("yyyy.MM.dd")<small>@item.UpdatedAt.ToString("HH:mm")</small></td><td><div class="table-actions"><a href="@("/admin/content/" + item.Id)">編輯<span class="sr-only"> @item.Title</span></a><button class="text-danger" disabled="@Blocked" @onclick="() => _pendingDelete = item">刪除<span class="sr-only"> @item.Title</span></button></div></td></tr>
+            }
+            </tbody></table></div>
+        }
+        <nav class="pagination" aria-label="後台內容分頁"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => ChangePage(-1)">上一頁</button><span>第 @_result.Page / @_result.TotalPages 頁</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => ChangePage(1)">下一頁</button></nav>
+    </section>
+}
+
+@code {
+    private ContentKind Kind;
+    private string Label => Kind == ContentKind.Post ? "文章" : "獨立頁面";
+    private string ListPath => Kind == ContentKind.Post ? "/admin/posts" : "/admin/pages";
+    private int _page = 1;
+    private PagedResult<ContentSummary>? _result;
+    private ContentSummary? _pendingDelete;
+    protected override async Task OnParametersSetAsync()
+    {
+        Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
+        _page = 1;
+        _result = null;
+        _pendingDelete = null;
+        await LoadAsync();
+    }
+    private Task<bool> LoadAsync() => RunAsync(async ct => { _result = await Content.ListAdminAsync(Kind, _page, ct: ct); });
+    private async Task ChangePage(int delta)
+    {
+        if (Blocked) return;
+        var previousPage = _page;
+        _page += delta;
+        _pendingDelete = null;
+        if (!await LoadAsync()) _page = previousPage;
+    }
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is not { } item) return;
+        var deleted = await RunAsync(async ct =>
+        {
+            await Content.DeleteAsync(item.Id, item.Version, true, ct);
+            _pendingDelete = null;
+            _result = await Content.ListAdminAsync(Kind, _page, ct: ct);
+            if (_result.Items.Count == 0 && _page > 1) { _page--; _result = await Content.ListAdminAsync(Kind, _page, ct: ct); }
+        }, "已永久刪除內容。圖片未被刪除。");
+        if (!deleted) _pendingDelete = null;
+    }
+}

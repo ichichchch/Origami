@@ -1,0 +1,14 @@
+@page "/not-found"
+<PageTitle>找不到內容</PageTitle>
+<section class="empty-state error-page">
+    <p class="eyebrow">404</p><h1>這一頁，暫時缺席。</h1>
+    <p>網址可能已變更，或內容尚未公開。<br />回到首頁，看看其他故事吧。</p>
+    <a class="button" href="/">回到首頁</a>
+</section>
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    protected override void OnInitialized()
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+    }
+}

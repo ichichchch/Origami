@@ -1,0 +1,43 @@
+@inherits AdminComponentBase
+@inject MediaService Media
+
+<section class="media-picker panel" aria-labelledby="media-picker-title">
+    <div class="panel-toolbar"><h2 id="media-picker-title">從媒體庫插入</h2><button type="button" class="text-button" disabled="@Disabled" @onclick="Close">關閉</button></div>
+    <p class="notice">所有圖片皆公開，包含草稿使用的圖片；撤回內容不會隱藏圖片。</p>
+    <AdminFeedback Busy="Busy" Error="@Error" LoginRequired="LoginRequired" />
+    @if (_result is not null)
+    {
+        @if (_result.Items.Count == 0) { <p class="empty-state">尚無圖片。請先到媒體庫上傳，再回來插入。</p> }
+        <div class="media-grid picker-grid">
+            @foreach (var item in _result.Items)
+            {
+                <button type="button" class="media-choice" @key="item.Id" disabled="@(Disabled || Blocked)" @onclick="() => Select.InvokeAsync(item)"><img src="@item.Url" alt="" loading="lazy" /><span>@item.OriginalName</span><small>插入至本文末尾</small></button>
+            }
+        </div>
+        <div class="pagination"><button type="button" class="button button-secondary" disabled="@(Disabled || Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button type="button" class="button button-secondary" disabled="@(Disabled || Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></div>
+    }
+    @if (Error is not null && !LoginRequired) { <button type="button" class="button button-secondary" disabled="@(Disabled || Blocked)" @onclick="Load">重新載入媒體</button> }
+</section>
+
+@code {
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<MediaItem> Select { get; set; }
+    [Parameter] public EventCallback Close { get; set; }
+    [Parameter] public EventCallback OnUnauthorized { get; set; }
+    private int _page = 1;
+    private PagedResult<MediaItem>? _result;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task<bool> Load()
+    {
+        var success = await RunAsync(async ct => { _result = await Media.ListAsync(_page, ct: ct); });
+        if (LoginRequired) await OnUnauthorized.InvokeAsync();
+        return success;
+    }
+    private async Task Move(int delta)
+    {
+        if (Disabled || Blocked) return;
+        var previousPage = _page;
+        _page += delta;
+        if (!await Load()) _page = previousPage;
+    }
+}

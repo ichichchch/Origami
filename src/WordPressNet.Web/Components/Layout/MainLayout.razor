@@ -1,0 +1,45 @@
+@inherits LayoutComponentBase
+@inject SettingsService Settings
+@inject ContentService Content
+@inject ILogger<MainLayout> Logger
+
+<a class="skip-link" href="#main-content">跳至主要內容</a>
+<div class="site-shell">
+    <header class="site-header">
+        <a class="site-brand" href="/">@_settings.Name</a>
+        <nav class="site-nav" aria-label="網站導覽">
+            <a href="/">首頁</a>
+            @foreach (var page in _pages)
+            {
+                <a href="@("/pages/" + Uri.EscapeDataString(page.Slug))">@(page.Title)</a>
+            }
+        </nav>
+    </header>
+    @if (!string.IsNullOrWhiteSpace(_settings.Description))
+    {
+        <p class="site-description">@_settings.Description</p>
+    }
+    <main id="main-content" class="public-main" tabindex="-1">@Body</main>
+    <footer class="site-footer">
+        <span>© @DateTime.UtcNow.Year @_settings.Name</span>
+        <a href="/account/login" data-enhance-nav="false">網站管理</a>
+    </footer>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private SiteSettings _settings = new();
+    private List<NavigationItem> _pages = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var ct = HttpContext?.RequestAborted ?? default;
+            _settings = await Settings.GetAsync(ct);
+            _pages = await Content.NavigationAsync(ct);
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (Exception ex) { Logger.LogError(ex, "Public navigation unavailable"); }
+    }
+}

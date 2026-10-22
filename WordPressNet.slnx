@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WordPressNet.Web/WordPressNet.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WordPressNet.Tests/WordPressNet.Tests.csproj" />
+  </Folder>
+</Solution>

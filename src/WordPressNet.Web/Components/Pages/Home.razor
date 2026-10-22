@@ -1,0 +1,69 @@
+@page "/"
+@inject ContentService Content
+@inject NavigationManager Navigation
+@inject ILogger<Home> Logger
+
+<PageTitle>最新文章</PageTitle>
+<section class="public-heading"><p class="eyebrow">文字・觀點・日常</p><h1>最新文章<span class="heading-dot">.</span></h1><p>記錄想法，也分享值得留意的事。</p></section>
+@if (_error is not null)
+{
+    <div class="notice notice-error" role="alert">@_error <a href="/" data-enhance-nav="false">重新載入首頁</a></div>
+}
+else if (_result is null)
+{
+    <p role="status">正在載入文章…</p>
+}
+else if (_result.Items.Count == 0)
+{
+    <section class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>故事，即將開始</h2><p>目前還沒有公開文章，歡迎稍後再來。</p></section>
+}
+else
+{
+    <div class="post-list">
+        @foreach (var post in _result.Items)
+        {
+            <article class="post-preview">
+                <time datetime="@post.PublishedAt?.ToString("O")">@post.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
+                <h2><a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2>
+                <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@("閱讀：" + post.Title)">閱讀全文 <span aria-hidden="true">↗</span></a>
+            </article>
+        }
+    </div>
+    <nav class="pagination" aria-label="文章分頁">
+        @if (_result.Page > 1) { <a class="button button-secondary" href="@("/?page=" + (_result.Page - 1))">上一頁</a> }
+        <span>第 @_result.Page / @_result.TotalPages 頁</span>
+        @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@("/?page=" + (_result.Page + 1))">下一頁</a> }
+    </nav>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "page")] public string? Page { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private PagedResult<ContentSummary>? _result;
+    private string? _error;
+    protected override async Task OnParametersSetAsync()
+    {
+        _result = null;
+        _error = null;
+        var page = 1;
+        if (Page is not null && (!int.TryParse(Page, out page) || page < 1 || page > int.MaxValue / Limits.PageSize))
+        { Missing(); return; }
+        try
+        {
+            _result = await Content.ListPublishedAsync(page, ct: HttpContext?.RequestAborted ?? default);
+            if (page > _result.TotalPages) Missing();
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Public article list unavailable");
+            _error = "目前無法載入文章，請稍後再試。";
+            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
+        }
+    }
+    private void Missing()
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+        Navigation.NotFound();
+    }
+}

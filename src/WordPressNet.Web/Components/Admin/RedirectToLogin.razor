@@ -1,0 +1,10 @@
+@inject NavigationManager Navigation
+<p role="status">請先登入後再管理網站。</p>
+<a class="button" href="/account/login" data-enhance-nav="false">前往登入</a>
+
+@code {
+    protected override void OnInitialized() =>
+        // A successful sign-in always returns to the content list, so no return address is
+        // carried and no caller-supplied target can influence the destination.
+        Navigation.NavigateTo("/account/login", forceLoad: true);
+}

@@ -1,0 +1,48 @@
+@inject NavigationManager Navigation
+
+<NavigationLock ConfirmExternalNavigation="@(Dirty || Busy)" OnBeforeInternalNavigation="BeforeNavigation" />
+@if (_destination is not null)
+{
+    <div class="dialog-backdrop">
+        <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-title" aria-describedby="leave-description" tabindex="-1">
+            <h2 id="leave-title">離開編輯頁面？</h2>
+            <p id="leave-description">尚有未儲存的變更。離開會捨棄這些輸入，請先儲存或複製備份。</p>
+            <div class="button-row">
+                <button type="button" class="button" autofocus @onclick="Stay">繼續編輯</button>
+                <button type="button" class="button button-danger" @onclick="Leave">捨棄並離開</button>
+            </div>
+        </section>
+    </div>
+}
+@if (_blocked && Busy)
+{
+    <p class="notice" role="alert">操作尚未結束，請稍候再離開。</p>
+}
+
+@code {
+    [Parameter] public bool Dirty { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    private string? _destination;
+    private bool _allow;
+    private bool _blocked;
+
+    private Task BeforeNavigation(LocationChangingContext context)
+    {
+        if (_allow) { _allow = false; return Task.CompletedTask; }
+        if (!Dirty && !Busy) return Task.CompletedTask;
+        context.PreventNavigation();
+        if (Busy) _blocked = true;
+        else _destination = context.TargetLocation;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+    private void Stay() => _destination = null;
+    private void Leave()
+    {
+        if (Busy) { _blocked = true; return; }
+        var destination = _destination;
+        _destination = null;
+        _allow = true;
+        if (destination is not null) Navigation.NavigateTo(destination);
+    }
+}

@@ -1,0 +1,59 @@
+@inherits AdminComponentBase
+@inject TaxonomyService Taxonomies
+
+<section class="taxonomy-selector" aria-label="@(Label)">
+    <div class="panel-toolbar compact"><h3>@(Label)</h3><span class="muted">已選 @Selected.Count / @Limits.MaxTaxonomiesPerKind</span></div>
+    <p class="field-help">可複選；換頁不會清除已選項目。</p>
+    <AdminFeedback Busy="Busy" Error="@Error" LoginRequired="LoginRequired" />
+    <fieldset disabled="@(Disabled || Blocked)">
+        @if (_result is not null)
+        {
+            @if (_result.Items.Count == 0) { <p class="muted">尚未建立@(Label)。</p> }
+            <div class="checkbox-list">
+            @foreach (var item in _result.Items)
+            {
+                <label @key="item.Id"><input type="checkbox" checked="@Selected.Contains(item.Id)" @onchange="e => Toggle(item.Id, e.Value is true)" /> @item.Name</label>
+            }
+            </div>
+            @if (_result.TotalPages > 1)
+            {
+                <div class="pagination compact"><button type="button" class="button button-secondary" disabled="@(_page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button type="button" class="button button-secondary" disabled="@(_page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></div>
+            }
+            @if (Selected.Count > 0) { <button type="button" class="text-button" @onclick="Clear">清除全部已選@(Label)</button> }
+        }
+        @if (Error is not null && !LoginRequired) { <button type="button" class="button button-secondary" @onclick="Load">重新載入選項</button> }
+    </fieldset>
+</section>
+
+@code {
+    [Parameter] public TaxonomyKind Kind { get; set; }
+    [Parameter, EditorRequired] public List<Guid> Selected { get; set; } = [];
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public EventCallback OnUnauthorized { get; set; }
+    private string Label => Kind == TaxonomyKind.Category ? "分類" : "標籤";
+    private int _page = 1;
+    private PagedResult<TaxonomyItem>? _result;
+    protected override Task OnInitializedAsync() => Load();
+    private async Task<bool> Load()
+    {
+        var success = await RunAsync(async ct => { _result = await Taxonomies.ListAsync(Kind, _page, 50, ct); });
+        if (LoginRequired) await OnUnauthorized.InvokeAsync();
+        return success;
+    }
+    private async Task Move(int delta)
+    {
+        if (Disabled || Blocked) return;
+        var previousPage = _page;
+        _page += delta;
+        if (!await Load()) _page = previousPage;
+    }
+    private async Task Toggle(Guid id, bool selected)
+    {
+        if (Disabled || Blocked) return;
+        if (selected && !Selected.Contains(id)) Selected.Add(id);
+        if (!selected) Selected.Remove(id);
+        await Changed.InvokeAsync();
+    }
+    private async Task Clear() { if (Disabled || Blocked) return; Selected.Clear(); await Changed.InvokeAsync(); }
+}

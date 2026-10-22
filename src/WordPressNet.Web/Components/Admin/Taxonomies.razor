@@ -1,0 +1,127 @@
+@page "/admin/taxonomies"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject TaxonomyService TaxonomiesService
+
+<PageTitle>分類與標籤 · 內容管理</PageTitle>
+<UnsavedGuard Dirty="Dirty" Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">整理內容</p><h1>分類與標籤</h1><p>為文章建立清楚的脈絡。分類採平面結構，不影響獨立頁面。</p></div></div>
+<div class="section-tabs" aria-label="分類與標籤切換">
+    <button class="tab-button @(_kind == TaxonomyKind.Category ? "active" : "")" aria-pressed="@(_kind == TaxonomyKind.Category)" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Category)">分類</button>
+    <button class="tab-button @(_kind == TaxonomyKind.Tag ? "active" : "")" aria-pressed="@(_kind == TaxonomyKind.Tag)" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Tag)">標籤</button>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Error is not null && !LoginRequired)
+{
+    <button class="button button-secondary" disabled="@Blocked" @onclick="() => RequestChange(ResetAndLoad)">重新載入列表並結束編輯</button>
+}
+@if (_pendingChange is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-discard-title"><h2 id="taxonomy-discard-title">捨棄未儲存的輸入？</h2><p>這會結束目前的編輯，尚未儲存的變更將遺失。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="ConfirmChange">捨棄並繼續</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingChange = null">繼續編輯</button></div></section>
+}
+@if (_delete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-delete-title"><h2 id="taxonomy-delete-title">永久刪除@(Label)「@_delete.Name」？</h2><p>只移除文章關聯，不會刪除文章。此項目的未儲存輸入也會捨棄。這個動作無法復原。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Delete">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _delete = null">取消</button></div></section>
+}
+<div class="management-grid">
+    <section class="panel settings-panel">
+        <h2>@(_edit.Id is null ? "新增" : "編輯")@(Label)</h2>
+        <EditForm Model="_edit" OnSubmit="Save" FormName="taxonomy-editor">
+            <fieldset disabled="@Blocked">
+                <div class="field"><label for="taxonomy-name">名稱 <span class="required">必填</span></label><input id="taxonomy-name" @bind="_edit.Name" @bind:event="oninput" required maxlength="@Limits.TaxonomyName" /><span class="field-help">最多 @Limits.TaxonomyName 字。</span></div>
+                <div class="field"><label for="taxonomy-slug">網址代稱</label><input id="taxonomy-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_edit.Id is not null)" /><span class="field-help">首次儲存可留空，由名稱產生。</span></div>
+                <div class="button-row"><button type="submit" class="button">@(Busy ? "處理中…" : "儲存" + Label)</button>@if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => RequestChange(NewEdit)">新增另一個</button> }</div>
+                <p class="field-help">@(Dirty ? "有未儲存的變更。" : "修改後請按儲存，不會自動儲存。")</p>
+            </fieldset>
+        </EditForm>
+    </section>
+    <section class="panel">
+        <div class="panel-toolbar"><h2>全部@(Label) <span class="count">@(_result?.Total ?? 0)</span></h2></div>
+        @if (_result is not null)
+        {
+            @if (_result.Items.Count == 0) { <div class="empty-state"><h2>尚無@(Label)</h2><p>使用旁邊的表單建立第一個@(Label)。</p></div> }
+            else
+            {
+                <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col">名稱 / 代稱</th><th scope="col">操作</th></tr></thead><tbody>
+                @foreach (var item in _result.Items)
+                {
+                    <tr @key="item.Id"><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug</span></td><td><div class="table-actions"><button class="text-button" disabled="@Blocked" @onclick="() => Edit(item)">編輯<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@Blocked" @onclick="() => _delete = item">刪除<span class="sr-only"> @item.Name</span></button></div></td></tr>
+                }
+                </tbody></table></div>
+            }
+            <nav class="pagination" aria-label="分類標籤分頁"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></nav>
+        }
+    </section>
+</div>
+
+@code {
+    private TaxonomyKind _kind = TaxonomyKind.Category;
+    private string Label => _kind == TaxonomyKind.Category ? "分類" : "標籤";
+    private int _page = 1;
+    private TaxonomyEdit _edit = new();
+    private string _baseline = "";
+    private PagedResult<TaxonomyItem>? _result;
+    private TaxonomyItem? _delete;
+    private Func<Task>? _pendingChange;
+    private bool Dirty => Snapshot() != _baseline;
+    private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(_edit);
+    protected override async Task OnInitializedAsync() { _baseline = Snapshot(); await Load(); }
+    private Task<bool> Load() => RunAsync(async ct => { _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct); });
+    private Task NewEdit() { _edit = new(); _baseline = Snapshot(); _delete = null; return Task.CompletedTask; }
+    private async Task ResetAndLoad() { await NewEdit(); await Load(); }
+    private async Task RequestChange(Func<Task> action)
+    {
+        if (Blocked) return;
+        if (Dirty) _pendingChange = action;
+        else await action();
+    }
+    private async Task ConfirmChange()
+    {
+        if (Blocked || _pendingChange is null) return;
+        var action = _pendingChange;
+        _pendingChange = null;
+        await action();
+    }
+    private Task Switch(TaxonomyKind kind) => kind == _kind ? Task.CompletedTask : RequestChange(async () =>
+    {
+        _kind = kind; _page = 1; _result = null; await ResetAndLoad();
+    });
+    private Task Edit(TaxonomyItem item) => RequestChange(() =>
+    {
+        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Version = item.Version };
+        _baseline = Snapshot();
+        _delete = null;
+        return Task.CompletedTask;
+    });
+    private async Task Move(int delta)
+    {
+        if (Blocked) return;
+        var previousPage = _page;
+        _page += delta;
+        _delete = null;
+        if (!await Load()) _page = previousPage;
+    }
+    private Task Save() => RunAsync(async ct =>
+    {
+        ContentRules.Validate(_edit);
+        var input = new TaxonomyEdit { Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Version = _edit.Version };
+        _edit = await TaxonomiesService.SaveAsync(_kind, input, ct);
+        _baseline = Snapshot();
+        _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct);
+    }, "已儲存" + Label + "。");
+    private async Task Delete()
+    {
+        if (_delete is not { } item) return;
+        await RunAsync(async ct =>
+        {
+            await TaxonomiesService.DeleteAsync(_kind, item.Id, item.Version, ct);
+            if (_edit.Id == item.Id) await NewEdit();
+            _delete = null;
+            _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct);
+            if (_result.Items.Count == 0 && _page > 1) { _page--; _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct); }
+        }, "已永久刪除" + Label + "，文章未被刪除。");
+        _delete = null;
+    }
+}

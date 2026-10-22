@@ -1,0 +1,52 @@
+@page "/admin/settings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject SettingsService SettingsService
+
+<PageTitle>網站設定 · 內容管理</PageTitle>
+<UnsavedGuard Dirty="Dirty" Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">讓網站成為你的樣子</p><h1>網站設定</h1><p>簡單的介紹，是讀者認識你的第一步。</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (_confirmReload)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="settings-reload-title"><h2 id="settings-reload-title">捨棄輸入並重新載入？</h2><p>請先複製要保留的文字。重新載入會取代目前未儲存的輸入。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _confirmReload = false">繼續編輯</button></div></section>
+}
+@if (_model is not null)
+{
+    <section class="panel settings-panel settings-width">
+        <div class="panel-intro"><h2>基本資訊</h2><p>儲存後會立即用於公開網站的名稱與說明。</p></div>
+        <EditForm Model="_model" OnSubmit="Save" FormName="site-settings">
+            <fieldset disabled="@Blocked">
+                <div class="field"><label for="site-name">網站名稱 <span class="required">必填</span></label><input id="site-name" @bind="_model.Name" @bind:event="oninput" maxlength="@Limits.SiteName" required aria-describedby="site-name-help" /><span id="site-name-help" class="field-help">最多 @Limits.SiteName 字，顯示於網站頁首。</span></div>
+                <div class="field"><label for="site-description">網站說明</label><textarea id="site-description" @bind="_model.Description" @bind:event="oninput" maxlength="@Limits.Description" rows="4" aria-describedby="site-description-help"></textarea><span id="site-description-help" class="field-help">用一小段文字介紹網站，最多 @Limits.Description 字。不支援 HTML。</span></div>
+                <div class="form-footer"><button type="submit" class="button">@(Busy ? "儲存中…" : "儲存設定")</button><span class="save-indicator" role="status">@(Dirty ? "有未儲存的變更" : "目前為儲存版本")</span></div>
+            </fieldset>
+        </EditForm>
+    </section>
+}
+@if (!LoginRequired)
+{
+    <button class="text-button reload-settings" disabled="@Blocked" @onclick="RequestReload">重新載入儲存版本</button>
+}
+
+@code {
+    private SiteSettings? _model;
+    private string _baseline = "";
+    private bool _confirmReload;
+    private bool Dirty => _model is not null && Snapshot(_model) != _baseline;
+    private static string Snapshot(SiteSettings model) => System.Text.Json.JsonSerializer.Serialize(model);
+    protected override Task OnInitializedAsync() => Load();
+    private Task Load() => RunAsync(async ct => { _model = await SettingsService.GetAsync(ct); _baseline = Snapshot(_model); });
+    private async Task RequestReload() { if (Blocked) return; if (Dirty) _confirmReload = true; else await Load(); }
+    private async Task Reload() { _confirmReload = false; await Load(); }
+    private Task Save() => RunAsync(async ct =>
+    {
+        if (_model is null) return;
+        ContentRules.Validate(_model);
+        var input = new SiteSettings { Id = _model.Id, Name = _model.Name, Description = _model.Description, Version = _model.Version };
+        _model = await SettingsService.SaveAsync(input, ct);
+        _baseline = Snapshot(_model);
+    }, "網站設定已儲存，公開網站已更新。");
+}

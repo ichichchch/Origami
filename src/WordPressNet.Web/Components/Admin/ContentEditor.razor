@@ -1,0 +1,197 @@
+@page "/admin/posts/new"
+@page "/admin/pages/new"
+@page "/admin/content/{Id:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject ContentService Content
+@inject MarkdownService MarkdownRenderer
+@inject NavigationManager Navigation
+@inject IJSRuntime JavaScript
+
+<PageTitle>@(_model?.Id is null ? "新增內容" : "編輯內容") · 內容管理</PageTitle>
+<UnsavedGuard Dirty="Dirty" Busy="Busy" />
+<div class="page-heading">
+    <div><a class="back-link" href="@ListPath">← 返回@(KindLabel)列表</a><h1>@(_model?.Id is null ? "新增" : "編輯")@(KindLabel)</h1><p>專注寫作，準備好再與世界分享。</p></div>
+    <span class="save-indicator @(Dirty ? "unsaved" : "")" role="status">@(Dirty ? "有未儲存的變更" : _model?.Id is not null ? "已載入儲存版本" : "尚未儲存")</span>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />@if (Error is not null && !LoginRequired)
+{
+    <p class="field-help">輸入仍保留。若資料衝突，請先複製需要的內容，再重新載入最新版本。</p>
+    <button class="button button-secondary" disabled="@Blocked" @onclick="RequestReload">重新載入最新版本</button>
+}
+@if (_reloadRequested)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="reload-title">
+        <h2 id="reload-title">捨棄輸入並重新載入？</h2><p>目前未儲存的輸入將被取代。請先複製要保留的內容。</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _reloadRequested = false">繼續編輯</button></div>
+    </section>
+}
+@if (_model is not null)
+{
+    <EditForm Model="_model" OnSubmit="SaveCurrent" FormName="content-editor">
+        <fieldset disabled="@Blocked" class="editor-grid">
+            <div class="editor-main">
+                <section class="panel editor-fields">
+                    <div class="field"><label for="content-title">標題 <span class="required">必填</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="給這個想法一個標題" /><span class="field-help">最多 @Limits.Title 字。</span></div>
+                    <div class="field"><label for="content-slug">網址代稱</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="首次儲存可留空，自標題產生" /></div><span id="slug-help" class="field-help">代稱須全站唯一；修改後舊網址不會自動轉址。</span></div>
+                </section>
+                <section class="panel markdown-panel">
+                    <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@(!_preview)" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview" @onclick="Preview">預覽</button></div><button type="button" class="button button-secondary button-small" @onclick="() => _mediaOpen = !_mediaOpen">插入圖片</button></div>
+                    @if (_preview)
+                    {
+                        <div class="prose editor-preview" aria-label="尚未儲存的內容預覽">@((MarkupString)_previewHtml)</div>
+                        <p class="editor-footnote">這是目前輸入的預覽，不代表已儲存或已發布。</p>
+                    }
+                    else
+                    {
+                        <label class="sr-only" for="content-markdown">Markdown 本文</label><textarea id="content-markdown" class="markdown-input" @bind="_model.Markdown" @bind:event="oninput" maxlength="@Limits.Body" rows="22" placeholder="從這裡開始寫作…" aria-describedby="markdown-help"></textarea>
+                        <div class="editor-footnote"><span id="markdown-help">支援 Markdown；不執行原始 HTML。</span><span>@_model.Markdown.Length.ToString("N0") / @Limits.Body.ToString("N0") 字</span></div>
+                    }
+                </section>
+                @if (_mediaOpen)
+                {
+                    <MediaPicker Disabled="Blocked" Select="InsertMedia" Close="() => _mediaOpen = false" OnUnauthorized="RequireLogin" />
+                }
+            </div>
+            <aside class="editor-aside">
+                <section class="panel publish-panel">
+                    <h2>發布設定</h2><div class="status-line"><span>目前狀態</span><span class="status-badge @(_model.Status == ContentStatus.Published ? "published" : "draft")">@(_model.Status == ContentStatus.Published ? "已發布" : "草稿")</span></div>
+                    <p class="field-help">@(_model.Status == ContentStatus.Published ? "儲存會立即更新公開網站。撤回後，文字內容將不再公開。" : "草稿僅供管理員編輯，發布後訪客才能閱讀。")</p>
+                    <button type="submit" class="button full-width">@(Busy ? "處理中…" : _model.Status == ContentStatus.Published ? "儲存變更" : "儲存草稿")</button>
+                    @if (_model.Status == ContentStatus.Draft)
+                    {
+                        <button type="button" class="button button-secondary full-width" @onclick="() => Save(ContentStatus.Published)">儲存並發布</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="button button-secondary full-width" @onclick="() => Save(ContentStatus.Draft)">儲存並撤回為草稿</button>
+                        <a class="public-preview-link" href="@PublicPath" target="_blank" rel="noopener" data-enhance-nav="false">檢視公開版本 ↗</a>
+                    }
+                    <p class="field-help">不會自動儲存。首次發布日期由系統保留，重新發布不會重設。</p>
+                </section>
+                @if (_model.Kind == ContentKind.Post)
+                {
+                    <section class="panel taxonomy-panel">
+                        <TaxonomySelector Kind="TaxonomyKind.Category" Selected="_model.CategoryIds" Disabled="Blocked" Changed="SelectionChanged" OnUnauthorized="RequireLogin" />
+                        <TaxonomySelector Kind="TaxonomyKind.Tag" Selected="_model.TagIds" Disabled="Blocked" Changed="SelectionChanged" OnUnauthorized="RequireLogin" />
+                    </section>
+                }
+                <p class="privacy-note">所有上傳圖片均為公開資源，草稿中的圖片也不例外。撤回文章不會隱藏圖片網址。</p>
+                @if (_model.Id is not null) { <button type="button" class="text-button" @onclick="RequestReload">重新載入儲存版本</button> }
+            </aside>
+        </fieldset>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+    // The save result travels in the URL, so only the tab that performed the save sees it.
+    [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
+    private ContentEdit? _model;
+    private string _baseline = "";
+    private Guid? _loadedId;
+    private bool _loaded;
+    private bool _preview;
+    private string _previewHtml = "";
+    private bool _mediaOpen;
+    private bool _reloadRequested;
+    private string KindLabel => _model?.Kind == ContentKind.Page ? "頁面" : "文章";
+    private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
+    private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
+    private bool Dirty => _model is not null && Snapshot(_model) != _baseline;
+    private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(model);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A full document load creates a new component instance, so the identifier is
+        // the only state that decides whether the stored version must be reloaded.
+        if (_loaded && _loadedId == Id) return;
+        _loaded = true;
+        _loadedId = Id;
+        _model = null;
+        _mediaOpen = false;
+        _preview = false;
+        _reloadRequested = false;
+        var flash = Saved switch
+        {
+            "draft" => "內容已建立為草稿，文字內容不對外公開。",
+            "published" => "內容已建立並公開。",
+            _ => null
+        };
+        await Load();
+        // The marker belongs to the document that performed the save, not to other tabs.
+        if (flash is not null) Notice = flash;
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Saved is null) return;
+        // Keep the result marker out of the address bar so a reload does not repeat it.
+        try { await JavaScript.InvokeVoidAsync("history.replaceState", null, "", Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0]); }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+    private Task Load() => RunAsync(async ct =>
+    {
+        var loaded = Id is { } id ? await Content.GetEditAsync(id, ct) : new ContentEdit
+        {
+            Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages/", StringComparison.OrdinalIgnoreCase)
+                ? ContentKind.Page : ContentKind.Post
+        };
+        _model = loaded;
+        _baseline = Snapshot(loaded);
+        _preview = false;
+    });
+    private void RequestReload() { if (!Blocked) _reloadRequested = true; }
+    private async Task Reload() { _reloadRequested = false; await Load(); }
+    private Task SaveCurrent() => Save(_model?.Status ?? ContentStatus.Draft);
+    private async Task Save(ContentStatus status)
+    {
+        if (_model is null || Blocked) return;
+        var input = new ContentEdit
+        {
+            Id = _model.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
+            Markdown = _model.Markdown, Version = _model.Version, Status = status,
+            CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]
+        };
+        var isNew = input.Id is null;
+        var wasPublished = _model.Status == ContentStatus.Published;
+        var success = await RunAsync(async ct =>
+        {
+            ContentRules.Validate(input);
+            // The server decides the content kind; a submitted kind is only used when creating.
+            _model = isNew
+                ? await Content.CreateAsync(input.Kind, input, ct)
+                : await Content.UpdateAsync(input, ct);
+            _baseline = Snapshot(_model);
+        }, status == ContentStatus.Published ? "已儲存並公開。"
+            : wasPublished ? "已撤回為草稿，文字內容不再公開。"
+            : "已儲存為草稿，文字內容不對外公開。");
+        if (success && isNew && _model.Id is { } id)
+        {
+            // A new content identifier changes this page's route. A document-level
+            // navigation guarantees a fresh component instance bound to the stored version.
+            var target = "/admin/content/" + id + "?saved=" + (status == ContentStatus.Published ? "published" : "draft");
+            try { await JavaScript.InvokeVoidAsync("location.replace", target); }
+            catch (JSException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+    private Task Preview() => RunAsync(ct =>
+    {
+        _previewHtml = MarkdownRenderer.Render(_model?.Markdown ?? "");
+        _preview = true;
+        return Task.CompletedTask;
+    });
+    private void InsertMedia(MediaItem item)
+    {
+        if (_model is null || Blocked) return;
+        if (_model.Markdown.Length + item.Markdown.Length + 4 > Limits.Body)
+        { Error = "插入圖片後將超過本文長度上限，請先縮短內容。"; return; }
+        _model.Markdown = _model.Markdown.TrimEnd() + "\n\n" + item.Markdown + "\n\n";
+        _preview = false;
+        _mediaOpen = false;
+    }
+    private void SelectionChanged() => StateHasChanged();
+}

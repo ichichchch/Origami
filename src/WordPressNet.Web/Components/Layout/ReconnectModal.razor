@@ -1,0 +1,17 @@
+<script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
+
+<dialog id="components-reconnect-modal" data-nosnippet aria-labelledby="reconnect-title" aria-describedby="reconnect-warning">
+    <div class="components-reconnect-container">
+        <h2 id="reconnect-title">連線中斷</h2>
+        <div class="components-rejoining-animation" aria-hidden="true"><div></div><div></div></div>
+        <p class="components-reconnect-first-attempt-visible" role="status">正在重新連線至伺服器…</p>
+        <p class="components-reconnect-repeated-attempt-visible" role="status">連線尚未恢復，將於 <span id="components-seconds-to-next-attempt"></span> 秒後重試。</p>
+        <p class="components-reconnect-failed-visible" role="alert">無法重新連線。<br />請檢查網路後重試。</p>
+        <button id="components-reconnect-button" class="components-reconnect-failed-visible">重新連線</button>
+        <p class="components-pause-visible">伺服器已暫停此工作階段。</p>
+        <p class="components-resume-failed-visible" role="alert">無法繼續工作階段。<br />請重試，或重新載入頁面。</p>
+        <button id="components-resume-button" class="components-pause-visible components-resume-failed-visible">繼續工作階段</button>
+        <p id="reconnect-warning" class="reconnect-warning">未按儲存的內容尚未保存。連線恢復不代表儲存成功；若工作階段失效，頁面可能重新載入並遺失輸入。請先保留文字備份，再確認儲存狀態。</p>
+        <button type="button" id="components-reload-button">重新載入頁面（未儲存變更可能遺失）</button>
+    </div>
+</dialog>
