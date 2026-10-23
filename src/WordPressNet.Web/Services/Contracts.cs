@@ -78,8 +78,16 @@ public static partial class ContentRules
     {
         try { await db.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateConcurrencyException) { throw new CmsException("資料已被另一個分頁更新或刪除，請重新載入後再編輯。"); }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
-        { throw new CmsException("網址代稱已存在，請使用其他代稱。"); }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } postgres)
+        {
+            throw new CmsException(postgres.ConstraintName switch
+            {
+                // Join-table keys mean two overlapping saves both passed the version check.
+                "PK_ContentCategories" or "PK_ContentTags" => "資料已被另一個分頁更新，請重新載入後再編輯。",
+                "IX_Contents_Slug" or "IX_Categories_Slug" or "IX_Tags_Slug" => "網址代稱已存在，請使用其他代稱。",
+                _ => "資料已存在或已被另一個分頁變更，請重新載入後再試。"
+            });
+        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
         { throw new CmsException("所選分類或標籤已被變更，請重新載入。"); }
     }

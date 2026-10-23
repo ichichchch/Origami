@@ -2,6 +2,7 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using WordPressNet.Web.Data;
 using WordPressNet.Web.Models;
 using WordPressNet.Web.Services;
@@ -47,6 +48,67 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         await using var db = await App.CreateContextAsync();
         Assert.Single(await db.Contents.ToListAsync());
         Assert.Equal(first.Slug, (await db.Contents.SingleAsync()).Slug);
+    }
+
+    [PostgresTheory]
+    [InlineData(TaxonomyKind.Category)]
+    [InlineData(TaxonomyKind.Tag)]
+    public async Task Overlapping_saves_past_the_version_check_report_a_conflict_not_a_duplicate_slug(TaxonomyKind kind)
+    {
+        using var actor = await App.AdministratorAsync();
+        var taxonomy = await actor.Taxonomy.SaveAsync(kind, new() { Name = "Race" });
+        var post = await actor.Content.SaveAsync(NewContent("Race post"));
+        var left = await actor.Content.GetEditAsync(post.Id!.Value);
+        var right = await actor.Content.GetEditAsync(post.Id.Value);
+        left.Title = "Race winner";
+        left.Markdown = "Winner body";
+        right.Title = "Race loser";
+        right.Markdown = "Loser body";
+        (kind == TaxonomyKind.Category ? left.CategoryIds : left.TagIds).Add(taxonomy.Id!.Value);
+        (kind == TaxonomyKind.Category ? right.CategoryIds : right.TagIds).Add(taxonomy.Id.Value);
+
+        var adminAccess = actor.Services.GetRequiredService<AdminAccess>();
+        var gateA = new SaveGate();
+        var gateB = new SaveGate();
+        var writerA = new ContentService(new InterceptingContextFactory(App.ConnectionString, gateA), adminAccess, TimeProvider.System);
+        var writerB = new ContentService(new InterceptingContextFactory(App.ConnectionString, gateB), adminAccess, TimeProvider.System);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var saveA = writerA.SaveAsync(left, timeout.Token);
+        var saveB = writerB.SaveAsync(right, timeout.Token);
+        ContentEdit winner;
+        try
+        {
+            // Both saves must already be past the version check before either write commits.
+            await Task.WhenAll(gateA.Ready.Task, gateB.Ready.Task).WaitAsync(TimeSpan.FromSeconds(15), timeout.Token);
+            gateA.Release.TrySetResult();
+            winner = await saveA;
+            gateB.Release.TrySetResult();
+            var loserError = await Assert.ThrowsAsync<CmsException>(() => saveB);
+            Assert.Equal("資料已被另一個分頁更新，請重新載入後再編輯。", loserError.Message);
+            Assert.Equal(PostgresErrorCodes.UniqueViolation, gateB.SqlState);
+            Assert.Equal(kind == TaxonomyKind.Category ? "PK_ContentCategories" : "PK_ContentTags", gateB.Constraint);
+        }
+        finally
+        {
+            timeout.Cancel();
+            gateA.Release.TrySetResult();
+            gateB.Release.TrySetResult();
+            await Task.WhenAll(ObserveAsync(saveA), ObserveAsync(saveB)).WaitAsync(TimeSpan.FromSeconds(15));
+        }
+
+        using var fresh = await App.AdministratorAsync();
+        var persisted = await fresh.Content.GetEditAsync(post.Id!.Value);
+        Assert.Equal("Race winner", persisted.Title);
+        Assert.Equal("Winner body", persisted.Markdown);
+        Assert.Equal(winner.Version, persisted.Version);
+        var associationIds = kind == TaxonomyKind.Category ? persisted.CategoryIds : persisted.TagIds;
+        Assert.Equal(taxonomy.Id, Assert.Single(associationIds));
+    }
+
+    private static async Task ObserveAsync(Task task)
+    {
+        try { await task; }
+        catch { /* cleanup-only observation; the original failure already failed the test */ }
     }
 
     [PostgresTheory]
@@ -483,6 +545,32 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         {
             Commands.Add(command.CommandText);
             return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class SaveGate : SaveChangesInterceptor
+    {
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string? SqlState { get; private set; }
+        public string? Constraint { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            Ready.TrySetResult();
+            await Release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            return result;
+        }
+
+        public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Exception.InnerException is PostgresException postgres)
+            {
+                SqlState = postgres.SqlState;
+                Constraint = postgres.ConstraintName;
+            }
+            return Task.CompletedTask;
         }
     }
 }

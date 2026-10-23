@@ -16,7 +16,8 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         var item = await admin.Taxonomy.SaveAsync(kind, new() { Name = "  Initial Name  ", Slug = "ＳＡＭＥ__Slug" });
         Assert.Equal("same-slug", item.Slug);
         Assert.Equal("Initial Name", Assert.Single((await admin.Taxonomy.ListAsync(kind)).Items).Name);
-        await Assert.ThrowsAsync<CmsException>(() => admin.Taxonomy.SaveAsync(kind, new() { Name = "Duplicate", Slug = "same / SLUG" }));
+        var duplicate = await Assert.ThrowsAsync<CmsException>(() => admin.Taxonomy.SaveAsync(kind, new() { Name = "Duplicate", Slug = "same / SLUG" }));
+        Assert.Contains("代稱已存在", duplicate.Message, StringComparison.Ordinal);
         var opposite = kind == TaxonomyKind.Category ? TaxonomyKind.Tag : TaxonomyKind.Category;
         await admin.Taxonomy.SaveAsync(opposite, new() { Name = "Independent kind", Slug = item.Slug });
         item.Name = "New Name";
