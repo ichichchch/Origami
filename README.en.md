@@ -1,4 +1,4 @@
-# WordPress.NET
+# Origami
 
 A single-site content management system for publishing articles and standalone pages, written in
 **C# / ASP.NET Core Blazor** on **PostgreSQL**. It re-implements the core publishing workflow of
@@ -45,8 +45,8 @@ an allow-list, so stored content cannot introduce script execution.
 Connection credentials are never stored in the source tree. Supply them through the environment:
 
 ```bash
-export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=wordpressnet;Username=wordpressnet;Password=<your password>"
-export Storage__RootPath="D:/wpnet-storage"   # optional; defaults to a folder under the user profile
+export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=origami;Username=origami;Password=<your password>"
+export Storage__RootPath="D:/origami-storage"   # optional; defaults to a folder under the user profile
 ```
 
 `Storage__RootPath` must be an absolute path outside the published application directory. It holds
@@ -55,7 +55,7 @@ uploaded images and the Data Protection key ring.
 ### 2. Apply the schema
 
 ```bash
-dotnet run --project src/WordPressNet.Web -- migrate
+dotnet run --project src/Origami.Web -- migrate
 ```
 
 The schema is managed by EF Core migrations. Upgrades never drop and recreate the database.
@@ -63,7 +63,7 @@ The schema is managed by EF Core migrations. Upgrades never drop and recreate th
 ### 3. Create the administrator
 
 ```bash
-dotnet run --project src/WordPressNet.Web -- admin-init
+dotnet run --project src/Origami.Web -- admin-init
 ```
 
 The password is read from an interactive console without echo. Credentials are never accepted as
@@ -74,7 +74,7 @@ existing sessions.
 ### 4. Run
 
 ```bash
-dotnet run --project src/WordPressNet.Web
+dotnet run --project src/Origami.Web
 ```
 
 The public site is at `/`, the admin area at `/admin/posts`.
@@ -82,7 +82,7 @@ The public site is at `/`, the admin area at `/admin/posts`.
 ## Project layout
 
 ```text
-src/WordPressNet.Web/
+src/Origami.Web/
   Components/
     Pages/          # Public site (Static SSR): home, article and page detail, 404, error page
     Admin/          # Admin area (Interactive Server): content, taxonomies, media, settings
@@ -92,7 +92,7 @@ src/WordPressNet.Web/
   Models/           # Content, Category, Tag, MediaAsset, SiteSettings, AdminUser
   Services/         # Content, taxonomies, media, Markdown, settings, authorization, admin commands
   wwwroot/          # Bundled CSS; persistent uploads never live here
-tests/WordPressNet.Tests/
+tests/Origami.Tests/
 ```
 
 ## Data model
@@ -140,7 +140,7 @@ time is written once and preserved across later edits, withdrawals and re-publis
 ## Testing
 
 ```bash
-dotnet test tests/WordPressNet.Tests/WordPressNet.Tests.csproj -c Release
+dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 ```
 
 Tests run against a PostgreSQL cluster they create themselves (SCRAM authentication, random port)

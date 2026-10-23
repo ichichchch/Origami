@@ -1,4 +1,4 @@
-# WordPress.NET — 开发与验收说明
+# Origami — 开发与验收说明
 
 本文档说明 MVP 的运行方式、项目结构、数据模型、登录授权、前后台页面、开发顺序与测试验收。
 产品范围与安全基线以 `Agent.MD` 为准；本文档只描述「如何运行与如何验证」。
@@ -13,7 +13,7 @@
 | PostgreSQL | 15 以上 | 开发、测试与正式环境皆使用 PostgreSQL |
 | 浏览器 | Edge 或 Chrome | 仅供端到端测试使用 |
 
-依赖包版本固定于 `src/WordPressNet.Web/WordPressNet.Web.csproj`：
+依赖包版本固定于 `src/Origami.Web/Origami.Web.csproj`：
 
 - `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3
 - `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 10.0.13
@@ -24,8 +24,8 @@
 连接密码不得写入源代码，通过外部配置提供：
 
 ```bash
-export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=wordpressnet;Username=wordpressnet;Password=<密码>"
-export Storage__RootPath="D:/wpnet-storage"   # 可省略，默认位于用户数据目录下的 WordPressNet/storage
+export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=origami;Username=origami;Password=<密码>"
+export Storage__RootPath="D:/origami-storage"   # 可省略，默认位于用户数据目录下的 Origami/storage
 ```
 
 `Storage__RootPath` 必须是绝对路径，且不得位于应用发布目录内；未设置时使用默认位置。
@@ -35,13 +35,13 @@ export Storage__RootPath="D:/wpnet-storage"   # 可省略，默认位于用户�
 
 ```bash
 # 1. 应用数据库迁移（结构由 EF Core migrations 管理，不会删库重建）
-dotnet run --project src/WordPressNet.Web -- migrate
+dotnet run --project src/Origami.Web -- migrate
 
 # 2. 创建唯一管理员（密码由交互输入，不接受命令行参数或重定向输入）
-dotnet run --project src/WordPressNet.Web -- admin-init
+dotnet run --project src/Origami.Web -- admin-init
 
 # 3. 启动网站
-dotnet run --project src/WordPressNet.Web
+dotnet run --project src/Origami.Web
 ```
 
 `admin-reset` 可在忘记密码时由服务器端重置；重置会轮换安全戳记，使现有登录立即失效。
@@ -50,7 +50,7 @@ dotnet run --project src/WordPressNet.Web
 ## 4. 项目结构
 
 ```text
-src/WordPressNet.Web/
+src/Origami.Web/
   Components/
     Pages/          # 公开网站（Static SSR）：首页、文章与页面详情、404、错误页
     Admin/          # 管理后台（Interactive Server）：内容、分类标签、媒体、设置
@@ -60,7 +60,7 @@ src/WordPressNet.Web/
   Models/           # Content、Category、Tag、MediaAsset、SiteSettings、AdminUser
   Services/         # 内容、分类标签、媒体、Markdown、站点设置、授权、管理命令
   wwwroot/          # 应用内置 CSS；持久化上传不存于此
-tests/WordPressNet.Tests/
+tests/Origami.Tests/
 ```
 
 ## 5. 数据模型
@@ -121,7 +121,7 @@ tests/WordPressNet.Tests/
 
 ```bash
 # 完整回归（需要本机有 PostgreSQL 服务器工具，测试会自行创建隔离集群）
-dotnet test tests/WordPressNet.Tests/WordPressNet.Tests.csproj -c Release
+dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 ```
 
 测试一律在测试自行创建的隔离 PostgreSQL 集群上执行（SCRAM 验证、随机连接端口），

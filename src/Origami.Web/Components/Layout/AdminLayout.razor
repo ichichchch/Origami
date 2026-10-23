@@ -1,0 +1,35 @@
+@inherits LayoutComponentBase
+
+<a class="skip-link" href="#main-content">跳至主要內容</a>
+@* Per-page interactive islands cannot intercept enhanced SSR link navigation.
+   Full-document admin navigation lets NavigationLock protect unsaved input. *@
+<div class="admin-shell" data-enhance-nav="false">
+    <aside class="admin-sidebar">
+        <a class="admin-brand" href="/admin/posts"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>內容管理</small></span></a>
+        <nav class="admin-nav" aria-label="後台導覽">
+            <span class="nav-label">工作空間</span>
+            <NavLink href="/admin/posts">文章<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/pages">獨立頁面<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/taxonomies">分類與標籤<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/media">媒體庫<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/settings">網站設定<span aria-hidden="true">↗</span></NavLink>
+        </nav>
+        <div class="sidebar-bottom">
+            <a href="/" data-enhance-nav="false">檢視公開網站 ↗</a>
+            <form method="post" action="/account/logout" data-enhance="false">
+                <AntiforgeryToken />
+                <button type="submit" class="logout-button">登出</button>
+            </form>
+        </div>
+    </aside>
+    <div class="admin-workspace">
+        <header class="admin-topbar"><span>你的文字，值得被看見。</span><span class="workspace-label">網站後台</span></header>
+        <main id="main-content" class="admin-main" tabindex="-1">@Body</main>
+        <footer class="admin-footer">專注內容，從這裡開始。</footer>
+    </div>
+</div>
+<div id="blazor-error-ui" role="alert" data-nosnippet>
+    介面發生錯誤。未儲存的變更可能遺失，請先複製輸入再重新載入。
+    <a href="" class="reload">重新載入</a>
+    <button type="button" class="dismiss" aria-label="關閉錯誤提示">×</button>
+</div>

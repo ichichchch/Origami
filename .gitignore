@@ -427,7 +427,7 @@ FodyWeavers.xsd
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
 
-# WordPress.NET local additions
+# Origami local additions
 .artifacts/
 dotnet-tools.json.bak
 *.pfx
