@@ -269,8 +269,10 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.Equal("Newer title", (await freshActor.Content.ListAdminAsync(ContentKind.Post)).Items.Single().Title);
     }
 
-    [PostgresFact]
-    public async Task Disconnected_editor_warns_before_reload_and_never_claims_unsaved_work_was_saved()
+    [PostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Disconnected_editor_warns_before_reload_and_never_claims_unsaved_work_was_saved(bool reducedMotion)
     {
         var password = IsolatedPostgres.NewPassword();
         await App.Provisioner.ResetPasswordAsync(password);
@@ -286,27 +288,40 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await using var browser = await playwright.Chromium.LaunchAsync(new() { Channel = BrowserChannel(), Headless = true });
         await using var context = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString() });
         var page = await context.NewPageAsync();
+        await page.EmulateMediaAsync(new() { ReducedMotion = reducedMotion ? ReducedMotion.Reduce : ReducedMotion.NoPreference });
         await LoginAsync(page, password);
         await VisitAsync(page, editPath);
+        await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
+        await Expect(page.Locator(".editor-preview")).ToHaveTextAsync("Test body");
+        await Expect(page.Locator("#content-title")).ToHaveValueAsync("Saved before disconnect");
         await page.Locator("#content-title").FillAsync("Not saved before disconnect");
         await Expect(page.Locator(".save-indicator")).ToContainTextAsync("未儲存");
         await site.StopAsync();
-        await Expect(page.Locator("#components-reconnect-modal")).ToBeVisibleAsync(new() { Timeout = 15000 });
+        var reconnect = page.Locator("#components-reconnect-modal");
+        await Expect(reconnect).ToBeVisibleAsync(new() { Timeout = 15000 });
+        await Expect(reconnect).ToHaveCSSAsync("opacity", "1");
+        Assert.True(await reconnect.EvaluateAsync<bool>("element => element.matches(':modal')"));
+        if (reducedMotion) await Expect(reconnect).ToHaveCSSAsync("animation-name", "none");
         await Expect(page.Locator("#reconnect-warning")).ToContainTextAsync("連線恢復不代表儲存成功");
+        await Expect(page.Locator("#components-reload-button")).ToBeVisibleAsync();
+        await SaveScreenshotAsync(page, reducedMotion ? "disconnect-reduced-motion.png" : "disconnect-default-motion.png");
         Assert.Equal(0, await page.Locator(".notice-success").CountAsync());
         using (var actor = await App.AdministratorAsync())
             Assert.Equal("Saved before disconnect", (await actor.Content.ListAdminAsync(ContentKind.Post)).Items.Single().Title);
         page.Dialog += async (_, dialog) => await dialog.AcceptAsync();
         await site.StartAsync(reuseAddress: true);
-        // A restarted single-instance server cannot recover the old circuit. The explicit
-        // reload path warns about unsaved input and reloads only the persisted version.
+        // Restarting cannot recover the old circuit, so reload only the persisted version.
         await page.Locator("#components-reload-button").ClickAsync();
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
+        await Expect(page.Locator(".editor-preview")).ToHaveTextAsync("Test body");
         await Expect(page.Locator("#content-title")).ToHaveValueAsync("Saved before disconnect");
-        await Expect(page.Locator("#components-reconnect-modal")).Not.ToBeVisibleAsync();
+        await Expect(reconnect).Not.ToBeVisibleAsync();
         await page.Locator("#content-title").FillAsync("Saved after reconnect");
         await page.GetByRole(AriaRole.Button, new() { Name = "儲存草稿", Exact = true }).ClickAsync();
         await Expect(page.Locator(".notice-success")).ToContainTextAsync("已儲存為草稿");
+        using var freshActor = await App.AdministratorAsync();
+        Assert.Equal("Saved after reconnect", (await freshActor.Content.ListAdminAsync(ContentKind.Post)).Items.Single().Title);
     }
 
     private static async Task LoginAsync(IPage page, string password)
