@@ -54,6 +54,8 @@ builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout 
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
 builder.Services.AddScoped<SemanticSearchService>();
 builder.Services.AddScoped<McpReadTools>();
+builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFactory>();
+builder.Services.AddScoped<SiteAssistant>();
 builder.Services.AddHostedService<EmbeddingJobWorker>();
 // Every anonymous MCP search costs a provider embedding, so /mcp is rate limited per source IP.
 builder.Services.AddRateLimiter(options =>

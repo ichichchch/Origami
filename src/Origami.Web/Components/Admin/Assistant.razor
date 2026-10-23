@@ -1,0 +1,72 @@
+@page "/admin/assistant"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject Origami.Web.Intelligence.Agents.SiteAssistant SiteAssistantService
+@inject Origami.Web.Services.MarkdownService Markdown
+
+<PageTitle>AI 助理 · 內容管理</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">問自己的網站</p><h1>AI 助理</h1><p>用自然語言查詢已發布的文章與頁面，助理會先搜尋再回答。</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+<section class="panel settings-panel settings-width">
+    <div class="panel-intro"><h2>內容問答</h2><p>對話僅保存在此頁面，離開或重新載入後清空；每次回覆都會呼叫外部模型並產生費用。</p></div>
+    @if (_turns.Count > 0)
+    {
+        <div class="assistant-log" aria-live="polite">
+            @foreach (var turn in _turns)
+            {
+                <div class="assistant-turn @(turn.FromUser ? "assistant-user" : "assistant-bot")">
+                    <span class="assistant-role">@(turn.FromUser ? "你" : "助理")</span>
+                    @if (turn.FromUser)
+                    {
+                        <div class="assistant-text">@turn.Text</div>
+                    }
+                    else
+                    {
+                        <div class="assistant-text">@((MarkupString)Markdown.Render(turn.Text))</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="field-help">尚無對話。可以問：這個網站有哪些關於某個主題的文章？某篇 文章的重點是什麼？</p>
+    }
+    <div class="field">
+        <label for="assistant-question">你的問題</label>
+        <textarea id="assistant-question" rows="3" maxlength="@Limits.AssistantQuestionMax" @bind="_question" @bind:event="oninput" disabled="@Blocked" aria-describedby="assistant-question-help"></textarea>
+        <span id="assistant-question-help" class="field-help">最多 @Limits.AssistantQuestionMax 字；助理只能查詢已發布內容。</span>
+    </div>
+    <div class="form-footer">
+        <button type="button" class="button" disabled="@Blocked || string.IsNullOrWhiteSpace(_question.Trim())" @onclick="Ask">@(Busy ? "思考中…" : "送出問題")</button>
+        @if (_turns.Count > 0)
+        {
+            <button type="button" class="text-button" disabled="@Blocked" @onclick="Clear">清空對話</button>
+        }
+    </div>
+</section>
+
+@code {
+    private readonly List<Origami.Web.Intelligence.Agents.AssistantMessage> _turns = [];
+    private string _question = "";
+
+    private Task Ask() => RunAsync(async ct =>
+    {
+        var question = _question.Trim();
+        if (question.Length == 0) throw new CmsException("請輸入問題。");
+        var reply = await SiteAssistantService.AskAsync(_turns, question, ct);
+        _turns.Add(new(true, question));
+        _turns.Add(new(false, reply));
+        _question = "";
+    });
+
+    private void Clear()
+    {
+        if (Blocked) return;
+        _turns.Clear();
+        Error = null;
+        Notice = null;
+    }
+}

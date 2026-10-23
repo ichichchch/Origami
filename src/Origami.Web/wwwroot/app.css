@@ -213,6 +213,14 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .validation-message, .validation-errors { color: var(--danger); font-size: .85rem; }
 .invalid { border-color: var(--danger) !important; }
 .auth-card { max-width: 460px; margin: 1rem auto; padding: 2rem; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
+.assistant-log { display: flex; flex-direction: column; gap: .9rem; margin-bottom: 1.3rem; }
+.assistant-turn { border: 1px solid var(--border); border-radius: var(--radius); padding: .85rem 1.05rem; max-width: 44rem; min-width: 0; }
+.assistant-user { background: var(--accent-soft); align-self: flex-end; }
+.assistant-bot { background: var(--surface); }
+.assistant-role { display: block; color: var(--muted); font-size: .7rem; letter-spacing: .08em; margin-bottom: .4rem; }
+.assistant-text { font-size: .9rem; line-height: 1.75; overflow-wrap: anywhere; }
+.assistant-text :is(p, ul, ol, pre, blockquote) { margin: .45rem 0; }
+.assistant-text :is(h1, h2, h3, h4) { font-size: .95rem; margin: .7rem 0 .4rem; }
 @media (min-width: 1500px) { .admin-main { padding-top: 3.5rem; } }
 @media (max-width: 1100px) { .admin-shell { grid-template-columns: 205px minmax(0,1fr); } .admin-sidebar { padding-left: .8rem; padding-right: .8rem; } .editor-grid { grid-template-columns: minmax(0,1fr); } .editor-aside { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; } .privacy-note { grid-column: 1 / -1; } .management-grid { grid-template-columns: minmax(230px,.8fr) minmax(0,1.2fr); } td, th { padding-left: 1rem; padding-right: 1rem; } }
 @media (max-width: 800px) { .admin-shell { grid-template-columns: minmax(0,1fr); } .admin-sidebar { position: static; height: auto; display: grid; grid-template-columns: 1fr auto; padding: 1.2rem; border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; gap: 1rem; } .admin-brand { margin: 0; padding: 0; } .admin-nav { grid-row: 2; grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: .35rem; } .admin-nav a { padding: .55rem .7rem; font-size: .8rem; } .admin-nav a span, .nav-label { display: none; } .sidebar-bottom { margin: 0; padding: 0; border: 0; display: flex; align-items: center; gap: 1rem; } .logout-button { padding: .3rem 0; } .admin-topbar { display: none; } .admin-main { padding: 2rem 1.2rem; } .admin-footer { padding: 1rem 1.2rem; } .management-grid { grid-template-columns: minmax(0,1fr); } .page-heading h1 { font-size: 1.8rem; } .post-preview { grid-template-columns: 1fr auto; gap: .5rem 1rem; padding: 1.7rem 0; } .post-preview time { grid-column: 1 / -1; } .post-preview h2 { font-size: 1.25rem; } }

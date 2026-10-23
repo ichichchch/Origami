@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Origami.Web.Data;
+using Origami.Web.Intelligence.Agents;
 using Origami.Web.Intelligence.AiGateway;
 using Origami.Web.Intelligence.Embedding;
 using Origami.Web.Intelligence.SemanticSearch;
@@ -56,6 +57,12 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<ContentService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<SettingsService>();
+        // The assistant runs against the shared scripted client; no provider or key is involved.
+        services.AddSingleton<FakeChatClient>();
+        services.AddSingleton<IAssistantChatClientFactory>(provider =>
+            new StubAssistantChatClientFactory(provider.GetRequiredService<FakeChatClient>()));
+        services.AddScoped<McpReadTools>();
+        services.AddScoped<SiteAssistant>();
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
@@ -72,6 +79,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
 
     public TestActor Anonymous() => new(Services.CreateScope());
     public FakeEmbeddingGateway Embeddings => Services.GetRequiredService<FakeEmbeddingGateway>();
+    public FakeChatClient Chat => Services.GetRequiredService<FakeChatClient>();
     public EmbeddingJobWorker Worker => new(Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(), Services,
         Services.GetRequiredService<TimeProvider>(), NullLogger<EmbeddingJobWorker>.Instance);
 
@@ -107,6 +115,7 @@ public sealed class TestActor(IServiceScope scope) : IDisposable
     public TaxonomyService Taxonomy => Services.GetRequiredService<TaxonomyService>();
     public SettingsService Settings => Services.GetRequiredService<SettingsService>();
     public SemanticSearchService Semantic => Services.GetRequiredService<SemanticSearchService>();
+    public SiteAssistant Assistant => Services.GetRequiredService<SiteAssistant>();
     public void Dispose() => scope.Dispose();
 }
 

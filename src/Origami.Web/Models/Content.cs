@@ -27,6 +27,8 @@ public static class Limits
     public const int EmbeddingChunkMax = 4000;
     public const int EmbeddingBatchSize = 64;
     public const int SearchMaxResults = 20;
+    public const int AssistantQuestionMax = 8_000;
+    public const int AssistantHistoryLimit = 20;
 }
 
 public sealed class AdminUser : IdentityUser
