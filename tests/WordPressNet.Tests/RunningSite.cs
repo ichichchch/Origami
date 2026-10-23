@@ -32,7 +32,7 @@ internal sealed class RunningSite : IAsyncDisposable
         File.WriteAllBytes(Path.Combine(root, "test.pfx"), certificate.Export(X509ContentType.Pfx, certificatePassword));
     }
 
-    public async Task StartAsync(bool reuseAddress = false)
+    public async Task StartAsync(bool reuseAddress = false, string environment = "Development")
     {
         if (process is not null) throw new InvalidOperationException("The test server is already running.");
         if (!reuseAddress || Address is null)
@@ -55,7 +55,7 @@ internal sealed class RunningSite : IAsyncDisposable
         };
         start.ArgumentList.Add(assembly);
         start.Environment["ASPNETCORE_URLS"] = Address.ToString();
-        start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        start.Environment["ASPNETCORE_ENVIRONMENT"] = environment;
         start.Environment["ConnectionStrings__Cms"] = connectionString;
         start.Environment["Storage__RootPath"] = StorageRoot;
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = Path.Combine(root, "test.pfx");

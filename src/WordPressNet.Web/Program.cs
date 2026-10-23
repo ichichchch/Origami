@@ -15,6 +15,8 @@ if (isCommand && args.Length != 1)
     return 2;
 }
 var builder = WebApplication.CreateBuilder(isCommand ? [] : args);
+// Load build-time assets even when an unpublished build runs in Production.
+builder.WebHost.UseStaticWebAssets();
 string connection;
 try
 {

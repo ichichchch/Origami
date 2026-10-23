@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.Playwright;
 using SkiaSharp;
 using WordPressNet.Web.Models;
+using WordPressNet.Web.Services;
 using static Microsoft.Playwright.Assertions;
 
 namespace WordPressNet.Tests;
@@ -9,6 +11,97 @@ namespace WordPressNet.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
+    [PostgresFact]
+    public async Task Production_build_loads_assets_and_persists_interactive_edits()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        ContentEdit seeded;
+        using (var actor = await App.AdministratorAsync())
+            seeded = await actor.Content.SaveAsync(NewContent("Production original title"));
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync(environment: "Production");
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new() { Channel = BrowserChannel(), Headless = true });
+        await using var context = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString() });
+        var page = await context.NewPageAsync();
+        var consoleMessages = new ConcurrentQueue<string>();
+        var pageErrors = new ConcurrentQueue<string>();
+        var resourceResponses = new ConcurrentQueue<(string Url, int Status)>();
+        var failedRequests = new ConcurrentQueue<string>();
+        page.Console += (_, message) => consoleMessages.Enqueue(message.Type + ": " + message.Text);
+        page.PageError += (_, error) => pageErrors.Enqueue(error);
+        page.Response += (_, response) =>
+        {
+            if (response.Request.ResourceType is "script" or "stylesheet") resourceResponses.Enqueue((response.Url, response.Status));
+        };
+        page.RequestFailed += (_, request) =>
+        {
+            if (request.ResourceType is "script" or "stylesheet") failedRequests.Enqueue(request.Url + ": " + request.Failure);
+        };
+
+        try
+        {
+            // Use normal HTTPS form login; document load is not a circuit-ready signal.
+            await page.GotoAsync("/account/login");
+            await page.Locator("#username").FillAsync("test-admin");
+            await page.Locator("#password").FillAsync(password);
+            await page.GetByRole(AriaRole.Button, new() { Name = "登入", Exact = true }).ClickAsync();
+            await page.WaitForURLAsync("**/admin/posts");
+            await page.GotoAsync("/admin/content/" + seeded.Id);
+
+            var assetUrls = await page.Locator("link[rel='stylesheet'], script[src]")
+                .EvaluateAllAsync<string[]>("elements => elements.map(element => element.href || element.src)");
+            Assert.Contains(assetUrls, url => url.Contains("/WordPressNet.Web.", StringComparison.Ordinal) && url.EndsWith(".styles.css", StringComparison.Ordinal));
+            Assert.Contains(assetUrls, url => url.Contains("/_framework/blazor.web.", StringComparison.Ordinal));
+            Assert.Contains(assetUrls, url => url.Contains("/Components/Layout/ReconnectModal.", StringComparison.Ordinal) && url.EndsWith(".razor.js", StringComparison.Ordinal));
+            foreach (var url in assetUrls)
+                Assert.Contains(resourceResponses, response => response.Url == url && response.Status is >= 200 and < 300);
+
+            // A prerendered button can accept a click before its handler attaches.
+            // Retry only this read-only probe; the server must return the seeded body.
+            for (var attempt = 0; ; attempt++)
+            {
+                await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
+                try
+                {
+                    await Expect(page.Locator(".editor-preview")).ToHaveTextAsync(seeded.Markdown, new() { Timeout = 1000 });
+                    break;
+                }
+                catch (PlaywrightException) when (attempt < 4)
+                {
+                    // The final failed assertion propagates with the diagnostics below.
+                }
+            }
+            await Expect(page.Locator("#content-title")).ToHaveValueAsync(seeded.Title);
+            await page.Locator("#content-title").FillAsync("Production saved title");
+            await page.GetByRole(AriaRole.Button, new() { Name = "儲存草稿", Exact = true }).ClickAsync();
+            await Expect(page.Locator(".notice-success")).ToContainTextAsync("已儲存為草稿");
+            await Expect(page.Locator("#content-title")).ToHaveValueAsync("Production saved title");
+
+            using var freshActor = await App.AdministratorAsync();
+            var persisted = await freshActor.Content.GetEditAsync(seeded.Id!.Value);
+            Assert.Equal("Production saved title", persisted.Title);
+            Assert.Equal(seeded.Markdown, persisted.Markdown);
+            Assert.NotEqual(seeded.Version, persisted.Version);
+            Assert.All(resourceResponses, response => Assert.True(response.Status is >= 200 and < 300, $"HTTP {response.Status}: {response.Url}"));
+            Assert.Empty(failedRequests);
+            Assert.Empty(pageErrors);
+        }
+        catch (Exception error)
+        {
+            var diagnostics = "url=" + page.Url
+                + "; fieldsetDisabled=" + await page.EvaluateAsync<bool?>("() => document.querySelector('fieldset.editor-grid')?.disabled ?? null")
+                + "; notices=" + string.Join(" | ", await page.Locator(".notice").AllInnerTextsAsync())
+                + "; resources=" + string.Join(" | ", resourceResponses.Select(response => $"{response.Status} {response.Url}"))
+                + "; failedRequests=" + string.Join(" | ", failedRequests)
+                + "; pageErrors=" + string.Join(" | ", pageErrors)
+                + "; console=" + string.Join(" | ", consoleMessages);
+            throw new InvalidOperationException(diagnostics, error);
+        }
+    }
+
     [PostgresFact]
     public async Task Administrator_can_complete_the_publishing_loop_in_a_real_browser()
     {
