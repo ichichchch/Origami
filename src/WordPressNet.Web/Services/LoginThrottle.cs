@@ -1,65 +1,49 @@
-using System.Collections.Concurrent;
-
 namespace WordPressNet.Web.Services;
 
-/// <summary>
-/// Limits repeated failed sign-in attempts per client. The Blazor sign-in page runs as a
-/// component rather than an endpoint, so endpoint metadata cannot carry this limit.
-/// </summary>
+/// <summary>Bounds all credential attempts per connection source, regardless of sign-in outcome.</summary>
 public sealed class LoginThrottle(TimeProvider clock)
 {
     public const int MaxAttempts = 20;
+    public const int MaxSources = 512;
     public static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
 
-    private readonly ConcurrentDictionary<string, Queue<DateTimeOffset>> failures = new();
+    private readonly object gate = new();
+    private readonly Dictionary<string, Queue<DateTimeOffset>> attempts = new(StringComparer.Ordinal);
+    // Exactly one expiry entry per source; requests visit only sources with expired attempts.
+    private readonly PriorityQueue<string, DateTimeOffset> expirations = new();
 
-    /// <summary>Reports whether the client exceeded the allowed number of failed attempts.</summary>
-    public bool IsBlocked(string key)
+    /// <summary>Atomically consumes a permit before checking credentials. Missing sources share one budget.</summary>
+    public bool TryAcquire(string? source)
     {
-        if (string.IsNullOrEmpty(key)) return false;
-        if (!failures.TryGetValue(key, out var queue)) return false;
-        lock (queue)
+        source = string.IsNullOrEmpty(source) ? "unknown" : source;
+        lock (gate)
         {
-            RemoveExpired(queue, clock.GetUtcNow());
-            if (queue.Count == 0) failures.TryRemove(key, out _);
-            return queue.Count >= MaxAttempts;
-        }
-    }
-
-    /// <summary>Records one failed attempt.</summary>
-    public void RegisterFailure(string key)
-    {
-        if (string.IsNullOrEmpty(key)) return;
-        var now = clock.GetUtcNow();
-        var queue = failures.GetOrAdd(key, _ => new Queue<DateTimeOffset>());
-        lock (queue)
-        {
-            RemoveExpired(queue, now);
-            queue.Enqueue(now);
-        }
-        if (failures.Count > 512) RemoveIdleEntries(now);
-    }
-
-    /// <summary>Clears the recorded failures after a successful sign-in.</summary>
-    public void Reset(string key)
-    {
-        if (!string.IsNullOrEmpty(key)) failures.TryRemove(key, out _);
-    }
-
-    private static void RemoveExpired(Queue<DateTimeOffset> queue, DateTimeOffset now)
-    {
-        while (queue.Count > 0 && now - queue.Peek() > Window) queue.Dequeue();
-    }
-
-    private void RemoveIdleEntries(DateTimeOffset now)
-    {
-        foreach (var entry in failures)
-        {
-            lock (entry.Value)
+            var now = clock.GetUtcNow();
+            RemoveExpired(now);
+            if (!attempts.TryGetValue(source, out var queue))
             {
-                RemoveExpired(entry.Value, now);
-                if (entry.Value.Count == 0) failures.TryRemove(entry.Key, out _);
+                // At capacity, new sources fail closed until an entry expires; live entries are never evicted.
+                if (attempts.Count >= MaxSources) return false;
+                queue = new Queue<DateTimeOffset>(MaxAttempts);
+                attempts.Add(source, queue);
+                expirations.Enqueue(source, now + Window);
             }
+            if (queue.Count >= MaxAttempts) return false;
+            queue.Enqueue(now);
+            return true;
+        }
+    }
+
+    private void RemoveExpired(DateTimeOffset now)
+    {
+        while (expirations.TryPeek(out var source, out var expiresAt) && expiresAt <= now)
+        {
+            expirations.Dequeue();
+            var queue = attempts[source];
+            while (queue.TryPeek(out var attemptedAt) && attemptedAt + Window <= now)
+                queue.Dequeue();
+            if (queue.Count == 0) attempts.Remove(source);
+            else expirations.Enqueue(source, queue.Peek() + Window);
         }
     }
 }

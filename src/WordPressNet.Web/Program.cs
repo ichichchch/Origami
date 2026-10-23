@@ -1,6 +1,4 @@
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
@@ -47,15 +45,6 @@ builder.Services.AddSingleton(storage);
 var protection = builder.Services.AddDataProtection().SetApplicationName("WordPressNet.SingleSite")
     .PersistKeysToFileSystem(new DirectoryInfo(storage.Keys));
 if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy("login", context => RateLimitPartition.GetSlidingWindowLimiter(
-        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new SlidingWindowRateLimiterOptions
-        {
-            PermitLimit = 20, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 4, QueueLimit = 0
-        }));
-});
 
 var app = builder.Build();
 if (isCommand)
@@ -99,7 +88,6 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapCmsIdentity();

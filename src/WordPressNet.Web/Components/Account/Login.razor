@@ -6,7 +6,6 @@
 @using Microsoft.EntityFrameworkCore
 @using WordPressNet.Web.Models
 @using WordPressNet.Web.Services
-@using Microsoft.AspNetCore.RateLimiting
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
 @inject NavigationManager Navigation
@@ -69,11 +68,9 @@
             return;
         }
 
-        // The sign-in page is a component, so endpoint rate-limit metadata never applies.
-        // The attempt limit is therefore enforced here, next to the sign-in itself.
+        // Consume before checking credentials; never key by a submitted username or forwarded header.
         var throttle = context.RequestServices.GetRequiredService<LoginThrottle>();
-        var clientKey = ThrottleKey(context, Input.Username);
-        if (throttle.IsBlocked(clientKey))
+        if (!throttle.TryAcquire(context.Connection.RemoteIpAddress?.ToString()))
         {
             Input.Password = string.Empty;
             errorMessage = ThrottledMessage;
@@ -105,26 +102,15 @@
         Input.Password = string.Empty;
         if (result.Succeeded)
         {
-            throttle.Reset(clientKey);
             // Never consume a caller-provided return URL. Cookies need a full HTTP navigation.
             Navigation.NavigateTo("/admin/posts", forceLoad: true);
             return;
         }
         // Do not disclose whether the username exists, is locked out, or is otherwise blocked.
-        throttle.RegisterFailure(clientKey);
         errorMessage = LoginFailure;
     }
 
     private void ClearPassword() => Input.Password = string.Empty;
-
-    // The limit applies to one account from one client, so an unrelated account or a
-    // different client is never blocked by another user's failures.
-    private static string ThrottleKey(HttpContext context, string username)
-    {
-        var address = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var account = username.Trim().ToLowerInvariant();
-        return account.Length == 0 ? "anonymous|" + address : account + "|" + address;
-    }
 
     public sealed class LoginInput
     {

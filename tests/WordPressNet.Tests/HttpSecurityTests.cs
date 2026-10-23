@@ -28,9 +28,71 @@ public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBa
         }
         Assert.NotNull(throttled);
         Assert.Contains("嘗試次數過多", WebUtility.HtmlDecode(await throttled!.Content.ReadAsStringAsync()));
-        // The limit applies to the account and client, so the correct password is refused
-        // while that combination is throttled.
+        // Exhausting a source also refuses a correct password from that source.
         Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(client, password)).StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task Rotating_nonexistent_usernames_cannot_bypass_source_limit_or_block_public_gets()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        for (var attempt = 0; attempt < LoginThrottle.MaxAttempts; attempt++)
+        {
+            client.DefaultRequestHeaders.Remove("X-Forwarded-For");
+            client.DefaultRequestHeaders.Add("X-Forwarded-For", $"192.0.2.{attempt + 1}");
+            using var response = await LoginAsync(client, password, $"nonexistent-{attempt}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("無法登入", WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync()));
+        }
+
+        using (var actor = App.Anonymous())
+        {
+            var user = await actor.Users.FindByNameAsync("test-admin");
+            Assert.False(await actor.Users.IsLockedOutAsync(user!));
+            Assert.Equal(0, await actor.Users.GetAccessFailedCountAsync(user!));
+        }
+
+        client.DefaultRequestHeaders.Remove("X-Forwarded-For");
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "198.51.100.1");
+        using var throttled = await LoginAsync(client, password, "another-nonexistent");
+        Assert.Equal(HttpStatusCode.TooManyRequests, throttled.StatusCode);
+        var html = WebUtility.HtmlDecode(await throttled.Content.ReadAsStringAsync());
+        Assert.Contains("嘗試次數過多", html);
+        Assert.False(html.Contains(password, StringComparison.Ordinal), "Throttling must never render a submitted password.");
+        using var correctPassword = await LoginAsync(client, password);
+        Assert.Equal(HttpStatusCode.TooManyRequests, correctPassword.StatusCode);
+        using var loginPage = await client.GetAsync("/account/login");
+        using var home = await client.GetAsync("/");
+        using var adminPage = await client.GetAsync("/admin/posts");
+        Assert.Equal(HttpStatusCode.OK, loginPage.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, home.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, adminPage.StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task Successful_login_consumes_a_permit_without_resetting_the_source_budget()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        for (var attempt = 0; attempt < LoginThrottle.MaxAttempts - 1; attempt++)
+        {
+            using var failed = await LoginAsync(client, password, $"nonexistent-{attempt}");
+            Assert.Equal(HttpStatusCode.OK, failed.StatusCode);
+        }
+        using var success = await LoginAsync(client, password);
+        Assert.Equal(HttpStatusCode.Redirect, success.StatusCode);
+        using var anotherClient = site.CreateClient();
+        using var throttled = await LoginAsync(anotherClient, password);
+        Assert.Equal(HttpStatusCode.TooManyRequests, throttled.StatusCode);
+        using var authenticated = await client.GetAsync("/admin/posts");
+        Assert.Equal(HttpStatusCode.OK, authenticated.StatusCode);
     }
 
     [PostgresFact]
