@@ -324,6 +324,39 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.Equal("Saved after reconnect", (await freshActor.Content.ListAdminAsync(ContentKind.Post)).Items.Single().Title);
     }
 
+    [PostgresFact]
+    public async Task Long_page_titles_and_site_names_fit_the_mobile_viewport()
+    {
+        var longTitle = new string('p', 100);
+        var longSiteName = new string('s', 100);
+        using (var actor = await App.AdministratorAsync())
+        {
+            await actor.Content.SaveAsync(NewContent(longTitle, ContentKind.Page, ContentStatus.Published));
+            var settings = await actor.Settings.GetAsync();
+            settings.Name = longSiteName;
+            await actor.Settings.SaveAsync(settings);
+        }
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new() { Channel = BrowserChannel(), Headless = true });
+        await using var context = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString(), ViewportSize = new() { Width = 390, Height = 844 } });
+        var page = await context.NewPageAsync();
+        await VisitAsync(page, "/");
+        // The public home is static SSR; the rendered values prove the server data arrived.
+        await Expect(page.Locator(".site-nav a").Nth(1)).ToHaveTextAsync(longTitle);
+        await Expect(page.Locator(".site-footer span")).ToContainTextAsync(longSiteName);
+        var diagnostics = await page.EvaluateAsync<string>("() => {" +
+            "const fail = [];" +
+            "if (document.documentElement.scrollWidth > window.innerWidth) fail.push('document ' + document.documentElement.scrollWidth + '>' + window.innerWidth);" +
+            "for (const el of document.querySelectorAll('.site-header, .site-nav, .site-footer')) {" +
+            "  if (el.scrollWidth > el.clientWidth + 1) fail.push(el.className + ' ' + el.scrollWidth + '>' + el.clientWidth);" +
+            "}" +
+            "return fail.join('; ');}");
+        Assert.True(diagnostics.Length == 0, "Horizontal overflow on mobile: " + diagnostics);
+        await SaveScreenshotAsync(page, "public-mobile-long-names.png");
+    }
+
     private static async Task LoginAsync(IPage page, string password)
     {
         await VisitAsync(page, "/account/login");
