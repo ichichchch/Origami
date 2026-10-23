@@ -1,4 +1,8 @@
-﻿#nullable disable
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Pgvector;
+
+#nullable disable
 
 namespace Origami.Web.Data.Migrations
 {
