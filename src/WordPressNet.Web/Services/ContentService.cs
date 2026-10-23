@@ -23,7 +23,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await admin.RequireAsync(ct);
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Contents.AsNoTracking().Where(x => x.Id == id).Select(x => new ContentEdit
+        return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown,
             Status = x.Status, Version = x.Version,
@@ -134,7 +134,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Contents.AsNoTracking().Where(x => x.Kind == kind && x.Status == ContentStatus.Published && x.Slug == slug)
+        return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Kind == kind && x.Status == ContentStatus.Published && x.Slug == slug)
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => c.Name).ToList(), x.Tags.OrderBy(t => t.Name).Select(t => t.Name).ToList())).SingleOrDefaultAsync(ct);
     }

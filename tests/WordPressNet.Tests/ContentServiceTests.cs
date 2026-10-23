@@ -1,4 +1,8 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using WordPressNet.Web.Data;
 using WordPressNet.Web.Models;
 using WordPressNet.Web.Services;
 
@@ -292,6 +296,50 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         Assert.Equal(Limits.MaxTaxonomiesPerKind, loaded.TagIds.Count);
     }
 
+    [PostgresTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Detail_queries_fetch_the_body_once_without_cross_joining_taxonomies(bool published)
+    {
+        using var admin = await App.AdministratorAsync();
+        await using var db = await App.CreateContextAsync();
+        var categories = Enumerable.Range(0, Limits.MaxTaxonomiesPerKind)
+            .Select(i => new Category { Name = "Category " + i, Slug = "category-" + i }).ToList();
+        var tags = Enumerable.Range(0, Limits.MaxTaxonomiesPerKind)
+            .Select(i => new Tag { Name = "Tag " + i, Slug = "tag-" + i }).ToList();
+        db.AddRange(categories);
+        db.AddRange(tags);
+        await db.SaveChangesAsync();
+        var input = NewContent("Bounded detail", status: ContentStatus.Published);
+        input.Markdown = new string('x', Limits.Body);
+        input.CategoryIds = categories.Select(x => x.Id).ToList();
+        input.TagIds = tags.Select(x => x.Id).ToList();
+        var saved = await admin.Content.SaveAsync(input);
+        var recorder = new QueryRecorder();
+        var service = new ContentService(new InterceptingContextFactory(App.ConnectionString, recorder),
+            admin.Services.GetRequiredService<AdminAccess>(), TimeProvider.System);
+
+        if (published)
+        {
+            var result = Assert.IsType<PublicContent>(await service.GetPublishedAsync(ContentKind.Post, saved.Slug));
+            Assert.Equal(input.Markdown, result.Markdown);
+            Assert.Equal(Limits.MaxTaxonomiesPerKind, result.Categories.Count);
+            Assert.Equal(Limits.MaxTaxonomiesPerKind, result.Tags.Count);
+        }
+        else
+        {
+            var result = await service.GetEditAsync(saved.Id!.Value);
+            Assert.Equal(input.Markdown, result.Markdown);
+            Assert.Equal(Limits.MaxTaxonomiesPerKind, result.CategoryIds.Count);
+            Assert.Equal(Limits.MaxTaxonomiesPerKind, result.TagIds.Count);
+        }
+
+        Assert.Equal(3, recorder.Commands.Count);
+        Assert.Single(recorder.Commands, sql => sql.Contains("\"Markdown\"", StringComparison.Ordinal));
+        Assert.DoesNotContain(recorder.Commands, sql => sql.Contains("\"ContentCategories\"", StringComparison.Ordinal)
+            && sql.Contains("\"ContentTags\"", StringComparison.Ordinal));
+    }
+
     [PostgresFact]
     public async Task Multiple_associations_are_deduplicated_and_sorted_on_the_public_projection()
     {
@@ -415,5 +463,26 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         await admin.Content.SaveAsync(NewContent("Hidden", ContentKind.Page));
         await admin.Content.SaveAsync(NewContent("Not a page", status: ContentStatus.Published));
         Assert.Equal(new[] { "Alpha", "Zebra" }, (await visitor.Content.NavigationAsync()).Select(x => x.Title));
+    }
+
+    private sealed class InterceptingContextFactory(string connectionString, IInterceptor interceptor) : IDbContextFactory<CmsDbContext>
+    {
+        public CmsDbContext CreateDbContext() => new(new DbContextOptionsBuilder<CmsDbContext>().UseNpgsql(connectionString)
+            .ConfigureWarnings(warnings => warnings.Throw(RelationalEventId.MultipleCollectionIncludeWarning))
+            .AddInterceptors(interceptor).Options);
+
+        public Task<CmsDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => Task.FromResult(CreateDbContext());
+    }
+
+    private sealed class QueryRecorder : DbCommandInterceptor
+    {
+        public List<string> Commands { get; } = [];
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            Commands.Add(command.CommandText);
+            return ValueTask.FromResult(result);
+        }
     }
 }
