@@ -1,23 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
-using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using System.Xml.Linq;
-using AngleSharp.Html.Parser;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
-using Npgsql;
-using SkiaSharp;
-using Origami.Web.Data;
-using Origami.Web.Models;
-using Origami.Web.Services;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]
@@ -229,7 +209,7 @@ public sealed class PersistenceTests : ServiceTestBase
         var cookie = source.GetCookies(address)["__Host-Origami.Admin"];
         Assert.True(cookie is not null, "HTTP login must issue the administrator authentication cookie.");
         var result = new CookieContainer();
-        result.Add(address, new Cookie(cookie.Name, cookie.Value, cookie.Path)
+        result.Add(address, new System.Net.Cookie(cookie.Name, cookie.Value, cookie.Path)
         {
             Secure = cookie.Secure, HttpOnly = cookie.HttpOnly
         });

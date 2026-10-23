@@ -1,9 +1,3 @@
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Web.Intelligence.Agents;
 
 public sealed record AssistantMessage(bool FromUser, string Text);

@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Components;
-using Origami.Web.Services;
-
 namespace Origami.Web.Components.Admin;
 
 public abstract class AdminComponentBase : ComponentBase, IDisposable

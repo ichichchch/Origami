@@ -1,8 +1,3 @@
-using System.Net;
-using AngleSharp.Html.Parser;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]
@@ -152,8 +147,8 @@ public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/admin/posts")).StatusCode);
 
         var staleCookies = new CookieContainer();
-        foreach (Cookie cookie in cookies.GetCookies(site.Address))
-            staleCookies.Add(site.Address, new Cookie(cookie.Name, cookie.Value, cookie.Path) { Secure = cookie.Secure, HttpOnly = cookie.HttpOnly });
+        foreach (System.Net.Cookie cookie in cookies.GetCookies(site.Address))
+            staleCookies.Add(site.Address, new System.Net.Cookie(cookie.Name, cookie.Value, cookie.Path) { Secure = cookie.Secure, HttpOnly = cookie.HttpOnly });
         using var staleClient = site.CreateClient(cookies: staleCookies);
         var getLogout = await client.GetAsync("/account/logout");
         Assert.True(getLogout.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed);

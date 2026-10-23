@@ -1,9 +1,3 @@
-using System.Diagnostics;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using Origami.Web.Data;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Tests;
 
 /// <summary>

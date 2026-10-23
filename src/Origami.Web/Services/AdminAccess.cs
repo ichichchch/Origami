@@ -1,10 +1,3 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Origami.Web.Data;
-
 namespace Origami.Web.Services;
 
 public sealed class AdminAccess(

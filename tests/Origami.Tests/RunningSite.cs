@@ -1,9 +1,3 @@
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
-
 namespace Origami.Tests;
 
 // A real HTTPS Kestrel process, with a test-only certificate and no machine trust-store changes.

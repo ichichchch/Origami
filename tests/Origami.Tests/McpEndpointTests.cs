@@ -1,9 +1,3 @@
-using System.Net;
-using System.Text;
-using System.Text.Json.Nodes;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 /// <summary>Drives /mcp over real HTTPS with the minimal JSON-RPC handshake the Streamable HTTP transport requires.</summary>

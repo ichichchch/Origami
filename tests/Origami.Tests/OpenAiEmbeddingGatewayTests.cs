@@ -1,12 +1,3 @@
-using System.Net;
-using System.Text;
-using System.Text.Json;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 public sealed class OpenAiEmbeddingGatewayTests

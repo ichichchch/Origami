@@ -1,5 +1,3 @@
-using Origami.Web.Models;
-
 namespace Origami.Web.Intelligence.Embedding;
 
 /// <summary>Splits Markdown into embeddable chunks at paragraph boundaries, deterministic and bounded.</summary>

@@ -1,6 +1,3 @@
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Models;
-
 namespace Origami.Tests;
 
 /// <summary>Deterministic embedding stand-in: maps texts to orthogonal basis vectors so similarity is exact.</summary>

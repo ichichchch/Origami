@@ -1,6 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]

@@ -1,11 +1,3 @@
-using System.Text.Json;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
-using Origami.Web.Intelligence.Agents;
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]

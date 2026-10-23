@@ -1,6 +1,3 @@
-using Microsoft.Extensions.AI;
-using Origami.Web.Intelligence.AiGateway;
-
 namespace Origami.Tests;
 
 /// <summary>Scripted IChatClient: returns queued responses and records every model call for assertions.</summary>

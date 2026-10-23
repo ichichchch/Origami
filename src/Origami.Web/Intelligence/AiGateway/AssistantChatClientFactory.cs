@@ -1,7 +1,3 @@
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
-using Origami.Web.Services;
-
 namespace Origami.Web.Intelligence.AiGateway;
 
 /// <summary>Seam for tests: lets the assistant run against a fake IChatClient without provider configuration.</summary>

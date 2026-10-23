@@ -1,11 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Origami.Web.Data;
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Models;
-using Origami.Web.Services;
-using Pgvector;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Web.Intelligence.SemanticSearch;
 
 public sealed record SemanticHit(Guid Id, ContentKind Kind, string Title, string Slug, double Score, string Snippet);

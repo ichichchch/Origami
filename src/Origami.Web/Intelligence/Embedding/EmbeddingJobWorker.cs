@@ -1,9 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Origami.Web.Data;
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Models;
-using Pgvector;
-
 namespace Origami.Web.Intelligence.Embedding;
 
 /// <summary>

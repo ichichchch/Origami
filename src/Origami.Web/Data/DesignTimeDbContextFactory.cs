@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Web.Data;
 
 public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<CmsDbContext>

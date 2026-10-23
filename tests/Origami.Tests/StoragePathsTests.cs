@@ -1,8 +1,3 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 public sealed class StoragePathsTests

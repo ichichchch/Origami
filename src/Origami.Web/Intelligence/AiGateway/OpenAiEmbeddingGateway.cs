@@ -1,8 +1,3 @@
-using System.Text.Json;
-using Microsoft.Extensions.Options;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Web.Intelligence.AiGateway;
 
 /// <summary>Calls an OpenAI-compatible /embeddings endpoint; the only place that knows the vendor's wire format.</summary>

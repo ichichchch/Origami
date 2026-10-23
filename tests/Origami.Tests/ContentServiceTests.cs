@@ -1,13 +1,3 @@
-using System.Data.Common;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
-using Origami.Web.Data;
-using Origami.Web.Models;
-using Origami.Web.Services;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]

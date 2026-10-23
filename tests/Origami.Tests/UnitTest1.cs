@@ -1,6 +1,3 @@
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Tests;
 
 public sealed class ContentRulesTests

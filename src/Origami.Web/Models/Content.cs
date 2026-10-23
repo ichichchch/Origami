@@ -1,7 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-using Microsoft.AspNetCore.Identity;
-using Pgvector;
-
 namespace Origami.Web.Models;
 
 public enum ContentKind { Post, Page }

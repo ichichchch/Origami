@@ -1,8 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using SkiaSharp;
-using Origami.Web.Data;
-using Origami.Web.Models;
-
 namespace Origami.Web.Services;
 
 public sealed class MediaService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin,

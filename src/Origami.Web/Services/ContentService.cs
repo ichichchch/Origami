@@ -1,7 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Origami.Web.Data;
-using Origami.Web.Models;
-
 namespace Origami.Web.Services;
 
 public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)

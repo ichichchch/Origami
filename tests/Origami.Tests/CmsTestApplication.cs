@@ -1,20 +1,3 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging.Abstractions;
-using Origami.Web.Data;
-using Origami.Web.Intelligence.Agents;
-using Origami.Web.Intelligence.AiGateway;
-using Origami.Web.Intelligence.Embedding;
-using Origami.Web.Intelligence.SemanticSearch;
-using Origami.Web.Models;
-using Origami.Web.Services;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Tests;
 
 public sealed class MutableAuthenticationStateProvider : AuthenticationStateProvider

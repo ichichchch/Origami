@@ -1,11 +1,3 @@
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Components.Server;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Origami.Web.Data;
-using Origami.Web.Services;
-
 namespace Origami.Web.Components.Account;
 
 public sealed class IdentityRevalidatingAuthenticationStateProvider(

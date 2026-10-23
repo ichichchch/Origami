@@ -1,13 +1,3 @@
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using Origami.Web.Data;
-using Pgvector.EntityFrameworkCore;
-
 namespace Origami.Tests;
 
 public sealed record PostgresBinaries(string InitDb, string PgCtl)

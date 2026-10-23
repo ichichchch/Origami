@@ -1,8 +1,3 @@
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore;
-using Pgvector.EntityFrameworkCore;
-using Origami.Web.Models;
-
 namespace Origami.Web.Data;
 
 public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : IdentityDbContext<AdminUser>(options)

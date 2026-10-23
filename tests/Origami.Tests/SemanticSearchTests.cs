@@ -1,8 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Origami.Web.Models;
-using Origami.Web.Services;
-using Pgvector;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]

@@ -1,15 +1,3 @@
-using System.Data.Common;
-using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Origami.Web.Components.Account;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Web.Data;
 
 public static class IdentityRegistration

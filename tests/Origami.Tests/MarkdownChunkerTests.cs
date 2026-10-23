@@ -1,6 +1,3 @@
-using Origami.Web.Intelligence.Embedding;
-using Origami.Web.Models;
-
 namespace Origami.Tests;
 
 public sealed class MarkdownChunkerTests

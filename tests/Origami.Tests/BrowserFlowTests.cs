@@ -1,11 +1,3 @@
-using System.Collections.Concurrent;
-using System.Net;
-using Microsoft.Playwright;
-using SkiaSharp;
-using Origami.Web.Models;
-using Origami.Web.Services;
-using static Microsoft.Playwright.Assertions;
-
 namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]

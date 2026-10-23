@@ -1,9 +1,3 @@
-using System.ComponentModel;
-using ModelContextProtocol.Server;
-using Origami.Web.Intelligence.SemanticSearch;
-using Origami.Web.Models;
-using Origami.Web.Services;
-
 namespace Origami.Web.Intelligence.Agents;
 
 public sealed record McpContentResult(bool Found, PublicContent? Content);
