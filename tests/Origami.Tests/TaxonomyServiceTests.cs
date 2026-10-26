@@ -160,7 +160,9 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         Assert.Equal("東京散步地圖", byTitle.Items.Single().Title);
         var all = await admin.Content.ListAdminAsync(ContentKind.Post, search: "");
         var byWildcard = await admin.Content.ListAdminAsync(ContentKind.Post, search: "%");
-        Assert.Equal(all.Total, byWildcard.Total);
+        // The wildcard is escaped, so it matches literally and never widens the result set.
+        Assert.Equal(0, byWildcard.Total);
+        Assert.True(all.Total > 0);
         Assert.Empty((await admin.Content.ListAdminAsync(ContentKind.Post, search: "不存在的主題")).Items);
     }
 }
