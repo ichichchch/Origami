@@ -112,7 +112,15 @@ public sealed class IsolatedPostgres : IAsyncLifetime
         catch (Exception error)
         {
             var diagnostic = Sanitize(error.Message);
-            if (File.Exists(LogFile)) diagnostic += Environment.NewLine + Sanitize(await File.ReadAllTextAsync(LogFile));
+            // The cluster may still be running and holding the log; reading it must never mask the original error.
+            try
+            {
+                if (File.Exists(LogFile))
+                    using (var stream = new FileStream(LogFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var reader = new StreamReader(stream))
+                        diagnostic += Environment.NewLine + Sanitize(await reader.ReadToEndAsync());
+            }
+            catch (IOException) { /* The original error is the useful diagnostic. */ }
             try { await DisposeAsync(); }
             catch (Exception cleanupError) { diagnostic += Environment.NewLine + Sanitize(cleanupError.Message); }
             // Do not attach an inner exception that could expose a connection string.
