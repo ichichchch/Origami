@@ -12,14 +12,14 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         {
             var total = await db.Categories.CountAsync(ct);
             var items = await db.Categories.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
-                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version)).ToListAsync(ct);
+                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version) { Description = x.Description }).ToListAsync(ct);
             return new(items, total, page, pageSize);
         }
         else
         {
             var total = await db.Tags.CountAsync(ct);
             var items = await db.Tags.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
-                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version)).ToListAsync(ct);
+                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version) { Description = x.Description }).ToListAsync(ct);
             return new(items, total, page, pageSize);
         }
     }
@@ -42,6 +42,7 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             else db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
             entity.Name = input.Name.Trim();
             entity.Slug = slug;
+            entity.Description = (input.Description ?? "").Trim();
             entity.Version = version;
             id = entity.Id;
         }
@@ -54,6 +55,7 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             else db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
             entity.Name = input.Name.Trim();
             entity.Slug = slug;
+            entity.Description = (input.Description ?? "").Trim();
             entity.Version = version;
             id = entity.Id;
         }

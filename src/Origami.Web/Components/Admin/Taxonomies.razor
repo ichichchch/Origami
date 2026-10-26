@@ -32,6 +32,7 @@
             <fieldset disabled="@Blocked">
                 <div class="field"><label for="taxonomy-name">名稱 <span class="required">必填</span></label><input id="taxonomy-name" @bind="_edit.Name" @bind:event="oninput" required maxlength="@Limits.TaxonomyName" /><span class="field-help">最多 @Limits.TaxonomyName 字。</span></div>
                 <div class="field"><label for="taxonomy-slug">網址代稱</label><input id="taxonomy-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_edit.Id is not null)" /><span class="field-help">首次儲存可留空，由名稱產生。</span></div>
+                <div class="field"><label for="taxonomy-description">描述</label><textarea id="taxonomy-description" @bind="_edit.Description" @bind:event="oninput" rows="3" maxlength="@Limits.TaxonomyDescription" aria-describedby="taxonomy-description-help"></textarea><span id="taxonomy-description-help" class="field-help">顯示於前台分類或標籤篩選頁的說明文字，最多 @Limits.TaxonomyDescription 字。</span></div>
                 <div class="button-row"><button type="submit" class="button">@(Busy ? "處理中…" : "儲存" + Label)</button>@if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => RequestChange(NewEdit)">新增另一個</button> }</div>
                 <p class="field-help">@(Dirty ? "有未儲存的變更。" : "修改後請按儲存，不會自動儲存。")</p>
             </fieldset>
@@ -90,7 +91,7 @@
     });
     private Task Edit(TaxonomyItem item) => RequestChange(() =>
     {
-        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Version = item.Version };
+        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Description = item.Description, Version = item.Version };
         _baseline = Snapshot();
         _delete = null;
         return Task.CompletedTask;

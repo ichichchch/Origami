@@ -39,6 +39,7 @@ public sealed class TaxonomyEdit
     public Guid? Id { get; set; }
     [Required, StringLength(Limits.TaxonomyName)] public string Name { get; set; } = "";
     [StringLength(Limits.Slug)] public string Slug { get; set; } = "";
+    [StringLength(Limits.TaxonomyDescription)] public string? Description { get; set; }
     public Guid Version { get; set; }
 }
 
@@ -65,7 +66,10 @@ public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
 /// <summary>Revision list entry; the body loads on demand.</summary>
 public sealed record RevisionItem(Guid Id, string Title, DateTimeOffset CreatedAt);
 public sealed record RevisionDetail(Guid Id, Guid ContentId, string Title, string Markdown, string Excerpt, DateTimeOffset CreatedAt);
-public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Version);
+public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Version)
+{
+    public string Description { get; init; } = "";
+}
 public sealed record PublicTaxonomy(string Name, string Slug, int Count);
 public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, string Slug, string Markdown,
     DateTimeOffset? PublishedAt, IReadOnlyList<NavigationItem> Categories, IReadOnlyList<NavigationItem> Tags)
