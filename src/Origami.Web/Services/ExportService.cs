@@ -2,7 +2,8 @@ namespace Origami.Web.Services;
 
 /// <summary>
 /// Streams the site's settings, taxonomies, full content and media metadata as JSON. Uploaded image
-/// binaries, accounts and every kind of secret stay out of the export on purpose.
+/// binaries, accounts and every kind of secret stay out of the export on purpose; content protection
+/// hashes travel along so password gates survive an import round trip.
 /// </summary>
 public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin)
 {
@@ -13,13 +14,25 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         await using var writer = new Utf8JsonWriter(output);
         writer.WriteStartObject();
         writer.WriteString("format", "origami-export");
-        writer.WriteNumber("version", 1);
+        writer.WriteNumber("version", 2);
         writer.WriteString("exportedAt", DateTimeOffset.UtcNow);
 
+        // Content ids never leave the site; slugs are the stable identity for import-time links.
+        var slugById = await db.Contents.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         var settings = await db.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, ct);
         writer.WriteStartObject("site");
         writer.WriteString("name", settings?.Name ?? "");
         writer.WriteString("description", settings?.Description ?? "");
+        if (settings?.PostsPerPage is { } postsPerPage) writer.WriteNumber("postsPerPage", postsPerPage);
+        if (settings?.FeedItems is { } feedItems) writer.WriteNumber("feedItems", feedItems);
+        if (settings?.HomePageContentId is { } homeId && slugById.TryGetValue(homeId, out var homeSlug))
+            writer.WriteString("homePageSlug", homeSlug);
+        if (settings?.SiteIconMediaId is { } iconId)
+        {
+            var iconFile = await db.MediaAssets.AsNoTracking().Where(x => x.Id == iconId)
+                .Select(x => x.FileName).SingleOrDefaultAsync(ct);
+            if (iconFile is not null) writer.WriteString("siteIconFileName", iconFile);
+        }
         writer.WriteEndObject();
 
         writer.WriteStartArray("categories");
@@ -28,6 +41,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteStartObject();
             writer.WriteString("name", category.Name);
             writer.WriteString("slug", category.Slug);
+            writer.WriteString("description", category.Description);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
@@ -38,6 +52,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteStartObject();
             writer.WriteString("name", tag.Name);
             writer.WriteString("slug", tag.Slug);
+            writer.WriteString("description", tag.Description);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
@@ -53,10 +68,25 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteString("excerpt", content.Excerpt);
             writer.WriteBoolean("isSticky", content.IsSticky);
             writer.WriteString("markdown", content.Markdown);
-            writer.WriteString("status", content.Status == ContentStatus.Published ? "published" : "draft");
+            writer.WriteString("status", content.Status switch
+            {
+                ContentStatus.Published => "published",
+                ContentStatus.Trashed => "trashed",
+                _ => "draft",
+            });
+            if (content.IsProtected)
+            {
+                writer.WriteBoolean("isProtected", true);
+                writer.WriteString("protectionHash", content.ProtectionHash);
+            }
+            if (content.IsPrivate) writer.WriteBoolean("isPrivate", true);
+            if (content.ParentId is { } parentId && slugById.TryGetValue(parentId, out var parentSlug))
+                writer.WriteString("parentSlug", parentSlug);
             writer.WriteString("createdAt", content.CreatedAt);
             writer.WriteString("updatedAt", content.UpdatedAt);
             if (content.PublishedAt is { } published) writer.WriteString("publishedAt", published);
+            if (content.PublishAt is { } scheduled) writer.WriteString("publishAt", scheduled);
+            if (content.DeletedAt is { } deleted) writer.WriteString("deletedAt", deleted);
             writer.WriteStartArray("categories");
             foreach (var slug in content.Categories.Select(x => x.Slug).OrderBy(x => x, StringComparer.Ordinal)) writer.WriteStringValue(slug);
             writer.WriteEndArray();

@@ -42,6 +42,7 @@ builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFa
 builder.Services.AddScoped<SiteAssistant>();
 builder.Services.AddScoped<AiStatusService>();
 builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<TwoFactorService>();
 builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
 builder.Services.AddHostedService<EmbeddingJobWorker>();
