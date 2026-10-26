@@ -11,21 +11,25 @@
 @inject IJSRuntime JavaScript
 
 <PageTitle>@(_model?.Id is null ? "新增內容" : "編輯內容") · 內容管理</PageTitle>
-<UnsavedGuard Dirty="Dirty" Busy="Busy" />
+<UnsavedGuard Dirty="Dirty" Busy="@(Busy || ChildBusy)" />
 <div class="page-heading">
     <div><a class="back-link" href="@ListPath">← 返回@(KindLabel)列表</a><h1>@(_model?.Id is null ? "新增" : "編輯")@(KindLabel)</h1><p>專注寫作，準備好再與世界分享。</p></div>
-    <span class="save-indicator @(Dirty ? "unsaved" : "")" role="status">@(Dirty ? "有未儲存的變更" : _model?.Id is not null ? "已載入儲存版本" : "尚未儲存")</span>
+    <span class="save-indicator @(Dirty ? "unsaved" : "")" role="status">@SaveStatusText</span>
+    @if (_autosaveAt is { } at)
+    {
+        <span class="save-indicator autosaved" role="status">已自動儲存 @at.ToString("HH:mm")</span>
+    }
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />@if (Error is not null && !LoginRequired)
 {
     <p class="field-help">輸入仍保留。若資料衝突，請先複製需要的內容，再重新載入最新版本。</p>
-    <button class="button button-secondary" disabled="@Blocked" @onclick="RequestReload">重新載入最新版本</button>
+    <button class="button button-secondary" disabled="@SaveBlocked" @onclick="RequestReload">重新載入最新版本</button>
 }
 @if (_reloadRequested)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="reload-title">
         <h2 id="reload-title">捨棄輸入並重新載入？</h2><p>目前未儲存的輸入將被取代。請先複製要保留的內容。</p>
-        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _reloadRequested = false">繼續編輯</button></div>
+        <div class="button-row"><button class="button button-danger" disabled="@SaveBlocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _reloadRequested = false">繼續編輯</button></div>
     </section>
 }
 @if (_model is not null)
@@ -36,9 +40,10 @@
                 <section class="panel editor-fields">
                     <div class="field"><label for="content-title">標題 <span class="required">必填</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="給這個想法一個標題" /><span class="field-help">最多 @Limits.Title 字。</span></div>
                     <div class="field"><label for="content-slug">網址代稱</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="首次儲存可留空，自標題產生" /></div><span id="slug-help" class="field-help">代稱須全站唯一；修改後舊網址不會自動轉址。</span></div>
+                    <div class="field"><label for="content-excerpt">摘要</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="用一兩句話介紹這篇內容；留空則自動使用開頭文字"></textarea><span id="excerpt-help" class="field-help">純文字，最多 @Limits.Excerpt 字；顯示於文章列表、搜尋結果與社群分享描述。</span></div>
                 </section>
                 <section class="panel markdown-panel">
-                    <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@(!_preview)" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview" @onclick="Preview">預覽</button></div><button type="button" class="button button-secondary button-small" @onclick="() => _mediaOpen = !_mediaOpen">插入圖片</button></div>
+                    <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@(!_preview)" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview" disabled="@ChildBusy" @onclick="Preview">預覽</button></div><button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">插入圖片</button></div>
                     @if (_preview)
                     {
                         <div class="prose editor-preview" aria-label="尚未儲存的內容預覽">@((MarkupString)_previewHtml)</div>
@@ -47,39 +52,111 @@
                     else
                     {
                         <label class="sr-only" for="content-markdown">Markdown 本文</label><textarea id="content-markdown" class="markdown-input" @bind="_model.Markdown" @bind:event="oninput" maxlength="@Limits.Body" rows="22" placeholder="從這裡開始寫作…" aria-describedby="markdown-help"></textarea>
-                        <div class="editor-footnote"><span id="markdown-help">支援 Markdown；不執行原始 HTML。</span><span>@_model.Markdown.Length.ToString("N0") / @Limits.Body.ToString("N0") 字</span></div>
+                        <div class="editor-footnote"><span id="markdown-help">支援 Markdown；不執行原始 HTML。</span><span>@((_model.Markdown?.Length ?? 0).ToString("N0")) / @Limits.Body.ToString("N0") 字</span></div>
                     }
                 </section>
                 @if (_mediaOpen)
                 {
-                    <MediaPicker Disabled="Blocked" Select="InsertMedia" Close="() => _mediaOpen = false" OnUnauthorized="RequireLogin" />
+                    <MediaPicker Disabled="Blocked" Select="InsertMedia" Close="ToggleMedia" BusyChanged="value => _mediaBusy = value" OnUnauthorized="RequireLogin" />
                 }
             </div>
             <aside class="editor-aside">
                 <section class="panel publish-panel">
                     <h2>發布設定</h2><div class="status-line"><span>目前狀態</span><span class="status-badge @(_model.Status == ContentStatus.Published ? "published" : "draft")">@(_model.Status == ContentStatus.Published ? "已發布" : "草稿")</span></div>
-                    <p class="field-help">@(_model.Status == ContentStatus.Published ? "儲存會立即更新公開網站。撤回後，文字內容將不再公開。" : "草稿僅供管理員編輯，發布後訪客才能閱讀。")</p>
-                    <button type="submit" class="button full-width">@(Busy ? "處理中…" : _model.Status == ContentStatus.Published ? "儲存變更" : "儲存草稿")</button>
+                    @if (_model.Kind == ContentKind.Post)
+                    {
+                        <div class="field checkbox-field">
+                            <label for="content-sticky"><input id="content-sticky" type="checkbox" @bind="_model.IsSticky" disabled="@Blocked" /> 置頂文章</label>
+                            <p class="field-help">置頂文章固定排在文章列表最前面。</p>
+                        </div>
+                    }
                     @if (_model.Status == ContentStatus.Draft)
                     {
-                        <button type="button" class="button button-secondary full-width" @onclick="() => Save(ContentStatus.Published)">儲存並發布</button>
+                        <div class="field">
+                            <label for="content-schedule">排程發布時間（選填）</label>
+                            <input id="content-schedule" type="datetime-local" @bind="_scheduleLocal" disabled="@Blocked" aria-describedby="schedule-help" />
+                            <span id="schedule-help" class="field-help">以你瀏覽器的時區為準，至少 @Limits.ScheduleLeadMinutes 分鐘後；時間到系統自動發布。留空表示不排程。</span>
+                        </div>
+                        @if (_model.Id is not null)
+                        {
+                            <div class="field">
+                                <label id="preview-link-label">草稿預覽連結</label>
+                                @if (_model.PreviewToken is { } token)
+                                {
+                                    <input class="code-input" value="@PreviewUrl(token)" readonly aria-labelledby="preview-link-label" />
+                                    <div class="button-row">
+                                        <button type="button" class="button button-secondary button-small" disabled="@SaveBlocked" @onclick="CyclePreview">重新產生連結</button>
+                                        <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RevokePreview">撤銷</button>
+                                    </div>
+                                    <span class="field-help">持有連結的人都能閱讀這份草稿（不會進入搜尋）；重新產生或撤銷後，舊連結立即失效。</span>
+                                }
+                                else
+                                {
+                                    <button type="button" class="button button-secondary button-small" disabled="@SaveBlocked" @onclick="CyclePreview">產生預覽連結</button>
+                                    <span class="field-help">產生臨時連結，在發布前分享草稿給其他人看。</span>
+                                }
+                            </div>
+                        }
+                    }
+                    <p class="field-help">@(_model.Status == ContentStatus.Published ? "儲存會立即更新公開網站。撤回後，文字內容將不再公開。" : "草稿僅供管理員編輯，發布後訪客才能閱讀。")</p>
+                    <button type="submit" class="button full-width" disabled="@SaveBlocked">@(SubmitText)</button>
+                    @if (_model.Status == ContentStatus.Draft)
+                    {
+                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Published)">儲存並發布</button>
                     }
                     else
                     {
-                        <button type="button" class="button button-secondary full-width" @onclick="() => Save(ContentStatus.Draft)">儲存並撤回為草稿</button>
+                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Draft)">儲存並撤回為草稿</button>
                         <a class="public-preview-link" href="@PublicPath" target="_blank" rel="noopener" data-enhance-nav="false">檢視公開版本 ↗</a>
                     }
-                    <p class="field-help">不會自動儲存。首次發布日期由系統保留，重新發布不會重設。</p>
+                    @if (ChildBusy) { <p class="field-help" role="status">分類、標籤或圖片操作尚未完成，請稍候再儲存；可繼續編輯本文。</p> }
+                    <p class="field-help">既有草稿每 @Limits.AutosaveSeconds 秒自動儲存一次（僅草稿）。首次發布日期由系統保留，重新發布不會重設。</p>
                 </section>
                 @if (_model.Kind == ContentKind.Post)
                 {
                     <section class="panel taxonomy-panel">
-                        <TaxonomySelector Kind="TaxonomyKind.Category" Selected="_model.CategoryIds" Disabled="Blocked" Changed="SelectionChanged" OnUnauthorized="RequireLogin" />
-                        <TaxonomySelector Kind="TaxonomyKind.Tag" Selected="_model.TagIds" Disabled="Blocked" Changed="SelectionChanged" OnUnauthorized="RequireLogin" />
+                        <TaxonomySelector Kind="TaxonomyKind.Category" Selected="_model.CategoryIds" Disabled="Blocked" Changed="SelectionChanged" BusyChanged="value => _categoryBusy = value" OnUnauthorized="RequireLogin" />
+                        <TaxonomySelector Kind="TaxonomyKind.Tag" Selected="_model.TagIds" Disabled="Blocked" Changed="SelectionChanged" BusyChanged="value => _tagBusy = value" OnUnauthorized="RequireLogin" />
+                    </section>
+                }
+                @if (_model.Id is not null)
+                {
+                    <section class="panel revisions-panel">
+                        <div class="panel-toolbar"><h2>修訂版本</h2><button type="button" class="text-button" disabled="@Blocked" @onclick="ToggleRevisions">@(_revisionsOpen ? "收起" : "查看")</button></div>
+                        @if (_revisionsOpen)
+                        {
+                            @if (_revisionView is not null)
+                            {
+                                <div class="revision-view">
+                                    <p><strong>@_revisionView.Title</strong> · @_revisionView.CreatedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
+                                    <label class="sr-only" for="@("revision-body-" + _revisionView.Id)">修訂內容（Markdown）</label>
+                                    <pre id="@("revision-body-" + _revisionView.Id)" class="revision-body">@_revisionView.Markdown</pre>
+                                    @if (_revisionView.Excerpt != "") { <p class="field-help">摘要：@_revisionView.Excerpt</p> }
+                                    <div class="button-row">
+                                        <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RestoreRevision(_revisionView)">載入至編輯器</button>
+                                        <button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionView = null">關閉</button>
+                                    </div>
+                                    <p class="field-help">載入會覆蓋編輯器目前內容（未儲存前可再次還原），確認後仍需手動儲存。</p>
+                                </div>
+                            }
+                            @if (_revisions.Count == 0)
+                            {
+                                <p class="field-help">還沒有修訂記錄；每次儲存都會保留前一版，最多 @Limits.RevisionKeep 筆。</p>
+                            }
+                            else
+                            {
+                                <ul class="revision-list">
+                                    @foreach (var revision in _revisions)
+                                    {
+                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">查看</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">還原</button></span></li>
+                                    }
+                                </ul>
+                            }
+                        }
                     </section>
                 }
                 <p class="privacy-note">所有上傳圖片均為公開資源，草稿中的圖片也不例外。撤回文章不會隱藏圖片網址。</p>
-                @if (_model.Id is not null) { <button type="button" class="text-button" @onclick="RequestReload">重新載入儲存版本</button> }
+                @if (_model.Id is not null) { <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RequestReload">重新載入儲存版本</button> }
             </aside>
         </fieldset>
     </EditForm>
@@ -97,10 +174,50 @@
     private string _previewHtml = "";
     private bool _mediaOpen;
     private bool _reloadRequested;
+    private bool _mediaBusy;
+    private bool _categoryBusy;
+    private bool _tagBusy;
+    private bool _revisionsOpen;
+    private List<RevisionItem> _revisions = [];
+    private RevisionDetail? _revisionView;
+    private DateTimeOffset? _autosaveAt;
+    private bool _autosaveStopped;
+    private int _tzOffsetMinutes;
+    private DateTimeOffset? _scheduleLocal;
+    private CancellationTokenSource? _autosaveCts;
+    private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
+    // Do not feed ChildBusy into the outer fieldset or child Disabled parameters:
+    // each child must finish its operation and callbacks without disabling itself through the parent.
+    private bool SaveBlocked => Blocked || ChildBusy;
     private string KindLabel => _model?.Kind == ContentKind.Page ? "頁面" : "文章";
     private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
     private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
     private bool Dirty => _model is not null && Snapshot(_model) != _baseline;
+    private string SaveStatusText
+    {
+        get
+        {
+            if (Dirty) return "有未儲存的變更";
+            if (_model?.Id is not null) return "已載入儲存版本";
+            return "尚未儲存";
+        }
+    }
+    private string SubmitText
+    {
+        get
+        {
+            if (Busy) return "處理中…";
+            return _model!.Status == ContentStatus.Published ? "儲存變更" : "儲存草稿";
+        }
+    }
+    private ContentKind InferNewKind() => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages/", StringComparison.OrdinalIgnoreCase)
+        ? ContentKind.Page : ContentKind.Post;
+    private static string SaveNotice(ContentStatus status, bool wasPublished)
+    {
+        if (status == ContentStatus.Published) return "已儲存並公開。";
+        if (wasPublished) return "已撤回為草稿，文字內容不再公開。";
+        return "已儲存為草稿，文字內容不對外公開。";
+    }
     private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(model);
 
     protected override async Task OnParametersSetAsync()
@@ -114,6 +231,12 @@
         _mediaOpen = false;
         _preview = false;
         _reloadRequested = false;
+        _revisionsOpen = false;
+        _revisions = [];
+        _revisionView = null;
+        _autosaveAt = null;
+        _autosaveStopped = false;
+        _scheduleLocal = null;
         var flash = Saved switch
         {
             "draft" => "內容已建立為草稿，文字內容不對外公開。",
@@ -126,35 +249,144 @@
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || Saved is null) return;
-        // Keep the result marker out of the address bar so a reload does not repeat it.
-        try { await JavaScript.InvokeVoidAsync("history.replaceState", null, "", Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0]); }
-        catch (JSException) { }
-        catch (InvalidOperationException) { }
+        if (!firstRender) return;
+        // The schedule input is interpreted in the visitor's own time zone.
+        try { _tzOffsetMinutes = (int)await JavaScript.InvokeAsync<double>("eval", "-new Date().getTimezoneOffset()"); }
+        catch (JSException) { _tzOffsetMinutes = 0; }
+        catch (InvalidOperationException) { /* No JS runtime during prerendering; keep UTC. */ }
+        _scheduleLocal = ToLocalOffset(_model?.PublishAt);
+        if (_model?.Id is not null)
+        {
+            _autosaveCts = new CancellationTokenSource();
+            _ = RunAutosaveLoopAsync(_autosaveCts.Token);
+        }
+        if (Saved is not null)
+        {
+            // Keep the result marker out of the address bar so a reload does not repeat it.
+            try { await JavaScript.InvokeVoidAsync("history.replaceState", null, "", Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0]); }
+            catch (JSException) { /* Best-effort address cleanup; the marker only repeats a notice. */ }
+            catch (InvalidOperationException) { /* No JS runtime during prerendering; ignore. */ }
+        }
     }
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!disposing) return;
+        _autosaveCts?.Cancel();
+        _autosaveCts?.Dispose();
+        _autosaveCts = null;
+    }
+    private async Task RunAutosaveLoopAsync(CancellationToken cancellation)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Limits.AutosaveSeconds));
+        try
+        {
+            while (!cancellation.IsCancellationRequested && await timer.WaitForNextTickAsync(cancellation))
+            {
+                await InvokeAsync(() => AutosaveTickAsync(cancellation));
+            }
+        }
+        catch (OperationCanceledException) { /* The circuit closed; nothing to save into. */ }
+        catch (ObjectDisposedException) { /* Component disposed while waiting on the timer. */ }
+    }
+    private async Task AutosaveTickAsync(CancellationToken cancellation)
+    {
+        // Autosave only touches existing drafts; anything else keeps the manual flow.
+        if (_autosaveStopped || cancellation.IsCancellationRequested || Busy || SaveBlocked || ChildBusy
+            || _model is not { Id: not null, Status: ContentStatus.Draft } || !Dirty) return;
+        try
+        {
+            var input = BuildInput(ContentStatus.Draft);
+            _ = await Content.UpdateAsync(input, cancellation);
+            _model = input;
+            _baseline = Snapshot(input);
+            _autosaveAt = DateTimeOffset.Now;
+        }
+        catch (CmsException)
+        {
+            // A conflict or validation failure must stop the loop; the manual flow shows the details.
+            _autosaveStopped = true;
+        }
+        catch (UnauthorizedAccessException) { _autosaveStopped = true; }
+        catch (OperationCanceledException) { /* The circuit is closing; the manual flow resumes next time. */ }
+    }
+    // The datetime-local picker yields wall-clock values; the browser offset converts them to UTC.
+    private DateTimeOffset? ToLocalOffset(DateTimeOffset? utc) =>
+        utc is { } value ? value.ToOffset(TimeSpan.FromMinutes(_tzOffsetMinutes)) : null;
+    private DateTimeOffset? FromLocalPick(DateTimeOffset? picked) =>
+        picked is { } value ? new DateTimeOffset(value.DateTime, TimeSpan.FromMinutes(_tzOffsetMinutes)).ToUniversalTime() : null;
+    private string PreviewUrl(Guid token) => Navigation.ToAbsoluteUri("/preview/" + token).ToString();
+    private Task ToggleRevisions() => _revisionsOpen ? Task.CompletedTask : LoadRevisions();
+    private Task LoadRevisions() => RunAsync(async ct =>
+    {
+        _revisions = await Content.ListRevisionsAsync(_model!.Id!.Value, ct);
+        _revisionsOpen = true;
+        _revisionView = null;
+    });
+    private Task ViewRevision(Guid revisionId) => RunAsync(async ct =>
+    {
+        _revisionView = await Content.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+    });
+    private Task RestoreRevisionById(Guid revisionId) => RunAsync(async ct =>
+    {
+        var revision = await Content.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        RestoreRevision(revision);
+    });
+    private void RestoreRevision(RevisionDetail revision)
+    {
+        // Restore loads the snapshot into the editor; nothing is written until the admin saves.
+        _model!.Title = revision.Title;
+        _model.Markdown = revision.Markdown;
+        _model.Excerpt = revision.Excerpt;
+        _revisionView = null;
+        _preview = false;
+    }
+    private Task CyclePreview() => RunAsync(async ct =>
+    {
+        var token = await Content.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
+        var stored = await Content.GetEditAsync(_model.Id.Value, ct);
+        _baseline = Snapshot(stored);
+        _model.Version = stored.Version;
+        _model.PreviewToken = token;
+    }, "預覽連結已產生；舊連結（若有）已失效。");
+    private Task RevokePreview() => RunAsync(async ct =>
+    {
+        await Content.RevokePreviewTokenAsync(_model!.Id!.Value, ct);
+        var stored = await Content.GetEditAsync(_model.Id.Value, ct);
+        _baseline = Snapshot(stored);
+        _model.Version = stored.Version;
+        _model.PreviewToken = null;
+    }, "預覽連結已撤銷。");
     private Task Load() => RunAsync(async ct =>
     {
-        var loaded = Id is { } id ? await Content.GetEditAsync(id, ct) : new ContentEdit
-        {
-            Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages/", StringComparison.OrdinalIgnoreCase)
-                ? ContentKind.Page : ContentKind.Post
-        };
+        var loaded = Id is { } id ? await Content.GetEditAsync(id, ct) : new ContentEdit { Kind = InferNewKind() };
         _model = loaded;
         _baseline = Snapshot(loaded);
         _preview = false;
     });
-    private void RequestReload() { if (!Blocked) _reloadRequested = true; }
-    private async Task Reload() { _reloadRequested = false; await Load(); }
+    private void RequestReload() { if (!SaveBlocked) _reloadRequested = true; }
+    private async Task Reload()
+    {
+        if (SaveBlocked) return;
+        _reloadRequested = false;
+        await Load();
+    }
+    private void ToggleMedia() { if (!Blocked && !_mediaBusy) _mediaOpen = !_mediaOpen; }
     private Task SaveCurrent() => Save(_model?.Status ?? ContentStatus.Draft);
+    private ContentEdit BuildInput(ContentStatus status) => new()
+    {
+        Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
+        Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
+        PublishAt = status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
+        Version = _model.Version, Status = status,
+        CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]
+    };
     private async Task Save(ContentStatus status)
     {
-        if (_model is null || Blocked) return;
-        var input = new ContentEdit
-        {
-            Id = _model.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
-            Markdown = _model.Markdown, Version = _model.Version, Status = status,
-            CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]
-        };
+        if (_model is null || SaveBlocked) return;
+        ContentEdit input;
+        try { input = BuildInput(status); }
+        catch (CmsException error) { Error = error.Message; return; }
         var isNew = input.Id is null;
         var wasPublished = _model.Status == ContentStatus.Published;
         var success = await RunAsync(async ct =>
@@ -165,20 +397,19 @@
                 ? await Content.CreateAsync(input.Kind, input, ct)
                 : await Content.UpdateAsync(input, ct);
             _baseline = Snapshot(_model);
-        }, status == ContentStatus.Published ? "已儲存並公開。"
-            : wasPublished ? "已撤回為草稿，文字內容不再公開。"
-            : "已儲存為草稿，文字內容不對外公開。");
+            _scheduleLocal = ToLocalOffset(_model.PublishAt);
+        }, SaveNotice(status, wasPublished));
         if (success && isNew && _model.Id is { } id)
         {
             // A new content identifier changes this page's route. A document-level
             // navigation guarantees a fresh component instance bound to the stored version.
             var target = "/admin/content/" + id + "?saved=" + (status == ContentStatus.Published ? "published" : "draft");
             try { await JavaScript.InvokeVoidAsync("location.replace", target); }
-            catch (JSException) { }
-            catch (InvalidOperationException) { }
+            catch (JSException) { /* The save already succeeded; the user can still navigate manually. */ }
+            catch (InvalidOperationException) { /* No JS runtime during prerendering; ignore. */ }
         }
     }
-    private Task Preview() => RunAsync(ct =>
+    private Task Preview() => SaveBlocked ? Task.CompletedTask : RunAsync(ct =>
     {
         _previewHtml = MarkdownRenderer.Render(_model?.Markdown ?? "");
         _preview = true;
@@ -187,9 +418,9 @@
     private void InsertMedia(MediaItem item)
     {
         if (_model is null || Blocked) return;
-        if (_model.Markdown.Length + item.Markdown.Length + 4 > Limits.Body)
+        if ((_model.Markdown?.Length ?? 0) + item.Markdown.Length + 4 > Limits.Body)
         { Error = "插入圖片後將超過本文長度上限，請先縮短內容。"; return; }
-        _model.Markdown = _model.Markdown.TrimEnd() + "\n\n" + item.Markdown + "\n\n";
+        _model.Markdown = (_model.Markdown ?? "").TrimEnd() + "\n\n" + item.Markdown + "\n\n";
         _preview = false;
         _mediaOpen = false;
     }

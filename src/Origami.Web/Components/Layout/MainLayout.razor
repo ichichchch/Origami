@@ -13,6 +13,8 @@
             {
                 <a href="@("/pages/" + Uri.EscapeDataString(page.Slug))">@(page.Title)</a>
             }
+            <a href="/search">搜尋文章</a>
+            <a href="/admin/posts" data-enhance-nav="false">管理後台</a>
         </nav>
     </header>
     @if (!string.IsNullOrWhiteSpace(_settings.Description))
@@ -39,7 +41,7 @@
             _settings = await Settings.GetAsync(ct);
             _pages = await Content.NavigationAsync(ct);
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
         catch (Exception ex) { Logger.LogError(ex, "Public navigation unavailable"); }
     }
 }

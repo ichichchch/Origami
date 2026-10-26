@@ -1,0 +1,101 @@
+@page "/preview/{Token:guid}"
+@inject ContentService Content
+@inject MediaService Media
+@inject MarkdownService Markdown
+@inject NavigationManager Navigation
+@inject ILogger<Preview> Logger
+
+<PageTitle>@(_content?.Title ?? "內容預覽")</PageTitle>
+@if (_redirecting)
+{
+    @* The redirect target is in the response headers; render no content. *@
+}
+else if (_error is not null)
+{
+    <section class="empty-state error-page" role="alert"><h1>暫時無法載入</h1><p>@_error</p><a href="/">回到首頁</a></section>
+}
+else if (_content is not null)
+{
+    <HeadContent>
+        <meta name="robots" content="noindex, nofollow" />
+    </HeadContent>
+    <div class="preview-banner" role="status">
+        <strong>草稿預覽</strong><span>這份內容尚未公開，僅持有連結的人可以閱讀；連結可在編輯器中撤銷。</span>
+    </div>
+    <article class="reading-column">
+        <a class="back-link" href="/" data-enhance-nav="false">回到首頁</a>
+        <header class="article-heading">
+            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面") · 預覽</p>
+            <h1>@_content.Title</h1>
+            @if (_content.Kind == ContentKind.Post && _content.Categories.Count > 0)
+            {
+                <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))" data-enhance-nav="false">@category.Title</a> }</div>
+            }
+        </header>
+        <div class="prose">@((MarkupString)_html)</div>
+        @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
+        {
+            <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))" data-enhance-nav="false"># @tag.Title</a> }</footer>
+        }
+    </article>
+}
+else
+{
+    @if (!_resolved) { <p role="status">正在載入預覽…</p> }
+}
+
+@code {
+    [Parameter] public Guid Token { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private PublicContent? _content;
+    private string _html = "";
+    private string? _error;
+    private bool _redirecting;
+    private bool _resolved;
+    protected override async Task OnParametersSetAsync()
+    {
+        _content = null;
+        _html = "";
+        _error = null;
+        _redirecting = false;
+        _resolved = false;
+        try
+        {
+            var ct = HttpContext?.RequestAborted ?? default;
+            _content = await Content.GetPreviewAsync(Token, ct);
+            // A token whose content is already public points at the canonical URL instead.
+            if (_content is null)
+            {
+                var published = await Content.ResolvePublishedPreviewAsync(Token, ct);
+                if (published is not null)
+                {
+                    if (HttpContext is not null && !HttpContext.Response.HasStarted)
+                    {
+                        HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                        HttpContext.Response.Headers.Location = "/" + (published.Kind == ContentKind.Page ? "pages/" : "posts/") + Uri.EscapeDataString(published.Slug);
+                    }
+                    _redirecting = true;
+                    _resolved = true;
+                    return;
+                }
+                if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+                Navigation.NotFound();
+                _resolved = true;
+                return;
+            }
+            _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
+            // Share links must never leak into search indexes, whatever the crawler honors.
+            if (HttpContext is not null && !HttpContext.Response.HasStarted)
+                HttpContext.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+            _resolved = true;
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* Visitor disconnected. */ }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Preview unavailable");
+            _error = "目前無法讀取這份預覽，請稍後再試。";
+            _resolved = true;
+            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
+        }
+    }
+}

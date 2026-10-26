@@ -1,0 +1,8 @@
+.search-page { max-width: 800px; margin: 0 auto; }
+.search-form { margin-bottom: 2rem; }
+.search-form .field { margin-bottom: .75rem; }
+.search-results { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.search-results li { padding: 1.5rem 0; border-bottom: 1px solid var(--border); }
+.search-results h3 { font-size: 1.2rem; margin-bottom: .5rem; }
+.search-results h3, .search-snippet, #search-results-title { overflow-wrap: anywhere; }
+.search-snippet { margin-bottom: 0; color: var(--muted); white-space: pre-line; }

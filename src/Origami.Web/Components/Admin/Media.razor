@@ -19,6 +19,30 @@
     <section class="notice notice-success"><p>最近上傳：<strong>@_uploaded.OriginalName</strong></p><p>在編輯器點選「插入圖片」，或複製下方 Markdown：</p><label class="sr-only" for="uploaded-markdown">最近上傳圖片的 Markdown</label><input id="uploaded-markdown" class="code-input" value="@_uploaded.Markdown" readonly /></section>
 }
 @if (Error is not null && !LoginRequired) { <button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入媒體列表</button> }
+@if (_pendingDelete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="media-delete-title" aria-describedby="media-delete-description">
+        <h2 id="media-delete-title">刪除圖片「@_pendingDelete.OriginalName」？</h2>
+        @if (_pendingReferences.Count > 0)
+        {
+            <p id="media-delete-description">這張圖片仍被以下內容引用，需先移除引用才能刪除：</p>
+            <ul>
+                @foreach (var reference in _pendingReferences)
+                {
+                    <li>「@reference.Title」（@(reference.Status switch { ContentStatus.Published => "已發布", ContentStatus.Trashed => "回收桶", _ => "草稿" })）</li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p id="media-delete-description">沒有任何內容引用這張圖片。刪除後圖片網址立即失效，無法復原（含縮圖變體）。</p>
+        }
+        <div class="button-row">
+            <button class="button button-danger" disabled="@(Blocked || _pendingReferences.Count > 0)" @onclick="DeleteAsync">確認刪除圖片</button>
+            <button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">取消</button>
+        </div>
+    </section>
+}
 <section class="panel media-library" aria-busy="@Busy.ToString().ToLowerInvariant()">
     <div class="panel-toolbar"><h2>所有圖片 <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">依上傳時間排序</span></div>
     @if (_result is not null)
@@ -32,7 +56,12 @@
             <div class="media-grid">
             @foreach (var item in _result.Items)
             {
-                <article class="media-card" @key="item.Id"><a href="@item.Url" target="_blank" rel="noopener" aria-label="@("開啟原圖：" + item.OriginalName)"><img src="@item.Url" alt="@item.OriginalName" loading="lazy" /></a><div class="media-details"><h3>@item.OriginalName</h3><p>@item.Width × @item.Height · @Size(item.Size)</p><p>@item.UploadedAt.ToString("yyyy.MM.dd HH:mm") UTC</p><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
+                <article class="media-card" @key="item.Id"><a href="@item.Url" target="_blank" rel="noopener" aria-label="@("開啟原圖：" + item.OriginalName)"><img src="@item.Url" alt="@item.AltText" loading="lazy" /></a><div class="media-details"><h3>@item.OriginalName</h3><p>@item.Width × @item.Height · @Size(item.Size)</p><p>@item.UploadedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
+@if (item.ReferenceCount > 0)
+{
+    <p class="field-help">被 @item.ReferenceCount 篇內容引用</p>
+}<label for="@("media-alt-" + item.Id)">替代文字（alt）</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value.ToString() ?? "")" disabled="@Blocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">最多 @Limits.AltText 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。</p><button type="button" class="button button-secondary button-small" disabled="@(Blocked || !_altEdits.ContainsKey(item.Id))" @onclick="() => SaveAlt(item.Id)">儲存替代文字</button>
+<button type="button" class="text-danger" disabled="@Blocked" @onclick="() => RequestDelete(item)">刪除圖片<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
             }
             </div>
         }
@@ -45,8 +74,50 @@
     private PagedResult<MediaItem>? _result;
     private MediaItem? _uploaded;
     private string? _uploadName;
+    private readonly Dictionary<Guid, string> _altEdits = [];
+    private MediaItem? _pendingDelete;
+    private List<MediaService.MediaReference> _pendingReferences = [];
     protected override Task OnInitializedAsync() => Load();
-    private Task<bool> Load() => RunAsync(async ct => { _result = await MediaService.ListAsync(_page, ct: ct); });
+    private Task<bool> Load() => RunAsync(async ct =>
+    {
+        var result = await MediaService.ListAsync(_page, ct: ct);
+        foreach (var item in result.Items)
+            item.ReferenceCount = await MediaService.CountReferencesAsync(item.Id, ct);
+        _result = result;
+    });
+    private async Task RequestDelete(MediaItem item)
+    {
+        if (Blocked) return;
+        _pendingDelete = item;
+        _pendingReferences = [];
+        var ok = await RunAsync(async ct => { _pendingReferences = await MediaService.ListReferencesAsync(item.Id, ct); });
+        if (!ok) _pendingDelete = null;
+    }
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is not { } item || Blocked) return;
+        var deleted = await RunAsync(async ct =>
+        {
+            await MediaService.DeleteAsync(item.Id, true, ct);
+            _pendingDelete = null;
+            var result = await MediaService.ListAsync(_page, ct: ct);
+            foreach (var media in result.Items)
+                media.ReferenceCount = await MediaService.CountReferencesAsync(media.Id, ct);
+            _result = result;
+        }, "圖片已刪除（含縮圖變體）。");
+        if (!deleted) _pendingDelete = null;
+    }
+    private string AltValue(MediaItem item) => _altEdits.TryGetValue(item.Id, out var value) ? value : item.AltText;
+    private Task SaveAlt(Guid id) => RunAsync(async ct =>
+    {
+        var value = _altEdits.TryGetValue(id, out var edit) ? edit : "";
+        await MediaService.UpdateAltAsync(id, value, ct);
+        _altEdits.Remove(id);
+        var result = await MediaService.ListAsync(_page, ct: ct);
+        foreach (var media in result.Items)
+            media.ReferenceCount = await MediaService.CountReferencesAsync(media.Id, ct);
+        _result = result;
+    }, "替代文字已儲存，插入圖片時會自動帶入。");
     private async Task Move(int delta)
     {
         if (Blocked) return;

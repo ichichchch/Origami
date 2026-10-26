@@ -1,0 +1,102 @@
+@page "/search"
+@attribute [StreamRendering(false)]
+@inject PublicSearchService SearchService
+
+<PageTitle>語意搜尋</PageTitle>
+<section class="search-page">
+    <header class="public-heading">
+        <p class="eyebrow">用意思，找到文章</p>
+        <h1>語意搜尋</h1>
+        <p>描述你想了解的主題，搜尋本站已發布且已建立索引的文章。</p>
+    </header>
+    <form method="get" action="/search" role="search" class="search-form">
+        <div class="field">
+            <label for="search-query">搜尋文字</label>
+            <input id="search-query" type="search" name="q" value="@Query" maxlength="@Limits.SearchQueryMax" aria-describedby="search-help" />
+            <p id="search-help" class="field-help">最多 @Limits.SearchQueryMax 字。搜尋文字會傳送至外部嵌入模型，請勿輸入密碼或敏感資料。</p>
+        </div>
+        <button type="submit" class="button">搜尋文章</button>
+    </form>
+    @if (!_semanticAvailable && !string.IsNullOrWhiteSpace(Query))
+    {
+        <p class="field-help" role="status">語意搜尋暫時無法使用，已改為關鍵字比對；精確詞仍可命中。</p>
+    }
+    @if (_error is not null)
+    {
+        <div class="notice notice-error" role="alert">@_error</div>
+    }
+    else if (string.IsNullOrWhiteSpace(Query))
+    {
+        <div class="empty-state"><h2>你想找什麼？</h2><p>輸入主題或問題開始搜尋，例如「如何整理寫作靈感」。</p></div>
+    }
+    else if (_hits.Count == 0)
+    {
+        <div class="empty-state" role="status"><h2>沒有找到文章</h2><p>試著換個說法；新發布的文章需等候索引完成才會出現。</p></div>
+    }
+    else
+    {
+        <section aria-labelledby="search-results-title">
+            <h2 id="search-results-title">「@(Query?.Trim())」的搜尋結果</h2>
+            <p class="field-help">顯示 @_hits.Count 篇相關文章；關鍵字命中排在前面，語意結果補足其餘。</p>
+            <ul class="search-results">
+                @foreach (var hit in _hits)
+                {
+                    <li>
+                        <article>
+                            <h3><span class="chip search-source">@hit.Source</span> <a href="@("/posts/" + Uri.EscapeDataString(hit.Slug))">@hit.Title</a></h3>
+                            <p class="search-snippet">@hit.Snippet</p>
+                        </article>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private IReadOnlyList<PublicSearchHit> _hits = [];
+    private string? _error;
+    private bool _semanticAvailable = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _hits = [];
+        _error = null;
+        _semanticAvailable = true;
+        if (Query?.Length > Limits.SearchQueryMax)
+        {
+            _error = $"搜尋文字上限為 {Limits.SearchQueryMax} 字。";
+            SetStatus(StatusCodes.Status400BadRequest);
+            return;
+        }
+        // Opening the page (or submitting whitespace) must not incur an embedding call.
+        if (string.IsNullOrWhiteSpace(Query)) return;
+        try
+        {
+            var result = await SearchService.SearchAsync(Query, ct: HttpContext?.RequestAborted ?? default);
+            _hits = result.Hits;
+            _semanticAvailable = result.SemanticAvailable;
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true)
+        {
+            // The visitor disconnected; no provider details are rendered or logged.
+        }
+        catch (CmsException)
+        {
+            _error = "搜尋暫時無法使用，請稍後再試。";
+            SetStatus(StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (Exception)
+        {
+            _error = "搜尋暫時無法使用，請稍後再試。";
+            SetStatus(StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private void SetStatus(int status)
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = status;
+    }
+}

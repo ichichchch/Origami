@@ -1,11 +1,35 @@
 @page "/posts/{Slug}"
 @page "/pages/{Slug}"
 @inject ContentService Content
+@inject SettingsService Settings
+@inject MediaService Media
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject ILogger<ContentDetail> Logger
 
 <PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
+@if (_content is not null)
+{
+    <HeadContent>
+        @* Layout-level HeadContent is not emitted in Static SSR, so discovery links live on pages. *@
+        <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
+        <meta name="description" content="@MetaDescription" />
+        <link rel="canonical" href="@Canonical" />
+        <meta property="og:site_name" content="@_settings.Name" />
+        <meta property="og:title" content="@_content.Title" />
+        <meta property="og:type" content="@(_content.Kind == ContentKind.Post ? "article" : "website")" />
+        <meta property="og:url" content="@Canonical" />
+        <meta property="og:description" content="@MetaDescription" />
+        @if (_firstImage is not null)
+        {
+            <meta property="og:image" content="@AbsoluteImage" />
+        }
+        @if (_content.Kind == ContentKind.Post && _content.PublishedAt is { } published)
+        {
+            <meta property="article:published_time" content="@published.ToString("O")" />
+        }
+    </HeadContent>
+}
 @if (_error is not null)
 {
     <section class="empty-state" role="alert"><h1>暫時無法載入</h1><p>@_error</p><a href="/">回到首頁</a></section>
@@ -22,46 +46,70 @@ else if (_content is not null)
                 <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString("yyyy 年 MM 月 dd 日") <span class="sr-only">UTC</span></time>
                 @if (_content.Categories.Count > 0)
                 {
-                    <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <span class="chip">@category</span> }</div>
+                    <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
                 }
             }
         </header>
         <div class="prose">@((MarkupString)_html)</div>
         @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
         {
-            <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <span class="tag"># @tag</span> }</footer>
+            <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
         }
     </article>
 }
 else
 {
-    <p role="status">正在載入內容…</p>
+    @if (!_redirecting) { <p role="status">正在載入內容…</p> }
 }
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PublicContent? _content;
+    private SiteSettings _settings = new();
+    private string? _firstImage;
     private string _html = "";
     private string? _error;
+    private bool _redirecting;
+    private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
+    private string Canonical => BaseUrl + (_content?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_content?.Slug ?? "");
+    private string MetaDescription => _content is null ? "" : _content.Excerpt != "" ? _content.Excerpt : Markdown.Excerpt(_content.Markdown);
+    private string AbsoluteImage => _firstImage![0] == '/' ? BaseUrl + _firstImage : _firstImage!;
     protected override async Task OnParametersSetAsync()
     {
         _content = null;
+        _firstImage = null;
         _html = "";
         _error = null;
+        _redirecting = false;
         try
         {
+            var ct = HttpContext?.RequestAborted ?? default;
+            _settings = await Settings.GetAsync(ct);
             var kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("pages/", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
-            _content = await Content.GetPublishedAsync(kind, Slug, HttpContext?.RequestAborted ?? default);
+            _content = await Content.GetPublishedAsync(kind, Slug, ct);
             if (_content is null)
             {
+                // A retired slug of published content keeps working through a permanent redirect.
+                var redirect = await Content.RedirectTargetAsync(Slug, ct);
+                if (redirect is not null)
+                {
+                    if (HttpContext is not null && !HttpContext.Response.HasStarted)
+                    {
+                        HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                        HttpContext.Response.Headers.Location = "/" + (redirect.Kind == ContentKind.Page ? "pages/" : "posts/") + Uri.EscapeDataString(redirect.Slug);
+                    }
+                    _redirecting = true;
+                    return;
+                }
                 if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
                 Navigation.NotFound();
                 return;
             }
-            _html = Markdown.Render(_content.Markdown);
+            _firstImage = Markdown.FirstImage(_content.Markdown);
+            _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Public content unavailable");

@@ -17,6 +17,14 @@
 {
     <button class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">重新載入列表</button>
 }
+@if (_pendingTrash is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="trash-title" aria-describedby="trash-description">
+        <h2 id="trash-title">將「@_pendingTrash.Title」移入回收桶？</h2>
+        <p id="trash-description">內容會立即停止公開（含搜尋與舊網址），在回收桶保留 @(Limits.TrashRetentionDays) 天，期間可隨時還原為草稿。</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="TrashAsync">確認移入回收桶</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingTrash = null">取消</button></div>
+    </section>
+}
 @if (_pendingDelete is not null)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-description">
@@ -25,20 +33,41 @@
         <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteAsync">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">取消</button></div>
     </section>
 }
-@if (_result is not null)
+@if (_result is not null && _counts is not null)
 {
+    @if (_counts.Total == 0)
+    {
+        <section class="getting-started panel" aria-labelledby="start-title">
+            <h2 id="start-title">把第一個想法變成網站內容</h2>
+            <ol class="setup-steps">
+                <li><strong>建立草稿</strong><span>先寫標題與 Markdown 本文，內容不會立即公開。</span></li>
+                <li><strong>整理與預覽</strong><span>編輯器內即可上傳圖片；文章還能就地新增分類與標籤。</span></li>
+                <li><strong>發布給讀者</strong><span>按「儲存並發布」，再到前台查看；隨時可撤回為草稿。</span></li>
+            </ol>
+            <div class="button-row"><a href="/admin/settings">設定網站名稱</a><a href="/admin/assistant">查看 AI 功能狀態</a></div>
+        </section>
+    }
+    <div class="section-tabs content-filters" role="group" aria-label="內容狀態篩選">
+        <button type="button" class="tab-button @(_status is null ? "active" : "")" aria-pressed="@(_status is null)" disabled="@Blocked" @onclick="() => ChangeStatus(null)">全部 <span class="count">@_counts.Total</span></button>
+        <button type="button" class="tab-button @(_status == ContentStatus.Draft ? "active" : "")" aria-pressed="@(_status == ContentStatus.Draft)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Draft)">草稿 <span class="count">@_counts.Drafts</span></button>
+        <button type="button" class="tab-button @(_status == ContentStatus.Published ? "active" : "")" aria-pressed="@(_status == ContentStatus.Published)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Published)">已發布 <span class="count">@_counts.Published</span></button>
+        @if (_counts.Trashed > 0)
+        {
+            <button type="button" class="tab-button @(_status == ContentStatus.Trashed ? "active" : "")" aria-pressed="@(_status == ContentStatus.Trashed)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Trashed)">回收桶 <span class="count">@_counts.Trashed</span></button>
+        }
+    </div>
     <section class="panel" aria-busy="@Busy.ToString().ToLowerInvariant()">
-        <div class="panel-toolbar"><h2>全部@(Label) <span class="count">@_result.Total</span></h2><span class="muted">依最後更新排序 · UTC</span></div>
+        <div class="panel-toolbar"><h2>@FilterLabel@(Label) <span class="count">@_result.Total</span></h2><span class="muted">依最後更新排序 · UTC</span></div>
         @if (_result.Items.Count == 0)
         {
-            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>從第一個想法開始</h2><p>這一頁尚無內容。新增草稿，準備好再發布。</p><a href="@(ListPath + "/new")">建立@(Kind == ContentKind.Post ? "文章" : "頁面") →</a></div>
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@(_status is null ? "從第一個想法開始" : "目前沒有" + FilterLabel + Label)</h2><p>@(_status == ContentStatus.Published ? "將草稿儲存並發布後，內容會出現在這裡與公開網站。" : "新增草稿，準備好再發布。")</p><a href="@(ListPath + "/new")">建立@(Kind == ContentKind.Post ? "文章" : "頁面") →</a></div>
         }
         else
         {
             <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col">標題 / 網址</th><th scope="col">狀態</th><th scope="col">最後更新</th><th scope="col">操作</th></tr></thead><tbody>
             @foreach (var item in _result.Items)
             {
-                <tr @key="item.Id"><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status == ContentStatus.Published ? "已發布" : "草稿")</span></td><td class="date-cell">@item.UpdatedAt.ToString("yyyy.MM.dd")<small>@item.UpdatedAt.ToString("HH:mm")</small></td><td><div class="table-actions"><a href="@("/admin/content/" + item.Id)">編輯<span class="sr-only"> @item.Title</span></a><button class="text-danger" disabled="@Blocked" @onclick="() => _pendingDelete = item">刪除<span class="sr-only"> @item.Title</span></button></div></td></tr>
+                <tr @key="item.Id"><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status switch { ContentStatus.Published => "已發布", ContentStatus.Trashed => "回收桶", _ => "草稿" })</span>@if (item.Status == ContentStatus.Draft && item.PublishAt is { } scheduled) { <small class="schedule-hint" title="@scheduled.ToString("O")">排程 @scheduled.ToString("MM.dd HH:mm") UTC</small> }</td><td class="date-cell">@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deleted ? deleted.ToString("yyyy.MM.dd") : item.UpdatedAt.ToString("yyyy.MM.dd"))<small>@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deletedAt ? "刪除於 " + deletedAt.ToString("HH:mm") : item.UpdatedAt.ToString("HH:mm"))</small></td><td><div class="table-actions">@if (item.Status == ContentStatus.Trashed) { <button disabled="@Blocked" @onclick="() => RestoreAsync(item)">還原<span class="sr-only"> @item.Title</span></button><button class="text-danger" disabled="@Blocked" @onclick="() => _pendingDelete = item">永久刪除<span class="sr-only"> @item.Title</span></button> } else { <a href="@("/admin/content/" + item.Id)">編輯<span class="sr-only"> @item.Title</span></a>@if (item.Status == ContentStatus.Published) { <a href="@((item.Kind == ContentKind.Post ? "/posts/" : "/pages/") + Uri.EscapeDataString(item.Slug))" target="_blank" rel="noopener" data-enhance-nav="false">檢視<span class="sr-only"> @item.Title</span></a> }<button class="text-danger" disabled="@Blocked" @onclick="() => _pendingTrash = item">刪除<span class="sr-only"> @item.Title</span></button> }</div></td></tr>
             }
             </tbody></table></div>
         }
@@ -51,17 +80,50 @@
     private string Label => Kind == ContentKind.Post ? "文章" : "獨立頁面";
     private string ListPath => Kind == ContentKind.Post ? "/admin/posts" : "/admin/pages";
     private int _page = 1;
+    private ContentStatus? _status;
+    private ContentCounts? _counts;
+    private string FilterLabel => _status switch
+    {
+        ContentStatus.Draft => "草稿",
+        ContentStatus.Published => "已發布",
+        ContentStatus.Trashed => "回收桶",
+        _ => "全部"
+    };
     private PagedResult<ContentSummary>? _result;
     private ContentSummary? _pendingDelete;
+    private ContentSummary? _pendingTrash;
     protected override async Task OnParametersSetAsync()
     {
         Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
         _page = 1;
+        _status = null;
+        _counts = null;
         _result = null;
         _pendingDelete = null;
+        _pendingTrash = null;
         await LoadAsync();
     }
-    private Task<bool> LoadAsync() => RunAsync(async ct => { _result = await Content.ListAdminAsync(Kind, _page, ct: ct); });
+    private Task<bool> LoadAsync() => RunAsync(RefreshAsync);
+    private async Task RefreshAsync(CancellationToken ct)
+    {
+        var result = await Content.ListAdminAsync(Kind, _page, ct: ct, status: _status);
+        if (_page > result.TotalPages)
+            result = await Content.ListAdminAsync(Kind, result.TotalPages, ct: ct, status: _status);
+        var counts = await Content.CountAdminAsync(Kind, ct);
+        _result = result;
+        _page = result.Page;
+        _counts = counts;
+    }
+    private async Task ChangeStatus(ContentStatus? status)
+    {
+        if (Blocked) return;
+        var previousStatus = _status;
+        var previousPage = _page;
+        _status = status;
+        _page = 1;
+        _pendingDelete = null;
+        if (!await LoadAsync()) { _status = previousStatus; _page = previousPage; }
+    }
     private async Task ChangePage(int delta)
     {
         if (Blocked) return;
@@ -77,9 +139,28 @@
         {
             await Content.DeleteAsync(item.Id, item.Version, true, ct);
             _pendingDelete = null;
-            _result = await Content.ListAdminAsync(Kind, _page, ct: ct);
-            if (_result.Items.Count == 0 && _page > 1) { _page--; _result = await Content.ListAdminAsync(Kind, _page, ct: ct); }
+            await RefreshAsync(ct);
         }, "已永久刪除內容。圖片未被刪除。");
         if (!deleted) _pendingDelete = null;
+    }
+    private async Task TrashAsync()
+    {
+        if (_pendingTrash is not { } item) return;
+        var trashed = await RunAsync(async ct =>
+        {
+            await Content.TrashAsync(item.Id, item.Version, true, ct);
+            _pendingTrash = null;
+            await RefreshAsync(ct);
+        }, "已移入回收桶，可於 30 天內還原。");
+        if (!trashed) _pendingTrash = null;
+    }
+    private async Task RestoreAsync(ContentSummary item)
+    {
+        if (Blocked) return;
+        await RunAsync(async ct =>
+        {
+            await Content.RestoreAsync(item.Id, item.Version, ct);
+            await RefreshAsync(ct);
+        }, "已還原為草稿。");
     }
 }
