@@ -31,7 +31,8 @@ public sealed class StoragePaths
     private static string DefaultRoot()
     {
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrWhiteSpace(local)) local = Path.GetTempPath();
+        if (string.IsNullOrWhiteSpace(local))
+            throw new InvalidOperationException("無法判定本機儲存目錄，請以 Storage:RootPath 指定絕對路徑。");
         return Path.Combine(local, "Origami", "storage");
     }
 }
