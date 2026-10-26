@@ -62,7 +62,7 @@ public sealed partial class EmbeddingJobWorker(
         var job = await db.EmbeddingJobs.SingleOrDefaultAsync(x => x.Id == jobId, ct);
         if (job is null) return true;
         var content = await db.Contents.AsNoTracking().Where(x => x.Id == job.ContentId)
-            .Select(x => new { x.Status, x.Markdown }).SingleOrDefaultAsync(ct);
+            .Select(x => new { x.Status, x.IsPrivate, x.IsProtected, x.Markdown }).SingleOrDefaultAsync(ct);
         // Withdrawn or deleted content must leave no vectors behind; withdrawal already removed
         // them in its own transaction, so this is a defensive purge plus job cleanup.
         if (content is null || content.Status != ContentStatus.Published)
@@ -70,6 +70,15 @@ public sealed partial class EmbeddingJobWorker(
             db.EmbeddingJobs.Remove(job);
             if (content is not null)
                 db.ContentEmbeddings.RemoveRange(await db.ContentEmbeddings.Where(x => x.ContentId == job.ContentId).ToListAsync(ct));
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        // Private and password-protected content never reaches the embedding provider. The
+        // visibility flags and the text come from the same read, so gated text cannot travel.
+        if (content.IsPrivate || content.IsProtected)
+        {
+            db.EmbeddingJobs.Remove(job);
+            db.ContentEmbeddings.RemoveRange(await db.ContentEmbeddings.Where(x => x.ContentId == job.ContentId).ToListAsync(ct));
             await db.SaveChangesAsync(ct);
             return true;
         }
@@ -98,6 +107,17 @@ public sealed partial class EmbeddingJobWorker(
             }
         }
         if (vectors.Count != chunks.Count) throw new InvalidOperationException("嵌入結果數量與切塊數量不符。");
+        // The content may have turned private while the provider was answering; such text stays
+        // out of the index and the vectors that were just computed are dropped again.
+        var stillPublic = await db.Contents.AsNoTracking().Where(x => x.Id == job.ContentId)
+            .Select(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).SingleOrDefaultAsync(ct);
+        if (!stillPublic)
+        {
+            db.EmbeddingJobs.Remove(job);
+            db.ContentEmbeddings.RemoveRange(await db.ContentEmbeddings.Where(x => x.ContentId == job.ContentId).ToListAsync(ct));
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
         // Vectors and the job row are replaced in one transaction: readers never see half of a re-embed.
         db.ContentEmbeddings.RemoveRange(await db.ContentEmbeddings.Where(x => x.ContentId == job.ContentId).ToListAsync(ct));
         for (var i = 0; i < chunks.Count; i++)

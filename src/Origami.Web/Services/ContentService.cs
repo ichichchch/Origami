@@ -517,8 +517,22 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         var hash = await db.Contents.AsNoTracking().Where(x => x.Id == contentId && x.Status == ContentStatus.Published && x.IsProtected)
             .Select(x => x.ProtectionHash).SingleOrDefaultAsync(ct);
-        return hash is not null && hash != "" && CryptographicOperations.FixedTimeEquals(
-            Convert.FromHexString(token), Convert.FromHexString(UnlockToken(hash)));
+        if (hash is null || hash == "") return false;
+        // A malformed or foreign cookie is simply an unlocked request, never a server error.
+        if (!TryDecodeToken(token, out var presented) || !TryDecodeToken(UnlockToken(hash), out var expected)) return false;
+        return CryptographicOperations.FixedTimeEquals(presented, expected);
+    }
+
+    private static bool TryDecodeToken(string value, out byte[] bytes)
+    {
+        bytes = [];
+        if (value.Length != 64) return false; // a SHA-256 digest in hex
+        try
+        {
+            bytes = Convert.FromHexString(value);
+            return true;
+        }
+        catch (FormatException) { return false; }
     }
 
     private static string UnlockToken(string protectionHash) =>

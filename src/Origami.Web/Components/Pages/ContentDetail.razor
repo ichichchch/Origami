@@ -19,7 +19,7 @@
         {
             <meta name="robots" content="noindex" />
         }
-        else
+        else if (_readable)
         {
             <meta name="description" content="@MetaDescription" />
             <link rel="canonical" href="@Canonical" />
@@ -69,11 +69,12 @@ else if (_content is not null)
                     <p class="notice notice-error" role="alert">@_unlockError</p>
                 }
                 @* Static SSR EditForm posts back here with an antiforgery token; no unlock ever signs a user in. *@
-                <EditForm Model="_unlock" FormName="content-unlock" OnValidSubmit="UnlockAsync" Enhance="false">
+                <EditForm Model="Unlock" FormName="content-unlock" method="post" OnValidSubmit="UnlockAsync" Enhance="false">
                     <DataAnnotationsValidator />
                     <div class="field">
                         <label for="unlock-password">內容密碼</label>
-                        <input id="unlock-password" type="password" @bind="_unlock.Password" autocomplete="off" maxlength="1024" required />
+                        @* The name matches the form model property, so a Static SSR post binds it. *@
+                        <input id="unlock-password" name="Unlock.Password" type="password" autocomplete="off" maxlength="1024" required />
                     </div>
                     <button type="submit" class="button">解鎖內容</button>
                 </EditForm>
@@ -129,10 +130,12 @@ else
     private bool _redirecting;
     private bool _locked;
     private bool _isPrivate;
+    private bool _readable;
     private List<ContentNeighbor> _neighbors = [];
     private IReadOnlyList<SemanticHit> _related = [];
     private string? _unlockError;
-    private UnlockInput _unlock = new();
+    [SupplyParameterFromForm(FormName = "content-unlock")]
+    private UnlockInput Unlock { get; set; } = default!;
     private sealed class UnlockInput
     {
         [Required(ErrorMessage = "請輸入內容密碼。")]
@@ -146,6 +149,8 @@ else
     private string AbsoluteImage => _firstImage![0] == '/' ? BaseUrl + _firstImage : _firstImage!;
     protected override async Task OnParametersSetAsync()
     {
+        // A Static SSR post replaces the form model; a plain visit starts with an empty one.
+        Unlock ??= new UnlockInput();
         _content = null;
         _firstImage = null;
         _html = "";
@@ -153,6 +158,7 @@ else
         _redirecting = false;
         _locked = false;
         _isPrivate = false;
+        _readable = false;
         _neighbors = [];
         _related = [];
         _unlockError = null;
@@ -203,6 +209,11 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Public content unavailable");
+            // A failed render must not publish the title, the excerpt or the body through the
+            // response head; the visitor only learns that the page is unavailable.
+            _content = null;
+            _firstImage = null;
+            _html = "";
             _error = "目前無法讀取這篇內容，請稍後再試。";
             if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
         }
@@ -212,10 +223,10 @@ else
         if (_content is null || HttpContext is null || HttpContext.Response.HasStarted) return;
         try
         {
-            var token = await Content.VerifyProtectionAsync(_content.Id, _unlock.Password, HttpContext.RequestAborted);
+            var token = await Content.VerifyProtectionAsync(_content.Id, Unlock.Password, HttpContext.RequestAborted);
             if (token is null)
             {
-                _unlock.Password = "";
+                Unlock.Password = "";
                 _unlockError = "密碼不正確，請再試一次。";
                 return;
             }
@@ -223,7 +234,7 @@ else
             {
                 HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromDays(10)
             });
-            _unlock.Password = "";
+            Unlock.Password = "";
             _unlockError = null;
             _locked = false;
             await RenderBodyAsync(HttpContext.RequestAborted);
@@ -244,5 +255,7 @@ else
             // Related reads stored vectors only; an unindexed site simply shows nothing.
             _related = await Semantic.RelatedAsync(_content.Id, 3, ct);
         }
+        // Only a rendered body may expose the description, the canonical link and the Open Graph tags.
+        _readable = true;
     }
 }

@@ -61,6 +61,7 @@
     private const string LoginFailure = "無法登入。請確認帳號密碼，或稍後再試。";
     private const string ThrottledMessage = "嘗試次數過多，請稍後再試。";
     private const string CodeFailure = "動態驗證碼不正確或已過期，請再試一次。";
+    private const string LockedMessage = "帳戶已暫時鎖定，請於鎖定時間過後再試。";
     private const string PendingCookie = "origami.2fa";
     private string? errorMessage;
     private bool awaitingCode;
@@ -142,10 +143,12 @@
         }
         if (user.TwoFactorEnabled && user.TwoFactorSecret != "")
         {
-            // Password proven, identity not yet: a 5-minute signed cookie carries only the pending user id.
+            // Password proven, identity not yet: a 5-minute signed cookie carries the pending
+            // user id and the current security stamp, so a password reset or a two-factor
+            // change ends the pending window on the server, not only in the browser.
             var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
                 .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
-            context.Response.Cookies.Append(PendingCookie, protector.Protect(user.Id, TimeSpan.FromMinutes(5)),
+            context.Response.Cookies.Append(PendingCookie, protector.Protect(PendingPayload(user), TimeSpan.FromMinutes(5)),
                 new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromMinutes(5) });
             awaitingCode = true;
             CodeForm.Code = string.Empty;
@@ -172,8 +175,8 @@
             if (!context.Response.HasStarted) context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
             return;
         }
-        var pendingUserId = TryReadPendingUser(context);
-        if (pendingUserId is null)
+        var pending = TryReadPendingUser(context);
+        if (pending is null)
         {
             awaitingCode = false;
             errorMessage = CodeFailure;
@@ -181,13 +184,28 @@
         }
         var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
         var userManager = context.RequestServices.GetRequiredService<UserManager<AdminUser>>();
-        var user = await userManager.FindByIdAsync(pendingUserId);
+        var user = await userManager.FindByIdAsync(pending.UserId);
         var submittedCode = CodeForm.Code;
         CodeForm.Code = string.Empty;
         if (user is null || !user.TwoFactorEnabled || user.TwoFactorSecret == ""
-            || !Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System))
+            || !string.Equals(user.SecurityStamp, pending.SecurityStamp, StringComparison.Ordinal))
         {
-            if (user is not null) await userManager.AccessFailedAsync(user);
+            // Do not disclose which factor failed; the pending cookie dies with the attempt window.
+            context.Response.Cookies.Delete(PendingCookie);
+            errorMessage = CodeFailure;
+            return;
+        }
+        if (await userManager.IsLockedOutAsync(user))
+        {
+            // A locked account stays locked for the second factor as well; guessing codes must
+            // not be able to outrun the account lockout the password stage established.
+            context.Response.Cookies.Delete(PendingCookie);
+            errorMessage = LockedMessage;
+            return;
+        }
+        if (!Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System))
+        {
+            await userManager.AccessFailedAsync(user);
             // Do not disclose which factor failed; the pending cookie dies with the attempt window.
             context.Response.Cookies.Delete(PendingCookie);
             errorMessage = CodeFailure;
@@ -199,7 +217,9 @@
         Navigation.NavigateTo("/admin/posts", forceLoad: true);
     }
 
-    private static string? TryReadPendingUser(HttpContext context)
+    private static string PendingPayload(AdminUser user) => user.Id + "|" + user.SecurityStamp;
+
+    private static PendingSignIn? TryReadPendingUser(HttpContext context)
     {
         if (context.Request.Cookies.TryGetValue(PendingCookie, out var value) && !string.IsNullOrEmpty(value))
         {
@@ -207,12 +227,17 @@
             {
                 var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
                     .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
-                return protector.Unprotect(value);
+                var payload = protector.Unprotect(value);
+                var separator = payload.IndexOf('|', StringComparison.Ordinal);
+                if (separator <= 0 || separator == payload.Length - 1) return null;
+                return new PendingSignIn(payload[..separator], payload[(separator + 1)..]);
             }
             catch (CryptographicException) { /* Expired or tampered pending cookies simply restart the flow. */ }
         }
         return null;
     }
+
+    private sealed record PendingSignIn(string UserId, string SecurityStamp);
 
     private void ClearPassword() => Input.Password = string.Empty;
     private void ClearCode() => CodeForm.Code = string.Empty;
