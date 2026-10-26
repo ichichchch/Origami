@@ -434,7 +434,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var now = clock.GetUtcNow();
         entity.PreviewToken = token;
         entity.UpdatedAt = now;
-        entity.Version = Guid.NewGuid();
+        // The share token is not part of the edited content, so the concurrency version stays
+        // untouched; a parallel content save must still end in a conflict, not a silent overwrite.
         await ContentRules.SaveAsync(db, ct);
         return entity.PreviewToken;
     }

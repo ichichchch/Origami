@@ -108,7 +108,7 @@
                     {
                         <div class="field">
                             <label for="content-schedule">排程發布時間（選填）</label>
-                            <input id="content-schedule" type="datetime-local" @bind="_scheduleLocal" disabled="@Blocked" aria-describedby="schedule-help" />
+                            <input id="content-schedule" type="datetime-local" @bind="_scheduleLocal" @bind:after="() => _scheduleTouched = true" disabled="@Blocked" aria-describedby="schedule-help" />
                             <span id="schedule-help" class="field-help">以你瀏覽器的時區為準，至少 @Limits.ScheduleLeadMinutes 分鐘後；時間到系統自動發布。留空表示不排程。</span>
                         </div>
                         @if (_model.Id is not null)
@@ -217,7 +217,10 @@
     private DateTimeOffset? _autosaveAt;
     private bool _autosaveStopped;
     private int _tzOffsetMinutes;
+    private string _timeZoneId = "";
+    private TimeZoneInfo? _timeZone;
     private DateTimeOffset? _scheduleLocal;
+    private bool _scheduleTouched;
     private string _protectPassword = "";
     private List<PageOption> _pageOptions = [];
     private CancellationTokenSource? _autosaveCts;
@@ -228,7 +231,16 @@
     private string KindLabel => _model?.Kind == ContentKind.Page ? "頁面" : "文章";
     private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
     private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
-    private bool Dirty => _model is not null && Snapshot(_model) != _baseline;
+    private bool Dirty => _model is not null && (Snapshot(_model) != _baseline || ScheduleChanged);
+    // The schedule lives beside the model, so a changed publish time is an unsaved change too.
+    private bool ScheduleChanged => _model is not null && EffectiveSchedule() != _model.PublishAt;
+    /// <summary>The picked time in UTC; a wall-clock time that does not exist never matches a stored one.</summary>
+    private DateTimeOffset? EffectiveSchedule()
+    {
+        if (_scheduleLocal is null) return null;
+        try { return FromLocalPick(_scheduleLocal); }
+        catch (CmsException) { return DateTimeOffset.MinValue; }
+    }
     private string SaveStatusText
     {
         get
@@ -254,7 +266,14 @@
         if (wasPublished) return "已撤回為草稿，文字內容不再公開。";
         return "已儲存為草稿，文字內容不對外公開。";
     }
-    private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(model);
+    // The snapshot covers the editable fields only: server-owned values and the share token
+    // never make the editor look dirty.
+    private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        model.Id, model.Kind, model.Title, model.Slug, model.Markdown, model.Excerpt, model.IsSticky,
+        model.IsProtected, model.IsPrivate, model.ParentId, model.PublishAt, model.Status, model.Version,
+        model.CategoryIds, model.TagIds
+    });
 
     protected override async Task OnParametersSetAsync()
     {
@@ -287,10 +306,14 @@
     {
         if (!firstRender) return;
         // The schedule input is interpreted in the visitor's own time zone.
+        try { _timeZoneId = await JavaScript.InvokeAsync<string>("eval", "Intl.DateTimeFormat().resolvedOptions().timeZone"); }
+        catch (JSException) { _timeZoneId = ""; }
+        catch (InvalidOperationException) { /* No JS runtime during prerendering; keep UTC. */ }
         try { _tzOffsetMinutes = (int)await JavaScript.InvokeAsync<double>("eval", "-new Date().getTimezoneOffset()"); }
         catch (JSException) { _tzOffsetMinutes = 0; }
         catch (InvalidOperationException) { /* No JS runtime during prerendering; keep UTC. */ }
-        _scheduleLocal = ToLocalOffset(_model?.PublishAt);
+        // The zone is known now: show the stored schedule in the visitor's own wall clock.
+        if (_model is not null && !_scheduleTouched) _scheduleLocal = ToLocalOffset(_model.PublishAt);
         if (_model?.Id is not null)
         {
             _autosaveCts = new CancellationTokenSource();
@@ -333,9 +356,25 @@
         try
         {
             var input = BuildInput(ContentStatus.Draft);
-            _ = await Content.UpdateAsync(input, cancellation);
-            _model = input;
-            _baseline = Snapshot(input);
+            var sent = Snapshot(input);
+            var sentVersion = input.Version;
+            var saved = await Content.UpdateAsync(input, cancellation);
+            if (_model is null) return;
+            if (_model.Version != sentVersion)
+            {
+                // Another save replaced the editor model while this one was running; that result wins.
+                return;
+            }
+            if (Snapshot(_model) != sent)
+            {
+                // The admin kept typing while the save was running: the newer text stays in the
+                // editor and the next autosave carries it; only the new version is adopted.
+                _model.Version = saved.Version;
+                _baseline = sent;
+                return;
+            }
+            _model = saved;
+            _baseline = Snapshot(saved);
             _autosaveAt = DateTimeOffset.Now;
         }
         catch (CmsException)
@@ -346,11 +385,21 @@
         catch (UnauthorizedAccessException) { _autosaveStopped = true; }
         catch (OperationCanceledException) { /* The circuit is closing; the manual flow resumes next time. */ }
     }
-    // The datetime-local picker yields wall-clock values; the browser offset converts them to UTC.
-    private DateTimeOffset? ToLocalOffset(DateTimeOffset? utc) =>
-        utc is { } value ? value.ToOffset(TimeSpan.FromMinutes(_tzOffsetMinutes)) : null;
-    private DateTimeOffset? FromLocalPick(DateTimeOffset? picked) =>
-        picked is { } value ? new DateTimeOffset(value.DateTime, TimeSpan.FromMinutes(_tzOffsetMinutes)).ToUniversalTime() : null;
+    // The datetime-local picker yields wall-clock values; the browser's own time zone converts
+    // them to UTC, so a date on the other side of a daylight-saving change keeps its wall clock.
+    private DateTimeOffset? ToLocalOffset(DateTimeOffset? utc)
+    {
+        if (utc is not { } value) return null;
+        return ScheduleTime.ToLocal(value, ResolveTimeZone());
+    }
+    private DateTimeOffset? FromLocalPick(DateTimeOffset? picked)
+    {
+        if (picked is not { } value) return null;
+        return ScheduleTime.ToUtc(value, ResolveTimeZone());
+    }
+    /// <summary>The visitor's time zone; a fixed browser offset is the fallback when the zone is unknown.</summary>
+    private TimeZoneInfo ResolveTimeZone() =>
+        _timeZone ??= ScheduleTime.Resolve(_timeZoneId, TimeSpan.FromMinutes(_tzOffsetMinutes));
     private string PreviewUrl(Guid token) => Navigation.ToAbsoluteUri("/preview/" + token).ToString();
     private Task ToggleRevisions() => _revisionsOpen ? Task.CompletedTask : LoadRevisions();
     private Task LoadRevisions() => RunAsync(async ct =>
@@ -380,17 +429,13 @@
     private Task CyclePreview() => RunAsync(async ct =>
     {
         var token = await Content.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
-        var stored = await Content.GetEditAsync(_model.Id.Value, ct);
-        _baseline = Snapshot(stored);
-        _model.Version = stored.Version;
+        // A share link is not a content edit: the editor keeps its own text and version, so a
+        // concurrent save elsewhere still ends in a visible conflict instead of a silent overwrite.
         _model.PreviewToken = token;
     }, "預覽連結已產生；舊連結（若有）已失效。");
     private Task RevokePreview() => RunAsync(async ct =>
     {
         await Content.RevokePreviewTokenAsync(_model!.Id!.Value, ct);
-        var stored = await Content.GetEditAsync(_model.Id.Value, ct);
-        _baseline = Snapshot(stored);
-        _model.Version = stored.Version;
         _model.PreviewToken = null;
     }, "預覽連結已撤銷。");
     private Task Load() => RunAsync(async ct =>
@@ -399,6 +444,10 @@
         _model = loaded;
         if (loaded.Kind == ContentKind.Page) _pageOptions = await Content.PageOptionsAsync(ct);
         _baseline = Snapshot(loaded);
+        // The stored schedule belongs into the picker; the zone may still be unknown here and is
+        // applied again once the browser reported it.
+        _scheduleTouched = false;
+        _scheduleLocal = ToLocalOffset(loaded.PublishAt);
         _preview = false;
     });
 
@@ -469,6 +518,7 @@
                 ? await Content.CreateAsync(input.Kind, input, ct)
                 : await Content.UpdateAsync(input, ct);
             _baseline = Snapshot(_model);
+            _scheduleTouched = false;
             _scheduleLocal = ToLocalOffset(_model.PublishAt);
         }, SaveNotice(status, wasPublished));
         if (success && isNew && _model.Id is { } id)
