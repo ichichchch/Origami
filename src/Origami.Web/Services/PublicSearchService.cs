@@ -48,7 +48,7 @@ public sealed class PublicSearchService(
         var pattern = "%" + EscapeLike(query) + "%";
         await using var db = await factory.CreateDbContextAsync(ct);
         var rows = await db.Contents.AsNoTracking()
-            .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published
+            .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsProtected
                 && (EF.Functions.ILike(x.Title, pattern) || EF.Functions.ILike(x.Excerpt, pattern) || EF.Functions.ILike(x.Markdown, pattern)))
             .OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
             .Take(limit).Select(x => new { x.Id, x.Title, x.Slug, x.Excerpt, x.Markdown }).ToListAsync(ct);
