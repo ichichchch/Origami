@@ -565,7 +565,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         await admin.Content.SaveAsync(other);
         await admin.Content.SaveAsync(NewContent("Standalone page", ContentKind.Page, ContentStatus.Published));
 
-        Assert.Equal(new NavigationItem("旅行", "travel"), await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, "TRAVEL"));
+        Assert.Equal(new TaxonomyView("旅行", "travel"), await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, "TRAVEL"));
         Assert.Null(await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, privateCategory.Slug));
         Assert.Null(await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Tag, "missing"));
         var popular = Assert.Single(await visitor.Content.PopularCategoriesAsync());

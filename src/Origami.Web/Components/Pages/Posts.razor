@@ -1,0 +1,56 @@
+@page "/posts"
+@inject SettingsService Settings
+@inject ILogger<Posts> Logger
+
+<PageTitle>最新文章</PageTitle>
+<HeadContent>
+    <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
+    <meta name="description" content="@_settings.Description" />
+    <link rel="canonical" href="@(BaseUrl + "/posts")" />
+    <meta property="og:site_name" content="@_settings.Name" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@(_settings.Name + " · 最新文章")" />
+    <meta property="og:description" content="@_settings.Description" />
+    <meta property="og:url" content="@(BaseUrl + "/posts")" />
+</HeadContent>
+@if (_serveList)
+{
+    <PostList Page="@Page" Category="@Category" Tag="@Tag" PageSize="@(_settings.PostsPerPage ?? Limits.PageSize)" BasePath="/posts" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "page")] public string? Page { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
+    [SupplyParameterFromQuery(Name = "tag")] public string? Tag { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private SiteSettings _settings = new();
+    private bool _serveList;
+    private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _serveList = false;
+        try
+        {
+            var ct = HttpContext?.RequestAborted ?? default;
+            _settings = await Settings.GetAsync(ct);
+            // Without a static home page the list lives at "/", so /posts just points there.
+            if (_settings.HomePageContentId is null)
+            {
+                if (HttpContext is not null && !HttpContext.Response.HasStarted)
+                {
+                    var query = HttpContext.Request.QueryString.HasValue ? HttpContext.Request.QueryString.Value : "";
+                    HttpContext.Response.Redirect("/" + query, permanent: false);
+                }
+                return;
+            }
+            _serveList = true;
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Posts listing unavailable");
+            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
+        }
+    }
+}

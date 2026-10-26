@@ -235,6 +235,18 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PageOption(x.Id, x.Title, x.ParentId, x.Status, x.IsPrivate, x.IsProtected)).ToListAsync(ct);
     }
 
+    /// <summary>The page rendered as the static home page; anything not publicly readable returns null.</summary>
+    public async Task<PublicContent?> GetPublishedPageAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Contents.AsNoTracking()
+            .Where(x => x.Id == id && x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected)
+            .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
+                x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
+                x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
+            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate }).SingleOrDefaultAsync(ct);
+    }
+
     private static void ValidateSaveInput(ContentEdit input, ContentKind? requestedKind)
     {
         ContentRules.Validate(input);
@@ -460,7 +472,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Take(Limits.MaxTaxonomiesPerKind).Select(x => new PublicTaxonomy(x.Name, x.Slug, x.Count)).ToListAsync(ct);
     }
 
-    public async Task<NavigationItem?> GetPublicTaxonomyAsync(TaxonomyKind kind, string slug, CancellationToken ct = default)
+    public async Task<TaxonomyView?> GetPublicTaxonomyAsync(TaxonomyKind kind, string slug, CancellationToken ct = default)
     {
         if (!Enum.IsDefined(kind)) throw new CmsException("分類類型無效。");
         slug = ContentRules.NormalizeSlug(slug);
@@ -468,9 +480,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         // A taxonomy used only by drafts is not part of the public site.
         return kind == TaxonomyKind.Category
             ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
-                .Select(x => new NavigationItem(x.Name, x.Slug)).SingleOrDefaultAsync(ct)
+                .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct)
             : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
-                .Select(x => new NavigationItem(x.Name, x.Slug)).SingleOrDefaultAsync(ct);
+                .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct);
     }
 
     public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, CancellationToken ct = default)

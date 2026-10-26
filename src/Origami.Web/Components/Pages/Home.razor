@@ -1,79 +1,33 @@
 @page "/"
 @inject ContentService Content
 @inject SettingsService Settings
-@inject NavigationManager Navigation
-@inject ILogger<Home> Logger
+@inject MediaService Media
 @inject MarkdownService Markdown
+@inject ILogger<Home> Logger
 
-<PageTitle>@Heading</PageTitle>
+<PageTitle>@HeadTitle</PageTitle>
 <HeadContent>
     <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
-    <meta name="description" content="@_settings.Description" />
+    <meta name="description" content="@HomeDescription" />
     @* Filtered listings canonicalize to the plain home URL to avoid duplicate-content URLs. *@
     <link rel="canonical" href="@BaseUrl/" />
     <meta property="og:site_name" content="@_settings.Name" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="@Heading" />
-    <meta property="og:description" content="@_settings.Description" />
+    <meta property="og:title" content="@HeadTitle" />
+    <meta property="og:description" content="@HomeDescription" />
     <meta property="og:url" content="@BaseUrl/" />
 </HeadContent>
-<section class="public-heading"><p class="eyebrow">文字・觀點・日常</p><h1>@Heading<span class="heading-dot">.</span></h1><p>@(HasFilter ? "探索這個主題的已發布文章。" : "記錄想法，也分享值得留意的事。")</p></section>
-@if (_categories.Count > 0)
+@if (_homePage is not null)
 {
-    <nav class="category-nav" aria-label="常用分類">
-        <a class="chip @(!HasFilter ? "selected" : "")" href="/">全部文章</a>
-        @foreach (var category in _categories)
-        {
-            <a class="chip @(_category?.Slug == category.Slug ? "selected" : "")" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Name <span class="muted">@category.Count</span></a>
-        }
-    </nav>
-}
-@if (HasFilter)
-{
-    <p class="field-help"><a href="/">清除篩選，查看全部文章</a>@if (_result is not null) { <span> · 共 @_result.Total 篇</span> }</p>
-}
-@if (_error is not null)
-{
-    <div class="notice notice-error" role="alert">@_error <a href="/" data-enhance-nav="false">重新載入首頁</a></div>
-}
-else if (_result is null)
-{
-    <p role="status">正在載入文章…</p>
-}
-else if (_result.Items.Count == 0)
-{
-    <section class="empty-state">
-        <span class="empty-symbol" aria-hidden="true">—</span>
-        <h2>@(HasFilter ? "這個組合還沒有文章" : "故事，即將開始")</h2>
-        @if (HasFilter)
-        {
-            <p>試試其他分類或標籤，或回到全部文章。</p><a href="/">瀏覽全部文章 →</a>
-        }
-        else
-        {
-            <p>目前還沒有公開文章。若你是網站管理員，登入後就能建立第一篇內容。</p>
-            <a class="button" href="/admin/posts" data-enhance-nav="false">開始管理內容</a>
-            <p class="field-help">建立草稿 → 加入分類與圖片 → 發布，文章就會出現在這裡。</p>
-        }
-    </section>
+    <article class="reading-column">
+        <header class="article-heading"><p class="eyebrow">首頁</p><h1>@_homePage.Title</h1></header>
+        <div class="prose">@((MarkupString)_homePageHtml)</div>
+    </article>
+    <p class="field-help home-posts-link">想看所有文章？<a href="/posts">前往文章列表 →</a></p>
 }
 else
 {
-    <div class="post-list">
-        @foreach (var post in _result.Items)
-        {
-            <article class="post-preview">
-                <time datetime="@post.PublishedAt?.ToString("O")">@post.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
-                <div class="post-summary"><h2>@if (post.IsSticky) { <span class="chip sticky-chip">置頂</span> } <a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2><p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
-                <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@("閱讀：" + post.Title)">閱讀全文 <span aria-hidden="true">↗</span></a>
-            </article>
-        }
-    </div>
-    <nav class="pagination" aria-label="文章分頁">
-        @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">上一頁</a> }
-        <span>第 @_result.Page / @_result.TotalPages 頁</span>
-        @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">下一頁</a> }
-    </nav>
+    <PostList Page="@Page" Category="@Category" Tag="@Tag" PageSize="@(_settings.PostsPerPage ?? Limits.PageSize)" BasePath="/" />
 }
 
 @code {
@@ -81,64 +35,30 @@ else
     [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
     [SupplyParameterFromQuery(Name = "tag")] public string? Tag { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
-    private PagedResult<ContentSummary>? _result;
     private SiteSettings _settings = new();
-    private List<PublicTaxonomy> _categories = [];
-    private NavigationItem? _category;
-    private NavigationItem? _tag;
-    private bool HasFilter => Category is not null || Tag is not null;
-    private string Heading => (_category, _tag) switch
-    {
-        ({ } category, { } tag) => category.Title + " · #" + tag.Title,
-        ({ } category, _) => category.Title,
-        (_, { } tag) => "#" + tag.Title,
-        _ => "最新文章"
-    };
-    private string? _error;
+    private PublicContent? _homePage;
+    private string _homePageHtml = "";
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
-    private string PageUrl(int page) => "/?page=" + page
-        + (_category is not null ? "&category=" + Uri.EscapeDataString(_category.Slug) : "")
-        + (_tag is not null ? "&tag=" + Uri.EscapeDataString(_tag.Slug) : "");
+    private string HeadTitle => _homePage?.Title ?? _settings.Name;
+    private string HomeDescription => _homePage is null
+        ? _settings.Description
+        : _homePage.Excerpt != "" ? _homePage.Excerpt : Markdown.Excerpt(_homePage.Markdown);
+
     protected override async Task OnParametersSetAsync()
     {
-        _result = null;
-        _error = null;
-        _category = null;
-        _tag = null;
-        _categories = [];
-        var page = 1;
-        if (Page is not null && (!int.TryParse(Page, out page) || page < 1 || page > int.MaxValue / Limits.PageSize))
-        { Missing(); return; }
+        _homePage = null;
+        _homePageHtml = "";
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
             _settings = await Settings.GetAsync(ct);
-            if (Category is not null)
-            {
-                _category = await Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, Category, ct);
-                if (_category is null) { Missing(); return; }
-            }
-            if (Tag is not null)
-            {
-                _tag = await Content.GetPublicTaxonomyAsync(TaxonomyKind.Tag, Tag, ct);
-                if (_tag is null) { Missing(); return; }
-            }
-            _result = await Content.ListPublishedAsync(page, ct: ct, category: _category?.Slug, tag: _tag?.Slug);
-            if (page > _result.TotalPages) { Missing(); return; }
-            _categories = await Content.PopularCategoriesAsync(ct);
+            // A configured static home page that stops being publicly readable falls back to the article list.
+            if (_settings.HomePageContentId is { } homeId)
+                _homePage = await Content.GetPublishedPageAsync(homeId, ct);
+            if (_homePage is not null)
+                _homePageHtml = Markdown.Render(_homePage.Markdown, await Media.PublicImageWidthsAsync(ct));
         }
-        catch (CmsException) { Missing(); }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Public article list unavailable");
-            _error = "目前無法載入文章，請稍後再試。";
-            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
-        }
-    }
-    private void Missing()
-    {
-        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
-        Navigation.NotFound();
+        catch (Exception ex) { Logger.LogError(ex, "Home page unavailable"); }
     }
 }

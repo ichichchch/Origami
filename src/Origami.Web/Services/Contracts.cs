@@ -70,6 +70,8 @@ public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Versio
 {
     public string Description { get; init; } = "";
 }
+/// <summary>A public taxonomy with its authored description for filtered listings.</summary>
+public sealed record TaxonomyView(string Title, string Slug, string Description = "");
 public sealed record PublicTaxonomy(string Name, string Slug, int Count);
 public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, string Slug, string Markdown,
     DateTimeOffset? PublishedAt, IReadOnlyList<NavigationItem> Categories, IReadOnlyList<NavigationItem> Tags)
