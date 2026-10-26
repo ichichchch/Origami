@@ -58,13 +58,39 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         await using var db = await factory.CreateDbContextAsync(ct);
         var fileName = await db.MediaAssets.Where(x => x.Id == mediaId).Select(x => x.FileName).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
-        return await db.Contents.AsNoTracking().CountAsync(x => x.Markdown.Contains("/media/" + fileName), ct);
+        return await ReferencedContents(db, fileName).CountAsync(ct);
+    }
+
+    /// <summary>The markers a Markdown body can use to reference an image: the original and every variant.</summary>
+    public static string[] ReferenceMarkers(string fileName)
+    {
+        var markers = new List<string> { "/media/" + fileName };
+        foreach (var width in Limits.ImageVariantWidths)
+            markers.Add("/media/" + VariantName(fileName, width));
+        return [.. markers];
+    }
+
+    /// <summary>Contents whose Markdown embeds this image or one of its responsive variants, in any state.</summary>
+    private static IQueryable<Content> ReferencedContents(CmsDbContext db, string fileName)
+    {
+        var markers = ReferenceMarkers(fileName);
+        // Any marker counts as a reference: a body may embed the original or a variant.
+        var parameter = Expression.Parameter(typeof(Content), "x");
+        var contains = typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+        Expression? body = null;
+        foreach (var marker in markers)
+        {
+            var markdown = Expression.Property(parameter, nameof(Content.Markdown));
+            var call = Expression.Call(markdown, contains, Expression.Constant(marker));
+            body = body is null ? call : Expression.OrElse(body, call);
+        }
+        var predicate = Expression.Lambda<Func<Content, bool>>(body!, parameter);
+        return db.Contents.AsNoTracking().Where(predicate);
     }
 
     private static async Task<List<MediaReference>> QueryReferencesAsync(CmsDbContext db, string fileName, CancellationToken ct)
     {
-        var marker = "/media/" + fileName;
-        return await db.Contents.AsNoTracking().Where(x => x.Markdown.Contains(marker))
+        return await ReferencedContents(db, fileName)
             .OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id)
             .Select(x => new MediaReference(x.Id, x.Title, x.Kind, x.Status)).ToListAsync(ct);
     }
@@ -77,7 +103,9 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
                           join asset in db.MediaAssets.AsNoTracking() on settings.SiteIconMediaId equals asset.Id
                           where settings.Id == 1
                           select new { asset.FileName, asset.ContentType }).SingleOrDefaultAsync(ct);
-        return icon is null ? null : new SiteIconFile(Path.Combine(storage.Images, icon.FileName), icon.ContentType);
+        // A stored name that is not a plain image file never becomes a readable path.
+        if (icon is null || !ContentRules.IsSafeMediaFileName(icon.FileName)) return null;
+        return new SiteIconFile(Path.Combine(storage.Images, icon.FileName), icon.ContentType);
     }
 
     public sealed record SiteIconFile(string Path, string ContentType);
@@ -89,6 +117,9 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         if (!confirmed) throw new CmsException("請先確認刪除圖片。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var asset = await db.MediaAssets.SingleOrDefaultAsync(x => x.Id == mediaId, ct) ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
+        // The stored name decides the path, so it must be a plain image file inside the image folder.
+        if (!ContentRules.IsSafeMediaFileName(asset.FileName))
+            throw new CmsException("媒體檔名不合法，無法刪除。");
         if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.SiteIconMediaId == mediaId, ct))
             throw new CmsException("此圖片是目前的網站圖示，請先在網站設定改用其他圖片或清除圖示後再刪除。");
         var references = await QueryReferencesAsync(db, asset.FileName, ct);
@@ -115,6 +146,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             .Select(x => new { x.FileName, x.Width, x.Height, x.ContentType }).ToListAsync(ct);
         foreach (var asset in assets)
         {
+            if (!ContentRules.IsSafeMediaFileName(asset.FileName)) continue;
             var originalPath = Path.Combine(storage.Images, asset.FileName);
             if (!File.Exists(originalPath)) continue;
             var format = asset.ContentType switch

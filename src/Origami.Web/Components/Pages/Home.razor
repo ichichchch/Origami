@@ -17,7 +17,7 @@
     <meta property="og:description" content="@HomeDescription" />
     <meta property="og:url" content="@BaseUrl/" />
 </HeadContent>
-@if (_homePage is not null)
+@if (_homePage is not null && !HasFilter)
 {
     <article class="reading-column">
         <header class="article-heading"><p class="eyebrow">首頁</p><h1>@_homePage.Title</h1></header>
@@ -39,10 +39,13 @@ else
     private PublicContent? _homePage;
     private string _homePageHtml = "";
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
-    private string HeadTitle => _homePage?.Title ?? _settings.Name;
-    private string HomeDescription => _homePage is null
+    // A category or tag filter always reaches the article list, even when a static home page is set.
+    private bool HasFilter => !string.IsNullOrWhiteSpace(Category) || !string.IsNullOrWhiteSpace(Tag);
+    private bool ServesHomePage => _homePage is not null && !HasFilter;
+    private string HeadTitle => ServesHomePage ? _homePage!.Title : _settings.Name;
+    private string HomeDescription => !ServesHomePage
         ? _settings.Description
-        : _homePage.Excerpt != "" ? _homePage.Excerpt : Markdown.Excerpt(_homePage.Markdown);
+        : _homePage!.Excerpt != "" ? _homePage.Excerpt : Markdown.Excerpt(_homePage.Markdown);
 
     protected override async Task OnParametersSetAsync()
     {

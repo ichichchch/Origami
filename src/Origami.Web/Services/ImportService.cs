@@ -62,12 +62,17 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (!tagsBySlug.TryAdd(tag.Slug, tag)) throw new CmsException($"匯入的標籤代稱重複：{tag.Slug}。");
             db.Tags.Add(tag);
         }
+        Dictionary<string, MediaAsset> mediaByFileName = [];
         foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
         {
-            db.MediaAssets.Add(new MediaAsset
+            var fileName = Bounded(node, "fileName", 80, "媒體檔名");
+            // A stored name becomes a file path later; only a plain image file may be imported.
+            if (!ContentRules.IsSafeMediaFileName(fileName))
+                throw new CmsException($"匯入的媒體檔名不合法：{fileName}。");
+            if (!mediaByFileName.TryAdd(fileName, new MediaAsset
             {
                 Id = Guid.NewGuid(),
-                FileName = Bounded(node, "fileName", 80, "媒體檔名"),
+                FileName = fileName,
                 OriginalName = Bounded(node, "originalName", 200, "媒體原始名稱"),
                 ContentType = Bounded(node, "contentType", 40, "媒體類型"),
                 AltText = Bounded(node, "altText", Limits.AltText, "媒體替代文字", optional: true),
@@ -75,8 +80,10 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 Width = node.TryGetProperty("width", out var width) && width.ValueKind == JsonValueKind.Number ? width.GetInt32() : 0,
                 Height = node.TryGetProperty("height", out var height) && height.ValueKind == JsonValueKind.Number ? height.GetInt32() : 0,
                 UploadedAt = Date(node, "uploadedAt") ?? now,
-            });
+            }))
+                throw new CmsException($"匯入的媒體檔名重複：{fileName}。");
         }
+        foreach (var asset in mediaByFileName.Values) db.MediaAssets.Add(asset);
 
         // First pass: create every content row; hierarchy links resolve on the in-memory entities.
         Dictionary<string, Content> contentsBySlug = [];
@@ -154,9 +161,11 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             ? Math.Clamp(feedItems.GetInt32(), 1, Limits.MaxFeedItems) : null;
         settings.HomePageContentId = site.GetString("homePageSlug") is { } homeSlug && contentsBySlug.GetValueOrDefault(homeSlug) is { Kind: ContentKind.Page, Status: ContentStatus.Published, IsProtected: false, IsPrivate: false } home
             ? home.Id : null;
-        settings.SiteIconMediaId = site.GetString("siteIconFileName") is { } iconFile
-            ? await db.MediaAssets.AsNoTracking().Where(x => x.FileName == iconFile).Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct)
-            : null;
+        // The imported media rows get new identifiers, so the icon is resolved from the file name.
+        Guid? siteIconId = null;
+        if (site.GetString("siteIconFileName") is { } iconFile && mediaByFileName.TryGetValue(iconFile, out var icon))
+            siteIconId = icon.Id;
+        settings.SiteIconMediaId = siteIconId;
         settings.Version = Guid.NewGuid();
 
         // Published public content re-enters the embedding pipeline exactly like a fresh publish.

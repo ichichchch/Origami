@@ -122,6 +122,17 @@ public static partial class ContentRules
     /// <summary>Escapes LIKE wildcards so user text is matched literally in ILike patterns.</summary>
     public static string EscapeLike(string value) => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 
+    /// <summary>
+    /// A stored media file name must stay a plain file inside the image directory: no path
+    /// separators, no drive letters, no traversal and only a raster image extension.
+    /// </summary>
+    public static bool IsSafeMediaFileName(string? fileName) =>
+        !string.IsNullOrWhiteSpace(fileName)
+        && fileName.Length <= 80
+        && fileName.IndexOfAny(['/', '\\', ':']) < 0
+        && !fileName.Any(char.IsControl)
+        && Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".webp";
+
     [GeneratedRegex(@"[^\p{L}\p{Nd}]+", RegexOptions.CultureInvariant)]
     private static partial Regex SlugSeparators();
 

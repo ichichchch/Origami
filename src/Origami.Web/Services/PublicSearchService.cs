@@ -29,6 +29,11 @@ public sealed class PublicSearchService(
             // configuration) only disables the semantic leg, keyword results still serve.
             semanticHits = [.. await semantic.SearchAsync(query, limit, ct)];
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // A provider timeout is a failed leg, not a cancelled visitor: keyword results still serve.
+            semanticAvailable = false;
+        }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             semanticAvailable = false;

@@ -103,8 +103,16 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException("私密與密碼保護不可同時啟用，請擇一。");
         entity.IsPrivate = input.IsPrivate;
         entity.ParentId = input.ParentId;
+        // A hierarchy change locks the page rows until the save commits. Two parallel saves that
+        // would close a cycle are therefore serialized, and the second one reads the committed
+        // state instead of a stale snapshot.
+        IDbContextTransaction? hierarchyTransaction = null;
         if (input.ParentId is { } parentId)
+        {
+            hierarchyTransaction = await db.Database.BeginTransactionAsync(ct);
+            await LockPageRowsAsync(db, ct);
             await ValidateParentAsync(db, entity, parentId, ct);
+        }
         if (!input.IsProtected)
         {
             entity.IsProtected = false;
@@ -174,6 +182,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await SyncEmbeddingAsync(db, entity, now, ct);
         // EF wraps the content update and both join-table updates in one transaction.
         await ContentRules.SaveAsync(db, ct);
+        if (hierarchyTransaction is not null) await hierarchyTransaction.CommitAsync(ct);
         input.Id = entity.Id;
         input.Kind = entity.Kind;
         input.Slug = entity.Slug;
@@ -223,6 +232,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 throw new CmsException("頁面階層過深，請檢查上層設定。");
             cursor = byId.TryGetValue(cursor.Value, out var node) ? node.ParentId : null;
         }
+    }
+
+    /// <summary>Locks the page rows in a stable order so hierarchy changes never overlap.</summary>
+    private static async Task LockPageRowsAsync(CmsDbContext db, CancellationToken ct)
+    {
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"""SELECT "Id" FROM "Contents" WHERE "Kind" = {(int)ContentKind.Page} ORDER BY "Id" FOR UPDATE""", ct);
     }
 
     /// <summary>Page candidates for the editor's parent selector; the trash is not selectable.</summary>
@@ -351,7 +367,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 .OrderBy(x => x.PublishAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
             if (due is null) break;
             // The scheduled moment is the publish moment, so ordering by publish time stays honest.
-            due.PublishedAt = due.PublishAt;
+            // A re-publish after a withdrawal keeps the first publication date.
+            due.PublishedAt ??= due.PublishAt;
             due.PublishAt = null;
             due.Status = ContentStatus.Published;
             due.UpdatedAt = now;
@@ -371,8 +388,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var expired = await db.Contents.Where(x => x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
             .Select(x => x.Id).ToListAsync(ct);
         if (expired.Count == 0) return 0;
-        await db.Contents.Where(x => expired.Contains(x.Id)).ExecuteDeleteAsync(ct);
-        return expired.Count;
+        // The delete repeats the trash conditions: content restored between the listing and the
+        // delete is a draft again and must survive the purge.
+        return await db.Contents.Where(x => expired.Contains(x.Id)
+                && x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
+            .ExecuteDeleteAsync(ct);
     }
 
     public async Task<List<RevisionItem>> ListRevisionsAsync(Guid contentId, CancellationToken ct = default)
