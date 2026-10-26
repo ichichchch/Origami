@@ -1,7 +1,7 @@
 namespace Origami.Web.Models;
 
 public enum ContentKind { Post, Page }
-public enum ContentStatus { Draft, Published }
+public enum ContentStatus { Draft, Published, Trashed }
 public enum TaxonomyKind { Category, Tag }
 
 public static class Limits
@@ -9,6 +9,8 @@ public static class Limits
     public const int Title = 200;
     public const int Slug = 160;
     public const int Body = 200_000;
+    public const int Excerpt = 500;
+    public const int AltText = 300;
     public const int TaxonomyName = 80;
     public const int SiteName = 100;
     public const int Description = 500;
@@ -23,6 +25,15 @@ public static class Limits
     public const int EmbeddingChunkMax = 4000;
     public const int EmbeddingBatchSize = 64;
     public const int SearchMaxResults = 20;
+    public const int SearchQueryMax = 500;
+    public const int FeedItems = 20;
+    public const int RevisionKeep = 20;
+    public const int AutosaveSeconds = 60;
+    public const int TrashRetentionDays = 30;
+    // A schedule must be at least this far ahead so the worker promotes it at the intended minute.
+    public const int ScheduleLeadMinutes = 5;
+    // Responsive widths generated next to every upload; variants wider than the source are skipped.
+    public static readonly int[] ImageVariantWidths = [480, 960, 1600];
     public const int AssistantQuestionMax = 8_000;
     public const int AssistantHistoryLimit = 20;
 }
@@ -40,13 +51,34 @@ public sealed class Content
     public string Title { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Markdown { get; set; } = "";
+    public string Excerpt { get; set; } = "";
     public ContentStatus Status { get; set; }
+    // Sticky posts lead the public article list; pages ignore the flag.
+    public bool IsSticky { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
+    /// <summary>Future publish time for a draft; the lifecycle worker promotes it when due.</summary>
+    public DateTimeOffset? PublishAt { get; set; }
+    /// <summary>Set while the content sits in the trash; drives the retention cleanup.</summary>
+    public DateTimeOffset? DeletedAt { get; set; }
+    /// <summary>Unguessable share link that renders this content before it is published.</summary>
+    public Guid? PreviewToken { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Category> Categories { get; set; } = new List<Category>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();
+}
+
+/// <summary>Snapshot of the content as it was before a save; restore loads it back into the editor.</summary>
+public sealed class ContentRevision
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid ContentId { get; set; }
+    public string Title { get; set; } = "";
+    public string Markdown { get; set; } = "";
+    public string Excerpt { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public Content Content { get; set; } = null!;
 }
 
 public sealed class Category
@@ -73,10 +105,21 @@ public sealed class MediaAsset
     public string FileName { get; set; } = "";
     public string OriginalName { get; set; } = "";
     public string ContentType { get; set; } = "";
+    public string AltText { get; set; } = "";
     public long Size { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public DateTimeOffset UploadedAt { get; set; }
+}
+
+/// <summary>Maps a retired public slug to the content that used to carry it, for permanent redirects.</summary>
+public sealed class ContentSlugRedirect
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string OldSlug { get; set; } = "";
+    public Guid ContentId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public Content Content { get; set; } = null!;
 }
 
 /// <summary>One chunk of a published content's text with its embedding vector.</summary>

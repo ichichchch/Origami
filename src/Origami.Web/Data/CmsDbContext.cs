@@ -3,9 +3,11 @@ namespace Origami.Web.Data;
 public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : IdentityDbContext<AdminUser>(options)
 {
     public DbSet<Content> Contents => Set<Content>();
+    public DbSet<ContentRevision> ContentRevisions => Set<ContentRevision>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
+    public DbSet<ContentSlugRedirect> SlugRedirects => Set<ContentSlugRedirect>();
     public DbSet<SiteSettings> Settings => Set<SiteSettings>();
     public DbSet<ContentEmbedding> ContentEmbeddings => Set<ContentEmbedding>();
     public DbSet<EmbeddingJob> EmbeddingJobs => Set<EmbeddingJob>();
@@ -24,19 +26,34 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.Property(x => x.Title).HasMaxLength(Limits.Title).IsRequired();
             e.Property(x => x.Slug).HasMaxLength(Limits.Slug).IsRequired();
             e.Property(x => x.Markdown).HasMaxLength(Limits.Body).IsRequired();
+            e.Property(x => x.Excerpt).HasMaxLength(Limits.Excerpt).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => x.Slug).IsUnique();
             e.HasIndex(x => new { x.Kind, x.Status, x.PublishedAt, x.Id });
+            e.HasIndex(x => x.PreviewToken).IsUnique();
+            e.HasIndex(x => x.Status);
             e.HasMany(x => x.Categories).WithMany(x => x.Contents).UsingEntity("ContentCategories");
             e.HasMany(x => x.Tags).WithMany(x => x.Contents).UsingEntity("ContentTags");
             e.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_Content_Kind", "\"Kind\" IN (0, 1)");
-                t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1)");
-                t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" = 0 OR \"PublishedAt\" IS NOT NULL");
+                t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2)");
+                // Drafts and trash may be unpublished; only the live published state requires a date.
+                t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2) OR \"PublishedAt\" IS NOT NULL");
+                // A schedule is only meaningful on a draft; the trash timestamp only in the trash.
+                t.HasCheckConstraint("CK_Content_PublishAt", "\"Status\" = 0 OR \"PublishAt\" IS NULL");
+                t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
                 t.HasCheckConstraint("CK_Content_Title", "length(btrim(\"Title\")) > 0");
                 t.HasCheckConstraint("CK_Content_Slug", "length(\"Slug\") > 0");
             });
+        });
+        builder.Entity<ContentRevision>(e =>
+        {
+            e.Property(x => x.Title).HasMaxLength(Limits.Title).IsRequired();
+            e.Property(x => x.Markdown).HasMaxLength(Limits.Body).IsRequired();
+            e.Property(x => x.Excerpt).HasMaxLength(Limits.Excerpt).IsRequired();
+            e.HasOne(x => x.Content).WithMany().HasForeignKey(x => x.ContentId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.ContentId, x.CreatedAt });
         });
         builder.Entity<Category>(e =>
         {
@@ -57,8 +74,15 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.Property(x => x.FileName).HasMaxLength(80).IsRequired();
             e.Property(x => x.OriginalName).HasMaxLength(200).IsRequired();
             e.Property(x => x.ContentType).HasMaxLength(40).IsRequired();
+            e.Property(x => x.AltText).HasMaxLength(Limits.AltText).IsRequired();
             e.HasIndex(x => x.FileName).IsUnique();
             e.HasIndex(x => new { x.UploadedAt, x.Id });
+        });
+        builder.Entity<ContentSlugRedirect>(e =>
+        {
+            e.Property(x => x.OldSlug).HasMaxLength(Limits.Slug).IsRequired();
+            e.HasIndex(x => x.OldSlug).IsUnique();
+            e.HasOne(x => x.Content).WithMany().HasForeignKey(x => x.ContentId).OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<SiteSettings>(e =>
         {

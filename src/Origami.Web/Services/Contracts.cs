@@ -7,8 +7,15 @@ public sealed class ContentEdit
     public Guid? Id { get; set; }
     public ContentKind Kind { get; set; }
     [Required, StringLength(Limits.Title)] public string Title { get; set; } = "";
-    [StringLength(Limits.Slug)] public string Slug { get; set; } = "";
-    [StringLength(Limits.Body)] public string Markdown { get; set; } = "";
+    [StringLength(Limits.Slug)] public string? Slug { get; set; }
+    [StringLength(Limits.Body)] public string? Markdown { get; set; }
+    [StringLength(Limits.Excerpt)] public string? Excerpt { get; set; }
+    public bool IsSticky { get; set; }
+    /// <summary>Future publish time; only meaningful while the content stays a draft.</summary>
+    public DateTimeOffset? PublishAt { get; set; }
+    public Guid? PreviewToken { get; set; }
+    /// <summary>Read-only echo of the stored first-publish time.</summary>
+    public DateTimeOffset? PublishedAt { get; set; }
     public ContentStatus Status { get; set; }
     public Guid Version { get; set; }
     public List<Guid> CategoryIds { get; set; } = [];
@@ -24,17 +31,45 @@ public sealed class TaxonomyEdit
 }
 
 public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, string Slug,
-    ContentStatus Status, DateTimeOffset UpdatedAt, DateTimeOffset? PublishedAt, Guid Version);
+    ContentStatus Status, DateTimeOffset UpdatedAt, DateTimeOffset? PublishedAt, Guid Version)
+{
+    public string Excerpt { get; init; } = "";
+    // A manual excerpt is rendered as authored; the fallback prefix still needs Markdown stripping.
+    public bool ExcerptIsManual { get; init; }
+    public bool IsSticky { get; init; }
+    public DateTimeOffset? PublishAt { get; init; }
+    public DateTimeOffset? DeletedAt { get; init; }
+}
+public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
+{
+    // The default tab lists drafts and published content; the trash has its own tab.
+    public int Total => Drafts + Published;
+}
+/// <summary>Revision list entry; the body loads on demand.</summary>
+public sealed record RevisionItem(Guid Id, string Title, DateTimeOffset CreatedAt);
+public sealed record RevisionDetail(Guid Id, Guid ContentId, string Title, string Markdown, string Excerpt, DateTimeOffset CreatedAt);
 public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Version);
+public sealed record PublicTaxonomy(string Name, string Slug, int Count);
 public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, string Slug, string Markdown,
-    DateTimeOffset? PublishedAt, List<string> Categories, List<string> Tags);
+    DateTimeOffset? PublishedAt, IReadOnlyList<NavigationItem> Categories, IReadOnlyList<NavigationItem> Tags)
+{
+    public string Excerpt { get; init; } = "";
+}
 public sealed record NavigationItem(string Title, string Slug);
+/// <summary>One public URL for the sitemap with its last significant change.</summary>
+public sealed record SitemapItem(string Path, DateTimeOffset? LastModified);
 public sealed record MediaItem(Guid Id, string FileName, string OriginalName, string ContentType,
     long Size, int Width, int Height, DateTimeOffset UploadedAt)
 {
+    public string AltText { get; init; } = "";
+    /// <summary>Set by listings; how many contents embed this image in any state.</summary>
+    public int ReferenceCount { get; set; }
     public string Url => "/media/" + FileName;
-    public string Markdown => "![圖片](" + Url + ")";
+    // An unset alt keeps the historical placeholder; brackets are escaped so authored text cannot break the syntax.
+    public string Markdown => "![" + (AltText == "" ? "圖片" : AltText.Replace("[", "\\[").Replace("]", "\\]")) + "](" + Url + ")";
 }
+/// <summary>The live public target behind a retired slug, for permanent redirects.</summary>
+public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Total / PageSize));
@@ -42,7 +77,7 @@ public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page,
 
 public static partial class ContentRules
 {
-    public static string NormalizeSlug(string value)
+    public static string NormalizeSlug(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) throw new CmsException("網址代稱不得空白。");
         var result = SlugSeparators().Replace(value.Normalize(NormalizationForm.FormKC).ToLowerInvariant().Trim(), "-").Trim('-');

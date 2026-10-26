@@ -296,6 +296,17 @@ namespace Origami.Web.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Excerpt")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsSticky")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
@@ -303,6 +314,12 @@ namespace Origami.Web.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200000)
                         .HasColumnType("character varying(200000)");
+
+                    b.Property<Guid?>("PreviewToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("PublishAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
@@ -329,20 +346,29 @@ namespace Origami.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PreviewToken")
+                        .IsUnique();
+
                     b.HasIndex("Slug")
                         .IsUnique();
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("Kind", "Status", "PublishedAt", "Id");
 
                     b.ToTable("Contents", t =>
                         {
+                            t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
+
                             t.HasCheckConstraint("CK_Content_Kind", "\"Kind\" IN (0, 1)");
 
-                            t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" = 0 OR \"PublishedAt\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_Content_PublishAt", "\"Status\" = 0 OR \"PublishAt\" IS NULL");
+
+                            t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2) OR \"PublishedAt\" IS NOT NULL");
 
                             t.HasCheckConstraint("CK_Content_Slug", "length(\"Slug\") > 0");
 
-                            t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1)");
+                            t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2)");
 
                             t.HasCheckConstraint("CK_Content_Title", "length(btrim(\"Title\")) > 0");
                         });
@@ -373,6 +399,67 @@ namespace Origami.Web.Data.Migrations
                     NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
                     b.ToTable("ContentEmbeddings");
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.ContentRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Excerpt")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Markdown")
+                        .IsRequired()
+                        .HasMaxLength(200000)
+                        .HasColumnType("character varying(200000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentId", "CreatedAt");
+
+                    b.ToTable("ContentRevisions");
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.ContentSlugRedirect", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OldSlug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentId");
+
+                    b.HasIndex("OldSlug")
+                        .IsUnique();
+
+                    b.ToTable("SlugRedirects");
                 });
 
             modelBuilder.Entity("Origami.Web.Models.EmbeddingJob", b =>
@@ -406,6 +493,11 @@ namespace Origami.Web.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AltText")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("ContentType")
                         .IsRequired()
@@ -599,6 +691,28 @@ namespace Origami.Web.Data.Migrations
                         .HasForeignKey("ContentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.ContentRevision", b =>
+                {
+                    b.HasOne("Origami.Web.Models.Content", "Content")
+                        .WithMany()
+                        .HasForeignKey("ContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Content");
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.ContentSlugRedirect", b =>
+                {
+                    b.HasOne("Origami.Web.Models.Content", "Content")
+                        .WithMany()
+                        .HasForeignKey("ContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Content");
                 });
 
             modelBuilder.Entity("Origami.Web.Models.EmbeddingJob", b =>
