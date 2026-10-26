@@ -13,6 +13,8 @@ public sealed class ContentEdit
     public bool IsSticky { get; set; }
     /// <summary>Requires a password before the public page renders the body.</summary>
     public bool IsProtected { get; set; }
+    /// <summary>Restricts the public URL to the signed-in administrator; everyone else gets 404.</summary>
+    public bool IsPrivate { get; set; }
     /// <summary>Set a new protection password; empty keeps the stored one. Null when unchanged.</summary>
     public string? NewProtectPassword { get; set; }
     /// <summary>Read-only echo: a protection password is already stored.</summary>
@@ -48,6 +50,7 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public DateTimeOffset? PublishAt { get; init; }
     public DateTimeOffset? DeletedAt { get; init; }
     public bool IsProtected { get; init; }
+    public bool IsPrivate { get; init; }
     public int Views { get; init; }
 }
 public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
@@ -65,6 +68,7 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
 {
     public string Excerpt { get; init; } = "";
     public bool IsProtected { get; init; }
+    public bool IsPrivate { get; init; }
 }
 public sealed record NavigationItem(string Title, string Slug);
 /// <summary>One public URL for the sitemap with its last significant change.</summary>

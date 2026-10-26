@@ -16,6 +16,14 @@ public sealed class AdminAccess(
         }
     }
 
+    /// <summary>Non-throwing variant for public pages that reveal private content to the administrator only.</summary>
+    public async Task<bool> IsAdminAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = await authenticationStateProvider.GetAuthenticationStateAsync();
+        return await ValidatePrincipalAsync(state.User, contextFactory, identityOptions.Value, cancellationToken);
+    }
+
     public static async Task<bool> ValidatePrincipalAsync(
         ClaimsPrincipal? principal,
         IDbContextFactory<CmsDbContext> contextFactory,

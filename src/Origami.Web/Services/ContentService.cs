@@ -20,7 +20,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var items = await query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
-                PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected,
+                PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 Views = x.Views.Sum(v => (int?)v.Count) ?? 0
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
@@ -45,7 +45,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
-            IsSticky = x.IsSticky, IsProtected = x.IsProtected, HasProtectPassword = x.ProtectionHash != "",
+            IsSticky = x.IsSticky, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate, HasProtectPassword = x.ProtectionHash != "",
             PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
             Status = x.Status, Version = x.Version,
             Views = x.Views.Sum(v => (int?)v.Count) ?? 0,
@@ -91,6 +91,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException("獨立頁面不可指派文章分類或標籤。");
         if (entity.Kind == ContentKind.Page && input.IsSticky)
             throw new CmsException("獨立頁面不可置頂，置頂僅用於文章列表。");
+        if (input.IsPrivate && input.IsProtected)
+            throw new CmsException("私密與密碼保護不可同時啟用，請擇一。");
+        entity.IsPrivate = input.IsPrivate;
         if (!input.IsProtected)
         {
             entity.IsProtected = false;
@@ -214,8 +217,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         // The embedding lifecycle rides in the same transaction as the content change:
         // a published state queues re-embedding, any other state removes vectors immediately
         // so withdrawn or draft content can never surface through semantic search. Password-
-        // protected content never enters the index: vectors would leak gated text.
-        if (entity.Status == ContentStatus.Published && !entity.IsProtected)
+        // protected and private content never enter the index: vectors would leak gated text.
+        if (entity.Status == ContentStatus.Published && !entity.IsProtected && !entity.IsPrivate)
         {
             if (!await db.EmbeddingJobs.AnyAsync(x => x.ContentId == entity.Id, ct))
                 db.EmbeddingJobs.Add(new EmbeddingJob { ContentId = entity.Id, EnqueuedAt = now, NextAttemptAt = now });
@@ -382,7 +385,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (category is not null) category = ContentRules.NormalizeSlug(category);
         if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
         await using var db = await factory.CreateDbContextAsync(ct);
-        var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published);
+        var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate);
         if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
         var total = await query.CountAsync(ct);
@@ -402,7 +405,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Categories.AsNoTracking()
-            .Select(x => new { x.Name, x.Slug, Count = x.Contents.Count(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published) })
+            .Select(x => new { x.Name, x.Slug, Count = x.Contents.Count(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate) })
             .Where(x => x.Count > 0).OrderByDescending(x => x.Count).ThenBy(x => x.Slug)
             .Take(Limits.MaxTaxonomiesPerKind).Select(x => new PublicTaxonomy(x.Name, x.Slug, x.Count)).ToListAsync(ct);
     }
@@ -414,9 +417,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         // A taxonomy used only by drafts is not part of the public site.
         return kind == TaxonomyKind.Category
-            ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published))
+            ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
                 .Select(x => new NavigationItem(x.Name, x.Slug)).SingleOrDefaultAsync(ct)
-            : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published))
+            : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
                 .Select(x => new NavigationItem(x.Name, x.Slug)).SingleOrDefaultAsync(ct);
     }
 
@@ -427,7 +430,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt, IsProtected = x.IsProtected }).SingleOrDefaultAsync(ct);
+            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate }).SingleOrDefaultAsync(ct);
     }
 
     /// <summary>Verifies the protection password and returns the unlock token for the browser cookie.</summary>
@@ -482,7 +485,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var target = await db.SlugRedirects.AsNoTracking()
-            .Where(x => x.OldSlug == slug && x.Content.Status == ContentStatus.Published)
+            .Where(x => x.OldSlug == slug && x.Content.Status == ContentStatus.Published && !x.Content.IsPrivate)
             .Select(x => new { x.Content.Slug, x.Content.Kind }).SingleOrDefaultAsync(ct);
         return target is null ? null : new SlugRedirectTarget(target.Slug, target.Kind);
     }
@@ -496,11 +499,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var contents = await db.Contents.AsNoTracking()
-            .Where(x => x.Status == ContentStatus.Published)
+            .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate)
             .Select(x => new { x.Kind, x.Slug, x.UpdatedAt }).ToListAsync(ct);
         var categories = await db.Categories.AsNoTracking()
             .Select(x => new { x.Slug, Latest = x.Contents
-                .Where(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published)
+                .Where(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate)
                 .Max(c => (DateTimeOffset?)c.PublishedAt) })
             .Where(x => x.Latest != null).ToListAsync(ct);
         var homeLastModified = contents.Count == 0 ? null : (DateTimeOffset?)contents.Max(x => x.UpdatedAt);

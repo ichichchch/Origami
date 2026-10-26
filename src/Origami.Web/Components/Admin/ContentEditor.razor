@@ -75,8 +75,12 @@
                         <p class="field-help">累積瀏覽 @_model.Views 次。</p>
                     }
                     <div class="field checkbox-field">
-                        <label for="content-protect"><input id="content-protect" type="checkbox" @bind="_model.IsProtected" disabled="@Blocked" /> 密碼保護</label>
+                        <label for="content-protect"><input id="content-protect" type="checkbox" @bind="_model.IsProtected" disabled="@(Blocked || _model.IsPrivate)" /> 密碼保護</label>
                         <p class="field-help">公開網址需輸入密碼才能閱讀內文；受保護內容不進入搜尋與 AI 檢索。</p>
+                    </div>
+                    <div class="field checkbox-field">
+                        <label for="content-private"><input id="content-private" type="checkbox" @bind="_model.IsPrivate" disabled="@(Blocked || _model.IsProtected)" /> 私密</label>
+                        <p class="field-help">公開網址僅管理員登入後可讀，訪客與搜尋引擎一律 404；私密內容不進入搜尋與 AI 檢索。</p>
                     </div>
                     @if (_model.IsProtected)
                     {
@@ -394,7 +398,7 @@
     {
         Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
-        IsProtected = _model.IsProtected, NewProtectPassword = _protectPassword,
+        IsProtected = _model.IsProtected, IsPrivate = _model.IsPrivate, NewProtectPassword = _protectPassword,
         PublishAt = status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
         Version = _model.Version, Status = status,
         CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]

@@ -17,7 +17,7 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
         // The publish filter is part of the SQL, never a post-hoc memory filter.
         var rows = await (from e in db.ContentEmbeddings.AsNoTracking()
                           join c in db.Contents.AsNoTracking() on e.ContentId equals c.Id
-                          where c.Kind == ContentKind.Post && c.Status == ContentStatus.Published
+                          where c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate
                           orderby e.Embedding.CosineDistance(queryVector)
                           select new { c.Id, c.Kind, c.Title, c.Slug, e.ChunkText, Distance = e.Embedding.CosineDistance(queryVector) })
             .Take(limit * 3).ToListAsync(ct);

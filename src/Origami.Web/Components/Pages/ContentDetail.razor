@@ -5,6 +5,7 @@
 @inject MediaService Media
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
+@inject AdminAccess Admin
 @inject ILogger<ContentDetail> Logger
 
 <PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
@@ -13,7 +14,7 @@
     <HeadContent>
         @* Layout-level HeadContent is not emitted in Static SSR, so discovery links live on pages. *@
         <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
-        @if (_locked)
+        @if (_locked || _isPrivate)
         {
             <meta name="robots" content="noindex" />
         }
@@ -46,7 +47,7 @@ else if (_content is not null)
     <article class="reading-column">
         <a class="back-link" href="/">← 回到首頁</a>
         <header class="article-heading">
-            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")@(_locked ? " · 受密碼保護" : "")</p>
+            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")@(_locked ? " · 受密碼保護" : "")@(_isPrivate ? " · 私密" : "")</p>
             <h1>@_content.Title</h1>
             @if (!_locked && _content.Kind == ContentKind.Post)
             {
@@ -102,6 +103,7 @@ else
     private string? _error;
     private bool _redirecting;
     private bool _locked;
+    private bool _isPrivate;
     private string? _unlockError;
     private UnlockInput _unlock = new();
     private sealed class UnlockInput
@@ -123,6 +125,7 @@ else
         _error = null;
         _redirecting = false;
         _locked = false;
+        _isPrivate = false;
         _unlockError = null;
         try
         {
@@ -150,6 +153,17 @@ else
             }
             _locked = _content.IsProtected
                 && !await Content.IsUnlockedAsync(_content.Id, HttpContext?.Request.Cookies[UnlockCookieName], ct);
+            if (_content.IsPrivate)
+            {
+                // For anyone but the signed-in administrator, private content is indistinguishable from missing content.
+                if (!await Admin.IsAdminAsync(ct))
+                {
+                    if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+                    Navigation.NotFound();
+                    return;
+                }
+                _isPrivate = true;
+            }
             if (!_locked)
             {
                 await RenderBodyAsync(ct);
