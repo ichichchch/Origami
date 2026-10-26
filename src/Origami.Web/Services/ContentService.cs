@@ -2,17 +2,37 @@ namespace Origami.Web.Services;
 
 public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
 {
-    public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default)
+    public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null)
     {
+
         await admin.RequireAsync(ct);
+
         var offset = ContentRules.Offset(page, pageSize);
         if (!Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
+        if (status is { } filter && !Enum.IsDefined(filter)) throw new CmsException("內容狀態無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
+        // Without an explicit filter the list hides the trash; it has its own tab and lifecycle.
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == kind);
+        query = status is null ? query.Where(x => x.Status != ContentStatus.Trashed) : query.Where(x => x.Status == status);
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
-            .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)).ToListAsync(ct);
+            .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+            {
+                PublishAt = x.PublishAt, DeletedAt = x.DeletedAt
+            }).ToListAsync(ct);
         return new(items, total, page, pageSize);
+    }
+
+    public async Task<ContentCounts> CountAdminAsync(ContentKind kind, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        if (!Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var counts = await db.Contents.AsNoTracking().Where(x => x.Kind == kind)
+            .GroupBy(x => x.Status).Select(x => new { Status = x.Key, Count = x.Count() }).ToListAsync(ct);
+        return new(counts.Where(x => x.Status == ContentStatus.Draft).Sum(x => x.Count),
+            counts.Where(x => x.Status == ContentStatus.Published).Sum(x => x.Count),
+            counts.Where(x => x.Status == ContentStatus.Trashed).Sum(x => x.Count));
     }
 
     public async Task<ContentEdit> GetEditAsync(Guid id, CancellationToken ct = default)
@@ -21,7 +41,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
-            Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown,
+            Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
+            IsSticky = x.IsSticky, PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
             Status = x.Status, Version = x.Version,
             CategoryIds = x.Categories.Select(c => c.Id).ToList(), TagIds = x.Tags.Select(t => t.Id).ToList()
         }).SingleOrDefaultAsync(ct) ?? throw new CmsException("內容不存在。");
@@ -56,32 +77,26 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     /// </summary>
     private async Task<ContentEdit> SaveCoreAsync(ContentKind? requestedKind, ContentEdit input, Guid? id, CancellationToken ct)
     {
-        ContentRules.Validate(input);
-        if (!Enum.IsDefined(input.Status)) throw new CmsException("內容狀態無效。");
-        if (requestedKind is { } kind && !Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
-        if (input.CategoryIds is null || input.TagIds is null || input.CategoryIds.Count > Limits.MaxTaxonomiesPerKind || input.TagIds.Count > Limits.MaxTaxonomiesPerKind)
-            throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個分類與標籤。");
+        ValidateSaveInput(input, requestedKind);
         var slug = ContentRules.NormalizeSlug(id is null && string.IsNullOrWhiteSpace(input.Slug) ? input.Title : input.Slug);
         await using var db = await factory.CreateDbContextAsync(ct);
-        Content entity;
         var now = clock.GetUtcNow();
-        if (id is { } existingId)
-        {
-            entity = await db.Contents.Include(x => x.Categories).Include(x => x.Tags).AsSplitQuery().SingleOrDefaultAsync(x => x.Id == existingId, ct)
-                ?? throw new CmsException("內容已被刪除。");
-            // The persisted kind is authoritative; a submitted change is refused, never applied.
-            if (input.Kind != entity.Kind) throw new CmsException("不可變更既有內容類型。");
-            if (entity.Version != input.Version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
-            db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
-        }
-        else
-        {
-            entity = new Content { Kind = requestedKind!.Value, CreatedAt = now };
-            db.Contents.Add(entity);
-        }
-        var isPage = entity.Kind == ContentKind.Page;
-        if (isPage && (input.CategoryIds.Count != 0 || input.TagIds.Count != 0))
+        var entity = await LoadOrCreateAsync(db, input, id, requestedKind, now, ct);
+        if (entity.Kind == ContentKind.Page && (input.CategoryIds.Count != 0 || input.TagIds.Count != 0))
             throw new CmsException("獨立頁面不可指派文章分類或標籤。");
+        if (entity.Kind == ContentKind.Page && input.IsSticky)
+            throw new CmsException("獨立頁面不可置頂，置頂僅用於文章列表。");
+        // A schedule is a draft with a future time; publishing always abandons the schedule.
+        if (input.Status == ContentStatus.Published && input.PublishAt is not null)
+            throw new CmsException("排程時間僅適用於草稿；發布前請先清除排程。");
+        if (input.Status == ContentStatus.Draft && input.PublishAt is { } schedule
+            && schedule <= now.AddMinutes(Limits.ScheduleLeadMinutes))
+            throw new CmsException($"排程時間至少需在 {Limits.ScheduleLeadMinutes} 分鐘之後。");
+        var oldSlug = entity.Slug;
+        // The state being overwritten becomes a revision; it rides in the same transaction as the save.
+        ContentRevision? revision = null;
+        if (id is not null)
+            revision = new ContentRevision { ContentId = entity.Id, Title = entity.Title, Markdown = entity.Markdown, Excerpt = entity.Excerpt, CreatedAt = now };
         var categoryIds = input.CategoryIds.Distinct().ToList();
         var tagIds = input.TagIds.Distinct().ToList();
         var categories = await db.Categories.Where(x => categoryIds.Contains(x.Id)).ToListAsync(ct);
@@ -90,12 +105,89 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         entity.Title = input.Title.Trim();
         entity.Slug = slug;
         entity.Markdown = input.Markdown ?? "";
+        entity.Excerpt = (input.Excerpt ?? "").Trim();
+        entity.IsSticky = input.IsSticky;
         entity.Status = input.Status;
-        if (entity.Status == ContentStatus.Published) entity.PublishedAt ??= now;
+        if (entity.Status == ContentStatus.Published)
+        {
+            entity.PublishedAt ??= now;
+            entity.PublishAt = null;
+        }
+        else
+        {
+            entity.PublishAt = input.Status == ContentStatus.Draft ? input.PublishAt : null;
+        }
         entity.UpdatedAt = now;
         entity.Version = Guid.NewGuid();
         entity.Categories = categories;
         entity.Tags = tags;
+        // A slug retired by an update to already-published content keeps serving at its old URL
+        // through a permanent redirect to the content's live slug.
+        if (id is not null && entity.PublishedAt is not null && oldSlug != slug)
+        {
+            // Another content may have owned this slug earlier; the redirect must follow the current owner.
+            var existing = await db.SlugRedirects.SingleOrDefaultAsync(x => x.OldSlug == oldSlug, ct);
+            if (existing is null) db.SlugRedirects.Add(new ContentSlugRedirect { OldSlug = oldSlug, ContentId = entity.Id, CreatedAt = now });
+            else existing.ContentId = entity.Id;
+        }
+        if (revision is not null)
+        {
+            db.ContentRevisions.Add(revision);
+            await TrimRevisionsAsync(db, entity.Id, ct);
+        }
+        await SyncEmbeddingAsync(db, entity, now, ct);
+        // EF wraps the content update and both join-table updates in one transaction.
+        await ContentRules.SaveAsync(db, ct);
+        input.Id = entity.Id;
+        input.Kind = entity.Kind;
+        input.Slug = entity.Slug;
+        input.Excerpt = entity.Excerpt;
+        input.PublishAt = entity.PublishAt;
+        input.PreviewToken = entity.PreviewToken;
+        input.PublishedAt = entity.PublishedAt;
+        input.Version = entity.Version;
+        return input;
+    }
+
+    /// <summary>Keeps only the newest revisions per content; runs inside the save transaction.</summary>
+    private static async Task TrimRevisionsAsync(CmsDbContext db, Guid contentId, CancellationToken ct)
+    {
+        // A tracking query also sees the revision pending in this transaction, keeping the cap exact.
+        var stale = await db.ContentRevisions.Where(x => x.ContentId == contentId)
+            .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            .Skip(Limits.RevisionKeep).ToListAsync(ct);
+        if (stale.Count > 0) db.ContentRevisions.RemoveRange(stale);
+    }
+
+    private static void ValidateSaveInput(ContentEdit input, ContentKind? requestedKind)
+    {
+        ContentRules.Validate(input);
+        if (!Enum.IsDefined(input.Status)) throw new CmsException("內容狀態無效。");
+        if (requestedKind is { } kind && !Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
+        if (input.CategoryIds is null || input.TagIds is null || input.CategoryIds.Count > Limits.MaxTaxonomiesPerKind || input.TagIds.Count > Limits.MaxTaxonomiesPerKind)
+            throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個分類與標籤。");
+    }
+
+    private static async Task<Content> LoadOrCreateAsync(CmsDbContext db, ContentEdit input, Guid? id, ContentKind? requestedKind, DateTimeOffset now, CancellationToken ct)
+    {
+        if (id is not { } existingId)
+        {
+            var created = new Content { Kind = requestedKind!.Value, CreatedAt = now };
+            db.Contents.Add(created);
+            return created;
+        }
+        var entity = await db.Contents.Include(x => x.Categories).Include(x => x.Tags).AsSplitQuery().SingleOrDefaultAsync(x => x.Id == existingId, ct)
+            ?? throw new CmsException("內容已被刪除。");
+        // The persisted kind is authoritative; a submitted change is refused, never applied.
+        if (input.Kind != entity.Kind) throw new CmsException("不可變更既有內容類型。");
+        if (entity.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯。");
+        if (entity.Version != input.Version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
+        db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
+        return entity;
+    }
+
+    private static async Task SyncEmbeddingAsync(CmsDbContext db, Content entity, DateTimeOffset now, CancellationToken ct)
+    {
         // The embedding lifecycle rides in the same transaction as the content change:
         // a published state queues re-embedding, any other state removes vectors immediately
         // so withdrawn or draft content can never surface through semantic search.
@@ -109,13 +201,6 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             db.EmbeddingJobs.RemoveRange(await db.EmbeddingJobs.Where(x => x.ContentId == entity.Id).ToListAsync(ct));
             db.ContentEmbeddings.RemoveRange(await db.ContentEmbeddings.Where(x => x.ContentId == entity.Id).ToListAsync(ct));
         }
-        // EF wraps the content update and both join-table updates in one transaction.
-        await ContentRules.SaveAsync(db, ct);
-        input.Id = entity.Id;
-        input.Kind = entity.Kind;
-        input.Slug = entity.Slug;
-        input.Version = entity.Version;
-        return input;
     }
 
     public async Task DeleteAsync(Guid id, Guid version, bool confirmed, CancellationToken ct = default)
@@ -129,15 +214,185 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await ContentRules.SaveAsync(db, ct);
     }
 
-    public async Task<PagedResult<ContentSummary>> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default)
+    /// <summary>Moves content to the trash: public routes and search stop serving it, nothing is destroyed.</summary>
+    public async Task TrashAsync(Guid id, Guid version, bool confirmed, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        if (!confirmed) throw new CmsException("請先確認移入回收桶。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
+        if (entity.Status == ContentStatus.Trashed) throw new CmsException("內容已在回收桶中。");
+        db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+        var now = clock.GetUtcNow();
+        entity.Status = ContentStatus.Trashed;
+        entity.DeletedAt = now;
+        entity.PublishAt = null;      // a schedule dies with the trash action
+        entity.PreviewToken = null;   // preview links die immediately
+        entity.UpdatedAt = now;
+        entity.Version = Guid.NewGuid();
+        await SyncEmbeddingAsync(db, entity, now, ct);
+        await ContentRules.SaveAsync(db, ct);
+    }
+
+    /// <summary>Returns trashed content to the draft state for further editing.</summary>
+    public async Task RestoreAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
+        if (entity.Status != ContentStatus.Trashed) throw new CmsException("只有回收桶內容可以還原。");
+        db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+        var now = clock.GetUtcNow();
+        entity.Status = ContentStatus.Draft;
+        entity.DeletedAt = null;
+        entity.UpdatedAt = now;
+        entity.Version = Guid.NewGuid();
+        await ContentRules.SaveAsync(db, ct);
+    }
+
+    /// <summary>System operation: publishes drafts whose scheduled time arrived. Returns promoted count.</summary>
+    public async Task<int> PromoteDueAsync(CancellationToken ct = default)
+    {
+        var promoted = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var now = clock.GetUtcNow();
+            var due = await db.Contents.Where(x => x.Status == ContentStatus.Draft && x.PublishAt != null && x.PublishAt <= now)
+                .OrderBy(x => x.PublishAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
+            if (due is null) break;
+            // The scheduled moment is the publish moment, so ordering by publish time stays honest.
+            due.PublishedAt = due.PublishAt;
+            due.PublishAt = null;
+            due.Status = ContentStatus.Published;
+            due.UpdatedAt = now;
+            due.Version = Guid.NewGuid();
+            await SyncEmbeddingAsync(db, due, now, ct);
+            await ContentRules.SaveAsync(db, ct);
+            promoted++;
+        }
+        return promoted;
+    }
+
+    /// <summary>System operation: permanently deletes trashed content past the retention window.</summary>
+    public async Task<int> PurgeExpiredTrashAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var cutoff = clock.GetUtcNow().AddDays(-Limits.TrashRetentionDays);
+        var expired = await db.Contents.Where(x => x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
+            .Select(x => x.Id).ToListAsync(ct);
+        if (expired.Count == 0) return 0;
+        await db.Contents.Where(x => expired.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        return expired.Count;
+    }
+
+    public async Task<List<RevisionItem>> ListRevisionsAsync(Guid contentId, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.ContentRevisions.AsNoTracking().Where(x => x.ContentId == contentId)
+            .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Take(Limits.RevisionKeep)
+            .Select(x => new RevisionItem(x.Id, x.Title, x.CreatedAt)).ToListAsync(ct);
+    }
+
+    public async Task<RevisionDetail?> GetRevisionAsync(Guid revisionId, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.ContentRevisions.AsNoTracking().Where(x => x.Id == revisionId)
+            .Select(x => new RevisionDetail(x.Id, x.ContentId, x.Title, x.Markdown, x.Excerpt, x.CreatedAt)).SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>Replaces the share token; the previous link stops working immediately.</summary>
+    public async Task<Guid> CyclePreviewTokenAsync(Guid contentId, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        return (await ModifyPreviewTokenAsync(contentId, Guid.NewGuid(), ct))!.Value;
+    }
+
+    /// <summary>Removes the share token; the preview link stops working immediately.</summary>
+    public async Task RevokePreviewTokenAsync(Guid contentId, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await ModifyPreviewTokenAsync(contentId, null, ct);
+    }
+
+    private async Task<Guid?> ModifyPreviewTokenAsync(Guid contentId, Guid? token, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == contentId, ct) ?? throw new CmsException("內容不存在。");
+        if (entity.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容不可建立預覽連結。");
+        var now = clock.GetUtcNow();
+        entity.PreviewToken = token;
+        entity.UpdatedAt = now;
+        entity.Version = Guid.NewGuid();
+        await ContentRules.SaveAsync(db, ct);
+        return entity.PreviewToken;
+    }
+
+    /// <summary>Draft reachable through a share token; trashed and published content never render here.</summary>
+    public async Task<PublicContent?> GetPreviewAsync(Guid token, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Contents.AsNoTracking().AsSplitQuery()
+            .Where(x => x.PreviewToken == token && x.Status == ContentStatus.Draft)
+            .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
+                x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
+                x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
+            { Excerpt = x.Excerpt }).SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>A retired token whose content is now published resolves to the public URL.</summary>
+    public async Task<SlugRedirectTarget?> ResolvePublishedPreviewAsync(Guid token, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Contents.AsNoTracking()
+            .Where(x => x.PreviewToken == token && x.Status == ContentStatus.Published)
+            .Select(x => new SlugRedirectTarget(x.Slug, x.Kind)).SingleOrDefaultAsync(ct);
+    }
+
+    public async Task<PagedResult<ContentSummary>> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
+        CancellationToken ct = default, string? category = null, string? tag = null)
     {
         var offset = ContentRules.Offset(page, pageSize);
+        if (category is not null) category = ContentRules.NormalizeSlug(category);
+        if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published);
+        if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
+        if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
-            .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)).ToListAsync(ct);
+        // Sticky posts lead every page of the public list; the stable sort keys keep pagination consistent.
+        var items = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
+            .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+            {
+                Excerpt = x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
+                ExcerptIsManual = x.Excerpt != "",
+                IsSticky = x.IsSticky
+            }).ToListAsync(ct);
         return new(items, total, page, pageSize);
+    }
+
+    public async Task<List<PublicTaxonomy>> PopularCategoriesAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Categories.AsNoTracking()
+            .Select(x => new { x.Name, x.Slug, Count = x.Contents.Count(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published) })
+            .Where(x => x.Count > 0).OrderByDescending(x => x.Count).ThenBy(x => x.Slug)
+            .Take(Limits.MaxTaxonomiesPerKind).Select(x => new PublicTaxonomy(x.Name, x.Slug, x.Count)).ToListAsync(ct);
+    }
+
+    public async Task<NavigationItem?> GetPublicTaxonomyAsync(TaxonomyKind kind, string slug, CancellationToken ct = default)
+    {
+        if (!Enum.IsDefined(kind)) throw new CmsException("分類類型無效。");
+        slug = ContentRules.NormalizeSlug(slug);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        // A taxonomy used only by drafts is not part of the public site.
+        return kind == TaxonomyKind.Category
+            ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published))
+                .Select(x => new NavigationItem(x.Name, x.Slug)).SingleOrDefaultAsync(ct)
+            : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published))
+                .Select(x => new NavigationItem(x.Name, x.Slug)).SingleOrDefaultAsync(ct);
     }
 
     public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, CancellationToken ct = default)
@@ -145,7 +400,46 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Kind == kind && x.Status == ContentStatus.Published && x.Slug == slug)
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
-                x.Categories.OrderBy(c => c.Name).Select(c => c.Name).ToList(), x.Tags.OrderBy(t => t.Name).Select(t => t.Name).ToList())).SingleOrDefaultAsync(ct);
+                x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
+                x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
+            { Excerpt = x.Excerpt }).SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// Resolves a retired slug to the content's live published slug. A redirect never surfaces
+    /// withdrawn or deleted content: those rows are removed by cascade or filtered here.
+    /// </summary>
+    public async Task<SlugRedirectTarget?> RedirectTargetAsync(string slug, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var target = await db.SlugRedirects.AsNoTracking()
+            .Where(x => x.OldSlug == slug && x.Content.Status == ContentStatus.Published)
+            .Select(x => new { x.Content.Slug, x.Content.Kind }).SingleOrDefaultAsync(ct);
+        return target is null ? null : new SlugRedirectTarget(target.Slug, target.Kind);
+    }
+
+    /// <summary>
+    /// Every public URL for the sitemap: the home page, published posts and pages, and category
+    /// listings that currently have at least one published post. Withdrawn content disappears
+    /// immediately because the query only considers the live published state.
+    /// </summary>
+    public async Task<List<SitemapItem>> SitemapAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var contents = await db.Contents.AsNoTracking()
+            .Where(x => x.Status == ContentStatus.Published)
+            .Select(x => new { x.Kind, x.Slug, x.UpdatedAt }).ToListAsync(ct);
+        var categories = await db.Categories.AsNoTracking()
+            .Select(x => new { x.Slug, Latest = x.Contents
+                .Where(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published)
+                .Max(c => (DateTimeOffset?)c.PublishedAt) })
+            .Where(x => x.Latest != null).ToListAsync(ct);
+        var homeLastModified = contents.Count == 0 ? null : (DateTimeOffset?)contents.Max(x => x.UpdatedAt);
+        List<SitemapItem> items = [new("/", homeLastModified)];
+        items.AddRange(contents.Where(x => x.Kind == ContentKind.Post).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(contents.Where(x => x.Kind == ContentKind.Page).Select(x => new SitemapItem("/pages/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(categories.Select(x => new SitemapItem("/?category=" + x.Slug, x.Latest)));
+        return items;
     }
 
     public async Task<List<NavigationItem>> NavigationAsync(CancellationToken ct = default)
