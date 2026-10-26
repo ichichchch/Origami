@@ -41,6 +41,20 @@
                     <div class="field"><label for="content-title">標題 <span class="required">必填</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="給這個想法一個標題" /><span class="field-help">最多 @Limits.Title 字。</span></div>
                     <div class="field"><label for="content-slug">網址代稱</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="首次儲存可留空，自標題產生" /></div><span id="slug-help" class="field-help">代稱須全站唯一；修改後舊網址不會自動轉址。</span></div>
                     <div class="field"><label for="content-excerpt">摘要</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="用一兩句話介紹這篇內容；留空則自動使用開頭文字"></textarea><span id="excerpt-help" class="field-help">純文字，最多 @Limits.Excerpt 字；顯示於文章列表、搜尋結果與社群分享描述。</span></div>
+                    @if (_model.Kind == ContentKind.Page)
+                    {
+                        <div class="field">
+                            <label for="content-parent">上層頁面（選填）</label>
+                            <select id="content-parent" disabled="@Blocked" value="@(_model.ParentId?.ToString() ?? "")" @onchange="ParentChanged">
+                                <option value="">無（最上層）</option>
+                                @foreach (var choice in ParentChoices())
+                                {
+                                    <option value="@choice.Id">@choice.Label</option>
+                                }
+                            </select>
+                            <span class="field-help">設定後此頁面會排列於該頁面之下（導覽與列表）；網址仍是獨立的 /pages/代稱，不會改變。</span>
+                        </div>
+                    }
                 </section>
                 <section class="panel markdown-panel">
                     <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@(!_preview)" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview" disabled="@ChildBusy" @onclick="Preview">預覽</button></div><button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">插入圖片</button></div>
@@ -205,6 +219,7 @@
     private int _tzOffsetMinutes;
     private DateTimeOffset? _scheduleLocal;
     private string _protectPassword = "";
+    private List<PageOption> _pageOptions = [];
     private CancellationTokenSource? _autosaveCts;
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
     // Do not feed ChildBusy into the outer fieldset or child Disabled parameters:
@@ -382,9 +397,43 @@
     {
         var loaded = Id is { } id ? await Content.GetEditAsync(id, ct) : new ContentEdit { Kind = InferNewKind() };
         _model = loaded;
+        if (loaded.Kind == ContentKind.Page) _pageOptions = await Content.PageOptionsAsync(ct);
         _baseline = Snapshot(loaded);
         _preview = false;
     });
+
+    private void ParentChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        _model.ParentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    /// <summary>Parent candidates with an ancestor-path label; the page itself and its subtree are excluded.</summary>
+    private List<(Guid Id, string Label)> ParentChoices()
+    {
+        if (_model is null) return [];
+        var byId = _pageOptions.ToDictionary(x => x.Id);
+        var children = _pageOptions.Where(x => x.ParentId is not null && byId.ContainsKey(x.ParentId.Value))
+            .ToLookup(x => x.ParentId!.Value);
+        HashSet<Guid> excluded = [];
+        if (_model.Id is { } self)
+        {
+            var stack = new Stack<Guid>();
+            stack.Push(self);
+            while (stack.Count > 0)
+                foreach (var child in children[stack.Pop()])
+                    if (excluded.Add(child.Id)) stack.Push(child.Id);
+        }
+        string Label(PageOption page)
+        {
+            var parts = new List<string> { page.Title };
+            var guard = 0;
+            for (Guid? cursor = page.ParentId; cursor is { } current && byId.TryGetValue(current, out var node) && ++guard <= 10; cursor = node.ParentId)
+                parts.Insert(0, node.Title);
+            return string.Join(" › ", parts);
+        }
+        return [.. _pageOptions.Where(x => !excluded.Contains(x.Id)).Select(x => (x.Id, Label(x)))];
+    }
     private void RequestReload() { if (!SaveBlocked) _reloadRequested = true; }
     private async Task Reload()
     {
@@ -399,6 +448,7 @@
         Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
         IsProtected = _model.IsProtected, IsPrivate = _model.IsPrivate, NewProtectPassword = _protectPassword,
+        ParentId = _model.Kind == ContentKind.Page ? _model.ParentId : null,
         PublishAt = status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
         Version = _model.Version, Status = status,
         CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]

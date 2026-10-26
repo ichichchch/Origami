@@ -15,6 +15,8 @@ public sealed class ContentEdit
     public bool IsProtected { get; set; }
     /// <summary>Restricts the public URL to the signed-in administrator; everyone else gets 404.</summary>
     public bool IsPrivate { get; set; }
+    /// <summary>Parent page for navigation hierarchy; pages only, posts always keep null.</summary>
+    public Guid? ParentId { get; set; }
     /// <summary>Set a new protection password; empty keeps the stored one. Null when unchanged.</summary>
     public string? NewProtectPassword { get; set; }
     /// <summary>Read-only echo: a protection password is already stored.</summary>
@@ -51,6 +53,8 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public DateTimeOffset? DeletedAt { get; init; }
     public bool IsProtected { get; init; }
     public bool IsPrivate { get; init; }
+    public Guid? ParentId { get; init; }
+    public string ParentTitle { get; init; } = "";
     public int Views { get; init; }
 }
 public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
@@ -71,6 +75,9 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public bool IsPrivate { get; init; }
 }
 public sealed record NavigationItem(string Title, string Slug);
+/// <summary>A page candidate for selectors in the editor and site settings.</summary>
+public sealed record PageOption(Guid Id, string Title, Guid? ParentId, ContentStatus Status,
+    bool IsPrivate = false, bool IsProtected = false);
 /// <summary>One public URL for the sitemap with its last significant change.</summary>
 public sealed record SitemapItem(string Path, DateTimeOffset? LastModified);
 public sealed record MediaItem(Guid Id, string FileName, string OriginalName, string ContentType,

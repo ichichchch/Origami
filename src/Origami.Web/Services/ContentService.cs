@@ -21,6 +21,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
                 PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                ParentId = x.ParentId, ParentTitle = x.Parent != null ? x.Parent.Title : "",
                 Views = x.Views.Sum(v => (int?)v.Count) ?? 0
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
@@ -46,6 +47,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
             IsSticky = x.IsSticky, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate, HasProtectPassword = x.ProtectionHash != "",
+            ParentId = x.ParentId,
             PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
             Status = x.Status, Version = x.Version,
             Views = x.Views.Sum(v => (int?)v.Count) ?? 0,
@@ -94,6 +96,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (input.IsPrivate && input.IsProtected)
             throw new CmsException("私密與密碼保護不可同時啟用，請擇一。");
         entity.IsPrivate = input.IsPrivate;
+        entity.ParentId = input.ParentId;
+        if (input.ParentId is { } parentId)
+            await ValidateParentAsync(db, entity, parentId, ct);
         if (!input.IsProtected)
         {
             entity.IsProtected = false;
@@ -183,6 +188,45 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
             .Skip(Limits.RevisionKeep).ToListAsync(ct);
         if (stale.Count > 0) db.ContentRevisions.RemoveRange(stale);
+    }
+
+    /// <summary>
+    /// Page hierarchy rules: only pages may nest, the parent must be a page, a page can never be
+    /// its own ancestor. The ancestor walk stays in memory over one small query, so a hostile
+    /// chain cannot loop the server.
+    /// </summary>
+    private static async Task ValidateParentAsync(CmsDbContext db, Content entity, Guid parentId, CancellationToken ct)
+    {
+        if (entity.Kind != ContentKind.Page)
+            throw new CmsException("僅獨立頁面可設定上層頁面。");
+        if (parentId == entity.Id)
+            throw new CmsException("頁面不可設為自己的上層。");
+        var pages = await db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Page)
+            .Select(x => new { x.Id, x.ParentId }).ToListAsync(ct);
+        var byId = pages.ToDictionary(x => x.Id);
+        if (!byId.ContainsKey(parentId))
+            throw new CmsException("上層頁面不存在，請重新選擇。");
+        // Walk up from the candidate parent; meeting the saved page again means the link closes a cycle.
+        var guard = 0;
+        Guid? cursor = parentId;
+        while (cursor is not null)
+        {
+            if (cursor == entity.Id)
+                throw new CmsException("不可將頁面設為其子孫的下層，這會形成循環階層。");
+            if (++guard > 1000)
+                throw new CmsException("頁面階層過深，請檢查上層設定。");
+            cursor = byId.TryGetValue(cursor.Value, out var node) ? node.ParentId : null;
+        }
+    }
+
+    /// <summary>Page candidates for the editor's parent selector; the trash is not selectable.</summary>
+    public async Task<List<PageOption>> PageOptionsAsync(CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Page && x.Status != ContentStatus.Trashed)
+            .OrderBy(x => x.Title).ThenBy(x => x.Id)
+            .Select(x => new PageOption(x.Id, x.Title, x.ParentId, x.Status, x.IsPrivate, x.IsProtected)).ToListAsync(ct);
     }
 
     private static void ValidateSaveInput(ContentEdit input, ContentKind? requestedKind)
