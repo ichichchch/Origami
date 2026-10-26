@@ -34,6 +34,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.HasIndex(x => new { x.Kind, x.Status, x.PublishedAt, x.Id });
             e.HasIndex(x => x.PreviewToken).IsUnique();
             e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.ParentId);
+            e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(x => x.Categories).WithMany(x => x.Contents).UsingEntity("ContentCategories");
             e.HasMany(x => x.Tags).WithMany(x => x.Contents).UsingEntity("ContentTags");
             e.ToTable(t =>
@@ -47,6 +49,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
                 t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
                 t.HasCheckConstraint("CK_Content_Title", "length(btrim(\"Title\")) > 0");
                 t.HasCheckConstraint("CK_Content_Slug", "length(\"Slug\") > 0");
+                // A page cannot protect and privatize at once, nor be its own parent.
+                t.HasCheckConstraint("CK_Content_Private", "NOT (\"IsProtected\" AND \"IsPrivate\")");
+                t.HasCheckConstraint("CK_Content_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
             });
         });
         builder.Entity<ContentRevision>(e =>
@@ -66,6 +71,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
         {
             e.Property(x => x.Name).HasMaxLength(Limits.TaxonomyName).IsRequired();
             e.Property(x => x.Slug).HasMaxLength(Limits.Slug).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(Limits.TaxonomyDescription).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => x.Slug).IsUnique();
         });
@@ -73,6 +79,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
         {
             e.Property(x => x.Name).HasMaxLength(Limits.TaxonomyName).IsRequired();
             e.Property(x => x.Slug).HasMaxLength(Limits.Slug).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(Limits.TaxonomyDescription).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => x.Slug).IsUnique();
         });
@@ -94,7 +101,16 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
         builder.Entity<SiteSettings>(e =>
         {
             e.Property(x => x.Version).IsConcurrencyToken();
-            e.ToTable(t => t.HasCheckConstraint("CK_Settings_Singleton", "\"Id\" = 1"));
+            e.HasOne<Content>().WithMany().HasForeignKey(x => x.HomePageContentId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne<MediaAsset>().WithMany().HasForeignKey(x => x.SiteIconMediaId).OnDelete(DeleteBehavior.SetNull);
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_Settings_Singleton", "\"Id\" = 1");
+                t.HasCheckConstraint("CK_Settings_PostsPerPage",
+                    "\"PostsPerPage\" IS NULL OR \"PostsPerPage\" BETWEEN 1 AND " + Limits.MaxPageSize);
+                t.HasCheckConstraint("CK_Settings_FeedItems",
+                    "\"FeedItems\" IS NULL OR \"FeedItems\" BETWEEN 1 AND " + Limits.MaxFeedItems);
+            });
             e.HasData(new SiteSettings { Id = 1, Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84") });
         });
         builder.Entity<ContentEmbedding>(e =>

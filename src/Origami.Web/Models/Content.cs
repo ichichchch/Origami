@@ -16,8 +16,11 @@ public static class Limits
     public const int Description = 500;
     public const int PageSize = 10;
     public const int MaxPageSize = 50;
+    public const int MaxFeedItems = 50;
+    public const int TaxonomyDescription = 500;
     public const int MaxTaxonomiesPerKind = 30;
     public const long UploadBytes = 5 * 1024 * 1024;
+    public const long ImportMaxBytes = 50 * 1024 * 1024;
     public const long ImagePixels = 20_000_000;
     public const int ImageDimension = 10_000;
     public const int EmbeddingDimensions = 1536;
@@ -71,6 +74,11 @@ public sealed class Content
     public bool IsProtected { get; set; }
     /// <summary>Identity-hashed protection password; empty when unprotected.</summary>
     public string ProtectionHash { get; set; } = "";
+    /// <summary>True when only the signed-in administrator may read the public URL; everyone else gets 404.</summary>
+    public bool IsPrivate { get; set; }
+    /// <summary>Parent page for hierarchical navigation; null on top-level pages and always null on posts.</summary>
+    public Guid? ParentId { get; set; }
+    public Content? Parent { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Category> Categories { get; set; } = new List<Category>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();
@@ -103,6 +111,7 @@ public sealed class Category
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
+    public string Description { get; set; } = "";
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Content> Contents { get; set; } = new List<Content>();
 }
@@ -112,6 +121,7 @@ public sealed class Tag
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
+    public string Description { get; set; } = "";
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Content> Contents { get; set; } = new List<Content>();
 }
@@ -163,5 +173,13 @@ public sealed class SiteSettings
     public int Id { get; set; } = 1;
     [Required, StringLength(Limits.SiteName)] public string Name { get; set; } = "Origami";
     [StringLength(Limits.Description)] public string Description { get; set; } = "用文字，分享你的世界。";
+    /// <summary>Articles per public list page; null falls back to <see cref="Limits.PageSize"/>.</summary>
+    public int? PostsPerPage { get; set; }
+    /// <summary>Items in the RSS feed; null falls back to <see cref="Limits.FeedItems"/>.</summary>
+    public int? FeedItems { get; set; }
+    /// <summary>Published page rendered as the home page; null keeps the home page as the article list.</summary>
+    public Guid? HomePageContentId { get; set; }
+    /// <summary>Media asset used as the site icon; null serves no favicon.</summary>
+    public Guid? SiteIconMediaId { get; set; }
     public Guid Version { get; set; }
 }

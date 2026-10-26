@@ -269,6 +269,11 @@ namespace Origami.Web.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -308,6 +313,9 @@ namespace Origami.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<bool>("IsPrivate")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsProtected")
                         .HasColumnType("boolean");
 
@@ -321,6 +329,9 @@ namespace Origami.Web.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200000)
                         .HasColumnType("character varying(200000)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("PreviewToken")
                         .HasColumnType("uuid");
@@ -358,6 +369,8 @@ namespace Origami.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ParentId");
+
                     b.HasIndex("PreviewToken")
                         .IsUnique();
 
@@ -373,6 +386,10 @@ namespace Origami.Web.Data.Migrations
                             t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_Content_Kind", "\"Kind\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_Content_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_Content_Private", "NOT (\"IsProtected\" AND \"IsPrivate\")");
 
                             t.HasCheckConstraint("CK_Content_PublishAt", "\"Status\" = 0 OR \"PublishAt\" IS NULL");
 
@@ -577,10 +594,22 @@ namespace Origami.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int?>("FeedItems")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("HomePageContentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("PostsPerPage")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SiteIconMediaId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
@@ -588,8 +617,16 @@ namespace Origami.Web.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("HomePageContentId");
+
+                    b.HasIndex("SiteIconMediaId");
+
                     b.ToTable("Settings", t =>
                         {
+                            t.HasCheckConstraint("CK_Settings_FeedItems", "\"FeedItems\" IS NULL OR \"FeedItems\" BETWEEN 1 AND 50");
+
+                            t.HasCheckConstraint("CK_Settings_PostsPerPage", "\"PostsPerPage\" IS NULL OR \"PostsPerPage\" BETWEEN 1 AND 50");
+
                             t.HasCheckConstraint("CK_Settings_Singleton", "\"Id\" = 1");
                         });
 
@@ -608,6 +645,11 @@ namespace Origami.Web.Data.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -712,6 +754,16 @@ namespace Origami.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Origami.Web.Models.Content", b =>
+                {
+                    b.HasOne("Origami.Web.Models.Content", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Parent");
+                });
+
             modelBuilder.Entity("Origami.Web.Models.ContentEmbedding", b =>
                 {
                     b.HasOne("Origami.Web.Models.Content", null)
@@ -761,6 +813,19 @@ namespace Origami.Web.Data.Migrations
                         .HasForeignKey("ContentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.SiteSettings", b =>
+                {
+                    b.HasOne("Origami.Web.Models.Content", null)
+                        .WithMany()
+                        .HasForeignKey("HomePageContentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Origami.Web.Models.MediaAsset", null)
+                        .WithMany()
+                        .HasForeignKey("SiteIconMediaId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Origami.Web.Models.Content", b =>
