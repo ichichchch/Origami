@@ -84,7 +84,6 @@
             Navigation.NavigateTo("/account/login", forceLoad: true);
             return;
         }
-        HttpContext.Response.Headers.CacheControl = "no-store";
         // A still-valid pending cookie shows the code step directly on a fresh GET.
         awaitingCode = TryReadPendingUser(HttpContext) is not null;
     }

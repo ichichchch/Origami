@@ -3,6 +3,85 @@ namespace Origami.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
+    [Fact]
+    public void Launch_profile_listens_on_http_and_https()
+    {
+        var path = Path.Combine(RunningSite.FindSolutionRoot(), "src", "Origami.Web", "Properties", "launchSettings.json");
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        var urls = document.RootElement.GetProperty("profiles").GetProperty("Origami.Web")
+            .GetProperty("applicationUrl").GetString()!.Split(';').Select(url => new Uri(url)).ToArray();
+        var https = Assert.Single(urls, url => url.Scheme == Uri.UriSchemeHttps);
+        var http = Assert.Single(urls, url => url.Scheme == Uri.UriSchemeHttp);
+        Assert.True(https.IsLoopback);
+        Assert.True(http.IsLoopback);
+        Assert.NotEqual(https.Port, http.Port);
+    }
+
+    [PostgresFact]
+    public async Task Http_login_redirects_to_https_without_port_warnings()
+    {
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync(listenOnHttp: true);
+        Assert.NotNull(site.HttpAddress);
+        Assert.NotEqual(site.Address.Port, site.HttpAddress.Port);
+        using var client = site.CreateClient();
+        const string path = "/account/login?returnUrl=%2Fadmin%2Fposts";
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var response = await client.GetAsync(new Uri(site.HttpAddress, path));
+            Assert.Equal(HttpStatusCode.TemporaryRedirect, response.StatusCode);
+            var location = response.Headers.Location;
+            Assert.NotNull(location);
+            Assert.True(location.IsAbsoluteUri);
+            Assert.Equal(Uri.UriSchemeHttps, location.Scheme);
+            Assert.Equal(site.Address.Authority, location.Authority);
+            Assert.Equal(path, location.PathAndQuery);
+            using var login = await client.GetAsync(location);
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        }
+        await site.StopAsync();
+        Assert.DoesNotContain("warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]", site.WarningCategories);
+        Assert.DoesNotContain("warn: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[8]", site.WarningCategories);
+    }
+
+    [PostgresFact]
+    public async Task Public_and_login_responses_disable_caching_without_antiforgery_warnings()
+    {
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var home = await client.GetAsync("/");
+            Assert.Equal(HttpStatusCode.OK, home.StatusCode);
+            AssertNoCache(home);
+            using var login = await client.GetAsync("/account/login");
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            AssertNoCache(login);
+            var fields = FormValues(await login.Content.ReadAsStringAsync(), "form");
+            Assert.True(fields.TryGetValue("__RequestVerificationToken", out var token));
+            Assert.False(string.IsNullOrWhiteSpace(token));
+            fields["Input.Username"] = "test-admin";
+            fields["Input.Password"] = IsolatedPostgres.NewPassword();
+            using var form = new FormUrlEncodedContent(fields);
+            using var failed = await client.PostAsync("/account/login", form);
+            Assert.Equal(HttpStatusCode.OK, failed.StatusCode);
+            AssertNoCache(failed);
+            Assert.Contains("無法登入", WebUtility.HtmlDecode(await failed.Content.ReadAsStringAsync()));
+        }
+        await site.StopAsync();
+        Assert.DoesNotContain("warn: Microsoft.AspNetCore.HttpsPolicy.HttpsRedirectionMiddleware[3]", site.WarningCategories);
+        Assert.DoesNotContain("warn: Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery[8]", site.WarningCategories);
+    }
+
+    private static void AssertNoCache(HttpResponseMessage response)
+    {
+        Assert.NotNull(response.Headers.CacheControl);
+        Assert.True(response.Headers.CacheControl.NoCache);
+        Assert.True(response.Headers.CacheControl.NoStore);
+        Assert.Contains(response.Headers.Pragma, value => string.Equals(value.Name, "no-cache", StringComparison.OrdinalIgnoreCase));
+    }
+
     [PostgresFact]
     public async Task Repeated_failed_logins_are_throttled_and_security_headers_are_present()
     {

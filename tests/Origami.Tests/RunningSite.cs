@@ -7,8 +7,11 @@ internal sealed class RunningSite : IAsyncDisposable
     private readonly string root;
     private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly X509Certificate2 certificate;
+    private readonly ConcurrentQueue<string> warningCategories = new();
     private Process? process;
     public Uri Address { get; private set; } = null!;
+    public Uri? HttpAddress { get; private set; }
+    public IReadOnlyCollection<string> WarningCategories => warningCategories.ToArray();
     public string StorageRoot => Path.Combine(root, "storage");
 
     public RunningSite(string connectionString)
@@ -27,7 +30,7 @@ internal sealed class RunningSite : IAsyncDisposable
     }
 
     public async Task StartAsync(bool reuseAddress = false, string environment = "Development",
-        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null, bool listenOnHttp = false)
     {
         if (process is not null) throw new InvalidOperationException("The test server is already running.");
         if (!reuseAddress || Address is null)
@@ -37,6 +40,16 @@ internal sealed class RunningSite : IAsyncDisposable
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             listener.Stop();
             Address = new Uri($"https://127.0.0.1:{port}");
+        }
+        if (!listenOnHttp) HttpAddress = null;
+        else if (!reuseAddress || HttpAddress is null)
+        {
+            do
+            {
+                using var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                HttpAddress = new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}");
+            } while (HttpAddress.Port == Address.Port);
         }
         var solutionRoot = FindSolutionRoot();
         var project = Path.Combine(solutionRoot, "src", "Origami.Web");
@@ -50,7 +63,7 @@ internal sealed class RunningSite : IAsyncDisposable
         };
         start.ArgumentList.Add(assembly);
         ConfigureAiEnvironment(start.Environment, configurationOverrides);
-        SetEnvironment(start.Environment, "ASPNETCORE_URLS", Address.ToString());
+        SetEnvironment(start.Environment, "ASPNETCORE_URLS", HttpAddress is null ? Address.ToString() : $"{Address};{HttpAddress}");
         // DOTNET_ENVIRONMENT takes precedence over ASPNETCORE_ENVIRONMENT in WebApplication.
         SetEnvironment(start.Environment, "DOTNET_ENVIRONMENT", environment);
         SetEnvironment(start.Environment, "ConnectionStrings__CMS", connectionString);
@@ -60,12 +73,21 @@ internal sealed class RunningSite : IAsyncDisposable
         SetEnvironment(start.Environment, "Logging__LogLevel__Default", "Warning");
         SetEnvironment(start.Environment, "Logging__LogLevel__Microsoft.Hosting.Lifetime", "Information");
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        process = new Process { StartInfo = start, EnableRaisingEvents = true };
-        process.OutputDataReceived += (_, e) =>
+        void Capture(object sender, DataReceivedEventArgs e)
         {
-            if (e.Data?.Contains("Now listening on:", StringComparison.Ordinal) == true) ready.TrySetResult();
-        };
-        process.ErrorDataReceived += (_, _) => { };
+            var line = e.Data;
+            if (line?.StartsWith("warn: ", StringComparison.Ordinal) == true)
+            {
+                // Keep only the category/event ID, never message bodies, credentials or connection strings.
+                var end = line.IndexOf(']');
+                if (end >= 0) warningCategories.Enqueue(line[..(end + 1)]);
+            }
+            // The first listening message is too early when both HTTP and HTTPS are enabled.
+            if (line?.Contains("Application started.", StringComparison.Ordinal) == true) ready.TrySetResult();
+        }
+        process = new Process { StartInfo = start, EnableRaisingEvents = true };
+        process.OutputDataReceived += Capture;
+        process.ErrorDataReceived += Capture;
         process.Exited += (_, _) => ready.TrySetException(new InvalidOperationException("The isolated test site exited before becoming ready."));
         process.Start();
         process.BeginOutputReadLine();
@@ -123,11 +145,9 @@ internal sealed class RunningSite : IAsyncDisposable
     public async Task StopAsync()
     {
         if (process is null) return;
-        if (!process.HasExited)
-        {
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync();
-        }
+        if (!process.HasExited) process.Kill(entireProcessTree: true);
+        // Drain redirected output even if the process already exited, before inspecting warnings.
+        await process.WaitForExitAsync();
         process.Dispose();
         process = null;
     }

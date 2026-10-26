@@ -84,7 +84,8 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    context.Response.Headers.CacheControl = "no-store";
+    context.Response.Headers.CacheControl = "no-cache, no-store";
+    context.Response.Headers.Pragma = "no-cache";
     await next(context);
 });
 var contentTypes = new FileExtensionContentTypeProvider(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
