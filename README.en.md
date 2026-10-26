@@ -16,18 +16,16 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 
 | Area | What it does |
 | --- | --- |
-| Administrator | One securely provisioned administrator, cookie sign-in, sign-out, server-side password recovery |
-| Articles | List, create, edit, draft, publish, withdraw, confirmed permanent delete |
-| Pages | Standalone pages with their own URLs, never mixed into the article list |
-| Categories & tags | Flat structure, many-to-many assignment, deletion never removes articles |
-| Media | Image upload, media library, insert as Markdown, public image URLs |
-| Public site | Article list with pagination, article and page detail, basic navigation, mobile-friendly |
-| Openness | RSS 2.0 feed, sitemap.xml, robots.txt, article-level Open Graph and canonical meta, sticky posts, 301 redirects for retired slugs, JSON data export, `/health` database liveness |
-| Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item), trash with 30-day retention and restore, scheduled publishing, revocable draft preview links |
-| Media | Image upload, media library, insert as Markdown, public image URLs, alt text, reference-protected deletion, responsive variants with srcset |
-| Search | Hybrid public search: exact keyword matching merged with pgvector semantic results |
-| Protection & security | Password-protected content (never indexed or searched), TOTP two-factor sign-in, daily view counts |
-| Site settings | Site name and description, applied immediately to the public site |
+| Administrator | One securely provisioned administrator, cookie sign-in, sign-out, server-side password recovery, TOTP two-factor sign-in |
+| Articles | List, create, edit, draft, publish, withdraw, sticky, scheduled publishing, excerpt, confirmed permanent delete, trash with restore |
+| Pages | Standalone pages with their own URLs, hierarchical navigation with a parent page, cycle protection, usable as the fixed home page |
+| Categories & tags | Flat structure, many-to-many assignment, descriptions, deletion never removes articles |
+| Media | Image upload, media library, insert as Markdown, alt text, reference-protected deletion, responsive variants with srcset |
+| Public site | Article list with pagination, article and page detail, neighbour and related posts, monthly archives, hybrid search, basic navigation, mobile-friendly |
+| Openness | RSS 2.0 feed, sitemap.xml, robots.txt, article-level Open Graph and canonical meta, 301 redirects for retired slugs, JSON data export and import, `/health` database liveness |
+| Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item), trash with 30-day retention and restore, revocable draft preview links |
+| Visibility | Private content is readable by the administrator only, password-protected content needs the password, and neither enters search or AI retrieval |
+| Site settings | Site name and description, articles per page, feed items, fixed home page, site icon, JSON data export and import |
 
 Content is written in **Markdown**. Raw HTML is disabled and every rendered URL is checked against
 an allow-list, so stored content cannot introduce script execution.
@@ -105,17 +103,22 @@ tests/Origami.Tests/
 | Model | Responsibility | Database constraints |
 | --- | --- | --- |
 | `AdminUser` (Identity) | Account, password hash, security stamp | `SingletonKey` unique and checked to be `1`, so exactly one administrator can exist |
-| `Content` | Articles and pages (`Kind`), title, slug, Markdown body, status, timestamps, version | Slug unique site-wide; check constraints on status, title, slug and publish time; `Version` is the concurrency token |
-| `Category` / `Tag` | Article categories and tags | Name and slug unique within their kind |
+| `Content` | Articles and pages (`Kind`), title, slug, Markdown body, excerpt, status, timestamps, version | Slug unique site-wide; check constraints on status, title, slug and publish time; `Version` is the concurrency token; private and password-protected cannot be combined; a page cannot point at itself |
+| `Category` / `Tag` | Article categories and tags with descriptions | Name and slug unique within their kind |
 | `ContentCategories` / `ContentTags` | Many-to-many links | Removed together with the content |
-| `MediaAsset` | File identity, media type, size, dimensions, upload time | File name unique; image bytes live on disk |
-| `SiteSettings` | Single site name and description | Only `Id = 1` is allowed |
+| `MediaAsset` | File identity, media type, size, dimensions, alt text, upload time | File name unique; image bytes live on disk |
+| `SiteSettings` | Site name and description, articles per page, feed items, fixed home page, site icon | Only `Id = 1` is allowed; home page and icon are released with their content |
 | `ContentSlugRedirect` | Retired slug to live content for permanent redirects | Old slug unique; removed with its content |
 | `ContentRevision` | Previous-state snapshot taken on every save | Removed with its content; newest 20 kept |
 | `ContentView` | One day of view counts per content | Composite key (content, date); removed with its content |
 
-Status is either `Draft` or `Published`; withdrawing returns content to `Draft`. The first publish
-time is written once and preserved across later edits, withdrawals and re-publishes.
+Content also carries a parent page (`ParentId`, pages only), the draft preview token, the scheduled
+publish time `PublishAt` and the trash timestamp `DeletedAt`; password-protected content stores an
+Identity password hash, and private content is indistinguishable from a missing page for visitors.
+
+Status is `Draft`, `Published` or `Trashed`; withdrawing returns content to `Draft`, and a delete
+moves it to the trash for 30 days with restore and an automatic cleanup. The first publish time is
+written once and preserved across later edits, withdrawals, re-publishes and scheduled publishing.
 
 ## Authentication and authorization
 
@@ -129,7 +132,41 @@ time is written once and preserved across later edits, withdrawals and re-publis
   working immediately.
 - Five failed sign-ins lock the account for 15 minutes. Repeated failures beyond 20 per
   account-and-client combination receive `429`; a successful sign-in resets the counter.
+- The two-factor stage obeys the same account lockout: a locked account cannot sign in even with a
+  correct code, and the pending cookie is bound to the security stamp, so a password reset or a
+  two-factor change ends the pending window on the server.
+- Private content is readable by the signed-in administrator only; everybody else gets `404`, and
+  private or protected content never enters keyword search, semantic retrieval or the MCP tools.
 - Sign-in and sign-out are ordinary HTTP POSTs with antiforgery validation.
+- The server rechecks the page hierarchy and locks the page rows while it saves, so two parallel
+  saves cannot close a cycle.
+
+## Public and admin pages
+
+Public site (Static SSR, HTML rendered per request):
+
+| Route | Content |
+| --- | --- |
+| `/` | Published articles by publish time with pagination; a configured fixed home page replaces the list, and a category or tag filter always shows the filtered list |
+| `/posts` | Article list (redirects to `/` when no fixed home page is set) |
+| `/posts/{slug}` | Article detail; unpublished or unknown slugs return `404`; includes neighbour and related articles |
+| `/pages/{slug}` | Page detail; unpublished pages return `404`; retired slugs redirect permanently to the new URL |
+| `/archives`, `/archives/{year}/{month}` | Monthly archive of published articles |
+| `/search` | Hybrid search: keyword matching merged with pgvector results, falling back to keywords without a model |
+| `/feed`, `/sitemap.xml`, `/robots.txt`, `/health`, `/favicon.ico` | RSS 2.0 feed, sitemap, crawler rules, database liveness and the site icon; published content only |
+| `/preview/{token}` | Draft share preview (noindex; revoked or published links stop working, published content redirects) |
+| `/account/login` | Administrator sign-in (Static SSR, cookie authentication) |
+
+Admin area (Interactive Server, per page render mode):
+
+| Route | Content |
+| --- | --- |
+| `/admin/posts`, `/admin/pages` | Content list with keyword search, status filters and the trash; publish, withdraw, confirmed delete |
+| `/admin/content/{id}` | Markdown editor, preview, taxonomy assignment, media insertion, scheduled publishing, revision history, protection and privacy settings |
+| `/admin/taxonomies` | Create, edit and delete categories and tags |
+| `/admin/media` | Image upload, media library search, alt text, reference-protected deletion |
+| `/admin/settings` | Site name and description, articles per page, feed items, fixed home page, site icon, JSON export and import |
+| `/admin/security` | Administrator two-factor (TOTP) setup and removal |
 
 ## Security notes
 
@@ -176,6 +213,11 @@ tests are reported as *skipped* with a diagnostic instead of silently passing on
 | `MediaClosureTests` | Upload variants and srcset, reference-protected deletion, variant backfill |
 | `HybridSearchTests` | Keyword hits (CJK and case), semantic merge without duplicates, withdrawal stops hits, public page rendering |
 | `SecurityAndProtectionTests` | RFC 6238 vectors and the TOTP flow, admin-reset disabling two-factor, the protection gate with search/MCP exclusion, daily view counts |
+| `ProtectionRegressionTests` | A malformed unlock cookie leaks no excerpt, the Static SSR unlock form works, a locked account cannot finish the second factor, private and protected text never reaches the embedding provider |
+| `ImportExportRegressionTests` | Import refuses media names outside the image directory, import restores the site icon, responsive variants count as references |
+| `LifecycleRegressionTests` | The trash purge keeps restored content, parallel saves never close a page cycle, a scheduled re-publish keeps the first publish time, a fixed home page still reaches the filtered list |
+| `EditorRegressionTests` | Creating a preview link never hides another tab's change, a changed schedule counts as an unsaved change |
+| `ScheduleTimeTests` | Schedule times convert through the browser time zone across daylight saving, a wall-clock time that does not exist is refused |
 
 The browser tests drive real Edge or Chrome through Playwright; the persistence test performs an
 actual `pg_dump` / `pg_restore` cycle.
@@ -187,6 +229,10 @@ actual `pg_dump` / `pg_restore` cycle.
 - All uploaded images are public, including those referenced only by drafts.
 - The Data Protection key ring is encrypted with Windows DPAPI, so it can only be decrypted on the
   same machine by the same user. Recovery on another machine requires re-provisioning.
+- A data export contains the password hashes of protected content, which can be attacked offline.
+  Treat the file as a secret and keep it out of version control and shared drives. An import
+  replaces every piece of text data on the site in one transaction; image files are restored
+  separately.
 - No comments, plugins or menu editor; multi-user, multi-site and theming stay out of scope.
 
 ## License
