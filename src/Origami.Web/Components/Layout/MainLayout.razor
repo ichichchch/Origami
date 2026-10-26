@@ -9,10 +9,11 @@
         <a class="site-brand" href="/">@_settings.Name</a>
         <nav class="site-nav" aria-label="網站導覽">
             <a href="/">首頁</a>
-            @foreach (var page in _pages)
+            @foreach (var (page, depth) in NavOrder())
             {
-                <a href="@("/pages/" + Uri.EscapeDataString(page.Slug))">@(page.Title)</a>
+                <a class="@(depth > 0 ? "nav-child" : "")" href="@("/pages/" + Uri.EscapeDataString(page.Slug))">@(depth > 0 ? "└ " : "")@(page.Title)</a>
             }
+            <a href="/archives">歸檔</a>
             <a href="/search">搜尋文章</a>
             <a href="/admin/posts" data-enhance-nav="false">管理後台</a>
         </nav>
@@ -31,7 +32,25 @@
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private SiteSettings _settings = new();
-    private List<NavigationItem> _pages = [];
+    private List<PageNavItem> _pages = [];
+
+    /// <summary>Depth-aware flat order: children follow their parent; a child whose parent is
+    /// not part of the published set renders at the top level instead of disappearing.</summary>
+    private List<(PageNavItem Page, int Depth)> NavOrder()
+    {
+        var byId = _pages.ToDictionary(x => x.Id);
+        var children = _pages.Where(x => x.ParentId is not null && byId.ContainsKey(x.ParentId.Value))
+            .ToLookup(x => x.ParentId!.Value);
+        List<(PageNavItem, int)> ordered = [];
+        void Walk(PageNavItem page, int depth)
+        {
+            ordered.Add((page, depth));
+            foreach (var child in children[page.Id].OrderBy(c => c.Title).ThenBy(c => c.Id)) Walk(child, depth + 1);
+        }
+        foreach (var top in _pages.Where(x => x.ParentId is null || !byId.ContainsKey(x.ParentId.Value)))
+            Walk(top, 0);
+        return ordered;
+    }
 
     protected override async Task OnInitializedAsync()
     {

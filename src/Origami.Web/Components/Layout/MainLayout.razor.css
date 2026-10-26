@@ -4,6 +4,7 @@
 .site-nav { display: flex; gap: .6rem 1.5rem; flex-wrap: wrap; font-size: .9rem; min-width: 0; }
 .site-nav a { color: var(--muted); text-decoration: none; overflow-wrap: anywhere; }
 .site-nav a:hover { color: var(--accent); }
+.site-nav a.nav-child { font-size: .8rem; opacity: .85; padding-left: .2rem; }
 .site-description { color: var(--muted); margin: 1.2rem 0 0; font-size: .9rem; overflow-wrap: anywhere; }
 .public-main { min-height: 60vh; padding: 3.5rem 0 5rem; }
 .site-footer { padding: 1.8rem 0; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; font-size: .8rem; color: var(--muted); }

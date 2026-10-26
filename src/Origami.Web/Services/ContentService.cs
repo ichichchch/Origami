@@ -441,15 +441,18 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     public async Task<PagedResult<ContentSummary>> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
-        CancellationToken ct = default, string? category = null, string? tag = null)
+        CancellationToken ct = default, string? category = null, string? tag = null, int? year = null, int? month = null)
     {
         var offset = ContentRules.Offset(page, pageSize);
         if (category is not null) category = ContentRules.NormalizeSlug(category);
         if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
+        if (month is { } m && m is < 1 or > 12) throw new CmsException("月份無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate);
         if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
+        if (year is { } filterYear) query = query.Where(x => x.PublishedAt!.Value.Year == filterYear);
+        if (month is { } filterMonth) query = query.Where(x => x.PublishedAt!.Value.Month == filterMonth);
         var total = await query.CountAsync(ct);
         // Sticky posts lead every page of the public list; the stable sort keys keep pagination consistent.
         var items = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
@@ -569,17 +572,33 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 .Max(c => (DateTimeOffset?)c.PublishedAt) })
             .Where(x => x.Latest != null).ToListAsync(ct);
         var homeLastModified = contents.Count == 0 ? null : (DateTimeOffset?)contents.Max(x => x.UpdatedAt);
-        List<SitemapItem> items = [new("/", homeLastModified)];
+        List<SitemapItem> items = [new("/", homeLastModified), new("/archives", homeLastModified)];
         items.AddRange(contents.Where(x => x.Kind == ContentKind.Post).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
         items.AddRange(contents.Where(x => x.Kind == ContentKind.Page).Select(x => new SitemapItem("/pages/" + x.Slug, x.UpdatedAt)));
         items.AddRange(categories.Select(x => new SitemapItem("/?category=" + x.Slug, x.Latest)));
         return items;
     }
 
-    public async Task<List<NavigationItem>> NavigationAsync(CancellationToken ct = default)
+    public async Task<List<PageNavItem>> NavigationAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Page && x.Status == ContentStatus.Published)
-            .OrderBy(x => x.Title).ThenBy(x => x.Id).Select(x => new NavigationItem(x.Title, x.Slug)).ToListAsync(ct);
+        return await db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate)
+            .OrderBy(x => x.Title).ThenBy(x => x.Id)
+            .Select(x => new PageNavItem(x.Id, x.Title, x.Slug, x.ParentId)).ToListAsync(ct);
+    }
+
+    /// <summary>Months of the public archive with their post counts, newest month first.</summary>
+    public async Task<List<ArchiveMonth>> ArchiveMonthsAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        // Date-only projection keeps the payload tiny; grouping happens in memory where the
+        // provider's date-part translation cannot silently change the grouping semantics.
+        var dates = await db.Contents.AsNoTracking()
+            .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate && x.PublishedAt != null)
+            .Select(x => x.PublishedAt!.Value).ToListAsync(ct);
+        return dates.GroupBy(x => (x.Year, x.Month))
+            .Select(g => new ArchiveMonth(g.Key.Year, g.Key.Month, g.Count()))
+            .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month)
+            .ToList();
     }
 }

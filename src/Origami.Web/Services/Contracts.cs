@@ -81,6 +81,8 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public bool IsPrivate { get; init; }
 }
 public sealed record NavigationItem(string Title, string Slug);
+/// <summary>A published page in the public navigation, with its hierarchy pointer.</summary>
+public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId);
 /// <summary>A page candidate for selectors in the editor and site settings.</summary>
 public sealed record PageOption(Guid Id, string Title, Guid? ParentId, ContentStatus Status,
     bool IsPrivate = false, bool IsProtected = false);
@@ -98,6 +100,8 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
 }
 /// <summary>The live public target behind a retired slug, for permanent redirects.</summary>
 public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
+/// <summary>One month of the public archive with its published post count.</summary>
+public sealed record ArchiveMonth(int Year, int Month, int Count);
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Total / PageSize));
