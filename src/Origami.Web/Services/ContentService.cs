@@ -4,7 +4,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 {
     // The protection password is hashed with the same Identity hasher as the administrator account.
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
-    public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null)
+    public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null, string? search = null)
     {
 
         await admin.RequireAsync(ct);
@@ -16,6 +16,12 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         // Without an explicit filter the list hides the trash; it has its own tab and lifecycle.
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == kind);
         query = status is null ? query.Where(x => x.Status != ContentStatus.Trashed) : query.Where(x => x.Status == status);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // Title and slug containment keeps the admin search predictable across CJK text.
+            var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
+            query = query.Where(x => EF.Functions.ILike(x.Title, pattern) || EF.Functions.ILike(x.Slug, pattern));
+        }
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)

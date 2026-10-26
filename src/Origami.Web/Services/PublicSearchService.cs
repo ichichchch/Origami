@@ -45,7 +45,7 @@ public sealed class PublicSearchService(
     /// <summary>Case-insensitive containment across title, excerpt and body of published posts.</summary>
     private async Task<List<PublicSearchHit>> KeywordAsync(string query, int limit, CancellationToken ct)
     {
-        var pattern = "%" + EscapeLike(query) + "%";
+        var pattern = "%" + ContentRules.EscapeLike(query) + "%";
         await using var db = await factory.CreateDbContextAsync(ct);
         var rows = await db.Contents.AsNoTracking()
             .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsProtected && !x.IsPrivate
@@ -66,6 +66,4 @@ public sealed class PublicSearchService(
     }
 
     private static string Truncate(string text) => text.Length <= 180 ? text : text[..179].TrimEnd() + "…";
-
-    private static string EscapeLike(string value) => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 }

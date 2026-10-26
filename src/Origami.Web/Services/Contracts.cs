@@ -107,6 +107,9 @@ public static partial class ContentRules
         return result;
     }
 
+    /// <summary>Escapes LIKE wildcards so user text is matched literally in ILike patterns.</summary>
+    public static string EscapeLike(string value) => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
+
     [GeneratedRegex(@"[^\p{L}\p{Nd}]+", RegexOptions.CultureInvariant)]
     private static partial Regex SlugSeparators();
 

@@ -45,6 +45,14 @@
 }
 <section class="panel media-library" aria-busy="@Busy.ToString().ToLowerInvariant()">
     <div class="panel-toolbar"><h2>所有圖片 <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">依上傳時間排序</span></div>
+    <div class="content-search">
+        <label class="sr-only" for="media-search">搜尋圖片</label>
+        <input id="media-search" type="search" placeholder="搜尋檔名或替代文字…" maxlength="300" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
+        @if (_search.Length > 0)
+        {
+            <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">清除</button>
+        }
+    </div>
     @if (_result is not null)
     {
         @if (_result.Items.Count == 0)
@@ -71,6 +79,7 @@
 
 @code {
     private int _page = 1;
+    private string _search = "";
     private PagedResult<MediaItem>? _result;
     private MediaItem? _uploaded;
     private string? _uploadName;
@@ -78,13 +87,28 @@
     private MediaItem? _pendingDelete;
     private List<MediaService.MediaReference> _pendingReferences = [];
     protected override Task OnInitializedAsync() => Load();
+    private string? ListSearch() => string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
     private Task<bool> Load() => RunAsync(async ct =>
     {
-        var result = await MediaService.ListAsync(_page, ct: ct);
+        var result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
         foreach (var item in result.Items)
             item.ReferenceCount = await MediaService.CountReferencesAsync(item.Id, ct);
         _result = result;
     });
+    private async Task SearchChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _search = args.Value?.ToString() ?? "";
+        _page = 1;
+        await Load();
+    }
+    private async Task ClearSearch()
+    {
+        if (Blocked) return;
+        _search = "";
+        _page = 1;
+        await Load();
+    }
     private async Task RequestDelete(MediaItem item)
     {
         if (Blocked) return;
@@ -100,7 +124,7 @@
         {
             await MediaService.DeleteAsync(item.Id, true, ct);
             _pendingDelete = null;
-            var result = await MediaService.ListAsync(_page, ct: ct);
+            var result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
             foreach (var media in result.Items)
                 media.ReferenceCount = await MediaService.CountReferencesAsync(media.Id, ct);
             _result = result;
@@ -113,7 +137,7 @@
         var value = _altEdits.TryGetValue(id, out var edit) ? edit : "";
         await MediaService.UpdateAltAsync(id, value, ct);
         _altEdits.Remove(id);
-        var result = await MediaService.ListAsync(_page, ct: ct);
+        var result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
         foreach (var media in result.Items)
             media.ReferenceCount = await MediaService.CountReferencesAsync(media.Id, ct);
         _result = result;
@@ -136,7 +160,7 @@
             await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
             _uploaded = await MediaService.UploadAsync(stream, file.Name, ct);
             _page = 1;
-            _result = await MediaService.ListAsync(_page, ct: ct);
+            _result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
         }, "圖片已上傳，現在可在編輯器中插入。");
         _uploadName = null;
     }

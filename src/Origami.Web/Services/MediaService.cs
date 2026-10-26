@@ -5,13 +5,20 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
 {
     private static readonly SemaphoreSlim DecodeSlots = new(2);
 
-    public async Task<PagedResult<MediaItem>> ListAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default)
+    public async Task<PagedResult<MediaItem>> ListAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, string? search = null)
     {
         await admin.RequireAsync(ct);
         var offset = ContentRules.Offset(page, pageSize);
         await using var db = await factory.CreateDbContextAsync(ct);
-        var total = await db.MediaAssets.CountAsync(ct);
-        var items = await db.MediaAssets.AsNoTracking().OrderByDescending(x => x.UploadedAt).ThenByDescending(x => x.Id)
+        var query = db.MediaAssets.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // Administrators find images by the name they uploaded or the alt text they wrote.
+            var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
+            query = query.Where(x => EF.Functions.ILike(x.OriginalName, pattern) || EF.Functions.ILike(x.AltText, pattern));
+        }
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.UploadedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize).Select(x => new MediaItem(x.Id, x.FileName, x.OriginalName, x.ContentType, x.Size, x.Width, x.Height, x.UploadedAt)
             { AltText = x.AltText }).ToListAsync(ct);
         return new(items, total, page, pageSize);

@@ -56,6 +56,14 @@
             <button type="button" class="tab-button @(_status == ContentStatus.Trashed ? "active" : "")" aria-pressed="@(_status == ContentStatus.Trashed)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Trashed)">回收桶 <span class="count">@_counts.Trashed</span></button>
         }
     </div>
+    <div class="content-search">
+        <label class="sr-only" for="content-search">搜尋@(Label)</label>
+        <input id="content-search" type="search" placeholder="搜尋標題或網址代稱…" maxlength="200" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
+        @if (_search.Length > 0)
+        {
+            <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">清除</button>
+        }
+    </div>
     <section class="panel" aria-busy="@Busy.ToString().ToLowerInvariant()">
         <div class="panel-toolbar"><h2>@FilterLabel@(Label) <span class="count">@_result.Total</span></h2><span class="muted">依最後更新排序 · UTC</span></div>
         @if (_result.Items.Count == 0)
@@ -81,6 +89,7 @@
     private string ListPath => Kind == ContentKind.Post ? "/admin/posts" : "/admin/pages";
     private int _page = 1;
     private ContentStatus? _status;
+    private string _search = "";
     private ContentCounts? _counts;
     private string FilterLabel => _status switch
     {
@@ -106,13 +115,28 @@
     private Task<bool> LoadAsync() => RunAsync(RefreshAsync);
     private async Task RefreshAsync(CancellationToken ct)
     {
-        var result = await Content.ListAdminAsync(Kind, _page, ct: ct, status: _status);
+        var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+        var result = await Content.ListAdminAsync(Kind, _page, ct: ct, status: _status, search: search);
         if (_page > result.TotalPages)
-            result = await Content.ListAdminAsync(Kind, result.TotalPages, ct: ct, status: _status);
+            result = await Content.ListAdminAsync(Kind, result.TotalPages, ct: ct, status: _status, search: search);
         var counts = await Content.CountAdminAsync(Kind, ct);
         _result = result;
         _page = result.Page;
         _counts = counts;
+    }
+    private async Task SearchChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _search = args.Value?.ToString() ?? "";
+        _page = 1;
+        await LoadAsync();
+    }
+    private async Task ClearSearch()
+    {
+        if (Blocked) return;
+        _search = "";
+        _page = 1;
+        await LoadAsync();
     }
     private async Task ChangeStatus(ContentStatus? status)
     {
