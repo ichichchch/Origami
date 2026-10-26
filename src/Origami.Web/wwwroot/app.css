@@ -264,3 +264,26 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .protected-gate { max-width: 30rem; }
 .views-cell { font-variant-numeric: tabular-nums; color: var(--muted); }
 .locked-mark { margin-left: .3rem; }
+
+/* Reading experience: archives, neighbour navigation, semantic recommendations */
+.home-posts-link { margin-top: 2rem; }
+.reading-intro { margin-top: 1.5rem; }
+.content-search { display: flex; align-items: center; gap: .6rem; max-width: 380px; margin: 0 0 1rem; }
+.content-search input { flex: 1; }
+.import-file-input { width: 0; height: 0; opacity: 0; overflow: hidden; position: absolute; }
+.archive-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
+.archive-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .8rem .2rem; border-bottom: 1px solid var(--border); }
+.archive-list li a { color: var(--ink); text-decoration: none; font-weight: 600; }
+.archive-list li a:hover { color: var(--accent); text-decoration: underline; }
+.archive-list .muted { color: var(--muted); font-size: .82rem; }
+.post-neighbors { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; margin: 2.5rem 0 0; }
+.post-neighbors .neighbor-link { display: grid; gap: .3rem; padding: .9rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; background: var(--surface); }
+.post-neighbors .neighbor-link span { color: var(--muted); font-size: .74rem; letter-spacing: .06em; }
+.post-neighbors .neighbor-link strong { color: var(--ink); font-size: .92rem; overflow-wrap: anywhere; }
+.post-neighbors .neighbor-link:hover { border-color: var(--accent); }
+.related-posts { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+.related-posts h2 { margin-bottom: .9rem; }
+.related-posts ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.related-posts li a { font-weight: 650; color: var(--ink); text-decoration: none; }
+.related-posts li a:hover { color: var(--accent); text-decoration: underline; }
+.related-posts li p { margin: .2rem 0 0; color: var(--muted); font-size: .84rem; }
