@@ -135,4 +135,32 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         Assert.Empty(await db.Categories.ToListAsync());
         Assert.Empty(await db.Tags.ToListAsync());
     }
+
+    [PostgresFact]
+    public async Task Descriptions_round_trip_and_admin_search_finds_content()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "旅行", Description = "路上的觀察與故事。" });
+        var travel = (await admin.Taxonomy.ListAsync(TaxonomyKind.Category)).Items.Single();
+        Assert.Equal("路上的觀察與故事。", travel.Description);
+
+        // The description surfaces on the public filtered listing once the category has published posts.
+        Assert.Null(await admin.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, "旅行"));
+        var post = NewContent("東京散步地圖", status: ContentStatus.Published);
+        post.CategoryIds = [travel.Id];
+        await admin.Content.SaveAsync(post);
+        var publicView = await admin.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, "旅行");
+        Assert.NotNull(publicView);
+        Assert.Equal("路上的觀察與故事。", publicView!.Description);
+
+        // Admin search matches titles and slugs literally, including escaped LIKE wildcards.
+        await admin.Content.SaveAsync(NewContent("完全不同的主題", status: ContentStatus.Published));
+        var byTitle = await admin.Content.ListAdminAsync(ContentKind.Post, search: "東京");
+        Assert.Single(byTitle.Items);
+        Assert.Equal("東京散步地圖", byTitle.Items.Single().Title);
+        var all = await admin.Content.ListAdminAsync(ContentKind.Post, search: "");
+        var byWildcard = await admin.Content.ListAdminAsync(ContentKind.Post, search: "%");
+        Assert.Equal(all.Total, byWildcard.Total);
+        Assert.Empty((await admin.Content.ListAdminAsync(ContentKind.Post, search: "不存在的主題")).Items);
+    }
 }

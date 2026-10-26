@@ -61,6 +61,29 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
     }
 
     [PostgresFact]
+    public async Task Media_search_matches_original_names_and_alt_text()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var actor = await App.AdministratorAsync();
+        var service = CreateService(actor, directory.Create());
+        using (var stream = new MemoryStream(EncodeImage(SKEncodedImageFormat.Png)))
+        {
+            await service.UploadAsync(stream, "tokyo-skyline.png");
+        }
+        MediaItem described;
+        using (var stream = new MemoryStream(EncodeImage(SKEncodedImageFormat.Png)))
+        {
+            described = await service.UploadAsync(stream, "random-name.png");
+        }
+        described = await service.UpdateAltAsync(described.Id, "京都的街道");
+
+        Assert.Single((await service.ListAsync(search: "skyline")).Items);
+        Assert.Single((await service.ListAsync(search: "SKYLINE")).Items);
+        Assert.Single((await service.ListAsync(search: "京都")).Items);
+        Assert.Empty((await service.ListAsync(search: "大阪")).Items);
+    }
+
+    [PostgresFact]
     public async Task Image_list_pages_by_timestamp_then_id_without_duplicates_or_missing_metadata()
     {
         using var directory = new TemporaryMediaStorage();

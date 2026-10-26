@@ -185,4 +185,74 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Equal(HttpStatusCode.Redirect, unauthenticated.StatusCode);
         Assert.Contains("/account/login", unauthenticated.Headers.Location!.ToString());
     }
+
+    [PostgresFact]
+    public async Task Import_replaces_text_data_and_reindexes_published_content()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "旅行" });
+        var travel = (await admin.Taxonomy.ListAsync(TaxonomyKind.Category)).Items.Single();
+        ContentEdit Post(string title, string slug) => new()
+        { Title = title, Slug = slug, Kind = ContentKind.Post, Status = ContentStatus.Published, Markdown = "內文。", CategoryIds = [travel.Id] };
+        var keep = await admin.Content.SaveAsync(Post("保留的文章", "keep-post"));
+        var secret = Post("私密文章", "secret-post");
+        secret.IsPrivate = true;
+        await admin.Content.SaveAsync(secret);
+        var parent = await admin.Content.CreateAsync(ContentKind.Page, new() { Title = "上層頁面", Slug = "parent-page", Kind = ContentKind.Page, Status = ContentStatus.Published, Markdown = "頁面。" });
+        await admin.Content.CreateAsync(ContentKind.Page, new() { Title = "下層頁面", Slug = "child-page", Kind = ContentKind.Page, Status = ContentStatus.Published, Markdown = "頁面。", ParentId = parent.Id });
+        var settings = await admin.Settings.GetAsync();
+        settings.PostsPerPage = 3;
+        await admin.Settings.SaveAsync(settings);
+        settings = await admin.Settings.GetAsync();
+        settings.HomePageContentId = parent.Id;
+        await admin.Settings.SaveAsync(settings);
+
+        // A stray post created after the export must disappear with the restore-style import.
+        var buffer = new MemoryStream();
+        await admin.Services.GetRequiredService<ExportService>().WriteAsync(buffer);
+        await admin.Content.SaveAsync(Post("不該存在的文章", "stray-post"));
+
+        var importer = admin.Services.GetRequiredService<ImportService>();
+        using (var input = new MemoryStream(buffer.ToArray()))
+        {
+            var preview = await importer.AnalyzeAsync(input);
+            Assert.Equal("Origami", preview.SiteName);
+            Assert.Equal(2, preview.Posts);
+            Assert.Equal(2, preview.Pages);
+        }
+        await Assert.ThrowsAsync<CmsException>(() =>
+        {
+            using var input = new MemoryStream(buffer.ToArray());
+            return importer.ApplyAsync(input, confirmed: false);
+        });
+        using (var input = new MemoryStream("not json"u8.ToArray()))
+        {
+            await Assert.ThrowsAsync<CmsException>(() => importer.AnalyzeAsync(input));
+        }
+
+        using (var input = new MemoryStream(buffer.ToArray()))
+        {
+            await importer.ApplyAsync(input, confirmed: true);
+        }
+
+        await using (var db = await App.CreateContextAsync())
+        {
+            Assert.True(await db.Contents.SingleOrDefaultAsync(x => x.Slug == "stray-post") is null, "import replaces, it never merges");
+            var importedKeep = await db.Contents.AsNoTracking().Include(x => x.Categories).SingleAsync(x => x.Slug == "keep-post");
+            Assert.Equal(ContentStatus.Published, importedKeep.Status);
+            Assert.Equal("旅行", importedKeep.Categories.Single().Name);
+            Assert.True(await db.Contents.AsNoTracking().SingleAsync(x => x.Slug == "secret-post") is { IsPrivate: true });
+            var child = await db.Contents.AsNoTracking().SingleAsync(x => x.Slug == "child-page");
+            var importedParent = await db.Contents.AsNoTracking().SingleAsync(x => x.Slug == "parent-page");
+            Assert.Equal(importedParent.Id, child.ParentId);
+            var restored = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1);
+            Assert.Equal(3, restored.PostsPerPage);
+            Assert.Equal(importedParent.Id, restored.HomePageContentId);
+            // Only published public content re-enters the embedding pipeline (post + both public pages).
+            var queued = await db.EmbeddingJobs.CountAsync();
+            Assert.Equal(3, queued);
+            var queuedIds = await db.EmbeddingJobs.Select(x => x.ContentId).ToListAsync();
+            Assert.Contains(queuedIds, id => id == importedKeep.Id);
+        }
+    }
 }

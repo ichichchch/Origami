@@ -110,10 +110,140 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/?tag=%2F%2F%2F")).StatusCode);
     }
 
+    [PostgresFact]
+    public async Task Static_home_page_moves_the_article_list_to_posts_and_settings_bound_sizes()
+    {
+        using var admin = await App.AdministratorAsync();
+        static ContentEdit PageInput(string title, string slug) => new()
+        { Title = title, Slug = slug, Kind = ContentKind.Page, Status = ContentStatus.Published, Markdown = "頁面內容。" };
+        static ContentEdit Post(string title, string slug) => new()
+        { Title = title, Slug = slug, Kind = ContentKind.Post, Status = ContentStatus.Published, Markdown = "文章內容。" };
+        var home = await admin.Content.CreateAsync(ContentKind.Page, PageInput("歡迎來到本站", "welcome"));
+        await admin.Content.SaveAsync(Post("第一篇文章", "first-post"));
+        await admin.Content.SaveAsync(Post("第二篇文章", "second-post"));
+        await admin.Content.SaveAsync(Post("第三篇文章", "third-post"));
+        var secret = PageInput("私密頁面", "secret-home");
+        secret.IsPrivate = true;
+        var secretSaved = await admin.Content.CreateAsync(ContentKind.Page, secret);
+
+        // A private page may not become the home page; the reading sizes are bounded by the limits.
+        var settings = await admin.Settings.GetAsync();
+        settings.HomePageContentId = secretSaved.Id;
+        await Assert.ThrowsAsync<CmsException>(() => admin.Settings.SaveAsync(settings));
+        settings = await admin.Settings.GetAsync();
+        settings.HomePageContentId = home.Id;
+        settings.PostsPerPage = 2;
+        settings.FeedItems = 1;
+        settings.PostsPerPage = 51; // one above the ceiling
+        await Assert.ThrowsAsync<CmsException>(() => admin.Settings.SaveAsync(settings));
+        settings = await admin.Settings.GetAsync();
+        settings.HomePageContentId = home.Id;
+        settings.PostsPerPage = 2;
+        settings.FeedItems = 1;
+        await admin.Settings.SaveAsync(settings);
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        var fetchedHome = await admin.Content.GetPublishedPageAsync(home.Id!.Value);
+        Assert.NotNull(fetchedHome);
+        var homeResponse = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, homeResponse.StatusCode);
+        var index = WebUtility.HtmlDecode(await homeResponse.Content.ReadAsStringAsync());
+        Assert.Contains("歡迎來到本站", index);
+        Assert.Contains("前往文章列表", index);
+        Assert.DoesNotContain("第一篇文章", index);
+        var postsResponse = await client.GetAsync("/posts");
+        var posts = WebUtility.HtmlDecode(await postsResponse.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, postsResponse.StatusCode);
+        Assert.Contains("第二篇文章", posts);
+        Assert.Contains("第 1 / 2 頁", posts);
+        var feed = await (await client.GetAsync("/feed")).Content.ReadAsStringAsync();
+        Assert.Equal(1, feed.Split("<item>").Length - 1);
+
+        // Withdrawing the static home page falls back to the list at "/" and /posts points there.
+        var withdrawn = await admin.Content.GetEditAsync(home.Id!.Value);
+        withdrawn.Status = ContentStatus.Draft;
+        await admin.Content.UpdateAsync(withdrawn);
+        var fallback = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
+        Assert.Contains("post-list", fallback);
+        Assert.Contains("篇文章", fallback);
+        Assert.DoesNotContain("歡迎來到本站", fallback);
+        var redirect = await client.GetAsync("/posts");
+        // The setting still names a page, so /posts keeps serving the list alongside the fallback home.
+        Assert.Equal(HttpStatusCode.OK, redirect.StatusCode);
+        var cleared = await admin.Settings.GetAsync();
+        cleared.HomePageContentId = null;
+        await admin.Settings.SaveAsync(cleared);
+        var unsetRedirect = await client.GetAsync("/posts");
+        Assert.Equal(HttpStatusCode.Redirect, unsetRedirect.StatusCode);
+        Assert.Equal("/", unsetRedirect.Headers.Location?.ToString());
+    }
+
     private static async Task SaveScreenshotAsync(IPage page, string name)
     {
         var directory = Path.Combine(RunningSite.FindSolutionRoot(), ".artifacts", "screenshots");
         Directory.CreateDirectory(directory);
         await page.ScreenshotAsync(new() { Path = Path.Combine(directory, name), FullPage = true });
+    }
+
+    [PostgresFact]
+    public async Task Readers_get_neighbours_related_posts_and_month_archives()
+    {
+        using var admin = await App.AdministratorAsync();
+        static ContentEdit Published(string title, string slug) => new()
+        { Title = title, Slug = slug, Kind = ContentKind.Post, Status = ContentStatus.Published, Markdown = "關於養蜂與自然觀察的長篇筆記。" };
+        await admin.Content.SaveAsync(Published("最早的養蜂筆記", "bee-early"));
+        await admin.Content.SaveAsync(Published("居中的養蜂筆記", "bee-middle"));
+        await admin.Content.SaveAsync(Published("最新的養蜂筆記", "bee-late"));
+        var secret = Published("私密不外流", "secret-archive");
+        secret.IsPrivate = true;
+        await admin.Content.SaveAsync(secret);
+
+        // Anchor every post to the 15th so each lands in a distinct, predictable month.
+        var now = DateTimeOffset.UtcNow;
+        var anchor = new DateTimeOffset(now.Year, now.Month, 15, 0, 0, 0, TimeSpan.Zero);
+        DateTimeOffset middlePublished;
+        await using (var db = await App.CreateContextAsync())
+        {
+            foreach (var (slug, publishedAt) in new[]
+            {
+                ("bee-early", anchor.AddMonths(-2)),
+                ("bee-middle", anchor.AddMonths(-1)),
+                ("bee-late", anchor),
+                ("secret-archive", anchor),
+            })
+                await db.Contents.Where(x => x.Slug == slug).ExecuteUpdateAsync(s => s.SetProperty(x => x.PublishedAt, publishedAt));
+            middlePublished = await db.Contents.Where(x => x.Slug == "bee-middle").Select(x => x.PublishedAt!.Value).SingleAsync();
+        }
+        await App.Worker.ProcessPendingAsync();
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        // The middle post links to both neighbours on the public timeline.
+        var middle = WebUtility.HtmlDecode(await (await client.GetAsync("/posts/bee-middle")).Content.ReadAsStringAsync());
+        Assert.Contains("/posts/bee-early", middle);
+        Assert.Contains("/posts/bee-late", middle);
+        Assert.Contains("上一篇", middle);
+        Assert.Contains("下一篇 →", middle);
+        // The newest post has no "next"; its related section names another published post.
+        var latest = WebUtility.HtmlDecode(await (await client.GetAsync("/posts/bee-late")).Content.ReadAsStringAsync());
+        Assert.DoesNotContain("下一篇 →", latest);
+        var relatedIndex = latest.IndexOf("相關文章", StringComparison.Ordinal);
+        Assert.True(relatedIndex >= 0, "related posts section is present");
+        Assert.Contains("養蜂", latest[relatedIndex..]);
+
+        // The archive overview lists months; month pages only list that month's public posts.
+        var archives = WebUtility.HtmlDecode(await (await client.GetAsync("/archives")).Content.ReadAsStringAsync());
+        Assert.Contains("文章歸檔", archives);
+        Assert.Contains($"{middlePublished.Year} 年 {middlePublished.Month} 月", archives);
+        var monthPage = WebUtility.HtmlDecode(await (await client.GetAsync($"/archives/{middlePublished.Year}/{middlePublished.Month}")).Content.ReadAsStringAsync());
+        Assert.Contains("居中的養蜂筆記", monthPage);
+        Assert.DoesNotContain("最早的養蜂筆記", monthPage);
+        var latestMonthPage = WebUtility.HtmlDecode(await (await client.GetAsync($"/archives/{now.Year}/{now.Month}")).Content.ReadAsStringAsync());
+        Assert.Contains("最新的養蜂筆記", latestMonthPage);
+        Assert.DoesNotContain("私密不外流", latestMonthPage);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/archives/2026/13")).StatusCode);
     }
 }

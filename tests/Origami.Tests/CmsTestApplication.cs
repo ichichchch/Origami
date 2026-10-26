@@ -44,6 +44,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<AdminAccess>();
         services.AddScoped<ContentService>();
         services.AddScoped<ExportService>();
+        services.AddScoped<ImportService>();
         services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<SettingsService>();

@@ -28,6 +28,57 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
     }
 
     [PostgresFact]
+    public async Task Page_hierarchy_nests_pages_and_rejects_cycles()
+    {
+        using var admin = await App.AdministratorAsync();
+        ContentEdit PageInput(string title, string slug, Guid? parentId = null) => new()
+        { Title = title, Slug = slug, Kind = ContentKind.Page, Status = ContentStatus.Published, Markdown = "頁面內容", ParentId = parentId };
+        var parent = await admin.Content.CreateAsync(ContentKind.Page, PageInput("頂層頁面", "top-page"));
+        var child = await admin.Content.CreateAsync(ContentKind.Page, PageInput("子頁面", "child-page", parent.Id));
+        var grandchild = await admin.Content.CreateAsync(ContentKind.Page, PageInput("孫頁面", "grandchild-page", child.Id));
+        Assert.Equal(parent.Id, (await admin.Content.GetEditAsync(child.Id!.Value)).ParentId);
+        Assert.Equal(child.Id, (await admin.Content.GetEditAsync(grandchild.Id!.Value)).ParentId);
+
+        // A page can never become its own ancestor or parent itself.
+        var cycle = await admin.Content.GetEditAsync(parent.Id!.Value);
+        cycle.ParentId = grandchild.Id;
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(cycle));
+        var self = await admin.Content.GetEditAsync(child.Id.Value);
+        self.ParentId = child.Id;
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(self));
+
+        // Posts never take a parent; an unknown parent is refused.
+        var post = NewContent("文章不可有上層", status: ContentStatus.Published);
+        post.ParentId = parent.Id;
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.SaveAsync(post));
+        var orphan = PageInput("孤兒頁面", "orphan-page");
+        orphan.ParentId = Guid.NewGuid();
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.CreateAsync(ContentKind.Page, orphan));
+
+        // The admin list names the parent page.
+        var listed = (await admin.Content.ListAdminAsync(ContentKind.Page)).Items.Single(x => x.Slug == "child-page");
+        Assert.Equal("頂層頁面", listed.ParentTitle);
+
+        // Public navigation nests children and keeps private pages out of the tree.
+        var secret = PageInput("私密子頁", "secret-child", parent.Id);
+        secret.IsPrivate = true;
+        await admin.Content.CreateAsync(ContentKind.Page, secret);
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        var html = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
+        Assert.Contains("└ 子頁面", html);
+        Assert.Contains("└ 孫頁面", html);
+        Assert.DoesNotContain("私密子頁", html);
+        // Trashing the parent promotes its published child to the top level instead of hiding it.
+        await admin.Content.TrashAsync(parent.Id.Value, parent.Version, confirmed: true);
+        var afterTrash = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
+        Assert.DoesNotContain("└ 子頁面", afterTrash);
+        Assert.Contains("子頁面", afterTrash);
+        Assert.Contains("└ 孫頁面", afterTrash);
+    }
+
+    [PostgresFact]
     public async Task Repeated_submission_of_the_same_create_is_rejected_by_the_unique_slug()
     {
         using var admin = await App.AdministratorAsync();

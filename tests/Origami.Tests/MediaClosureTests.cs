@@ -112,4 +112,41 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.True(File.Exists(variant));
         Assert.Equal(0, await service.BackfillVariantsAsync());
     }
+
+    [PostgresFact]
+    public async Task Site_icon_resolves_to_the_media_file_and_protects_deletion()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var service = CreateService(admin, directory);
+        MediaItem icon;
+        await using (var stream = new MemoryStream(Png(64, 64)))
+        {
+            icon = await service.UploadAsync(stream, "icon.png");
+        }
+        var settings = await admin.Settings.GetAsync();
+        settings.SiteIconMediaId = icon.Id;
+        await admin.Settings.SaveAsync(settings);
+
+        var file = await service.GetSiteIconAsync();
+        Assert.NotNull(file);
+        Assert.Equal("image/png", file!.ContentType);
+        Assert.True(File.Exists(file.Path), "the icon points at the stored media file");
+        Assert.EndsWith(icon.FileName, file.Path, StringComparison.Ordinal);
+
+        // The current site icon cannot be deleted while the setting points at it.
+        var refused = await Assert.ThrowsAsync<CmsException>(() => service.DeleteAsync(icon.Id, true));
+        Assert.Contains("網站圖示", refused.Message, StringComparison.Ordinal);
+
+        // Clearing the setting releases the file, and an unset icon answers 404 over HTTP.
+        var cleared = await admin.Settings.GetAsync();
+        cleared.SiteIconMediaId = null;
+        await admin.Settings.SaveAsync(cleared);
+        await service.DeleteAsync(icon.Id, true);
+        Assert.Null(await service.GetSiteIconAsync());
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/favicon.ico")).StatusCode);
+    }
 }

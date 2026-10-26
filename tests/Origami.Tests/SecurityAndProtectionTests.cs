@@ -164,6 +164,76 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
     }
 
     [PostgresFact]
+    public async Task Private_content_is_visible_only_to_the_administrator()
+    {
+        // A known password lets the test sign in over HTTP after the reset rotates the stamp.
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        using var admin = await App.AdministratorAsync();
+        var post = NewContent("僅管理員可見", status: ContentStatus.Published);
+        post.Slug = "private-post";
+        post.Markdown = "這段私密文字絕不能外洩。";
+        post.IsPrivate = true;
+        var saved = await admin.Content.SaveAsync(post);
+
+        // Private text never reaches the embedding index, exactly like password-protected text.
+        await App.Worker.ProcessPendingAsync();
+        await using (var db = await App.CreateContextAsync())
+        {
+            Assert.False(await db.ContentEmbeddings.AnyAsync(x => x.ContentId == saved.Id), "private content never enters the index");
+        }
+
+        // Private and password protection are mutually exclusive.
+        var conflict = NewContent("矛盾設定", status: ContentStatus.Published);
+        conflict.IsProtected = true;
+        conflict.NewProtectPassword = "long-enough-pass";
+        conflict.IsPrivate = true;
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.SaveAsync(conflict));
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+        // Anonymous visitors get the same 404 as missing content.
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/posts/private-post")).StatusCode);
+        var home = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
+        Assert.DoesNotContain("private-post", home);
+        Assert.DoesNotContain("僅管理員可見", home);
+        Assert.DoesNotContain("private-post", await (await client.GetAsync("/sitemap.xml")).Content.ReadAsStringAsync());
+        Assert.DoesNotContain("private-post", await (await client.GetAsync("/feed")).Content.ReadAsStringAsync());
+        var search = await admin.Services.GetRequiredService<PublicSearchService>().SearchAsync("私密文字");
+        Assert.DoesNotContain(search.Hits, x => x.Slug == "private-post");
+        var tools = admin.Services.GetRequiredService<McpReadTools>();
+        Assert.False((await tools.GetPostAsync("private-post")).Found, "MCP must not reach private bodies");
+
+        // The signed-in administrator reads the same URL with a visible private marker.
+        var cookies = new CookieContainer();
+        using (var signedIn = site.CreateClient(cookies: cookies))
+        {
+            using var login = await HttpSecurityTests.LoginAsync(signedIn, password);
+            Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
+            var page = await signedIn.GetAsync("/posts/private-post");
+            Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+            var html = WebUtility.HtmlDecode(await page.Content.ReadAsStringAsync());
+            Assert.Contains("私密", html);
+            Assert.Contains("這段私密文字絕不能外洩。", html);
+            Assert.Contains("noindex", html);
+        }
+
+        // Switching back to public restores the URL, the listing and the embedding pipeline.
+        var edit = await admin.Content.GetEditAsync(saved.Id!.Value);
+        edit.IsPrivate = false;
+        await admin.Content.UpdateAsync(edit);
+        await App.Worker.ProcessPendingAsync();
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/posts/private-post")).StatusCode);
+        var homeAgain = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
+        Assert.Contains("僅管理員可見", homeAgain);
+        await using (var db = await App.CreateContextAsync())
+        {
+            Assert.True(await db.ContentEmbeddings.AnyAsync(x => x.ContentId == saved.Id), "re-embedding follows the private-to-public switch");
+        }
+    }
+
+    [PostgresFact]
     public async Task Views_are_counted_per_day_and_surface_in_the_admin_list()
     {
         using var admin = await App.AdministratorAsync();
