@@ -34,12 +34,24 @@ public sealed class SemanticSearchTests(IsolatedPostgres postgres) : ServiceTest
     }
 
     [PostgresFact]
-    public async Task Search_rejects_blank_queries_and_clamps_limits()
+    public async Task Search_validates_before_gateway_and_accepts_the_exact_query_bound()
     {
         using var actor = await App.AdministratorAsync();
-        await Assert.ThrowsAsync<CmsException>(() => actor.Semantic.SearchAsync("   "));
-        var hits = await actor.Semantic.SearchAsync("隨便", 999);
+        foreach (var invalid in new[] { null, "", " \t\r\n", new string('x', Limits.SearchQueryMax + 1),
+                     " " + new string('x', Limits.SearchQueryMax) })
+        {
+            await Assert.ThrowsAsync<CmsException>(() => actor.Semantic.SearchAsync(invalid!));
+            Assert.Equal(0, App.Embeddings.EmbeddedTexts);
+        }
+        var boundary = new string('x', Limits.SearchQueryMax);
+        string? sent = null;
+        App.Embeddings.VectorFor = text => { sent = text; return FakeEmbeddingGateway.Basis(0); };
+        var hits = await actor.Semantic.SearchAsync(boundary, 999);
         Assert.Empty(hits); // clamped, not thrown; an empty corpus returns nothing
+        Assert.Equal(boundary, sent);
+        Assert.Equal(1, App.Embeddings.EmbeddedTexts);
+        await actor.Semantic.SearchAsync("  主題  ");
+        Assert.Equal("主題", sent);
     }
 
     [PostgresFact]

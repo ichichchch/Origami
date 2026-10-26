@@ -68,7 +68,7 @@ public sealed class CommandLineTests(IsolatedPostgres postgres)
     {
         var result = await RunWebCommandAsync("migrate", null, null);
         Assert.True(result.ExitCode != 0, "the application must not start without a configured database.");
-        Assert.Contains("缺少 ConnectionStrings__Cms 設定", result.Output, StringComparison.Ordinal);
+        Assert.Contains("缺少 ConnectionStrings__CMS 設定", result.Output, StringComparison.Ordinal);
         Assert.DoesNotContain("Npgsql", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Password=", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("   at ", result.Output, StringComparison.Ordinal);

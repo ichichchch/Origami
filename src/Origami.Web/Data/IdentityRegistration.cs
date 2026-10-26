@@ -13,7 +13,7 @@ public static class IdentityRegistration
 
         services.AddIdentityCore<AdminUser>(options =>
         {
-            options.Password.RequiredLength = 12;
+            options.Password.RequiredLength = 8;
             options.Password.RequiredUniqueChars = 4;
             options.Password.RequireDigit = true;
             options.Password.RequireLowercase = true;

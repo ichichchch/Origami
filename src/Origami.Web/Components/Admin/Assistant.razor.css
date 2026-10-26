@@ -1,0 +1,8 @@
+.ai-status, .ai-setup { margin-bottom: 1.5rem; }
+.ai-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.1rem; margin: 0 0 1.5rem; }
+.ai-status-grid dt { font-size: .8rem; color: var(--muted); }
+.ai-status-grid dd { margin: .2rem 0 0; font-weight: 600; }
+.ai-status-grid div, .ai-setup li, .ai-setup code { overflow-wrap: anywhere; }
+.ai-setup ul { padding-left: 1.25rem; }
+.ai-setup li { margin-bottom: .65rem; }
+@media (max-width: 600px) { .ai-status-grid { grid-template-columns: 1fr; } }

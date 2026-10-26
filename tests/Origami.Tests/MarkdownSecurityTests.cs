@@ -47,6 +47,18 @@ public sealed class MarkdownSecurityTests
     }
 
     [Fact]
+    public void Excerpts_are_plain_bounded_text_without_markdown_formatting()
+    {
+        Assert.Equal("旅程 重點 內容", markdown.Excerpt("# 旅程\n\n**重點**\n\n內容"));
+        Assert.Equal("", markdown.Excerpt(" \n\t"));
+        Assert.Equal(new string('字', 180) + "…", markdown.Excerpt(new string('字', 250)));
+        Assert.Equal(new string('a', 179) + "…", markdown.Excerpt(new string('a', 179) + "\U00020000z"));
+        var text = markdown.Excerpt("<script>alert(1)</script>");
+        var document = new HtmlParser().ParseDocument("<p>" + WebUtility.HtmlEncode(text) + "</p>");
+        Assert.Empty(document.QuerySelectorAll("script"));
+    }
+
+    [Fact]
     public void Body_limit_is_enforced() => Assert.Throws<CmsException>(() => markdown.Render(new string('x', Limits.Body + 1)));
 
     [Fact]

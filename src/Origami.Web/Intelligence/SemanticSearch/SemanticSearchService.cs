@@ -7,6 +7,8 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
     /// <summary>Searches published posts by meaning. Drafts, withdrawn and deleted content are filtered in SQL.</summary>
     public async Task<IReadOnlyList<SemanticHit>> SearchAsync(string query, int limit = Limits.PageSize, CancellationToken ct = default)
     {
+        if (query?.Length > Limits.SearchQueryMax)
+            throw new CmsException($"搜尋文字上限為 {Limits.SearchQueryMax} 字。");
         query = (query ?? "").Trim();
         if (query.Length == 0) throw new CmsException("請輸入搜尋文字。");
         limit = Math.Clamp(limit, 1, Limits.SearchMaxResults);

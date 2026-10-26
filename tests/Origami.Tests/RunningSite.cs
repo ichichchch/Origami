@@ -26,7 +26,8 @@ internal sealed class RunningSite : IAsyncDisposable
         File.WriteAllBytes(Path.Combine(root, "test.pfx"), certificate.Export(X509ContentType.Pfx, certificatePassword));
     }
 
-    public async Task StartAsync(bool reuseAddress = false, string environment = "Development")
+    public async Task StartAsync(bool reuseAddress = false, string environment = "Development",
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null)
     {
         if (process is not null) throw new InvalidOperationException("The test server is already running.");
         if (!reuseAddress || Address is null)
@@ -48,14 +49,16 @@ internal sealed class RunningSite : IAsyncDisposable
             UseShellExecute = false, CreateNoWindow = true
         };
         start.ArgumentList.Add(assembly);
-        start.Environment["ASPNETCORE_URLS"] = Address.ToString();
-        start.Environment["ASPNETCORE_ENVIRONMENT"] = environment;
-        start.Environment["ConnectionStrings__Cms"] = connectionString;
-        start.Environment["Storage__RootPath"] = StorageRoot;
-        start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = Path.Combine(root, "test.pfx");
-        start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Password"] = certificatePassword;
-        start.Environment["Logging__LogLevel__Default"] = "Warning";
-        start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
+        ConfigureAiEnvironment(start.Environment, configurationOverrides);
+        SetEnvironment(start.Environment, "ASPNETCORE_URLS", Address.ToString());
+        // DOTNET_ENVIRONMENT takes precedence over ASPNETCORE_ENVIRONMENT in WebApplication.
+        SetEnvironment(start.Environment, "DOTNET_ENVIRONMENT", environment);
+        SetEnvironment(start.Environment, "ConnectionStrings__CMS", connectionString);
+        SetEnvironment(start.Environment, "Storage__RootPath", StorageRoot);
+        SetEnvironment(start.Environment, "ASPNETCORE_Kestrel__Certificates__Default__Path", Path.Combine(root, "test.pfx"));
+        SetEnvironment(start.Environment, "ASPNETCORE_Kestrel__Certificates__Default__Password", certificatePassword);
+        SetEnvironment(start.Environment, "Logging__LogLevel__Default", "Warning");
+        SetEnvironment(start.Environment, "Logging__LogLevel__Microsoft.Hosting.Lifetime", "Information");
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         process = new Process { StartInfo = start, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, e) =>
@@ -68,6 +71,43 @@ internal sealed class RunningSite : IAsyncDisposable
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         await ready.Task.WaitAsync(TimeSpan.FromSeconds(45));
+    }
+
+    internal static void ConfigureAiEnvironment(IDictionary<string, string?> environment,
+        IReadOnlyDictionary<string, string?>? overrides = null)
+    {
+        // Remove every spelling before adding defaults: Linux can inherit differently-cased
+        // duplicate keys which ASP.NET configuration subsequently treats as the same key.
+        foreach (var key in environment.Keys.Where(key =>
+            ConfigurationKey(key).StartsWith("Ai:", StringComparison.OrdinalIgnoreCase)).ToArray())
+            environment.Remove(key);
+        foreach (var model in new[] { "Embedding", "Assistant" })
+        {
+            SetEnvironment(environment, $"Ai__{model}__Endpoint", "http://127.0.0.1:1/disabled");
+            SetEnvironment(environment, $"Ai__{model}__Model", "isolated-test-model");
+            SetEnvironment(environment, $"Ai__{model}__ApiKey", "");
+        }
+        if (overrides is not null)
+            foreach (var pair in overrides) SetEnvironment(environment, pair.Key, pair.Value);
+    }
+
+    private static void SetEnvironment(IDictionary<string, string?> environment, string key, string? value)
+    {
+        foreach (var inherited in environment.Keys.Where(candidate =>
+            string.Equals(ConfigurationKey(candidate), ConfigurationKey(key), StringComparison.OrdinalIgnoreCase)).ToArray())
+            environment.Remove(inherited);
+        environment[key] = value;
+    }
+
+    private static string ConfigurationKey(string key)
+    {
+        foreach (var prefix in new[] { "ASPNETCORE_", "DOTNET_" })
+            if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                key = key[prefix.Length..];
+                break;
+            }
+        return key.Replace("__", ":", StringComparison.Ordinal);
     }
 
     public HttpClient CreateClient(bool allowRedirects = false, CookieContainer? cookies = null)

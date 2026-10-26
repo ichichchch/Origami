@@ -93,7 +93,7 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
         if (result.Errors.Any(error => error.Code.StartsWith("Password", StringComparison.Ordinal)))
         {
             throw new AdminProvisioningException(
-                "密碼至少 12 字，需含大寫、小寫、數字、符號，且至少有四個不同字元。");
+                "密碼至少 8 字，需含大寫、小寫、數字、符號，且至少有四個不同字元。");
         }
         if (result.Errors.Any(error => error.Code == "ConcurrencyFailure"))
         {

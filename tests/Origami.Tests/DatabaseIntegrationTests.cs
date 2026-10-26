@@ -43,7 +43,7 @@ public sealed class DatabaseIntegrationTests(IsolatedPostgres postgres) : Servic
             Assert.All(methods, method => Assert.Equal("scram-sha-256", method));
         }
         await using (var command = new NpgsqlCommand("SELECT rolpassword LIKE 'SCRAM-SHA-256$%' FROM pg_authid WHERE rolname = current_user", connection))
-            Assert.Equal(true, await command.ExecuteScalarAsync());
+            Assert.True((bool)(await command.ExecuteScalarAsync())!);
         await using (var command = new NpgsqlCommand("SELECT data_type FROM information_schema.columns WHERE table_name = 'Contents' AND column_name IN ('CreatedAt', 'UpdatedAt', 'PublishedAt')", connection))
         {
             var types = new List<string>();

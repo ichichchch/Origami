@@ -1,4 +1,7 @@
 global using AngleSharp.Html.Parser;
+global using Microsoft.AspNetCore.Builder;
+global using Microsoft.AspNetCore.Hosting;
+global using Microsoft.AspNetCore.Http;
 global using Microsoft.AspNetCore.Components;
 global using Microsoft.AspNetCore.Components.Authorization;
 global using Microsoft.AspNetCore.Components.Web;
@@ -19,6 +22,7 @@ global using Microsoft.Playwright;
 global using Npgsql;
 global using Origami.Web.Components.Layout;
 global using Origami.Web.Data;
+global using Origami.Web.Intelligence;
 global using Origami.Web.Intelligence.Agents;
 global using Origami.Web.Intelligence.AiGateway;
 global using Origami.Web.Intelligence.Embedding;

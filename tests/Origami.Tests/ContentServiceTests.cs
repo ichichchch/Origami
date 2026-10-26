@@ -112,7 +112,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         var before = DateTimeOffset.UtcNow.AddSeconds(-1);
         var edit = await admin.Content.SaveAsync(NewContent("First title", kind));
         var id = edit.Id!.Value;
-        Assert.Null(await visitor.Content.GetPublishedAsync(kind, edit.Slug));
+        Assert.Null(await visitor.Content.GetPublishedAsync(kind, edit.Slug!));
         Assert.Empty((await visitor.Content.ListPublishedAsync()).Items);
         Assert.Empty(await visitor.Content.NavigationAsync());
         Assert.Single((await admin.Content.ListAdminAsync(kind)).Items);
@@ -128,16 +128,16 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
 
         edit.Status = ContentStatus.Published;
         edit = await admin.Content.SaveAsync(edit);
-        var published = Assert.IsType<PublicContent>(await visitor.Content.GetPublishedAsync(kind, edit.Slug));
+        var published = Assert.IsType<PublicContent>(await visitor.Content.GetPublishedAsync(kind, edit.Slug!));
         var publishedAt = published.PublishedAt!.Value;
         Assert.Equal(TimeSpan.Zero, publishedAt.Offset);
         Assert.InRange(publishedAt, before, DateTimeOffset.UtcNow);
         var otherKind = kind == ContentKind.Post ? ContentKind.Page : ContentKind.Post;
-        Assert.Null(await visitor.Content.GetPublishedAsync(otherKind, edit.Slug));
+        Assert.Null(await visitor.Content.GetPublishedAsync(otherKind, edit.Slug!));
         Assert.Equal(kind == ContentKind.Post ? 1 : 0, (await visitor.Content.ListPublishedAsync()).Total);
         Assert.Equal(kind == ContentKind.Page ? 1 : 0, (await visitor.Content.NavigationAsync()).Count);
 
-        var stableSlug = edit.Slug;
+        var stableSlug = edit.Slug!;
         edit.Title = "Changed title";
         edit.Markdown = "An immediately visible edit";
         edit = await admin.Content.SaveAsync(edit);
@@ -374,7 +374,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
 
         if (published)
         {
-            var result = Assert.IsType<PublicContent>(await service.GetPublishedAsync(ContentKind.Post, saved.Slug));
+            var result = Assert.IsType<PublicContent>(await service.GetPublishedAsync(ContentKind.Post, saved.Slug!));
             Assert.Equal(input.Markdown, result.Markdown);
             Assert.Equal(Limits.MaxTaxonomiesPerKind, result.Categories.Count);
             Assert.Equal(Limits.MaxTaxonomiesPerKind, result.Tags.Count);
@@ -409,9 +409,9 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         var loaded = await admin.Content.GetEditAsync(saved.Id!.Value);
         Assert.Equal(2, loaded.CategoryIds.Count);
         Assert.Equal(2, loaded.TagIds.Count);
-        var published = (await visitor.Content.GetPublishedAsync(ContentKind.Post, saved.Slug))!;
-        Assert.Equal(new[] { "Alpha", "Zebra" }, published.Categories);
-        Assert.Equal(new[] { "Alpha", "Zebra" }, published.Tags);
+        var published = (await visitor.Content.GetPublishedAsync(ContentKind.Post, saved.Slug!))!;
+        Assert.Equal([new NavigationItem("Alpha", "alpha"), new NavigationItem("Zebra", "zebra")], published.Categories);
+        Assert.Equal([new NavigationItem("Alpha", "alpha"), new NavigationItem("Zebra", "zebra")], published.Tags);
     }
 
     [PostgresFact]
@@ -516,6 +516,80 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         await admin.Content.SaveAsync(NewContent("Hidden", ContentKind.Page));
         await admin.Content.SaveAsync(NewContent("Not a page", status: ContentStatus.Published));
         Assert.Equal(new[] { "Alpha", "Zebra" }, (await visitor.Content.NavigationAsync()).Select(x => x.Title));
+    }
+
+    [PostgresFact]
+    public async Task Admin_status_filters_and_counts_are_scoped_authorized_and_paged()
+    {
+        using var admin = await App.AdministratorAsync();
+        using var visitor = App.Anonymous();
+        Assert.Equal(new ContentCounts(0, 0), await admin.Content.CountAdminAsync(ContentKind.Post));
+        for (var i = 0; i < 3; i++) await admin.Content.SaveAsync(NewContent("Draft " + i));
+        var published = await admin.Content.SaveAsync(NewContent("Public post", status: ContentStatus.Published));
+        await admin.Content.SaveAsync(NewContent("Separate page", ContentKind.Page, ContentStatus.Published));
+        Assert.Equal(new ContentCounts(3, 1), await admin.Content.CountAdminAsync(ContentKind.Post));
+        Assert.Equal(new ContentCounts(0, 1), await admin.Content.CountAdminAsync(ContentKind.Page));
+        var first = await admin.Content.ListAdminAsync(ContentKind.Post, pageSize: 2, status: ContentStatus.Draft);
+        var second = await admin.Content.ListAdminAsync(ContentKind.Post, 2, 2, status: ContentStatus.Draft);
+        Assert.Equal(3, first.Total);
+        Assert.Equal(2, first.TotalPages);
+        Assert.Single(second.Items);
+        Assert.Equal(3, first.Items.Concat(second.Items).Select(x => x.Id).Distinct().Count());
+        Assert.All(first.Items.Concat(second.Items), x => Assert.Equal(ContentStatus.Draft, x.Status));
+        Assert.Equal(published.Id, Assert.Single((await admin.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Published)).Items).Id);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => visitor.Content.CountAdminAsync(ContentKind.Post));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => visitor.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Draft));
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.CountAdminAsync((ContentKind)99));
+        await Assert.ThrowsAsync<CmsException>(() => admin.Content.ListAdminAsync(ContentKind.Post, status: (ContentStatus)99));
+    }
+
+    [PostgresFact]
+    public async Task Public_taxonomy_browsing_excludes_drafts_and_removes_withdrawn_content_immediately()
+    {
+        using var admin = await App.AdministratorAsync();
+        using var visitor = App.Anonymous();
+        var category = await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "旅行", Slug = "travel" });
+        var privateCategory = await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "Private topic" });
+        var tag = await admin.Taxonomy.SaveAsync(TaxonomyKind.Tag, new() { Name = "徒步", Slug = "walking" });
+        var post = NewContent("Public journey", status: ContentStatus.Published);
+        post.CategoryIds = [category.Id!.Value];
+        post.TagIds = [tag.Id!.Value];
+        post.Markdown = new string('a', 900);
+        post = await admin.Content.SaveAsync(post);
+        var draft = NewContent("Hidden journey");
+        draft.CategoryIds = [category.Id.Value, privateCategory.Id!.Value];
+        draft.TagIds = [tag.Id.Value];
+        await admin.Content.SaveAsync(draft);
+        var other = NewContent("Unrelated public post", status: ContentStatus.Published);
+        other.CategoryIds = [category.Id.Value];
+        await admin.Content.SaveAsync(other);
+        await admin.Content.SaveAsync(NewContent("Standalone page", ContentKind.Page, ContentStatus.Published));
+
+        Assert.Equal(new NavigationItem("旅行", "travel"), await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, "TRAVEL"));
+        Assert.Null(await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, privateCategory.Slug));
+        Assert.Null(await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Tag, "missing"));
+        var popular = Assert.Single(await visitor.Content.PopularCategoriesAsync());
+        Assert.Equal("travel", popular.Slug);
+        Assert.Equal(2, popular.Count);
+        var categoryPage = await visitor.Content.ListPublishedAsync(pageSize: 1, category: "travel");
+        Assert.Equal(2, categoryPage.Total);
+        Assert.Equal(2, categoryPage.TotalPages);
+        var next = await visitor.Content.ListPublishedAsync(2, 1, category: "travel");
+        Assert.NotEqual(Assert.Single(categoryPage.Items).Id, Assert.Single(next.Items).Id);
+        var filtered = Assert.Single((await visitor.Content.ListPublishedAsync(category: "travel", tag: "walking")).Items);
+        Assert.Equal(post.Id, filtered.Id);
+        Assert.Equal(600, filtered.Excerpt.Length);
+        await Assert.ThrowsAsync<CmsException>(() => visitor.Content.ListPublishedAsync(category: new string('x', Limits.Slug + 1)));
+
+        post.Status = ContentStatus.Draft;
+        post = await admin.Content.SaveAsync(post);
+        Assert.Empty((await visitor.Content.ListPublishedAsync(tag: "walking")).Items);
+        Assert.Null(await visitor.Content.GetPublicTaxonomyAsync(TaxonomyKind.Tag, "walking"));
+        Assert.Equal(1, Assert.Single(await visitor.Content.PopularCategoriesAsync()).Count);
+        await admin.Taxonomy.DeleteAsync(TaxonomyKind.Category, category.Id.Value, category.Version);
+        Assert.Empty(await visitor.Content.PopularCategoriesAsync());
+        Assert.Empty((await visitor.Content.ListPublishedAsync(category: "travel")).Items);
+        Assert.Equal(1, (await visitor.Content.ListPublishedAsync()).Total);
     }
 
     private sealed class InterceptingContextFactory(string connectionString, IInterceptor interceptor) : IDbContextFactory<CmsDbContext>

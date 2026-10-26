@@ -2,37 +2,97 @@
 @inject MediaService Media
 
 <section class="media-picker panel" aria-labelledby="media-picker-title">
-    <div class="panel-toolbar"><h2 id="media-picker-title">從媒體庫插入</h2><button type="button" class="text-button" disabled="@Disabled" @onclick="Close">關閉</button></div>
-    <p class="notice">所有圖片皆公開，包含草稿使用的圖片；撤回內容不會隱藏圖片。</p>
-    <AdminFeedback Busy="Busy" Error="@Error" LoginRequired="LoginRequired" />
+    <div class="panel-toolbar"><h2 id="media-picker-title">從媒體庫插入</h2><button type="button" class="text-button" disabled="@(Disabled || Blocked)" @onclick="ClosePicker">關閉</button></div>
+    <p class="notice">所有圖片皆公開，包含草稿使用的圖片；撤回或刪除內容不會隱藏圖片，請勿上傳私人資料。</p>
+    <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+    <div class="field upload-control">
+        <label for="picker-upload">上傳新圖片</label>
+        <p id="picker-upload-help" class="field-help">選取後即上傳，每次一張，上限 @(Limits.UploadBytes / 1024 / 1024) MB。支援 JPEG、PNG、WebP（不含動畫），不接受 SVG；實際格式及尺寸由伺服器驗證。</p>
+        <InputFile @key="_uploadInputVersion" id="picker-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp" disabled="@(Disabled || Blocked)" aria-describedby="picker-upload-help" />
+        @if (_uploadName is not null) { <p role="status">正在上傳：@_uploadName</p> }
+    </div>
+    @if (Error is not null) { <p class="field-help">本文仍保留在編輯器中，請勿重新整理整頁；可重試上傳或刷新媒體列表。</p> }
+    @if (_uploaded is not null)
+    {
+        <p class="field-help">最近上傳；點選圖片才會插入本文。</p>
+        <div class="media-grid picker-grid"><button type="button" class="media-choice" disabled="@(Disabled || Blocked)" @onclick="() => Choose(_uploaded)"><img src="@_uploaded.Url" alt="" /><span>@_uploaded.OriginalName</span><small>插入至本文末尾</small></button></div>
+    }
+    <button type="button" class="text-button" disabled="@(Disabled || Blocked)" @onclick="Refresh">刷新媒體列表</button>
     @if (_result is not null)
     {
-        @if (_result.Items.Count == 0) { <p class="empty-state">尚無圖片。請先到媒體庫上傳，再回來插入。</p> }
+        @if (_result.Items.Count == 0 && _uploaded is null) { <p class="empty-state">尚無圖片。可直接在此上傳，無須離開編輯器。</p> }
         <div class="media-grid picker-grid">
-            @foreach (var item in _result.Items)
+            @foreach (var item in _result.Items.Where(item => item.Id != _uploaded?.Id))
             {
-                <button type="button" class="media-choice" @key="item.Id" disabled="@(Disabled || Blocked)" @onclick="() => Select.InvokeAsync(item)"><img src="@item.Url" alt="" loading="lazy" /><span>@item.OriginalName</span><small>插入至本文末尾</small></button>
+                <button type="button" class="media-choice" @key="item.Id" disabled="@(Disabled || Blocked)" @onclick="() => Choose(item)"><img src="@item.Url" alt="" loading="lazy" /><span>@item.OriginalName</span><small>插入至本文末尾</small></button>
             }
         </div>
         <div class="pagination"><button type="button" class="button button-secondary" disabled="@(Disabled || Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button type="button" class="button button-secondary" disabled="@(Disabled || Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></div>
     }
-    @if (Error is not null && !LoginRequired) { <button type="button" class="button button-secondary" disabled="@(Disabled || Blocked)" @onclick="Load">重新載入媒體</button> }
 </section>
 
 @code {
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback<MediaItem> Select { get; set; }
     [Parameter] public EventCallback Close { get; set; }
+    [Parameter] public EventCallback<bool> BusyChanged { get; set; }
     [Parameter] public EventCallback OnUnauthorized { get; set; }
     private int _page = 1;
+    private int _uploadInputVersion;
+    private string? _uploadName;
+    private MediaItem? _uploaded;
     private PagedResult<MediaItem>? _result;
     protected override Task OnInitializedAsync() => Load();
-    private async Task<bool> Load()
+    private Task<bool> Load() => RunOperationAsync(async ct => { _result = await Media.ListAsync(_page, ct: ct); });
+    private async Task Refresh()
     {
-        var success = await RunAsync(async ct => { _result = await Media.ListAsync(_page, ct: ct); });
-        if (LoginRequired) await OnUnauthorized.InvokeAsync();
-        return success;
+        if (Disabled || Blocked) return;
+        await Load();
     }
+    private async Task<bool> RunOperationAsync(Func<CancellationToken, Task> action, string? success = null)
+    {
+        var started = false;
+        try
+        {
+            return await RunAsync(async ct =>
+            {
+                started = true;
+                await BusyChanged.InvokeAsync(true);
+                await action(ct);
+            }, success);
+        }
+        finally
+        {
+            if (started) await BusyChanged.InvokeAsync(false);
+            if (LoginRequired) await OnUnauthorized.InvokeAsync();
+        }
+    }
+    private async Task Upload(InputFileChangeEventArgs args)
+    {
+        if (Disabled || Blocked) return;
+        try
+        {
+            await RunOperationAsync(async ct =>
+            {
+                if (args.FileCount != 1) throw new CmsException("每次只能上傳一張圖片。");
+                var file = args.File;
+                if (file.Size > Limits.UploadBytes) throw new CmsException($"圖片超過 {Limits.UploadBytes / 1024 / 1024} MB 上限，請選擇較小的檔案。");
+                _uploadName = file.Name;
+                await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
+                _uploaded = await Media.UploadAsync(stream, file.Name, ct);
+                // Retain the upload result for insertion even if listing fails afterward.
+                _page = 1;
+                _result = await Media.ListAsync(_page, ct: ct);
+            }, "圖片已上傳，請點選圖片插入；本文尚未儲存。");
+        }
+        finally
+        {
+            _uploadName = null;
+            _uploadInputVersion++;
+        }
+    }
+    private Task Choose(MediaItem item) => Disabled || Blocked ? Task.CompletedTask : Select.InvokeAsync(item);
+    private Task ClosePicker() => Disabled || Blocked ? Task.CompletedTask : Close.InvokeAsync();
     private async Task Move(int delta)
     {
         if (Disabled || Blocked) return;

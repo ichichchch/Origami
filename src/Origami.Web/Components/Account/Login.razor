@@ -5,29 +5,38 @@
 
 <PageTitle>管理員登入</PageTitle>
 
-<h1>管理員登入</h1>
-<p>僅限網站管理員。帳號初始化及密碼恢復須由伺服器端管理命令執行。</p>
+<section class="auth-card" aria-labelledby="login-title">
+    <p class="eyebrow">ORIGAMI · 內容工作室</p>
+    <h1 id="login-title">管理員登入</h1>
+    <p class="field-help">登入後可撰寫文章、建立獨立頁面、管理圖片與使用站內 AI 助理。</p>
 
-@if (errorMessage is not null)
-{
-    <p role="alert">@errorMessage</p>
-}
+    @if (errorMessage is not null)
+    {
+        <p class="notice notice-error" role="alert">@errorMessage</p>
+    }
 
-@* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
-<EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
-    <DataAnnotationsValidator />
-    <ValidationSummary />
-    <div>
-        <label for="username">帳號</label>
-        <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
-    </div>
-    <div>
-        <label for="password">密碼</label>
-        @* Form mapping reads this field on POST; never bind or render its submitted value. *@
-        <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
-    </div>
-    <button type="submit">登入</button>
-</EditForm>
+    @* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
+    <EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="field">
+            <label for="username">帳號</label>
+            <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
+        </div>
+        <div class="field">
+            <label for="password">密碼</label>
+            @* Form mapping reads this field on POST; never bind or render its submitted value. *@
+            <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
+        </div>
+        <button type="submit" class="button full-width">登入</button>
+    </EditForm>
+    <details class="setup-help">
+        <summary>第一次使用，或忘記密碼？</summary>
+        <p>本網站僅開放一位管理員，不提供公開註冊。請在伺服器的專案目錄執行：</p>
+        <p><code>dotnet run --project src/Origami.Web -- admin-init</code></p>
+        <p>已有帳號要重設密碼，改用 <code>admin-reset</code>。密碼由終端機互動輸入，請勿放入命令列或分享給他人。</p>
+    </details>
+</section>
 
 @code {
     private const string LoginFailure = "無法登入。請確認帳號密碼，或稍後再試。";

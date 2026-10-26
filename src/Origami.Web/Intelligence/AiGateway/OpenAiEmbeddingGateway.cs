@@ -1,7 +1,7 @@
 namespace Origami.Web.Intelligence.AiGateway;
 
 /// <summary>Calls an OpenAI-compatible /embeddings endpoint; the only place that knows the vendor's wire format.</summary>
-public sealed class OpenAiEmbeddingGateway(
+public sealed partial class OpenAiEmbeddingGateway(
     HttpClient client, IOptionsMonitor<AiOptions> options, ILogger<OpenAiEmbeddingGateway> logger) : IEmbeddingGateway
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -32,7 +32,7 @@ public sealed class OpenAiEmbeddingGateway(
         using var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogWarning("嵌入服務回應 {Status}，本批 {Count} 段文字未嵌入。", (int)response.StatusCode, batch.Count);
+            Log.EmbeddingResponseRejected(logger, (int)response.StatusCode, batch.Count);
             throw new CmsException("嵌入服務暫時無法使用，請稍後再試。");
         }
         var payload = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(Json, ct);
@@ -46,6 +46,12 @@ public sealed class OpenAiEmbeddingGateway(
     }
 
     private sealed record EmbeddingRequest(string Model, IReadOnlyList<string> Input);
-    private sealed class EmbeddingResponse { public List<EmbeddingItem>? Data { get; set; } }
-    private sealed class EmbeddingItem { public int Index { get; set; } public float[]? Embedding { get; set; } }
+    private sealed record EmbeddingResponse(List<EmbeddingItem>? Data);
+    private sealed record EmbeddingItem(int Index, float[]? Embedding);
+
+    private static partial class Log
+    {
+        [LoggerMessage(LogLevel.Warning, "嵌入服務回應 {Status}，本批 {Count} 段文字未嵌入。")]
+        public static partial void EmbeddingResponseRejected(ILogger logger, int status, int count);
+    }
 }

@@ -4,12 +4,12 @@ namespace Origami.Web.Intelligence.Embedding;
 public static class MarkdownChunker
 {
     /// <summary>Chunks never exceed Limits.EmbeddingChunkMax so they fit the storage column and model input limit.</summary>
-    public static List<string> Chunk(string markdown)
+    public static IReadOnlyList<string> Chunk(string markdown)
     {
         var chunks = new List<string>();
         var current = new List<string>();
         var length = 0;
-        foreach (var block in markdown.Replace("\r\n", "\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries))
+        foreach (var block in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Split("\n\n", StringSplitOptions.RemoveEmptyEntries))
         {
             var piece = block.Trim();
             if (piece.Length == 0) continue;

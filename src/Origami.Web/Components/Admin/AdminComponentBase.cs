@@ -1,14 +1,14 @@
 namespace Origami.Web.Components.Admin;
 
-public abstract class AdminComponentBase : ComponentBase, IDisposable
+public abstract partial class AdminComponentBase : ComponentBase, IDisposable
 {
     [Inject] protected ILogger<AdminComponentBase> Logger { get; set; } = default!;
-    protected readonly CancellationTokenSource Lifetime = new();
+    protected CancellationTokenSource Lifetime { get; } = new();
     protected bool Busy { get; private set; }
     protected bool LoginRequired { get; private set; }
     protected string? Error { get; set; }
     protected string? Notice { get; set; }
-    protected bool Blocked => Busy || LoginRequired;
+    protected bool Blocked => Busy || LoginRequired || !RendererInfo.IsInteractive;
 
     protected void RequireLogin()
     {
@@ -19,7 +19,8 @@ public abstract class AdminComponentBase : ComponentBase, IDisposable
 
     protected async Task<bool> RunAsync(Func<CancellationToken, Task> action, string? success = null)
     {
-        if (Blocked || Lifetime.IsCancellationRequested) return false;
+        // Initial data loads also run during prerendering; only user controls wait for interactivity.
+        if (Busy || LoginRequired || Lifetime.IsCancellationRequested) return false;
         Busy = true;
         Error = null;
         Notice = null;
@@ -31,20 +32,38 @@ public abstract class AdminComponentBase : ComponentBase, IDisposable
         }
         catch (UnauthorizedAccessException) { RequireLogin(); }
         catch (CmsException ex) { Error = ex.Message; }
-        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { /* The component was disposed mid-operation; user input is intentionally left untouched. */ }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "CMS component operation failed");
+            Log.ComponentOperationFailed(Logger, ex);
             Error = "操作未完成，無法確認是否已儲存。請保留輸入並重新載入，確認最新資料後再試。";
         }
         finally { Busy = false; }
         return false;
     }
 
-    public virtual void Dispose()
+    private static partial class Log
     {
-        Lifetime.Cancel();
-        Lifetime.Dispose();
+        [LoggerMessage(LogLevel.Error, "CMS component operation failed")]
+        public static partial void ComponentOperationFailed(ILogger logger, Exception exception);
+    }
+
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            Lifetime.Cancel();
+            Lifetime.Dispose();
+        }
     }
 }

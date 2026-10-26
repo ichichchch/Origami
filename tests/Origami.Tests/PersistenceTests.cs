@@ -44,7 +44,7 @@ public sealed class PersistenceTests : ServiceTestBase
         Assert.Equal(post.Title, databaseBefore.Content.Title);
         Assert.Equal(post.Slug, databaseBefore.Content.Slug);
         Assert.Equal(ContentStatus.Published, databaseBefore.Content.Status);
-        Assert.Equal(Encoding.UTF8.GetBytes(post.Markdown), Encoding.UTF8.GetBytes(databaseBefore.Content.Markdown));
+        Assert.Equal(Encoding.UTF8.GetBytes(post.Markdown!), Encoding.UTF8.GetBytes(databaseBefore.Content.Markdown));
         Assert.NotNull(databaseBefore.Content.PublishedAt);
 
         await source.StartAsync();
@@ -182,7 +182,7 @@ public sealed class PersistenceTests : ServiceTestBase
 
     private static async Task<byte[]> ReadPublishedArticleAsync(HttpClient client, ContentEdit post, MediaItem media)
     {
-        using var response = await client.GetAsync("/posts/" + Uri.EscapeDataString(post.Slug));
+        using var response = await client.GetAsync("/posts/" + Uri.EscapeDataString(post.Slug!));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/html", response.Content.Headers.ContentType?.MediaType);
         var document = new HtmlParser().ParseDocument(await response.Content.ReadAsStringAsync());

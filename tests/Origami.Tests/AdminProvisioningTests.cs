@@ -100,7 +100,7 @@ public sealed class AdminProvisioningTests(IsolatedPostgres postgres) : ServiceT
             case "long-name": name = new string('a', AdminProvisioner.MaximumUserNameLength + 1); break;
             case "invalid-name": name = "invalid/user"; break;
             case "empty-password": password = ""; break;
-            case "short-password": password = password[..11]; break;
+            case "short-password": password = password[..7]; break;
             case "long-password": password = LongRandomPassword(AdminProvisioner.MaximumPasswordLength + 1); break;
             default: throw new ArgumentOutOfRangeException(nameof(scenario));
         }
@@ -110,6 +110,16 @@ public sealed class AdminProvisioningTests(IsolatedPostgres postgres) : ServiceT
             Assert.False(error.Message.Contains(password, StringComparison.Ordinal), "Provisioning diagnostics must not contain credentials.");
         await using var db = await App.CreateContextAsync();
         Assert.Empty(await db.Users.ToListAsync());
+    }
+
+    [PostgresFact]
+    public async Task Minimum_compliant_password_is_accepted()
+    {
+        // Exactly eight characters covering all four required classes.
+        const string password = "Aa1!wxyz";
+        await App.Provisioner.InitializeAsync("test-admin", password, CancellationToken.None);
+        using var actor = App.Anonymous();
+        Assert.True(await actor.Users.CheckPasswordAsync(await actor.Users.Users.SingleAsync(), password));
     }
 
     [PostgresFact]

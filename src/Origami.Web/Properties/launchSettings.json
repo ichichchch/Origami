@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Origami.Web": {
+      "commandName": "Project",
+      "applicationUrl": "http://localhost:8228",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

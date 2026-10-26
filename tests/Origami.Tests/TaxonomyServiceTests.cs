@@ -68,8 +68,8 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         {
             var edit = await admin.Content.GetEditAsync(post.Id!.Value);
             Assert.Equal(new[] { kept.Id!.Value }, kind == TaxonomyKind.Category ? edit.CategoryIds : edit.TagIds);
-            var published = (await visitor.Content.GetPublishedAsync(ContentKind.Post, post.Slug))!;
-            Assert.Equal(new[] { "Keep me" }, kind == TaxonomyKind.Category ? published.Categories : published.Tags);
+            var published = (await visitor.Content.GetPublishedAsync(ContentKind.Post, post.Slug!))!;
+            Assert.Equal([new NavigationItem("Keep me", "keep-me")], kind == TaxonomyKind.Category ? published.Categories : published.Tags);
         }
         await using var db = await App.CreateContextAsync();
         Assert.Equal(2, await db.Contents.CountAsync());

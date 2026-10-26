@@ -434,6 +434,11 @@ dotnet-tools.json.bak
 *.dump
 *.backup
 appsettings.Local.json
+src/Origami.Web/appsettings.Development.json
+src/Origami.Web/appsettings.Production.json
 
 # Local tooling workspace
 .qoder/
+
+# SonarQube scanner working folder
+.sonarqube/

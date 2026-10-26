@@ -13,7 +13,7 @@ public sealed class ProtectedServiceTests(IsolatedPostgres postgres) : ServiceTe
         await AssertProtectedCallsRejected(visitor, post, category);
         Assert.NotNull(await admin.Content.GetEditAsync(post.Id!.Value));
         Assert.Single((await admin.Taxonomy.ListAsync(TaxonomyKind.Category)).Items);
-        Assert.Null(await visitor.Content.GetPublishedAsync(ContentKind.Post, post.Slug));
+        Assert.Null(await visitor.Content.GetPublishedAsync(ContentKind.Post, post.Slug!));
         Assert.NotNull(await visitor.Settings.GetAsync());
     }
 
@@ -84,6 +84,8 @@ public sealed class ProtectedServiceTests(IsolatedPostgres postgres) : ServiceTe
         var calls = new Func<Task>[]
         {
             () => actor.Content.ListAdminAsync(ContentKind.Post),
+            () => actor.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Draft),
+            () => actor.Content.CountAdminAsync(ContentKind.Post),
             () => actor.Content.GetEditAsync(post.Id!.Value),
             () => actor.Content.SaveAsync(NewContent()),
             () => actor.Content.SaveAsync(post),

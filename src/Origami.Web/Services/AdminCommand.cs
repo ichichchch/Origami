@@ -6,12 +6,12 @@ public static class AdminCommand
     {
         if (command is not ("admin-init" or "admin-reset"))
         {
-            Console.Error.WriteLine("請使用 admin-init 或 admin-reset，且不可帶入憑證參數。");
+            await Console.Error.WriteLineAsync("請使用 admin-init 或 admin-reset，且不可帶入憑證參數。");
             return 2;
         }
         if (Console.IsInputRedirected)
         {
-            Console.Error.WriteLine("管理命令需要互動終端機；不接受重導向的輸入。");
+            await Console.Error.WriteLineAsync("管理命令需要互動終端機；不接受重導向的輸入。");
             return 2;
         }
 
@@ -24,17 +24,17 @@ public static class AdminCommand
                 username = Console.ReadLine();
                 if (string.IsNullOrWhiteSpace(username) || username.Trim().Length > AdminProvisioner.MaximumUserNameLength)
                 {
-                    Console.Error.WriteLine("請輸入 1 至 256 字元的帳號。");
+                    await Console.Error.WriteLineAsync("請輸入 1 至 256 字元的帳號。");
                     return 1;
                 }
             }
 
-            Console.WriteLine("密碼至少 12 字，需含大寫、小寫、數字、符號，且至少有四個不同字元。");
+            Console.WriteLine("密碼至少 8 字，需含大寫、小寫、數字、符號，且至少有四個不同字元。");
             var password = ReadPassword("密碼：");
             var confirmation = ReadPassword("再次輸入密碼：");
             if (!string.Equals(password, confirmation, StringComparison.Ordinal))
             {
-                Console.Error.WriteLine("兩次密碼不一致，未做任何變更。");
+                await Console.Error.WriteLineAsync("兩次密碼不一致，未做任何變更。");
                 return 1;
             }
 
@@ -54,18 +54,18 @@ public static class AdminCommand
         }
         catch (AdminProvisioningException exception)
         {
-            Console.Error.WriteLine(exception.Message);
+            await Console.Error.WriteLineAsync(exception.Message);
             return 1;
         }
         catch (OperationCanceledException)
         {
-            Console.Error.WriteLine("管理命令已取消。");
+            await Console.Error.WriteLineAsync("管理命令已取消。");
             return 1;
         }
         catch (Exception)
         {
             // Never print exception details, command arguments, passwords, or connection strings.
-            Console.Error.WriteLine("管理命令執行失敗。請檢查終端機、應用設定與已套用的資料庫遷移。");
+            await Console.Error.WriteLineAsync("管理命令執行失敗。請檢查終端機、應用設定與已套用的資料庫遷移。");
             return 1;
         }
     }

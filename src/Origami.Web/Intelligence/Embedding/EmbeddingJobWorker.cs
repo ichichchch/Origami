@@ -4,7 +4,7 @@ namespace Origami.Web.Intelligence.Embedding;
 /// Drains the EmbeddingJobs outbox table. A job is deleted only after its vectors are
 /// written, so a publish can never be lost when the embedding provider is unavailable.
 /// </summary>
-public sealed class EmbeddingJobWorker(
+public sealed partial class EmbeddingJobWorker(
     IDbContextFactory<CmsDbContext> factory,
     IServiceProvider services,
     TimeProvider clock,
@@ -25,7 +25,7 @@ public sealed class EmbeddingJobWorker(
                 await timer.WaitForNextTickAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { /* Host shutdown cancels the poll loop; nothing to clean up. */ }
     }
 
     private async Task RunPassAsync(CancellationToken ct)
@@ -34,7 +34,7 @@ public sealed class EmbeddingJobWorker(
         // A failed pass must never kill the hosted service; the next tick retries.
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            logger.LogWarning(error, "嵌入工作批次失敗，將於下次輪詢重試。");
+            Log.PassFailed(logger, error);
         }
     }
 
@@ -91,8 +91,9 @@ public sealed class EmbeddingJobWorker(
                 var delay = Backoff[Math.Min(job.Attempts - 1, Backoff.Length - 1)];
                 job.NextAttemptAt = clock.GetUtcNow() + delay;
                 await db.SaveChangesAsync(ct);
-                // Only the retry count and timing are logged; the provider error text stays out.
-                logger.LogWarning("內容 {ContentId} 的嵌入工作失敗，第 {Attempts} 次將於 {Delay:dd\\ HH:mm} 後重試。", job.ContentId, job.Attempts, delay);
+                // The failure reason is logged with the retry count; the API key never appears
+                // because it exists only in the outbound request header.
+                Log.JobFailed(logger, error, job.ContentId, job.Attempts, delay.ToString(@"dd\ hh\:mm"));
                 return false;
             }
         }
@@ -104,5 +105,14 @@ public sealed class EmbeddingJobWorker(
         db.EmbeddingJobs.Remove(job);
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    private static partial class Log
+    {
+        [LoggerMessage(LogLevel.Warning, "嵌入工作批次失敗，將於下次輪詢重試。")]
+        public static partial void PassFailed(ILogger logger, Exception exception);
+
+        [LoggerMessage(LogLevel.Warning, "內容 {ContentId} 的嵌入工作失敗，第 {Attempts} 次將於 {Delay} 後重試。")]
+        public static partial void JobFailed(ILogger logger, Exception exception, Guid contentId, int attempts, string delay);
     }
 }
