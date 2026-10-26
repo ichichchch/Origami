@@ -100,6 +100,8 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
 }
 /// <summary>The live public target behind a retired slug, for permanent redirects.</summary>
 public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
+/// <summary>An adjacent post on the public timeline; newer or older than the current one.</summary>
+public sealed record ContentNeighbor(Guid Id, string Slug, string Title, bool IsNewer);
 /// <summary>One month of the public archive with its published post count.</summary>
 public sealed record ArchiveMonth(int Year, int Month, int Count);
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)

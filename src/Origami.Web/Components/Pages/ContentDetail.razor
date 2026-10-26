@@ -6,6 +6,7 @@
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject AdminAccess Admin
+@inject SemanticSearchService Semantic
 @inject ILogger<ContentDetail> Logger
 
 <PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
@@ -86,6 +87,30 @@ else if (_content is not null)
                 <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
             }
         }
+        @if (_content.Kind == ContentKind.Post && _neighbors.Count > 0)
+        {
+            <nav class="post-neighbors" aria-label="上一篇與下一篇">
+                @foreach (var neighbor in _neighbors)
+                {
+                    <a class="neighbor-link" href="@("/posts/" + Uri.EscapeDataString(neighbor.Slug))">
+                        <span>@(neighbor.IsNewer ? "下一篇 →" : "← 上一篇")</span>
+                        <strong>@neighbor.Title</strong>
+                    </a>
+                }
+            </nav>
+        }
+        @if (_content.Kind == ContentKind.Post && _related.Count > 0)
+        {
+            <aside class="related-posts" aria-labelledby="related-heading">
+                <h2 id="related-heading">相關文章</h2>
+                <ul>
+                    @foreach (var item in _related)
+                    {
+                        <li><a href="@("/posts/" + Uri.EscapeDataString(item.Slug))">@item.Title</a><p>@item.Snippet</p></li>
+                    }
+                </ul>
+            </aside>
+        }
     </article>
 }
 else
@@ -104,6 +129,8 @@ else
     private bool _redirecting;
     private bool _locked;
     private bool _isPrivate;
+    private List<ContentNeighbor> _neighbors = [];
+    private IReadOnlyList<SemanticHit> _related = [];
     private string? _unlockError;
     private UnlockInput _unlock = new();
     private sealed class UnlockInput
@@ -126,6 +153,8 @@ else
         _redirecting = false;
         _locked = false;
         _isPrivate = false;
+        _neighbors = [];
+        _related = [];
         _unlockError = null;
         try
         {
@@ -209,5 +238,11 @@ else
     {
         _firstImage = Markdown.FirstImage(_content!.Markdown);
         _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
+        if (_content.Kind == ContentKind.Post)
+        {
+            _neighbors = await Content.NeighborsAsync(_content.Id, ct);
+            // Related reads stored vectors only; an unindexed site simply shows nothing.
+            _related = await Semantic.RelatedAsync(_content.Id, 3, ct);
+        }
     }
 }

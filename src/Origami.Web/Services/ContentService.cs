@@ -587,6 +587,32 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PageNavItem(x.Id, x.Title, x.Slug, x.ParentId)).ToListAsync(ct);
     }
 
+    /// <summary>
+    /// The two adjacent posts on the public timeline, strictly ordered by publish time then Id.
+    /// Private posts stay out of the walk: a neighbour link must not leak or dead-end for visitors.
+    /// </summary>
+    public async Task<List<ContentNeighbor>> NeighborsAsync(Guid contentId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var current = await db.Contents.AsNoTracking().Where(x => x.Id == contentId)
+            .Select(x => new { x.PublishedAt, x.Id }).SingleOrDefaultAsync(ct);
+        if (current is null || current.PublishedAt is not { } publishedAt) return [];
+        var newer = await db.Contents.AsNoTracking()
+            .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate
+                && (x.PublishedAt! > publishedAt || (x.PublishedAt == publishedAt && x.Id > current.Id)))
+            .OrderBy(x => x.PublishedAt).ThenBy(x => x.Id)
+            .Select(x => new ContentNeighbor(x.Id, x.Slug, x.Title, true)).FirstOrDefaultAsync(ct);
+        var older = await db.Contents.AsNoTracking()
+            .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate
+                && (x.PublishedAt! < publishedAt || (x.PublishedAt == publishedAt && x.Id < current.Id)))
+            .OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
+            .Select(x => new ContentNeighbor(x.Id, x.Slug, x.Title, false)).FirstOrDefaultAsync(ct);
+        List<ContentNeighbor> neighbors = [];
+        if (newer is not null) neighbors.Add(newer);
+        if (older is not null) neighbors.Add(older);
+        return neighbors;
+    }
+
     /// <summary>Months of the public archive with their post counts, newest month first.</summary>
     public async Task<List<ArchiveMonth>> ArchiveMonthsAsync(CancellationToken ct = default)
     {
