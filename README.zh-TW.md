@@ -73,8 +73,10 @@ tests/Origami.Tests/
 | `ContentCategories` / `ContentTags` | 內容與分類標籤的多對多關聯 | 由內容刪除時自動清理 |
 | `MediaAsset` | 圖片識別、媒體類型、大小、尺寸、上傳時間 | 檔名唯一；圖片本體存於檔案系統 |
 | `SiteSettings` | 單站點名稱與說明 | 僅允許 `Id = 1` |
+| `ContentSlugRedirect` | 舊 slug 到現有內容的永久轉址記錄 | 舊 slug 唯一；隨內容刪除級聯清理 |
+| `ContentRevision` | 每次儲存前的前一版快照（標題／本文／摘要） | 隨內容級聯刪除；每篇保留最新 20 筆 |
 
-狀態只有 `Draft` 與 `Published`；撤回即改回 `Draft`。首次發布時間寫入 `PublishedAt` 後不再變更。
+狀態有 `Draft`、`Published` 與 `Trashed`；撤回即改回 `Draft`，刪除先進回收桶保留 30 天（可還原、逾期自動清理）。首次發布時間寫入 `PublishedAt` 後不再變更；排程發布以草稿＋未來時間表示，到期由背景工作晉升。
 
 ## 6. 登入與授權
 
@@ -94,7 +96,9 @@ tests/Origami.Tests/
 | --- | --- |
 | `/` | 已發布文章列表，依發布時間倒序，含分頁 |
 | `/posts/{slug}` | 文章詳情；未發布或不存在回傳 404 |
-| `/pages/{slug}` | 獨立頁面詳情；未發布回傳 404 |
+| `/pages/{slug}` | 獨立頁面詳情；未發布回傳 404；舊網址在 slug 變更後 301 轉址到新網址 |
+| `/feed`、`/sitemap.xml`、`/robots.txt`、`/health` | RSS 2.0 訂閱、網站地圖、爬蟲規則與資料庫健康檢查；僅反映已發布狀態 |
+| `/preview/{token}` | 草稿分享預覽（noindex；撤銷或發布後失效，已發布則轉址公開網址） |
 | `/account/login` | 管理員登入（Static SSR，Cookie 登入） |
 
 管理後台（Interactive Server，逐頁配置渲染模式）：
@@ -105,9 +109,9 @@ tests/Origami.Tests/
 | `/admin/content/{id}` | Markdown 編輯器、預覽、分類標籤指派、媒體插入 |
 | `/admin/taxonomies` | 分類與標籤的建立、修改、刪除 |
 | `/admin/media` | 圖片上傳與媒體列表 |
-| `/admin/settings` | 網站名稱與說明 |
+| `/admin/settings` | 網站名稱與說明、JSON 資料匯出入口（`/admin/export`） |
 
-固定版型在行動裝置可用；操作期間停用重複提交；未儲存變更離開時會提示；
+固定版型在行動裝置可用；操作期間停用重複提交；未儲存變更離開時會提示，既有草稿每 60 秒自動儲存；
 連線中斷時明確告知「未儲存的內容尚未保存」，不會假稱已儲存。
 
 ## 8. 開發順序
@@ -142,10 +146,15 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `PersistenceTests` | 應用重啟後資料與圖片可用、資料庫與檔案備份還原、原登入仍可用 |
 | `CommandLineTests` | 遷移命令套用結構且可重複執行、管理命令拒絕憑證參數與重導向輸入、缺少設定時拒絕啟動 |
 | `StoragePathsTests` | 持久化目錄不得位於發布目錄內、相對路徑拒絕、預設位置在應用目錄之外 |
+| `PublicSyndicationTests` | 手寫摘要優先與上限、robots/sitemap/feed 僅含已發布內容且撤回後立即下架、詳情頁 og/canonical、feed 條數上限 |
+| `PublishingParityTests` | 置頂排序與頁面停用置頂、舊 slug 301 轉址與撤回後停止、圖片 lazy loading、媒體 alt 文字、健康檢查、JSON 匯出與權限 |
+| `ContentLifecycleTests` | 回收桶下架與還原、逾期清理、修訂版本數量上限與還原、排程晉升與撤回、預覽連結生命週期 |
+| `MediaClosureTests` | 上傳縮圖變體與 srcset、引用保護刪除、變體回填 |
+| `HybridSearchTests` | 關鍵字命中（CJK 與大小寫）、語意結果融合去重、撤回後不再命中、前台頁呈現 |
 
 ### 已知限制
 
 - 單站點、單管理員、單一應用實例；不支援多使用者與角色權限。
 - 所有已上傳圖片皆為公開資源，草稿中的圖片也不例外；撤回或刪除內容不會隱藏圖片網址。
 - 資料保護金鑰以 Windows DPAPI 加密，只能由同一台電腦上的同一個使用者解密。
-- 不含排程發布、自動儲存、修訂歷史、回收桶、全文搜尋、評論與外掛機制。
+- 不含評論與外掛機制；多使用者、多站點與主題系統不在範圍。

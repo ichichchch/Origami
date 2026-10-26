@@ -58,7 +58,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
                 await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
                 try
                 {
-                    await Expect(page.Locator(".editor-preview")).ToHaveTextAsync(seeded.Markdown, new() { Timeout = 1000 });
+                    await Expect(page.Locator(".editor-preview")).ToHaveTextAsync(seeded.Markdown!, new() { Timeout = 1000 });
                     break;
                 }
                 catch (PlaywrightException) when (attempt < 4)
@@ -148,7 +148,9 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var publishButton = page.GetByRole(AriaRole.Button, new() { Name = "儲存並發布", Exact = true });
         Assert.Equal(1, await publishButton.CountAsync());
-        Assert.True(await publishButton.IsEnabledAsync(), "publish button must be enabled before the click");
+        // Taxonomy selectors finish loading over the circuit (WebSocket), after HTTP NetworkIdle;
+        // wait for the button to become enabled instead of asserting its immediate state.
+        await Expect(publishButton).ToBeEnabledAsync(new() { Timeout = 15_000 });
         await publishButton.ClickAsync();
         try
         {
@@ -169,8 +171,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         using (var actor = await App.AdministratorAsync())
         {
             var item = await actor.Content.GetPublishedAsync(ContentKind.Post, "first-journey");
-            Assert.Equal(["旅行"], item!.Categories);
-            Assert.Equal(["日常"], item.Tags);
+            Assert.Equal([new NavigationItem("旅行", "旅行")], item!.Categories);
+            Assert.Equal([new NavigationItem("日常", "日常")], item.Tags);
         }
 
         await VisitAsync(page, "/admin/pages/new");
@@ -205,12 +207,162 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await page.GetByRole(AriaRole.Button, new() { Name = "取消", Exact = true }).ClickAsync();
         await Expect(page.Locator(".content-title")).ToHaveTextAsync("第一篇旅程");
         await page.GetByRole(AriaRole.Button, new() { Name = "刪除 第一篇旅程" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "確認移入回收桶", Exact = true }).ClickAsync();
+        await Expect(page.Locator(".notice-success")).ToContainTextAsync("已移入回收桶");
+        await page.GetByRole(AriaRole.Button, new() { Name = "回收桶 1", Exact = true }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "永久刪除 第一篇旅程" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "確認永久刪除", Exact = true }).ClickAsync();
         await Expect(page.Locator(".notice-success")).ToContainTextAsync("已永久刪除內容");
         await page.GetByRole(AriaRole.Button, new() { Name = "登出", Exact = true }).ClickAsync();
         await page.WaitForURLAsync(site.Address.ToString());
         await VisitAsync(page, "/admin/posts");
         Assert.Contains("/account/login", page.Url);
+    }
+
+    [PostgresFact]
+    public async Task Empty_editor_can_create_taxonomies_upload_and_publish_without_losing_body_in_edge()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new() { Channel = BrowserChannel(), Headless = true });
+        await using var context = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString() });
+        var page = await context.NewPageAsync();
+        var pageErrors = new ConcurrentQueue<string>();
+        page.PageError += (_, error) => pageErrors.Enqueue(error);
+        await LoginAsync(page, password);
+        await VisitAsync(page, "/admin/posts/new");
+
+        const string title = "Inline publishing journey";
+        const string slug = "inline-publishing-journey";
+        const string body = "## 現場筆記\n\n**本文不可遺失**，尚未儲存。";
+        var markdown = page.Locator("#content-markdown");
+        var publish = page.GetByRole(AriaRole.Button, new() { Name = "儲存並發布", Exact = true });
+        var draft = page.GetByRole(AriaRole.Button, new() { Name = "儲存草稿", Exact = true });
+        await Expect(page.Locator("#content-title")).ToHaveValueAsync("");
+        await Expect(markdown).ToHaveValueAsync("");
+        await page.Locator("#content-title").FillAsync(title);
+        await markdown.FillAsync(body);
+        // Leave the slug empty, and create all related data through the editor's controls.
+        var category = page.Locator(".taxonomy-selector[aria-label='分類']");
+        var tag = page.Locator(".taxonomy-selector[aria-label='標籤']");
+        await category.GetByLabel("新增分類名稱", new() { Exact = true }).FillAsync("編輯器分類");
+        await category.GetByLabel("新增分類名稱", new() { Exact = true }).PressAsync("Enter");
+        await category.GetByRole(AriaRole.Button, new() { Name = "建立並選取分類", Exact = true }).ClickAsync();
+        await Expect(category.Locator(".notice-success")).ToContainTextAsync("已建立並選取分類");
+        await Expect(category.GetByRole(AriaRole.Checkbox, new() { Name = "編輯器分類", Exact = true })).ToBeCheckedAsync();
+        await tag.GetByLabel("新增標籤名稱", new() { Exact = true }).FillAsync("編輯器標籤");
+        await tag.GetByRole(AriaRole.Button, new() { Name = "建立並選取標籤", Exact = true }).ClickAsync();
+        await Expect(tag.Locator(".notice-success")).ToContainTextAsync("已建立並選取標籤");
+        await Expect(tag.GetByRole(AriaRole.Checkbox, new() { Name = "編輯器標籤", Exact = true })).ToBeCheckedAsync();
+        await Expect(markdown).ToHaveValueAsync(body);
+
+        // A normalized duplicate must not clear either the name, selection or body.
+        await category.GetByLabel("新增分類名稱", new() { Exact = true }).FillAsync(" 編輯器分類 ");
+        await category.GetByRole(AriaRole.Button, new() { Name = "建立並選取分類", Exact = true }).ClickAsync();
+        await Expect(category.GetByRole(AriaRole.Alert)).ToContainTextAsync("已存在");
+        await Expect(category.GetByLabel("新增分類名稱", new() { Exact = true })).ToHaveValueAsync(" 編輯器分類 ");
+        await Expect(markdown).ToHaveValueAsync(body);
+        await category.GetByRole(AriaRole.Button, new() { Name = "刷新分類", Exact = true }).ClickAsync();
+        await Expect(category.GetByRole(AriaRole.Alert)).ToHaveCountAsync(0);
+        await Expect(category.GetByRole(AriaRole.Checkbox, new() { Name = "編輯器分類", Exact = true })).ToBeCheckedAsync();
+        await category.GetByLabel("新增分類名稱", new() { Exact = true }).FillAsync("");
+        await tag.GetByRole(AriaRole.Button, new() { Name = "刷新標籤", Exact = true }).ClickAsync();
+        await Expect(tag.GetByRole(AriaRole.Checkbox, new() { Name = "編輯器標籤", Exact = true })).ToBeCheckedAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "插入圖片", Exact = true }).ClickAsync();
+        var picker = page.Locator(".media-picker");
+        var upload = picker.Locator("#picker-upload");
+        await Expect(picker).ToContainTextAsync("所有圖片皆公開");
+        // The inputs must stay inside the original EditForm, without a nested form.
+        await Expect(page.Locator("form:has(#content-title) #picker-upload")).ToHaveCountAsync(1);
+        await Expect(page.Locator("form:has(#content-title) #new-taxonomy-Category")).ToHaveCountAsync(1);
+        await Expect(page.Locator("fieldset.editor-grid form")).ToHaveCountAsync(0);
+        await Expect(upload).ToBeEnabledAsync();
+        await upload.SetInputFilesAsync(new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = Encoding.UTF8.GetBytes("not a PNG") });
+        await Expect(picker.GetByRole(AriaRole.Alert)).ToContainTextAsync("圖片無法解碼或格式不合法");
+        await Expect(picker.Locator(".media-choice")).ToHaveCountAsync(0);
+        await Expect(markdown).ToHaveValueAsync(body);
+        await Expect(publish).ToBeEnabledAsync();
+
+        const string bodyDuringUpload = body + "\n\n上傳期間繼續寫作。";
+        // Hold only this test database's media insert, making the busy-state assertion
+        // deterministic without sleeps, browser mocks or bypassing the upload UI.
+        await using (var connection = new NpgsqlConnection(App.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            await using var hold = new NpgsqlCommand("LOCK TABLE \"MediaAssets\" IN SHARE MODE", connection, transaction);
+            await hold.ExecuteNonQueryAsync();
+            // Reuse the failed filename to prove the file control can retry it.
+            await upload.SetInputFilesAsync(new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = ImageBytes() });
+            await Expect(picker.GetByText("正在上傳：inline.png", new() { Exact = true })).ToBeVisibleAsync();
+            await Expect(draft).ToBeDisabledAsync();
+            await Expect(publish).ToBeDisabledAsync();
+            await Expect(picker.GetByRole(AriaRole.Button, new() { Name = "關閉", Exact = true })).ToBeDisabledAsync();
+            await Expect(page.GetByRole(AriaRole.Button, new() { Name = "插入圖片", Exact = true })).ToBeDisabledAsync();
+            await Expect(markdown).ToBeEnabledAsync();
+            await markdown.FillAsync(bodyDuringUpload);
+            await using var untouched = await App.CreateContextAsync();
+            Assert.Empty(await untouched.Contents.ToListAsync());
+            await transaction.RollbackAsync();
+        }
+        await Expect(picker.Locator(".notice-success")).ToContainTextAsync("圖片已上傳");
+        await Expect(publish).ToBeEnabledAsync();
+        await Expect(picker.GetByRole(AriaRole.Button, new() { Name = "關閉", Exact = true })).ToBeEnabledAsync();
+        await Expect(markdown).ToHaveValueAsync(bodyDuringUpload);
+        Assert.Equal("/admin/posts/new", new Uri(page.Url).AbsolutePath);
+        var choice = picker.Locator(".media-choice").Filter(new() { HasText = "inline.png" });
+        var imagePath = await choice.Locator("img").GetAttributeAsync("src");
+        Assert.NotNull(imagePath);
+        using var publicClient = site.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await publicClient.GetAsync(imagePath)).StatusCode);
+        var expectedMarkdown = bodyDuringUpload + "\n\n![圖片](" + imagePath + ")\n\n";
+        await choice.ClickAsync();
+        await Expect(picker).ToHaveCountAsync(0);
+        await Expect(markdown).ToHaveValueAsync(expectedMarkdown);
+        await Expect(page.Locator("#content-title")).ToHaveValueAsync(title);
+        await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
+        await Expect(page.Locator(".editor-preview")).ToContainTextAsync("本文不可遺失");
+        await Expect(page.Locator(".editor-preview img")).ToHaveAttributeAsync("src", imagePath);
+        await SaveScreenshotAsync(page, "inline-authoring.png");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Markdown", Exact = true }).ClickAsync();
+        await Expect(markdown).ToHaveValueAsync(expectedMarkdown);
+        await publish.ClickAsync();
+        await page.WaitForURLAsync("**/admin/content/*");
+        await Expect(page.Locator(".notice-success")).ToContainTextAsync("內容已建立並公開");
+
+        await using (var db = await App.CreateContextAsync())
+        {
+            var stored = await db.Contents.Include(content => content.Categories).Include(content => content.Tags).SingleAsync();
+            Assert.Equal(title, stored.Title);
+            Assert.Equal(slug, stored.Slug);
+            Assert.Equal(expectedMarkdown, stored.Markdown);
+            Assert.Equal(ContentStatus.Published, stored.Status);
+            Assert.NotNull(stored.PublishedAt);
+            Assert.Equal("編輯器分類", Assert.Single(stored.Categories).Name);
+            Assert.Equal("編輯器標籤", Assert.Single(stored.Tags).Name);
+            Assert.Equal(1, await db.Categories.CountAsync());
+            Assert.Equal(1, await db.Tags.CountAsync());
+            var asset = await db.MediaAssets.SingleAsync();
+            Assert.Equal("inline.png", asset.OriginalName);
+            Assert.Equal("image/png", asset.ContentType);
+            Assert.Equal("/media/" + asset.FileName, imagePath);
+        }
+        await using var visitorContext = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString() });
+        var visitor = await visitorContext.NewPageAsync();
+        var response = await VisitAsync(visitor, "/posts/" + slug);
+        Assert.Equal(200, response!.Status);
+        await Expect(visitor.GetByRole(AriaRole.Heading, new() { Name = title, Exact = true })).ToBeVisibleAsync();
+        await Expect(visitor.Locator("article .prose")).ToContainTextAsync("本文不可遺失");
+        await Expect(visitor.Locator("article .prose")).ToContainTextAsync("上傳期間繼續寫作。");
+        await Expect(visitor.GetByRole(AriaRole.Link, new() { Name = "編輯器分類", Exact = true })).ToBeVisibleAsync();
+        await Expect(visitor.GetByRole(AriaRole.Link, new() { Name = "# 編輯器標籤", Exact = true })).ToBeVisibleAsync();
+        await Expect(visitor.Locator("article img")).ToHaveAttributeAsync("src", imagePath);
+        Assert.True(await visitor.Locator("article img").EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0"));
+        Assert.Empty(pageErrors);
     }
 
     [PostgresFact]

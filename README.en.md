@@ -22,6 +22,10 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 | Categories & tags | Flat structure, many-to-many assignment, deletion never removes articles |
 | Media | Image upload, media library, insert as Markdown, public image URLs |
 | Public site | Article list with pagination, article and page detail, basic navigation, mobile-friendly |
+| Openness | RSS 2.0 feed, sitemap.xml, robots.txt, article-level Open Graph and canonical meta, sticky posts, 301 redirects for retired slugs, JSON data export, `/health` database liveness |
+| Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item), trash with 30-day retention and restore, scheduled publishing, revocable draft preview links |
+| Media | Image upload, media library, insert as Markdown, public image URLs, alt text, reference-protected deletion, responsive variants with srcset |
+| Search | Hybrid public search: exact keyword matching merged with pgvector semantic results |
 | Site settings | Site name and description, applied immediately to the public site |
 
 Content is written in **Markdown**. Raw HTML is disabled and every rendered URL is checked against
@@ -105,6 +109,8 @@ tests/Origami.Tests/
 | `ContentCategories` / `ContentTags` | Many-to-many links | Removed together with the content |
 | `MediaAsset` | File identity, media type, size, dimensions, upload time | File name unique; image bytes live on disk |
 | `SiteSettings` | Single site name and description | Only `Id = 1` is allowed |
+| `ContentSlugRedirect` | Retired slug to live content for permanent redirects | Old slug unique; removed with its content |
+| `ContentRevision` | Previous-state snapshot taken on every save | Removed with its content; newest 20 kept |
 
 Status is either `Draft` or `Published`; withdrawing returns content to `Draft`. The first publish
 time is written once and preserved across later edits, withdrawals and re-publishes.
@@ -162,6 +168,11 @@ tests are reported as *skipped* with a diagnostic instead of silently passing on
 | `PersistenceTests` | Data and images survive a restart, database and file backup/restore, existing sessions keep working |
 | `CommandLineTests` | Migration command, refused credential arguments and redirected input, refusal to start without configuration |
 | `StoragePathsTests` | Persistent storage never inside the published directory, relative paths rejected |
+| `PublicSyndicationTests` | Manual excerpt precedence and limit, robots/sitemap/feed with published-only content and immediate withdrawal, detail-page og/canonical, feed item cap |
+| `PublishingParityTests` | Sticky ordering and page refusal, retired-slug 301 redirects that stop after withdrawal, lazy-loaded images, media alt text, health endpoint, JSON export and its authorization |
+| `ContentLifecycleTests` | Trash removal and restore, retention purge, revision cap and restore, scheduled promotion and withdrawal, preview-token lifecycle |
+| `MediaClosureTests` | Upload variants and srcset, reference-protected deletion, variant backfill |
+| `HybridSearchTests` | Keyword hits (CJK and case), semantic merge without duplicates, withdrawal stops hits, public page rendering |
 
 The browser tests drive real Edge or Chrome through Playwright; the persistence test performs an
 actual `pg_dump` / `pg_restore` cycle.
@@ -173,8 +184,7 @@ actual `pg_dump` / `pg_restore` cycle.
 - All uploaded images are public, including those referenced only by drafts.
 - The Data Protection key ring is encrypted with Windows DPAPI, so it can only be decrypted on the
   same machine by the same user. Recovery on another machine requires re-provisioning.
-- No comments, plugins, scheduled publishing, autosave, revision history, recycle bin, full-text
-  search, media deletion or menu editor.
+- No comments, plugins or menu editor; multi-user, multi-site and theming stay out of scope.
 
 ## License
 

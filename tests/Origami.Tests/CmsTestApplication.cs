@@ -36,8 +36,14 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddSingleton<FakeEmbeddingGateway>();
         services.AddSingleton<IEmbeddingGateway>(provider => provider.GetRequiredService<FakeEmbeddingGateway>());
         services.AddScoped<SemanticSearchService>();
+        services.AddSingleton<MarkdownService>();
+        services.AddScoped<PublicSearchService>();
+        // Deliberately not bound to host configuration or inherited AI credentials.
+        services.AddOptions<AiOptions>();
+        services.AddScoped<AiStatusService>();
         services.AddScoped<AdminAccess>();
         services.AddScoped<ContentService>();
+        services.AddScoped<ExportService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<SettingsService>();
         // The assistant runs against the shared scripted client; no provider or key is involved.
