@@ -44,6 +44,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<AdminAccess>();
         services.AddScoped<ContentService>();
         services.AddScoped<ExportService>();
+        services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<SettingsService>();
         // The assistant runs against the shared scripted client; no provider or key is involved.

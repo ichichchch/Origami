@@ -179,7 +179,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await page.Locator("#content-title").FillAsync("關於這裡");
         await page.Locator("#content-slug").FillAsync("about");
         await page.Locator("#content-markdown").FillAsync("這是我的寫作空間。");
-        Assert.Equal(0, await page.GetByRole(AriaRole.Checkbox).CountAsync());
+        // Pages never join the article taxonomy flow; the password-protection checkbox is not a taxonomy.
+        Assert.Equal(0, await page.Locator(".taxonomy-panel").CountAsync());
         await page.GetByRole(AriaRole.Button, new() { Name = "儲存並發布", Exact = true }).ClickAsync();
         await page.WaitForURLAsync("**/admin/content/*");
         await Expect(page.Locator(".notice-success")).ToContainTextAsync("內容已建立並公開");

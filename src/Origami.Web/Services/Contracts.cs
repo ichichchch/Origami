@@ -11,6 +11,14 @@ public sealed class ContentEdit
     [StringLength(Limits.Body)] public string? Markdown { get; set; }
     [StringLength(Limits.Excerpt)] public string? Excerpt { get; set; }
     public bool IsSticky { get; set; }
+    /// <summary>Requires a password before the public page renders the body.</summary>
+    public bool IsProtected { get; set; }
+    /// <summary>Set a new protection password; empty keeps the stored one. Null when unchanged.</summary>
+    public string? NewProtectPassword { get; set; }
+    /// <summary>Read-only echo: a protection password is already stored.</summary>
+    public bool HasProtectPassword { get; set; }
+    /// <summary>Read-only echo of the stored view total.</summary>
+    public int Views { get; set; }
     /// <summary>Future publish time; only meaningful while the content stays a draft.</summary>
     public DateTimeOffset? PublishAt { get; set; }
     public Guid? PreviewToken { get; set; }
@@ -39,6 +47,8 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public bool IsSticky { get; init; }
     public DateTimeOffset? PublishAt { get; init; }
     public DateTimeOffset? DeletedAt { get; init; }
+    public bool IsProtected { get; init; }
+    public int Views { get; init; }
 }
 public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
 {
@@ -54,6 +64,7 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     DateTimeOffset? PublishedAt, IReadOnlyList<NavigationItem> Categories, IReadOnlyList<NavigationItem> Tags)
 {
     public string Excerpt { get; init; } = "";
+    public bool IsProtected { get; init; }
 }
 public sealed record NavigationItem(string Title, string Slug);
 /// <summary>One public URL for the sitemap with its last significant change.</summary>

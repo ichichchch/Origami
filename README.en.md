@@ -26,6 +26,7 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 | Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item), trash with 30-day retention and restore, scheduled publishing, revocable draft preview links |
 | Media | Image upload, media library, insert as Markdown, public image URLs, alt text, reference-protected deletion, responsive variants with srcset |
 | Search | Hybrid public search: exact keyword matching merged with pgvector semantic results |
+| Protection & security | Password-protected content (never indexed or searched), TOTP two-factor sign-in, daily view counts |
 | Site settings | Site name and description, applied immediately to the public site |
 
 Content is written in **Markdown**. Raw HTML is disabled and every rendered URL is checked against
@@ -111,6 +112,7 @@ tests/Origami.Tests/
 | `SiteSettings` | Single site name and description | Only `Id = 1` is allowed |
 | `ContentSlugRedirect` | Retired slug to live content for permanent redirects | Old slug unique; removed with its content |
 | `ContentRevision` | Previous-state snapshot taken on every save | Removed with its content; newest 20 kept |
+| `ContentView` | One day of view counts per content | Composite key (content, date); removed with its content |
 
 Status is either `Draft` or `Published`; withdrawing returns content to `Draft`. The first publish
 time is written once and preserved across later edits, withdrawals and re-publishes.
@@ -173,6 +175,7 @@ tests are reported as *skipped* with a diagnostic instead of silently passing on
 | `ContentLifecycleTests` | Trash removal and restore, retention purge, revision cap and restore, scheduled promotion and withdrawal, preview-token lifecycle |
 | `MediaClosureTests` | Upload variants and srcset, reference-protected deletion, variant backfill |
 | `HybridSearchTests` | Keyword hits (CJK and case), semantic merge without duplicates, withdrawal stops hits, public page rendering |
+| `SecurityAndProtectionTests` | RFC 6238 vectors and the TOTP flow, admin-reset disabling two-factor, the protection gate with search/MCP exclusion, daily view counts |
 
 The browser tests drive real Edge or Chrome through Playwright; the persistence test performs an
 actual `pg_dump` / `pg_restore` cycle.

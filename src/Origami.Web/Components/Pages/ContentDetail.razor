@@ -13,20 +13,27 @@
     <HeadContent>
         @* Layout-level HeadContent is not emitted in Static SSR, so discovery links live on pages. *@
         <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
-        <meta name="description" content="@MetaDescription" />
-        <link rel="canonical" href="@Canonical" />
-        <meta property="og:site_name" content="@_settings.Name" />
-        <meta property="og:title" content="@_content.Title" />
-        <meta property="og:type" content="@(_content.Kind == ContentKind.Post ? "article" : "website")" />
-        <meta property="og:url" content="@Canonical" />
-        <meta property="og:description" content="@MetaDescription" />
-        @if (_firstImage is not null)
+        @if (_locked)
         {
-            <meta property="og:image" content="@AbsoluteImage" />
+            <meta name="robots" content="noindex" />
         }
-        @if (_content.Kind == ContentKind.Post && _content.PublishedAt is { } published)
+        else
         {
-            <meta property="article:published_time" content="@published.ToString("O")" />
+            <meta name="description" content="@MetaDescription" />
+            <link rel="canonical" href="@Canonical" />
+            <meta property="og:site_name" content="@_settings.Name" />
+            <meta property="og:title" content="@_content.Title" />
+            <meta property="og:type" content="@(_content.Kind == ContentKind.Post ? "article" : "website")" />
+            <meta property="og:url" content="@Canonical" />
+            <meta property="og:description" content="@MetaDescription" />
+            @if (_firstImage is not null)
+            {
+                <meta property="og:image" content="@AbsoluteImage" />
+            }
+            @if (_content.Kind == ContentKind.Post && _content.PublishedAt is { } published)
+            {
+                <meta property="article:published_time" content="@published.ToString("O")" />
+            }
         }
     </HeadContent>
 }
@@ -39,9 +46,9 @@ else if (_content is not null)
     <article class="reading-column">
         <a class="back-link" href="/">← 回到首頁</a>
         <header class="article-heading">
-            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")</p>
+            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")@(_locked ? " · 受密碼保護" : "")</p>
             <h1>@_content.Title</h1>
-            @if (_content.Kind == ContentKind.Post)
+            @if (!_locked && _content.Kind == ContentKind.Post)
             {
                 <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString("yyyy 年 MM 月 dd 日") <span class="sr-only">UTC</span></time>
                 @if (_content.Categories.Count > 0)
@@ -50,10 +57,33 @@ else if (_content is not null)
                 }
             }
         </header>
-        <div class="prose">@((MarkupString)_html)</div>
-        @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
+        @if (_locked)
         {
-            <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
+            <section class="protected-gate panel" aria-labelledby="protected-title">
+                <h2 id="protected-title">這份內容受密碼保護</h2>
+                <p class="field-help">輸入管理員提供的密碼即可閱讀；密碼變更後需重新解鎖。</p>
+                @if (_unlockError is not null)
+                {
+                    <p class="notice notice-error" role="alert">@_unlockError</p>
+                }
+                @* Static SSR EditForm posts back here with an antiforgery token; no unlock ever signs a user in. *@
+                <EditForm Model="_unlock" FormName="content-unlock" OnValidSubmit="UnlockAsync" Enhance="false">
+                    <DataAnnotationsValidator />
+                    <div class="field">
+                        <label for="unlock-password">內容密碼</label>
+                        <input id="unlock-password" type="password" @bind="_unlock.Password" autocomplete="off" maxlength="1024" required />
+                    </div>
+                    <button type="submit" class="button">解鎖內容</button>
+                </EditForm>
+            </section>
+        }
+        else
+        {
+            <div class="prose">@((MarkupString)_html)</div>
+            @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
+            {
+                <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
+            }
         }
     </article>
 }
@@ -71,6 +101,16 @@ else
     private string _html = "";
     private string? _error;
     private bool _redirecting;
+    private bool _locked;
+    private string? _unlockError;
+    private UnlockInput _unlock = new();
+    private sealed class UnlockInput
+    {
+        [Required(ErrorMessage = "請輸入內容密碼。")]
+        [StringLength(1024)]
+        public string Password { get; set; } = "";
+    }
+    private string UnlockCookieName => "origami.unlock." + _content?.Id.ToString("N");
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
     private string Canonical => BaseUrl + (_content?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_content?.Slug ?? "");
     private string MetaDescription => _content is null ? "" : _content.Excerpt != "" ? _content.Excerpt : Markdown.Excerpt(_content.Markdown);
@@ -82,6 +122,8 @@ else
         _html = "";
         _error = null;
         _redirecting = false;
+        _locked = false;
+        _unlockError = null;
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
@@ -106,8 +148,13 @@ else
                 Navigation.NotFound();
                 return;
             }
-            _firstImage = Markdown.FirstImage(_content.Markdown);
-            _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
+            _locked = _content.IsProtected
+                && !await Content.IsUnlockedAsync(_content.Id, HttpContext?.Request.Cookies[UnlockCookieName], ct);
+            if (!_locked)
+            {
+                await RenderBodyAsync(ct);
+                await Content.RecordViewAsync(_content.Id, ct);
+            }
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
         catch (Exception ex)
@@ -116,5 +163,37 @@ else
             _error = "目前無法讀取這篇內容，請稍後再試。";
             if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
         }
+    }
+    private async Task UnlockAsync()
+    {
+        if (_content is null || HttpContext is null || HttpContext.Response.HasStarted) return;
+        try
+        {
+            var token = await Content.VerifyProtectionAsync(_content.Id, _unlock.Password, HttpContext.RequestAborted);
+            if (token is null)
+            {
+                _unlock.Password = "";
+                _unlockError = "密碼不正確，請再試一次。";
+                return;
+            }
+            HttpContext.Response.Cookies.Append(UnlockCookieName, token, new CookieOptions
+            {
+                HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromDays(10)
+            });
+            _unlock.Password = "";
+            _unlockError = null;
+            _locked = false;
+            await RenderBodyAsync(HttpContext.RequestAborted);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "Content unlock failed");
+            _unlockError = "解鎖失敗，請稍後再試。";
+        }
+    }
+    private async Task RenderBodyAsync(CancellationToken ct)
+    {
+        _firstImage = Markdown.FirstImage(_content!.Markdown);
+        _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
     }
 }

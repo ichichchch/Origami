@@ -75,6 +75,7 @@ tests/Origami.Tests/
 | `SiteSettings` | 單站點名稱與說明 | 僅允許 `Id = 1` |
 | `ContentSlugRedirect` | 舊 slug 到現有內容的永久轉址記錄 | 舊 slug 唯一；隨內容刪除級聯清理 |
 | `ContentRevision` | 每次儲存前的前一版快照（標題／本文／摘要） | 隨內容級聯刪除；每篇保留最新 20 筆 |
+| `ContentView` | 每篇內容的每日瀏覽計數 | 複合主鍵（內容＋日期）；隨內容級聯刪除 |
 
 狀態有 `Draft`、`Published` 與 `Trashed`；撤回即改回 `Draft`，刪除先進回收桶保留 30 天（可還原、逾期自動清理）。首次發布時間寫入 `PublishedAt` 後不再變更；排程發布以草稿＋未來時間表示，到期由背景工作晉升。
 
@@ -110,6 +111,7 @@ tests/Origami.Tests/
 | `/admin/taxonomies` | 分類與標籤的建立、修改、刪除 |
 | `/admin/media` | 圖片上傳與媒體列表 |
 | `/admin/settings` | 網站名稱與說明、JSON 資料匯出入口（`/admin/export`） |
+| `/admin/security` | 管理員兩步驟驗證（TOTP）啟用與停用 |
 
 固定版型在行動裝置可用；操作期間停用重複提交；未儲存變更離開時會提示，既有草稿每 60 秒自動儲存；
 連線中斷時明確告知「未儲存的內容尚未保存」，不會假稱已儲存。
@@ -151,6 +153,7 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `ContentLifecycleTests` | 回收桶下架與還原、逾期清理、修訂版本數量上限與還原、排程晉升與撤回、預覽連結生命週期 |
 | `MediaClosureTests` | 上傳縮圖變體與 srcset、引用保護刪除、變體回填 |
 | `HybridSearchTests` | 關鍵字命中（CJK 與大小寫）、語意結果融合去重、撤回後不再命中、前台頁呈現 |
+| `SecurityAndProtectionTests` | RFC 6238 向量與 TOTP 流程、admin-reset 停用兩步驗證、密碼保護閘門與搜尋/MCP 排除、每日瀏覽計數 |
 
 ### 已知限制
 

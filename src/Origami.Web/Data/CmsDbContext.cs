@@ -4,6 +4,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
 {
     public DbSet<Content> Contents => Set<Content>();
     public DbSet<ContentRevision> ContentRevisions => Set<ContentRevision>();
+    public DbSet<ContentView> ContentViews => Set<ContentView>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
@@ -27,6 +28,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.Property(x => x.Slug).HasMaxLength(Limits.Slug).IsRequired();
             e.Property(x => x.Markdown).HasMaxLength(Limits.Body).IsRequired();
             e.Property(x => x.Excerpt).HasMaxLength(Limits.Excerpt).IsRequired();
+            e.Property(x => x.ProtectionHash).HasMaxLength(500).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => x.Slug).IsUnique();
             e.HasIndex(x => new { x.Kind, x.Status, x.PublishedAt, x.Id });
@@ -54,6 +56,11 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.Property(x => x.Excerpt).HasMaxLength(Limits.Excerpt).IsRequired();
             e.HasOne(x => x.Content).WithMany().HasForeignKey(x => x.ContentId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.ContentId, x.CreatedAt });
+        });
+        builder.Entity<ContentView>(e =>
+        {
+            e.HasKey(x => new { x.ContentId, x.Date });
+            e.HasOne(x => x.Content).WithMany(x => x.Views).HasForeignKey(x => x.ContentId).OnDelete(DeleteBehavior.Cascade);
         });
         builder.Entity<Category>(e =>
         {

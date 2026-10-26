@@ -2,6 +2,8 @@ namespace Origami.Web.Services;
 
 public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
 {
+    // The protection password is hashed with the same Identity hasher as the administrator account.
+    private static readonly PasswordHasher<Content> ProtectionHasher = new();
     public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null)
     {
 
@@ -18,7 +20,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var items = await query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
-                PublishAt = x.PublishAt, DeletedAt = x.DeletedAt
+                PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected,
+                Views = x.Views.Sum(v => (int?)v.Count) ?? 0
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
     }
@@ -42,8 +45,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
-            IsSticky = x.IsSticky, PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
+            IsSticky = x.IsSticky, IsProtected = x.IsProtected, HasProtectPassword = x.ProtectionHash != "",
+            PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
             Status = x.Status, Version = x.Version,
+            Views = x.Views.Sum(v => (int?)v.Count) ?? 0,
             CategoryIds = x.Categories.Select(c => c.Id).ToList(), TagIds = x.Tags.Select(t => t.Id).ToList()
         }).SingleOrDefaultAsync(ct) ?? throw new CmsException("內容不存在。");
     }
@@ -86,6 +91,23 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException("獨立頁面不可指派文章分類或標籤。");
         if (entity.Kind == ContentKind.Page && input.IsSticky)
             throw new CmsException("獨立頁面不可置頂，置頂僅用於文章列表。");
+        if (!input.IsProtected)
+        {
+            entity.IsProtected = false;
+            entity.ProtectionHash = "";
+        }
+        else
+        {
+            var newPassword = input.NewProtectPassword ?? "";
+            if (entity.ProtectionHash == "" || newPassword != "")
+            {
+                if (newPassword.Length < 8)
+                    throw new CmsException("保護密碼至少需 8 個字元。");
+                entity.ProtectionHash = ProtectionHasher.HashPassword(entity, newPassword);
+            }
+            entity.IsProtected = true;
+        }
+        input.NewProtectPassword = null;
         // A schedule is a draft with a future time; publishing always abandons the schedule.
         if (input.Status == ContentStatus.Published && input.PublishAt is not null)
             throw new CmsException("排程時間僅適用於草稿；發布前請先清除排程。");
@@ -145,6 +167,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         input.PublishAt = entity.PublishAt;
         input.PreviewToken = entity.PreviewToken;
         input.PublishedAt = entity.PublishedAt;
+        input.HasProtectPassword = entity.ProtectionHash != "";
         input.Version = entity.Version;
         return input;
     }
@@ -190,8 +213,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         // The embedding lifecycle rides in the same transaction as the content change:
         // a published state queues re-embedding, any other state removes vectors immediately
-        // so withdrawn or draft content can never surface through semantic search.
-        if (entity.Status == ContentStatus.Published)
+        // so withdrawn or draft content can never surface through semantic search. Password-
+        // protected content never enters the index: vectors would leak gated text.
+        if (entity.Status == ContentStatus.Published && !entity.IsProtected)
         {
             if (!await db.EmbeddingJobs.AnyAsync(x => x.ContentId == entity.Id, ct))
                 db.EmbeddingJobs.Add(new EmbeddingJob { ContentId = entity.Id, EnqueuedAt = now, NextAttemptAt = now });
@@ -366,9 +390,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var items = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
             .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
-                Excerpt = x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
-                ExcerptIsManual = x.Excerpt != "",
-                IsSticky = x.IsSticky
+                Excerpt = x.IsProtected ? "此內容受密碼保護。" : x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
+                ExcerptIsManual = x.IsProtected || x.Excerpt != "",
+                IsSticky = x.IsSticky,
+                IsProtected = x.IsProtected
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
     }
@@ -402,7 +427,51 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt }).SingleOrDefaultAsync(ct);
+            { Excerpt = x.Excerpt, IsProtected = x.IsProtected }).SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>Verifies the protection password and returns the unlock token for the browser cookie.</summary>
+    public async Task<string?> VerifyProtectionAsync(Guid contentId, string? password, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var stored = await db.Contents.AsNoTracking().Where(x => x.Id == contentId && x.Status == ContentStatus.Published && x.IsProtected)
+            .Select(x => new { x.Id, x.ProtectionHash }).SingleOrDefaultAsync(ct);
+        if (stored is null || stored.ProtectionHash == "") return null;
+        if (ProtectionHasher.VerifyHashedPassword(new Content { Id = stored.Id }, stored.ProtectionHash, password ?? "") == PasswordVerificationResult.Failed)
+            return null;
+        return UnlockToken(stored.ProtectionHash);
+    }
+
+    /// <summary>A cookie token derived from the stored hash; changing the password invalidates old cookies.</summary>
+    public async Task<bool> IsUnlockedAsync(Guid contentId, string? token, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(token)) return false;
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var hash = await db.Contents.AsNoTracking().Where(x => x.Id == contentId && x.Status == ContentStatus.Published && x.IsProtected)
+            .Select(x => x.ProtectionHash).SingleOrDefaultAsync(ct);
+        return hash is not null && hash != "" && CryptographicOperations.FixedTimeEquals(
+            Convert.FromHexString(token), Convert.FromHexString(UnlockToken(hash)));
+    }
+
+    private static string UnlockToken(string protectionHash) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(protectionHash)));
+
+    /// <summary>Records one public view as a daily counter; failures never break rendering.</summary>
+    public async Task RecordViewAsync(Guid contentId, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var date = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+            await db.Database.ExecuteSqlAsync($"""
+                INSERT INTO "ContentViews" ("ContentId", "Date", "Count") VALUES ({contentId}, {date}, 1)
+                ON CONFLICT ("ContentId", "Date") DO UPDATE SET "Count" = "ContentViews"."Count" + 1
+                """, ct);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            // View counting is best-effort; a failed counter must never fail a page render.
+        }
     }
 
     /// <summary>

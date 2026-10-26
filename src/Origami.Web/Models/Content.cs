@@ -42,6 +42,9 @@ public sealed class AdminUser : IdentityUser
 {
     // A unique, checked constant prevents concurrent provisioning of a second administrator.
     public int SingletonKey { get; set; } = 1;
+    /// <summary>Base32 TOTP shared secret; empty until two-factor setup begins.</summary>
+    public string TwoFactorSecret { get; set; } = "";
+    // Two-factor enablement reuses the inherited IdentityUser.TwoFactorEnabled column.
 }
 
 public sealed class Content
@@ -64,9 +67,14 @@ public sealed class Content
     public DateTimeOffset? DeletedAt { get; set; }
     /// <summary>Unguessable share link that renders this content before it is published.</summary>
     public Guid? PreviewToken { get; set; }
+    /// <summary>True when the public URL requires a password before rendering the body.</summary>
+    public bool IsProtected { get; set; }
+    /// <summary>Identity-hashed protection password; empty when unprotected.</summary>
+    public string ProtectionHash { get; set; } = "";
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Category> Categories { get; set; } = new List<Category>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();
+    public ICollection<ContentView> Views { get; set; } = new List<ContentView>();
 }
 
 /// <summary>Snapshot of the content as it was before a save; restore loads it back into the editor.</summary>
@@ -78,6 +86,15 @@ public sealed class ContentRevision
     public string Markdown { get; set; } = "";
     public string Excerpt { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
+    public Content Content { get; set; } = null!;
+}
+
+/// <summary>One day of view counts for one content; the only analytics surface.</summary>
+public sealed class ContentView
+{
+    public Guid ContentId { get; set; }
+    public DateOnly Date { get; set; }
+    public int Count { get; set; }
     public Content Content { get; set; } = null!;
 }
 

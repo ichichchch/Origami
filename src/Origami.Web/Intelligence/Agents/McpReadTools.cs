@@ -29,6 +29,7 @@ public sealed class McpReadTools(SemanticSearchService search, ContentService co
     private async Task<McpContentResult> GetAsync(ContentKind kind, string slug, CancellationToken ct)
     {
         var found = await content.GetPublishedAsync(kind, slug, ct);
-        return new(found is not null, found);
+        // Password-protected bodies are gated for humans; a model tool must not become a side door.
+        return new(found is not null && !found.IsProtected, found is { IsProtected: false } ? found : null);
     }
 }

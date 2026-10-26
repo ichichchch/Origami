@@ -15,33 +15,55 @@
         <p class="notice notice-error" role="alert">@errorMessage</p>
     }
 
-    @* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
-    <EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
-        <div class="field">
-            <label for="username">帳號</label>
-            <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
-        </div>
-        <div class="field">
-            <label for="password">密碼</label>
-            @* Form mapping reads this field on POST; never bind or render its submitted value. *@
-            <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
-        </div>
-        <button type="submit" class="button full-width">登入</button>
-    </EditForm>
+    @if (awaitingCode)
+    {
+        <p class="field-help">帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼。</p>
+        @* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
+        <EditForm Model="CodeForm" method="post" OnValidSubmit="CodeAsync" OnInvalidSubmit="ClearCode" FormName="account-code" Enhance="false">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="field">
+                <label for="code">動態驗證碼</label>
+                <input id="code" name="CodeForm.Code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+            </div>
+            <button type="submit" class="button full-width">驗證並登入</button>
+            <p class="field-help"><a href="/account/login">改用帳號密碼重新登入</a></p>
+        </EditForm>
+    }
+    else
+    {
+        @* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
+        <EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="field">
+                <label for="username">帳號</label>
+                <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
+            </div>
+            <div class="field">
+                <label for="password">密碼</label>
+                @* Form mapping reads this field on POST; never bind or render its submitted value. *@
+                <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
+            </div>
+            <button type="submit" class="button full-width">登入</button>
+        </EditForm>
+    }
     <details class="setup-help">
         <summary>第一次使用，或忘記密碼？</summary>
         <p>本網站僅開放一位管理員，不提供公開註冊。請在伺服器的專案目錄執行：</p>
         <p><code>dotnet run --project src/Origami.Web -- admin-init</code></p>
         <p>已有帳號要重設密碼，改用 <code>admin-reset</code>。密碼由終端機互動輸入，請勿放入命令列或分享給他人。</p>
+        <p>遺失動態驗證器時，<code>admin-reset</code> 會一併停用兩步驟驗證。</p>
     </details>
 </section>
 
 @code {
     private const string LoginFailure = "無法登入。請確認帳號密碼，或稍後再試。";
     private const string ThrottledMessage = "嘗試次數過多，請稍後再試。";
+    private const string CodeFailure = "動態驗證碼不正確或已過期，請再試一次。";
+    private const string PendingCookie = "origami.2fa";
     private string? errorMessage;
+    private bool awaitingCode;
 
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
@@ -49,9 +71,13 @@
     [SupplyParameterFromForm(FormName = "account-login")]
     private LoginInput Input { get; set; } = default!;
 
+    [SupplyParameterFromForm(FormName = "account-code")]
+    private CodeInput CodeForm { get; set; } = default!;
+
     protected override void OnInitialized()
     {
         Input ??= new();
+        CodeForm ??= new();
         if (HttpContext is null)
         {
             // Safety net if a parent accidentally tries to render this page in a circuit.
@@ -59,6 +85,8 @@
             return;
         }
         HttpContext.Response.Headers.CacheControl = "no-store";
+        // A still-valid pending cookie shows the code step directly on a fresh GET.
+        awaitingCode = TryReadPendingUser(HttpContext) is not null;
     }
 
     private async Task LoginAsync()
@@ -82,11 +110,16 @@
 
         // Resolve only in an active HTTP request: never inject SignInManager into a circuit.
         var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
-        Microsoft.AspNetCore.Identity.SignInResult result;
+        var userManager = context.RequestServices.GetRequiredService<UserManager<AdminUser>>();
+        AdminUser? user;
+        Microsoft.AspNetCore.Identity.SignInResult passwordCheck;
         try
         {
-            result = await signInManager.PasswordSignInAsync(
-                Input.Username.Trim(), Input.Password, isPersistent: false, lockoutOnFailure: true);
+            user = await userManager.FindByNameAsync(Input.Username.Trim());
+            // An unknown username runs the same password hashing path as a real one.
+            passwordCheck = user is null
+                ? Microsoft.AspNetCore.Identity.SignInResult.Failed
+                : await signInManager.CheckPasswordSignInAsync(user, Input.Password, lockoutOnFailure: true);
         }
         catch (DbUpdateException)
         {
@@ -102,17 +135,88 @@
         }
 
         Input.Password = string.Empty;
-        if (result.Succeeded)
+        if (user is null || !passwordCheck.Succeeded)
         {
-            // Never consume a caller-provided return URL. Cookies need a full HTTP navigation.
-            Navigation.NavigateTo("/admin/posts", forceLoad: true);
+            // Do not disclose whether the username exists, is locked out, or is otherwise blocked.
+            errorMessage = LoginFailure;
             return;
         }
-        // Do not disclose whether the username exists, is locked out, or is otherwise blocked.
-        errorMessage = LoginFailure;
+        if (user.TwoFactorEnabled && user.TwoFactorSecret != "")
+        {
+            // Password proven, identity not yet: a 5-minute signed cookie carries only the pending user id.
+            var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
+            context.Response.Cookies.Append(PendingCookie, protector.Protect(user.Id, TimeSpan.FromMinutes(5)),
+                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromMinutes(5) });
+            awaitingCode = true;
+            CodeForm.Code = string.Empty;
+            return;
+        }
+        await signInManager.SignInAsync(user, isPersistent: false);
+        // Never consume a caller-provided return URL. Cookies need a full HTTP navigation.
+        Navigation.NavigateTo("/admin/posts", forceLoad: true);
+    }
+
+    private async Task CodeAsync()
+    {
+        var context = HttpContext;
+        if (context is null || !HttpMethods.IsPost(context.Request.Method) || context.Response.HasStarted)
+        {
+            Navigation.NavigateTo("/account/login", forceLoad: true);
+            return;
+        }
+        var throttle = context.RequestServices.GetRequiredService<LoginThrottle>();
+        if (!throttle.TryAcquire(context.Connection.RemoteIpAddress?.ToString()))
+        {
+            CodeForm.Code = string.Empty;
+            errorMessage = ThrottledMessage;
+            if (!context.Response.HasStarted) context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            return;
+        }
+        var pendingUserId = TryReadPendingUser(context);
+        if (pendingUserId is null)
+        {
+            awaitingCode = false;
+            errorMessage = CodeFailure;
+            return;
+        }
+        var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
+        var userManager = context.RequestServices.GetRequiredService<UserManager<AdminUser>>();
+        var user = await userManager.FindByIdAsync(pendingUserId);
+        var submittedCode = CodeForm.Code;
+        CodeForm.Code = string.Empty;
+        if (user is null || !user.TwoFactorEnabled || user.TwoFactorSecret == ""
+            || !Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System))
+        {
+            if (user is not null) await userManager.AccessFailedAsync(user);
+            // Do not disclose which factor failed; the pending cookie dies with the attempt window.
+            context.Response.Cookies.Delete(PendingCookie);
+            errorMessage = CodeFailure;
+            return;
+        }
+        await userManager.ResetAccessFailedCountAsync(user);
+        context.Response.Cookies.Delete(PendingCookie);
+        await signInManager.SignInAsync(user, isPersistent: false);
+        Navigation.NavigateTo("/admin/posts", forceLoad: true);
+    }
+
+    private static string? TryReadPendingUser(HttpContext context)
+    {
+        if (context.Request.Cookies.TryGetValue(PendingCookie, out var value) && !string.IsNullOrEmpty(value))
+        {
+            try
+            {
+                var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
+                    .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
+                return protector.Unprotect(value);
+            }
+            catch (CryptographicException) { /* Expired or tampered pending cookies simply restart the flow. */ }
+        }
+        return null;
     }
 
     private void ClearPassword() => Input.Password = string.Empty;
+    private void ClearCode() => CodeForm.Code = string.Empty;
 
     public sealed class LoginInput
     {
@@ -123,5 +227,12 @@
         [Required(ErrorMessage = "請輸入密碼。")]
         [StringLength(AdminProvisioner.MaximumPasswordLength, ErrorMessage = "密碼過長。")]
         public string Password { get; set; } = string.Empty;
+    }
+
+    public sealed class CodeInput
+    {
+        [Required(ErrorMessage = "請輸入動態驗證碼。")]
+        [StringLength(6, MinimumLength = 6, ErrorMessage = "驗證碼為 6 位數字。")]
+        public string Code { get; set; } = string.Empty;
     }
 }

@@ -259,3 +259,8 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .revisions-panel .revision-list li { display: flex; justify-content: space-between; align-items: center; gap: .6rem; font-size: .8rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
 .revision-body { max-height: 320px; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem; font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .save-indicator.autosaved { color: var(--muted); }
+
+/* Password gate, views column, security page (category-3 small batch) */
+.protected-gate { max-width: 30rem; }
+.views-cell { font-variant-numeric: tabular-nums; color: var(--muted); }
+.locked-mark { margin-left: .3rem; }

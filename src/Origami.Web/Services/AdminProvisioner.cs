@@ -61,6 +61,9 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
             // Recovery also clears lockout, in the same save as the password/security stamp.
             user.AccessFailedCount = 0;
             user.LockoutEnd = null;
+            // A lost authenticator is recovered server-side: reset also disables two-factor.
+            user.TwoFactorEnabled = false;
+            user.TwoFactorSecret = "";
             cancellationToken.ThrowIfCancellationRequested();
             // Identity resets the security stamp atomically with the password hash.
             EnsureSucceeded(await manager.ResetPasswordAsync(user, token, password));

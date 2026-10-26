@@ -237,6 +237,10 @@ namespace Origami.Web.Data.Migrations
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("TwoFactorSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -304,6 +308,9 @@ namespace Origami.Web.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<bool>("IsProtected")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsSticky")
                         .HasColumnType("boolean");
 
@@ -317,6 +324,11 @@ namespace Origami.Web.Data.Migrations
 
                     b.Property<Guid?>("PreviewToken")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ProtectionHash")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTimeOffset?>("PublishAt")
                         .HasColumnType("timestamp with time zone");
@@ -460,6 +472,22 @@ namespace Origami.Web.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("SlugRedirects");
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.ContentView", b =>
+                {
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ContentId", "Date");
+
+                    b.ToTable("ContentViews");
                 });
 
             modelBuilder.Entity("Origami.Web.Models.EmbeddingJob", b =>
@@ -715,6 +743,17 @@ namespace Origami.Web.Data.Migrations
                     b.Navigation("Content");
                 });
 
+            modelBuilder.Entity("Origami.Web.Models.ContentView", b =>
+                {
+                    b.HasOne("Origami.Web.Models.Content", "Content")
+                        .WithMany("Views")
+                        .HasForeignKey("ContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Content");
+                });
+
             modelBuilder.Entity("Origami.Web.Models.EmbeddingJob", b =>
                 {
                     b.HasOne("Origami.Web.Models.Content", null)
@@ -722,6 +761,11 @@ namespace Origami.Web.Data.Migrations
                         .HasForeignKey("ContentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Origami.Web.Models.Content", b =>
+                {
+                    b.Navigation("Views");
                 });
 #pragma warning restore 612, 618
         }

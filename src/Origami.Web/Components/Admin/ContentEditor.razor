@@ -70,6 +70,22 @@
                             <p class="field-help">置頂文章固定排在文章列表最前面。</p>
                         </div>
                     }
+                    @if (_model.Id is not null)
+                    {
+                        <p class="field-help">累積瀏覽 @_model.Views 次。</p>
+                    }
+                    <div class="field checkbox-field">
+                        <label for="content-protect"><input id="content-protect" type="checkbox" @bind="_model.IsProtected" disabled="@Blocked" /> 密碼保護</label>
+                        <p class="field-help">公開網址需輸入密碼才能閱讀內文；受保護內容不進入搜尋與 AI 檢索。</p>
+                    </div>
+                    @if (_model.IsProtected)
+                    {
+                        <div class="field">
+                            <label for="protect-password">@(_model.HasProtectPassword ? "更換保護密碼（選填）" : "設定保護密碼")</label>
+                            <input id="protect-password" type="password" maxlength="1024" @bind="_protectPassword" disabled="@Blocked" autocomplete="new-password" aria-describedby="protect-help" />
+                            <span id="protect-help" class="field-help">@(_model.HasProtectPassword ? "留空表示沿用目前的保護密碼。" : "首次啟用需設定密碼，至少 8 個字元。")</span>
+                        </div>
+                    }
                     @if (_model.Status == ContentStatus.Draft)
                     {
                         <div class="field">
@@ -184,6 +200,7 @@
     private bool _autosaveStopped;
     private int _tzOffsetMinutes;
     private DateTimeOffset? _scheduleLocal;
+    private string _protectPassword = "";
     private CancellationTokenSource? _autosaveCts;
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
     // Do not feed ChildBusy into the outer fieldset or child Disabled parameters:
@@ -377,6 +394,7 @@
     {
         Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
+        IsProtected = _model.IsProtected, NewProtectPassword = _protectPassword,
         PublishAt = status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
         Version = _model.Version, Status = status,
         CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]
