@@ -27,7 +27,7 @@ public static class PublicEndpoints
             HttpContext http, CancellationToken ct) =>
         {
             var site = await settings.GetAsync(ct);
-            var posts = await content.ListPublishedAsync(1, Limits.FeedItems, ct);
+            var posts = await content.ListPublishedAsync(1, site.FeedItems ?? Limits.FeedItems, ct);
             var document = new XDocument(new XDeclaration("1.0", "utf-8", null),
                 new XElement("rss", new XAttribute("version", "2.0"),
                     new XElement("channel",

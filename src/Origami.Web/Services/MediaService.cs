@@ -69,6 +69,19 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             .Select(x => new MediaReference(x.Id, x.Title, x.Kind, x.Status)).ToListAsync(ct);
     }
 
+    /// <summary>The stored file and content type behind the configured site icon; null when unset.</summary>
+    public async Task<SiteIconFile?> GetSiteIconAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var icon = await (from settings in db.Settings.AsNoTracking()
+                          join asset in db.MediaAssets.AsNoTracking() on settings.SiteIconMediaId equals asset.Id
+                          where settings.Id == 1
+                          select new { asset.FileName, asset.ContentType }).SingleOrDefaultAsync(ct);
+        return icon is null ? null : new SiteIconFile(Path.Combine(storage.Images, icon.FileName), icon.ContentType);
+    }
+
+    public sealed record SiteIconFile(string Path, string ContentType);
+
     /// <summary>Deletes an unreferenced image together with its variants. Referenced images are refused.</summary>
     public async Task DeleteAsync(Guid mediaId, bool confirmed, CancellationToken ct = default)
     {
@@ -76,6 +89,8 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         if (!confirmed) throw new CmsException("請先確認刪除圖片。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var asset = await db.MediaAssets.SingleOrDefaultAsync(x => x.Id == mediaId, ct) ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
+        if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.SiteIconMediaId == mediaId, ct))
+            throw new CmsException("此圖片是目前的網站圖示，請先在網站設定改用其他圖片或清除圖示後再刪除。");
         var references = await QueryReferencesAsync(db, asset.FileName, ct);
         if (references.Count > 0)
         {

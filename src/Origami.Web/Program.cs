@@ -103,6 +103,12 @@ app.UseRateLimiter();
 app.MapStaticAssets();
 app.MapCmsIdentity();
 app.MapPublicEndpoints();
+// Browsers request this URL by convention; the configured media asset is served without any library query UI.
+app.MapGet("/favicon.ico", async (MediaService media, CancellationToken ct) =>
+{
+    var icon = await media.GetSiteIconAsync(ct);
+    return icon is { } file && File.Exists(file.Path) ? Results.File(file.Path, file.ContentType) : Results.NotFound();
+});
 app.MapHealthChecks("/health");
 // The buffer keeps a failed export from streaming a truncated file with a 200 status.
 app.MapGet("/admin/export", async (ExportService export, CancellationToken ct) =>
