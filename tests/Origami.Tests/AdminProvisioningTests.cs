@@ -52,7 +52,7 @@ public sealed class AdminProvisioningTests(IsolatedPostgres postgres) : ServiceT
         var newPassword = IsolatedPostgres.NewPassword();
         await App.Provisioner.InitializeAsync("test-admin", oldPassword, CancellationToken.None);
         using var oldActor = await App.AdministratorAsync();
-        Assert.Empty((await oldActor.Content.ListAdminAsync(Web.Models.ContentKind.Post)).Items);
+        Assert.Empty((await oldActor.Content.ListAdminAsync(Core.Models.ContentKind.Post)).Items);
         string? oldStamp;
         using (var managerActor = App.Anonymous())
         {
@@ -63,7 +63,7 @@ public sealed class AdminProvisioningTests(IsolatedPostgres postgres) : ServiceT
             Assert.True((await managerActor.Users.UpdateAsync(user)).Succeeded);
         }
         await App.Provisioner.ResetPasswordAsync(newPassword, CancellationToken.None);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => oldActor.Content.ListAdminAsync(Web.Models.ContentKind.Post));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => oldActor.Content.ListAdminAsync(Core.Models.ContentKind.Post));
         using var fresh = await App.AdministratorAsync();
         var resetUser = await fresh.Users.Users.SingleAsync();
         Assert.NotEqual(oldStamp, resetUser.SecurityStamp);
@@ -71,7 +71,7 @@ public sealed class AdminProvisioningTests(IsolatedPostgres postgres) : ServiceT
         Assert.Null(resetUser.LockoutEnd);
         Assert.False(await fresh.Users.CheckPasswordAsync(resetUser, oldPassword));
         Assert.True(await fresh.Users.CheckPasswordAsync(resetUser, newPassword));
-        Assert.Empty((await fresh.Content.ListAdminAsync(Web.Models.ContentKind.Post)).Items);
+        Assert.Empty((await fresh.Content.ListAdminAsync(Core.Models.ContentKind.Post)).Items);
     }
 
     [PostgresFact]

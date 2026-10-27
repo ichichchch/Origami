@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Origami.Api/Origami.Api.csproj" />
+    <Project Path="src/Origami.Core/Origami.Core.csproj" />
     <Project Path="src/Origami.Web/Origami.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">

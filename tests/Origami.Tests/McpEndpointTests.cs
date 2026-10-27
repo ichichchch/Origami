@@ -14,7 +14,7 @@ public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBas
         await actor.Content.SaveAsync(new ContentEdit { Title = "公開文章", Kind = ContentKind.Post, Status = ContentStatus.Published, Markdown = "公開本文" });
         await actor.Content.SaveAsync(new ContentEdit { Title = "未公開草稿", Kind = ContentKind.Post, Status = ContentStatus.Draft, Markdown = "草稿本文" });
 
-        await using var site = new RunningSite(App.ConnectionString);
+        await using var site = new RunningApi(App.ConnectionString);
         await site.StartAsync();
         using var client = site.CreateClient();
         var session = await InitializeAsync(client);
@@ -39,7 +39,7 @@ public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBas
     [PostgresFact]
     public async Task Search_tool_fails_gracefully_without_an_embedding_key()
     {
-        await using var site = new RunningSite(App.ConnectionString);
+        await using var site = new RunningApi(App.ConnectionString);
         await site.StartAsync();
         using var client = site.CreateClient();
         var session = await InitializeAsync(client);
@@ -55,7 +55,7 @@ public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBas
     [PostgresFact]
     public async Task Mcp_endpoint_is_rate_limited_per_source()
     {
-        await using var site = new RunningSite(App.ConnectionString);
+        await using var site = new RunningApi(App.ConnectionString);
         await site.StartAsync();
         using var client = site.CreateClient();
         var statuses = new List<int>();

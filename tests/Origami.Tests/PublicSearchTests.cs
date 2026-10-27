@@ -191,7 +191,7 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
     }
 
     [PostgresFact]
-    public async Task Search_and_mcp_share_thirty_requests_per_ip_even_with_mixed_path_case()
+    public async Task Search_is_limited_to_thirty_requests_per_ip_even_with_mixed_path_case()
     {
         await using var site = new RunningSite(App.ConnectionString);
         await site.StartAsync();
@@ -200,17 +200,16 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
         {
             client.DefaultRequestHeaders.Remove("X-Forwarded-For");
             client.DefaultRequestHeaders.Add("X-Forwarded-For", $"192.0.2.{i + 1}");
-            using var response = i % 2 == 0
-                ? await client.GetAsync("/SeArCh?q=%20")
-                : await PingAsync(client);
-            Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
-            if (i % 2 == 0) Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var response = await client.GetAsync("/SeArCh?q=%20");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
-        using var mcp = await PingAsync(client);
+        // A spoofed X-Forwarded-For must not buy a fresh budget: the 31st search from the same source is rejected.
         using var search = await client.GetAsync("/search?q=%20");
-        Assert.Equal(HttpStatusCode.TooManyRequests, mcp.StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, search.StatusCode);
         Assert.Equal("Too many requests.", await search.Content.ReadAsStringAsync());
+        // The MCP endpoint now lives on the Origami.Api host; the website no longer treats /mcp as machine traffic.
+        using var mcp = await PingAsync(client);
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, mcp.StatusCode);
         using var home = await client.GetAsync("/");
         Assert.Equal(HttpStatusCode.OK, home.StatusCode);
     }

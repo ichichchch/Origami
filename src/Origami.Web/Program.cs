@@ -37,6 +37,7 @@ builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout 
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
 builder.Services.AddScoped<SemanticSearchService>();
 builder.Services.AddScoped<PublicSearchService>();
+// The admin assistant reuses the MCP read tools as its function tools; only the /mcp endpoint moved to Origami.Api.
 builder.Services.AddScoped<McpReadTools>();
 builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFactory>();
 builder.Services.AddScoped<SiteAssistant>();
@@ -48,7 +49,8 @@ builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
 builder.Services.AddHostedService<EmbeddingJobWorker>();
 builder.Services.AddHostedService<ContentLifecycleWorker>();
 builder.Services.AddHostedService<MediaVariantBackfillService>();
-// Anonymous MCP and public searches share one provider-cost budget per source IP.
+// Anonymous public searches keep one provider-cost budget per source IP; the MCP endpoint
+// now lives in the Origami.Api host and carries its own limiter there.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -59,14 +61,12 @@ builder.Services.AddRateLimiter(options =>
         await context.HttpContext.Response.WriteAsync("Too many requests.", context.HttpContext.RequestAborted);
     };
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-        (context.Request.Path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase)
-         || context.Request.Path.StartsWithSegments("/search", StringComparison.OrdinalIgnoreCase))
+        context.Request.Path.StartsWithSegments("/search", StringComparison.OrdinalIgnoreCase)
             ? RateLimitPartition.GetFixedWindowLimiter(
                 (context.Connection.RemoteIpAddress ?? IPAddress.Loopback).ToString(),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) })
             : RateLimitPartition.GetNoLimiter("other"));
 });
-builder.Services.AddMcpServer().WithHttpTransport().WithToolsFromAssembly();
 var storage = new StoragePaths(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(storage);
 var protection = builder.Services.AddDataProtection().SetApplicationName("Origami.SingleSite")
@@ -119,7 +119,6 @@ app.MapGet("/admin/export", async (ExportService export, CancellationToken ct) =
     await export.WriteAsync(buffer, ct);
     return Results.File(buffer.ToArray(), "application/json", "origami-export.json");
 }).RequireAuthorization();
-app.MapMcp("/mcp");
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 await app.RunAsync();
 return 0;
