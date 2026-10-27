@@ -3,9 +3,9 @@ using System.Text.Json;
 namespace Origami.Mobile.Services;
 
 /// <summary>
-/// App settings persisted as JSON under the platform app-data directory.
-/// The default targets a local Api host on port 5100; the Android emulator reaches the host
-/// machine's loopback through 10.0.2.2 instead.
+/// 以 JSON 保存於平台應用程式資料目錄的應用程式設定。
+/// 預設指向本機 5100 連接埠的 Api 主機；Android 模擬器則改透過
+/// 10.0.2.2 連至主機的回送位址。
 /// </summary>
 public sealed class AppSettings
 {
@@ -24,7 +24,7 @@ public sealed class AppSettings
         }
         catch
         {
-            // A corrupt settings file falls back to defaults rather than blocking startup.
+            // 設定檔損毀時改回預設值，不阻擋啟動。
             return new AppSettings();
         }
     }
@@ -38,7 +38,7 @@ public sealed class AppSettings
 
     private static string PathForSettings()
     {
-        // ApplicationData works on desktop platforms; mobile falls back to the writable app directory.
+        // ApplicationData 在桌面平台可用；行動平台改用可寫入的應用程式目錄。
         var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         if (string.IsNullOrWhiteSpace(root)) root = AppContext.BaseDirectory;
         return Path.Combine(root, "Origami.Mobile", "settings.json");

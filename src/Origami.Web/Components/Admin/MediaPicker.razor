@@ -80,7 +80,7 @@
                 _uploadName = file.Name;
                 await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
                 _uploaded = await Media.UploadAsync(stream, file.Name, ct);
-                // Retain the upload result for insertion even if listing fails afterward.
+                // 即使之後載入列表失敗，仍保留上傳結果供插入使用。
                 _page = 1;
                 _result = await Media.ListAsync(_page, ct: ct);
             }, "圖片已上傳，請點選圖片插入；本文尚未儲存。");

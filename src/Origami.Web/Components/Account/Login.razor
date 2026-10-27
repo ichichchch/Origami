@@ -18,7 +18,7 @@
     @if (awaitingCode)
     {
         <p class="field-help">帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼。</p>
-        @* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
+        @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證。 *@
         <EditForm Model="CodeForm" method="post" OnValidSubmit="CodeAsync" OnInvalidSubmit="ClearCode" FormName="account-code" Enhance="false">
             <DataAnnotationsValidator />
             <ValidationSummary />
@@ -32,7 +32,7 @@
     }
     else
     {
-        @* Static SSR EditForm includes an antiforgery token and validates it on POST. *@
+        @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證。 *@
         <EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
             <DataAnnotationsValidator />
             <ValidationSummary />
@@ -42,7 +42,7 @@
             </div>
             <div class="field">
                 <label for="password">密碼</label>
-                @* Form mapping reads this field on POST; never bind or render its submitted value. *@
+                @* 表單對應在 POST 時讀取此欄位；絕不繫結或渲染其送出值。 *@
                 <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
             </div>
             <button type="submit" class="button full-width">登入</button>
@@ -81,11 +81,11 @@
         CodeForm ??= new();
         if (HttpContext is null)
         {
-            // Safety net if a parent accidentally tries to render this page in a circuit.
+            // 保險措施：防止上層不小心在 circuit 中渲染此頁面。
             Navigation.NavigateTo("/account/login", forceLoad: true);
             return;
         }
-        // A still-valid pending cookie shows the code step directly on a fresh GET.
+        // 仍有效的待驗證 cookie 會在全新的 GET 請求直接顯示驗證碼步驟。
         awaitingCode = TryReadPendingUser(HttpContext) is not null;
     }
 
@@ -98,7 +98,7 @@
             return;
         }
 
-        // Consume before checking credentials; never key by a submitted username or forwarded header.
+        // 檢查憑證前先消耗限流額度；絕不以送出的帳號或轉送標頭作為鍵值。
         var throttle = context.RequestServices.GetRequiredService<LoginThrottle>();
         if (!throttle.TryAcquire(context.Connection.RemoteIpAddress?.ToString()))
         {
@@ -108,7 +108,7 @@
             return;
         }
 
-        // Resolve only in an active HTTP request: never inject SignInManager into a circuit.
+        // 只在作用中的 HTTP 請求內解析：絕不將 SignInManager 注入 circuit。
         var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
         var userManager = context.RequestServices.GetRequiredService<UserManager<AdminUser>>();
         AdminUser? user;
@@ -116,7 +116,7 @@
         try
         {
             user = await userManager.FindByNameAsync(Input.Username.Trim());
-            // An unknown username runs the same password hashing path as a real one.
+            // 未知的帳號會走與真實帳號相同的密碼雜湊路徑。
             passwordCheck = user is null
                 ? Microsoft.AspNetCore.Identity.SignInResult.Failed
                 : await signInManager.CheckPasswordSignInAsync(user, Input.Password, lockoutOnFailure: true);
@@ -137,15 +137,15 @@
         Input.Password = string.Empty;
         if (user is null || !passwordCheck.Succeeded)
         {
-            // Do not disclose whether the username exists, is locked out, or is otherwise blocked.
+            // 不揭露帳號是否存在、已鎖定或因其他原因被擋。
             errorMessage = LoginFailure;
             return;
         }
         if (user.TwoFactorEnabled && user.TwoFactorSecret != "")
         {
-            // Password proven, identity not yet: a 5-minute signed cookie carries the pending
-            // user id and the current security stamp, so a password reset or a two-factor
-            // change ends the pending window on the server, not only in the browser.
+            // 密碼已證實、身份還沒有：效期 5 分鐘的簽章 cookie 承載待驗證的
+            // 使用者 id 與目前的安全戳記，因此密碼重設或兩步驗證
+            // 變更都會在伺服器端結束待驗證期間，而不只是瀏覽器端。
             var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
                 .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
             context.Response.Cookies.Append(PendingCookie, protector.Protect(PendingPayload(user), TimeSpan.FromMinutes(5)),
@@ -155,7 +155,7 @@
             return;
         }
         await signInManager.SignInAsync(user, isPersistent: false);
-        // Never consume a caller-provided return URL. Cookies need a full HTTP navigation.
+        // 絕不採用呼叫端提供的返回網址。Cookie 需要完整的 HTTP 導覽。
         Navigation.NavigateTo("/admin/posts", forceLoad: true);
     }
 
@@ -190,15 +190,15 @@
         if (user is null || !user.TwoFactorEnabled || user.TwoFactorSecret == ""
             || !string.Equals(user.SecurityStamp, pending.SecurityStamp, StringComparison.Ordinal))
         {
-            // Do not disclose which factor failed; the pending cookie dies with the attempt window.
+            // 不揭露是哪個因子失敗；待驗證 cookie 隨該次嘗試期間一同失效。
             context.Response.Cookies.Delete(PendingCookie);
             errorMessage = CodeFailure;
             return;
         }
         if (await userManager.IsLockedOutAsync(user))
         {
-            // A locked account stays locked for the second factor as well; guessing codes must
-            // not be able to outrun the account lockout the password stage established.
+            // 已鎖定的帳號在第二因子階段同樣維持鎖定；猜測驗證碼
+            // 不能跑得比密碼階段建立的帳號鎖定更久。
             context.Response.Cookies.Delete(PendingCookie);
             errorMessage = LockedMessage;
             return;
@@ -206,7 +206,7 @@
         if (!Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System))
         {
             await userManager.AccessFailedAsync(user);
-            // Do not disclose which factor failed; the pending cookie dies with the attempt window.
+            // 不揭露是哪個因子失敗；待驗證 cookie 隨該次嘗試期間一同失效。
             context.Response.Cookies.Delete(PendingCookie);
             errorMessage = CodeFailure;
             return;
@@ -232,7 +232,7 @@
                 if (separator <= 0 || separator == payload.Length - 1) return null;
                 return new PendingSignIn(payload[..separator], payload[(separator + 1)..]);
             }
-            catch (CryptographicException) { /* Expired or tampered pending cookies simply restart the flow. */ }
+            catch (CryptographicException) { /* 已過期或遭竄改的待驗證 cookie 只是重新開始流程。 */ }
         }
         return null;
     }

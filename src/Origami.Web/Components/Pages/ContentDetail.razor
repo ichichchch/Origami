@@ -13,7 +13,7 @@
 @if (_content is not null)
 {
     <HeadContent>
-        @* Layout-level HeadContent is not emitted in Static SSR, so discovery links live on pages. *@
+        @* 版面配置層的 HeadContent 在 Static SSR 不會輸出，因此探索連結放在各頁面。 *@
         <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
         @if (_locked || _isPrivate)
         {
@@ -68,12 +68,12 @@ else if (_content is not null)
                 {
                     <p class="notice notice-error" role="alert">@_unlockError</p>
                 }
-                @* Static SSR EditForm posts back here with an antiforgery token; no unlock ever signs a user in. *@
+                @* Static SSR 的 EditForm 帶防偽權杖回傳至此；解鎖絕不會把任何使用者登入。 *@
                 <EditForm Model="Unlock" FormName="content-unlock" method="post" OnValidSubmit="UnlockAsync" Enhance="false">
                     <DataAnnotationsValidator />
                     <div class="field">
                         <label for="unlock-password">內容密碼</label>
-                        @* The name matches the form model property, so a Static SSR post binds it. *@
+                        @* name 與表單模型屬性同名，Static SSR 的 POST 才會繫結此欄位。 *@
                         <input id="unlock-password" name="Unlock.Password" type="password" autocomplete="off" maxlength="1024" required />
                     </div>
                     <button type="submit" class="button">解鎖內容</button>
@@ -149,7 +149,7 @@ else
     private string AbsoluteImage => _firstImage![0] == '/' ? BaseUrl + _firstImage : _firstImage!;
     protected override async Task OnParametersSetAsync()
     {
-        // A Static SSR post replaces the form model; a plain visit starts with an empty one.
+        // Static SSR 的 POST 會替換表單模型；單純瀏覽則從空的模型開始。
         Unlock ??= new UnlockInput();
         _content = null;
         _firstImage = null;
@@ -170,7 +170,7 @@ else
             _content = await Content.GetPublishedAsync(kind, Slug, ct);
             if (_content is null)
             {
-                // A retired slug of published content keeps working through a permanent redirect.
+                // 已發布內容的汰換 slug 透過永久轉址持續可用。
                 var redirect = await Content.RedirectTargetAsync(Slug, ct);
                 if (redirect is not null)
                 {
@@ -190,7 +190,7 @@ else
                 && !await Content.IsUnlockedAsync(_content.Id, HttpContext?.Request.Cookies[UnlockCookieName], ct);
             if (_content.IsPrivate)
             {
-                // For anyone but the signed-in administrator, private content is indistinguishable from missing content.
+                // 對已登入管理員以外的任何人，私密內容與不存在的內容無從區分。
                 if (!await Admin.IsAdminAsync(ct))
                 {
                     if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
@@ -205,12 +205,12 @@ else
                 await Content.RecordViewAsync(_content.Id, ct);
             }
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客於渲染期間中斷連線；無需處理。 */ }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Public content unavailable");
-            // A failed render must not publish the title, the excerpt or the body through the
-            // response head; the visitor only learns that the page is unavailable.
+            // 渲染失敗時，標題、摘要與本文都不得經由
+            // 回應標頭外洩；訪客只會得知頁面無法使用。
             _content = null;
             _firstImage = null;
             _html = "";
@@ -252,10 +252,10 @@ else
         if (_content.Kind == ContentKind.Post)
         {
             _neighbors = await Content.NeighborsAsync(_content.Id, ct);
-            // Related reads stored vectors only; an unindexed site simply shows nothing.
+            // 相關文章只讀取已儲存的向量；尚未建立索引的網站就不顯示。
             _related = await Semantic.RelatedAsync(_content.Id, 3, ct);
         }
-        // Only a rendered body may expose the description, the canonical link and the Open Graph tags.
+        // 只有本文確實渲染後，才公開描述、canonical 連結與 Open Graph 標籤。
         _readable = true;
     }
 }

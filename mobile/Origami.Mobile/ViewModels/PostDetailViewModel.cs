@@ -3,7 +3,7 @@ using Origami.Mobile.Services;
 
 namespace Origami.Mobile.ViewModels;
 
-/// <summary>Post or page detail. Drafts, protected and private content resolve to a not-found message.</summary>
+/// <summary>文章或頁面詳情。草稿、受保護與私密內容會顯示找不到內容的訊息。</summary>
 public sealed partial class PostDetailViewModel(OrigamiApiClient api, string slug, string kind = "post") : ViewModelBase
 {
     [ObservableProperty]

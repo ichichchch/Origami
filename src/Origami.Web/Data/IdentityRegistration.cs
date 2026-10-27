@@ -32,7 +32,7 @@ public static class IdentityRegistration
         services.Configure<SecurityStampValidatorOptions>(options =>
             options.ValidationInterval = TimeSpan.Zero);
 
-        // Apply transport protections to every cookie registered by Identity, not just login.
+        // 對 Identity 註冊的每個 cookie 套用傳輸保護，而非只保護登入 cookie。
         foreach (var scheme in new[]
         {
             IdentityConstants.ApplicationScheme, IdentityConstants.ExternalScheme,
@@ -58,7 +58,7 @@ public static class IdentityRegistration
             options.Events.OnValidatePrincipal = async context =>
             {
                 var requestServices = context.HttpContext.RequestServices;
-                // Explicit validation also covers requests within the cookie's issue-time tick.
+                // 明確驗證也涵蓋安全戳記驗證間隔內的請求。
                 var valid = await AdminAccess.ValidatePrincipalAsync(
                     context.Principal,
                     requestServices.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
@@ -70,7 +70,7 @@ public static class IdentityRegistration
                     await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
                     return;
                 }
-                // Keep the official Identity validator/claims refresh as well.
+                // 同時保留官方 Identity 驗證器與宣告刷新。
                 await SecurityStampValidator.ValidatePrincipalAsync(context);
             };
         });
@@ -115,7 +115,7 @@ public static class IdentityRegistration
                 return Results.Unauthorized();
             }
 
-            // These managers belong to the HTTP request, never to an interactive circuit.
+            // 這些管理員物件屬於 HTTP 請求範圍，絕不屬於互動電路。
             var user = await userManager.GetUserAsync(context.User);
             if (user is null || user.SingletonKey != 1)
             {
@@ -136,7 +136,7 @@ public static class IdentityRegistration
             return Results.Problem("Could not revoke sessions. Please try logging out again.", statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 
-        // Only report success once the new stamp has been persisted.
+        // 新安全戳記確實寫入後才回報成功。
         await signInManager.SignOutAsync();
         return Results.LocalRedirect("/");
     }

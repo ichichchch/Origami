@@ -5,7 +5,7 @@ using Origami.Mobile.Services;
 
 namespace Origami.Mobile.ViewModels;
 
-/// <summary>Edits the Api base URL; Android emulator users need http://10.0.2.2:PORT for the host machine.</summary>
+/// <summary>編輯 API 基底網址；Android 模擬器需以 http://10.0.2.2:PORT 連到開發主機。</summary>
 public sealed partial class SettingsViewModel(Navigator navigator, AppSettings settings) : ViewModelBase
 {
     [ObservableProperty]

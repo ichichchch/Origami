@@ -111,7 +111,7 @@
 
     private Task Ask() => RunAsync(async ct =>
     {
-        // Recheck authorization and current external settings, not just the last UI snapshot.
+        // 重新檢查授權與目前的外部設定，而非僅依賴上次的畫面快照。
         _status = null;
         _status = await StatusService.GetAsync(ct);
         if (!ModelsConfigured) throw new CmsException("請先完成嵌入與助理模型配置。");
@@ -125,7 +125,7 @@
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception)
         {
-            // Client construction failures must also stay out of the UI and component logs.
+            // 用戶端建構失敗的細節同樣不得進入畫面與元件日誌。
             throw new CmsException("助理暫時無法回覆，請稍後再試。");
         }
         _turns.Add(new(true, question));

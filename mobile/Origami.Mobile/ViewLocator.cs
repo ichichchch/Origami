@@ -7,7 +7,7 @@ using Origami.Mobile.ViewModels;
 namespace Origami.Mobile;
 
 /// <summary>
-/// Given a view model, returns the corresponding view if possible.
+/// 給定 ViewModel，盡可能傳回對應的 View。
 /// </summary>
 [RequiresUnreferencedCode(
     "Default implementation of ViewLocator involves reflection which may be trimmed away.",

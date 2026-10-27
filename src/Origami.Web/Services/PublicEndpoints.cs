@@ -1,8 +1,8 @@
 namespace Origami.Web.Services;
 
 /// <summary>
-/// Machine-facing public endpoints: robots.txt, sitemap.xml and the RSS 2.0 feed. They read the
-/// live published state on every request, so withdrawn or deleted content disappears immediately.
+/// 機器端公開端點：robots.txt、sitemap.xml 與 RSS 2.0 feed。每次請求都讀取即時的
+/// 已發布狀態，因此撤回或刪除的內容會立即消失。
 /// </summary>
 public static class PublicEndpoints
 {
@@ -42,7 +42,7 @@ public static class PublicEndpoints
                                 new XElement("link", link),
                                 new XElement("guid", new XAttribute("isPermaLink", "true"), link),
                                 post.PublishedAt is { } published ? new XElement("pubDate", published.UtcDateTime.ToString("R")) : null,
-                                // A manual excerpt is plain authored text; the fallback prefix still contains Markdown.
+                                // 手動摘要是作者輸入的純文字；備援取得的前綴仍含 Markdown。
                                 new XElement("description", post.ExcerptIsManual ? post.Excerpt : markdown.Excerpt(post.Excerpt)));
                         }))));
             return Results.Text(ToXml(document), "application/rss+xml", Encoding.UTF8);

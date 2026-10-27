@@ -2,5 +2,5 @@ using Origami.Mobile.Models;
 
 namespace Origami.Mobile.ViewModels;
 
-/// <summary>A single row in the posts list or search results.</summary>
+/// <summary>文章列表或搜尋結果中的單一列。</summary>
 public sealed record ItemModel(string Title, string Subtitle, string Slug, string Badge);

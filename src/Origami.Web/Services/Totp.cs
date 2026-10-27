@@ -1,19 +1,19 @@
 namespace Origami.Web.Services;
 
 /// <summary>
-/// RFC 6238 TOTP (SHA-1, 30 s step, 6 digits) with a one-step drift window on each side.
-/// Implemented locally so two-factor login adds no new dependency.
+/// RFC 6238 TOTP (SHA-1, 30 s step, 6 digits)，前後各允許一步的漂移窗口。
+/// 在本機自行實作，兩步驗證登入因此不必新增相依套件。
 /// </summary>
 public static class Totp
 {
     private const int StepSeconds = 30;
     private const int Digits = 6;
 
-    /// <summary>Generates a new 20-byte shared secret encoded as Base32.</summary>
+    /// <summary>產生新的 20 位元組共用密鑰，以 Base32 編碼。</summary>
     public static string GenerateSecret() =>
         Base32Encode(RandomNumberGenerator.GetBytes(20));
 
-    /// <summary>Constant-time verification accepting the previous, current and next step.</summary>
+    /// <summary>常數時間驗證，接受前一步、目前與下一步的驗證碼。</summary>
     public static bool Verify(string base32Secret, string? code, TimeProvider clock)
     {
         if (string.IsNullOrEmpty(code) || code.Length != Digits || !code.All(char.IsDigit)) return false;

@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Host-level wiring only; domain packages flow transitively from Origami.Core. -->
+    <!-- 僅做主機層接線；領域套件由 Origami.Core 傳遞引入。 -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13">
       <PrivateAssets>all</PrivateAssets>

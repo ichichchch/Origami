@@ -1,8 +1,8 @@
 @inherits LayoutComponentBase
 
 <a class="skip-link" href="#main-content">跳至主要內容</a>
-@* Per-page interactive islands cannot intercept enhanced SSR link navigation.
-   Full-document admin navigation lets NavigationLock protect unsaved input. *@
+@* 各頁面的互動島嶼無法攔截 Static SSR 連結的增強導覽。
+   後台採整份文件導覽，讓 NavigationLock 得以保護未儲存的輸入。 *@
 <div class="admin-shell" data-enhance-nav="false">
     <aside class="admin-sidebar">
         <a class="admin-brand" href="/admin/posts"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>內容管理</small></span></a>

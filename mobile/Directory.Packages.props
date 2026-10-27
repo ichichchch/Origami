@@ -4,8 +4,8 @@
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     </PropertyGroup>
     <ItemGroup>
-        <!-- Avalonia packages -->
-        <!-- Important: keep version in sync! -->
+        <!-- Avalonia 套件 -->
+        <!-- 重要：版本必須保持同步！ -->
         <PackageVersion Include="Avalonia" Version="12.1.4" />
         <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
         <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.4" />
@@ -19,7 +19,7 @@
 
         <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
 
-        <!-- Test project -->
+        <!-- 測試專案 -->
         <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
         <PackageVersion Include="xunit" Version="2.9.3" />
         <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />

@@ -1,8 +1,8 @@
 namespace Origami.Core.Services;
 
 /// <summary>
-/// Promotes scheduled drafts when due and purges expired trash. Both operations are idempotent
-/// system jobs on the database; a failed pass is retried on the next tick and never kills the host.
+/// 到期時發布排程草稿並清理逾期回收桶。兩者都是資料庫上的冪等系統工作；
+/// 失敗的輪次會在下個週期重試，絕不會拖垮主機。
 /// </summary>
 public sealed partial class ContentLifecycleWorker(
     IServiceProvider services,
@@ -15,7 +15,7 @@ public sealed partial class ContentLifecycleWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var promoteTimer = new PeriodicTimer(PromoteInterval, clock);
-        var nextPurge = DateTimeOffset.MinValue; // run one purge shortly after startup
+        var nextPurge = DateTimeOffset.MinValue; // 啟動後不久先執行一次清理
         try
         {
             while (true)
@@ -29,13 +29,13 @@ public sealed partial class ContentLifecycleWorker(
                 await promoteTimer.WaitForNextTickAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { /* Host shutdown cancels the loop. */ }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { /* 主機關閉會取消迴圈。 */ }
     }
 
-    /// <summary>Promotes due schedules; exposed for tests and one-off runs.</summary>
+    /// <summary>發布到期排程；供測試與單次執行使用。</summary>
     public Task<int> PromoteAsync(CancellationToken ct = default) => WithContentServiceAsync((content, token) => content.PromoteDueAsync(token), ct);
 
-    /// <summary>Purges expired trash; exposed for tests and one-off runs.</summary>
+    /// <summary>清理逾期回收桶；供測試與單次執行使用。</summary>
     public Task<int> PurgeAsync(CancellationToken ct = default) => WithContentServiceAsync((content, token) => content.PurgeExpiredTrashAsync(token), ct);
 
     private async Task RunPassAsync(CancellationToken ct)
@@ -52,7 +52,7 @@ public sealed partial class ContentLifecycleWorker(
 
     private async Task<int> WithContentServiceAsync(Func<ContentService, CancellationToken, Task<int>> operation, CancellationToken ct)
     {
-        // The system operations resolve the scoped service; they never require an administrator principal.
+        // 系統操作解析 scoped 服務；絕不需要管理員主體。
         using var scope = services.CreateScope();
         var content = scope.ServiceProvider.GetRequiredService<ContentService>();
         return await operation(content, ct);

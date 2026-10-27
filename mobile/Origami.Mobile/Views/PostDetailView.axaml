@@ -12,7 +12,7 @@
             <TextBlock Text="{Binding Meta}" Opacity="0.65" TextWrapping="Wrap" />
             <Separator />
             <TextBlock Text="{Binding Message}" Foreground="Red" TextWrapping="Wrap" />
-            <!-- v1 renders the Markdown source as selectable text; rich rendering is a later round. -->
+            <!-- v1 先將 Markdown 原始內容以可選取文字呈現；富內容渲染留待後續輪次。 -->
             <SelectableTextBlock Text="{Binding Markdown}" TextWrapping="Wrap" />
         </StackPanel>
     </ScrollViewer>

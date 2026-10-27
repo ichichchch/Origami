@@ -63,13 +63,13 @@ else
 }
 
 @code {
-    // A reusable public article list: the home page and the /posts listing share it.
-    // Query parsing stays in the owning page; raw values arrive as parameters.
+    // 可重複使用的公開文章列表：首頁與 /posts 列表共用此元件。
+    // 查詢字串解析保留在所屬頁面；原始值以參數傳入。
     [Parameter] public string? Page { get; set; }
     [Parameter] public string? Category { get; set; }
     [Parameter] public string? Tag { get; set; }
     [Parameter] public int PageSize { get; set; } = Limits.PageSize;
-    /// <summary>Route the filters and pagination build on, e.g. "/" or "/posts".</summary>
+    /// <summary>篩選與分頁所依據的路由，例如 "/" 或 "/posts"。</summary>
     [Parameter] public string BasePath { get; set; } = "/";
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PagedResult<ContentSummary>? _result;
@@ -121,7 +121,7 @@ else
             _categories = await Content.PopularCategoriesAsync(ct);
         }
         catch (CmsException) { Missing(); }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Public article list unavailable");

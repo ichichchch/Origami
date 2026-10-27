@@ -243,14 +243,14 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media print { .admin-sidebar, .admin-topbar, .admin-footer, .skip-link, .site-nav, .site-footer, .back-link { display: none !important; } body { background: white; color: black; } .admin-shell { display: block; } .prose a { color: inherit; } }
 
-/* Sticky badge, editor checkbox, media alt editing (WordPress-parity round) */
+/* 置頂徽章、編輯器核取方塊、媒體替代文字編輯（WordPress 對齊輪） */
 .post-summary h2 .sticky-chip { margin-right: .45rem; vertical-align: .1em; }
 .checkbox-field { display: grid; gap: .3rem; margin: .8rem 0; }
 .checkbox-field label { display: flex; align-items: center; gap: .55rem; font-weight: 600; }
 .checkbox-field input { width: auto; accent-color: var(--accent); }
 .media-details .button-small { margin: .55rem 0 .35rem; }
 
-/* Trash/schedule/preview/revisions (WordPress-parity round, category 2) */
+/* 回收桶、排程、預覽、修訂版本（WordPress 對齊輪，類別 2） */
 .schedule-hint { display: block; margin-top: .25rem; color: var(--muted); font-size: .72rem; }
 .preview-banner { display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: baseline; margin: 0 0 1.5rem; padding: .8rem 1.1rem; border: 1px dashed var(--border); border-radius: var(--radius); background: #fff7e6; color: #654b22; }
 .preview-banner strong { font-size: .8rem; letter-spacing: .08em; }
@@ -260,12 +260,12 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .revision-body { max-height: 320px; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem; font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .save-indicator.autosaved { color: var(--muted); }
 
-/* Password gate, views column, security page (category-3 small batch) */
+/* 密碼保護、瀏覽次數欄位、安全設定頁（類別 3 小批次） */
 .protected-gate { max-width: 30rem; }
 .views-cell { font-variant-numeric: tabular-nums; color: var(--muted); }
 .locked-mark { margin-left: .3rem; }
 
-/* Reading experience: archives, neighbour navigation, semantic recommendations */
+/* 閱讀體驗：彙整、相鄰導覽、語意推薦 */
 .home-posts-link { margin-top: 2rem; }
 .reading-intro { margin-top: 1.5rem; }
 .content-search { display: flex; align-items: center; gap: .6rem; max-width: 380px; margin: 0 0 1rem; }

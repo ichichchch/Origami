@@ -42,14 +42,14 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             {
                 t.HasCheckConstraint("CK_Content_Kind", "\"Kind\" IN (0, 1)");
                 t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2)");
-                // Drafts and trash may be unpublished; only the live published state requires a date.
+                // 草稿與回收桶內容可為未發布；只有生效中的已發布狀態需要日期。
                 t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2) OR \"PublishedAt\" IS NOT NULL");
-                // A schedule is only meaningful on a draft; the trash timestamp only in the trash.
+                // 排程只在草稿上有意義；回收桶時間戳只在回收桶中。
                 t.HasCheckConstraint("CK_Content_PublishAt", "\"Status\" = 0 OR \"PublishAt\" IS NULL");
                 t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
                 t.HasCheckConstraint("CK_Content_Title", "length(btrim(\"Title\")) > 0");
                 t.HasCheckConstraint("CK_Content_Slug", "length(\"Slug\") > 0");
-                // A page cannot protect and privatize at once, nor be its own parent.
+                // 頁面不能同時密碼保護又私密，也不能成為自己的父頁面。
                 t.HasCheckConstraint("CK_Content_Private", "NOT (\"IsProtected\" AND \"IsPrivate\")");
                 t.HasCheckConstraint("CK_Content_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
             });
@@ -119,7 +119,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.Property(x => x.ChunkText).HasMaxLength(Limits.EmbeddingChunkMax).IsRequired();
             e.Property(x => x.Embedding).HasColumnType("vector(" + Limits.EmbeddingDimensions + ")");
             e.HasOne<Content>().WithMany().HasForeignKey(x => x.ContentId).OnDelete(DeleteBehavior.Cascade);
-            // The ANN index keeps similarity ordering exact enough for search while avoiding full scans.
+            // ANN 索引讓相似度排序對搜尋而言足夠精確，同時避免全表掃描。
             e.HasIndex(x => x.Embedding).HasMethod("hnsw").HasOperators("vector_cosine_ops");
         });
         builder.Entity<EmbeddingJob>(e =>

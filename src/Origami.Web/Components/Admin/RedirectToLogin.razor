@@ -4,7 +4,7 @@
 
 @code {
     protected override void OnInitialized() =>
-        // A successful sign-in always returns to the content list, so no return address is
-        // carried and no caller-supplied target can influence the destination.
+        // 登入成功後一律回到內容列表，因此不攜帶返回位址，
+        // 呼叫端提供的目標也無法影響導向的目的地。
         Navigation.NavigateTo("/account/login", forceLoad: true);
 }

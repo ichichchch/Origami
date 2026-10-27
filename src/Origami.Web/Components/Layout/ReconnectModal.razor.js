@@ -1,4 +1,4 @@
-// Set up event handlers
+// 註冊事件處理器
 const reconnectModal = document.getElementById("components-reconnect-modal");
 reconnectModal.addEventListener("components-reconnect-state-changed", handleReconnectStateChanged);
 
@@ -26,14 +26,14 @@ async function retry() {
     document.removeEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
 
     try {
-        // Reconnect will asynchronously return:
-        // - true to mean success
-        // - false to mean we reached the server, but it rejected the connection (e.g., unknown circuit ID)
-        // - exception to mean we didn't reach the server (this can be sync or async)
+        // 重連會以非同步方式回傳：
+        // - true 表示成功
+        // - false 表示已連上伺服器，但連線遭到拒絕（例如未知的 circuit ID）
+        // - 例外表示未能連上伺服器（可能同步或非同步發生）
         const successful = await Blazor.reconnect();
         if (!successful) {
-            // We have been able to reach the server, but the circuit is no longer available.
-            // We'll reload the page so the user can continue using the app as quickly as possible.
+            // 已可連上伺服器，但互動電路已不存在。
+            // 重新載入頁面，讓使用者能盡快繼續使用應用程式。
             const resumeSuccessful = await Blazor.resumeCircuit();
             if (!resumeSuccessful) {
                 location.reload();
@@ -42,7 +42,7 @@ async function retry() {
             }
         }
     } catch (err) {
-        // We got an exception, server is currently unavailable
+        // 收到例外，伺服器目前無法連線
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
     }
 }

@@ -8,7 +8,7 @@
     <fieldset disabled="@(Disabled || Blocked)">
         <div class="field">
             <label for="@NameInputId">新增@(Label)名稱</label>
-            @* Do not implicitly submit the containing EditForm, or treat IME confirmation as creation. *@
+            @* 不得隱含送出所在的 EditForm，也不得將 IME 確認視為建立。 *@
             <input id="@NameInputId" @bind="_newName" @bind:event="oninput" maxlength="@Limits.TaxonomyName" disabled="@AtLimit" onkeydown="if (event.key === 'Enter' && !event.isComposing) event.preventDefault();" />
             <span class="field-help">最多 @Limits.TaxonomyName 字；建立後自動選取，不會儲存本文。</span>
         </div>
@@ -101,7 +101,7 @@
             _created = new(saved.Id!.Value, saved.Name, saved.Slug, saved.Version);
             Selected.Add(_created.Id);
             _newName = "";
-            // Keep the successful selection even if refreshing the list fails afterward.
+            // 即使之後刷新列表失敗，仍保留成功的選取結果。
             await Changed.InvokeAsync();
             await LoadOptions(ct);
         }, $"已建立並選取{Label}；本文尚未儲存。");

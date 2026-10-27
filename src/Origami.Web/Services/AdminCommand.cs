@@ -64,7 +64,7 @@ public static class AdminCommand
         }
         catch (Exception)
         {
-            // Never print exception details, command arguments, passwords, or connection strings.
+            // 絕不輸出例外細節、命令參數、密碼或連線字串。
             await Console.Error.WriteLineAsync("管理命令執行失敗。請檢查終端機、應用設定與已套用的資料庫遷移。");
             return 1;
         }

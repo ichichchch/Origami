@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
 	<uses-permission android:name="android.permission.INTERNET" />
-	<!-- Development against http://10.0.2.2 requires cleartext; production APIs must use HTTPS. -->
+	<!-- 對 http://10.0.2.2 開發需要明文傳輸 cleartext；正式環境 API 必須使用 HTTPS。 -->
 	<application android:label="Origami" android:icon="@drawable/Icon" android:usesCleartextTraffic="true" />
 </manifest>

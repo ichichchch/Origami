@@ -4,7 +4,7 @@ using Origami.Mobile.ViewModels;
 
 namespace Origami.Mobile.Services;
 
-/// <summary>Composes the single-instance app services and the root shell view model.</summary>
+/// <summary>組合單例應用程式服務與根殼層 ViewModel。</summary>
 public static class AppScope
 {
     public static Navigator Navigator { get; } = new();

@@ -1,8 +1,8 @@
 namespace Origami.Core.Services;
 
 /// <summary>
-/// Regenerates responsive variant files that predate variant generation. Runs once after startup,
-/// never blocks boot, and failures only mean the original image keeps serving on its own.
+/// 重新產生變體功能出現前便已存在的回應式變體檔。啟動後執行一次、
+/// 絕不阻塞開機，失敗只代表原圖繼續自行提供服務。
 /// </summary>
 public sealed partial class MediaVariantBackfillService(
     IServiceProvider services,
@@ -21,7 +21,7 @@ public sealed partial class MediaVariantBackfillService(
         if (_backfill is not null)
         {
             try { await _backfill; }
-            catch (OperationCanceledException) { /* Shutdown raced the one-off backfill. */ }
+            catch (OperationCanceledException) { /* 關閉與單次回填相互競爭。 */ }
         }
     }
 
@@ -33,7 +33,7 @@ public sealed partial class MediaVariantBackfillService(
             var repaired = await scope.ServiceProvider.GetRequiredService<MediaService>().BackfillVariantsAsync(ct);
             if (repaired > 0) Log.Repaired(logger, repaired);
         }
-        catch (OperationCanceledException) { /* Shutdown during startup backfill. */ }
+        catch (OperationCanceledException) { /* 啟動回填期間遇到關閉。 */ }
         catch (Exception error) { Log.Failed(logger, error); }
     }
 

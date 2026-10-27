@@ -13,7 +13,7 @@ public sealed class AiOptions
         public string Endpoint { get; set; } = "https://api.openai.com/v1/embeddings";
         public string Model { get; set; } = "text-embedding-3-small";
 
-        /// <summary>Provided only through external configuration; never stored in source control.</summary>
+        /// <summary>僅由外部設定提供；絕不存入原始碼版控。</summary>
         public string? ApiKey { get; set; }
     }
 
@@ -22,7 +22,7 @@ public sealed class AiOptions
         public string Endpoint { get; set; } = "https://api.openai.com/v1";
         public string Model { get; set; } = "gpt-4o-mini";
 
-        /// <summary>Provided only through external configuration; never stored in source control.</summary>
+        /// <summary>僅由外部設定提供；絕不存入原始碼版控。</summary>
         public string? ApiKey { get; set; }
     }
 }

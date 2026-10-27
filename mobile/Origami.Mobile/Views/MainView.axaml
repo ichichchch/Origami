@@ -19,7 +19,7 @@
         <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="4" />
         <ScrollViewer>
             <StackPanel Margin="12" Spacing="6">
-                <!-- Reflection bindings inside the item template: ElementName paths are resolved at runtime. -->
+                <!-- 項目範本內採反映繫結：ElementName 路徑於執行階段解析。 -->
                 <ItemsControl ItemsSource="{Binding Items}" x:Name="PostsList">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>

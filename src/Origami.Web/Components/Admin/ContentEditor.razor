@@ -198,7 +198,7 @@
 
 @code {
     [Parameter] public Guid? Id { get; set; }
-    // The save result travels in the URL, so only the tab that performed the save sees it.
+    // 儲存結果透過網址傳遞，因此只有執行儲存的那個分頁看得到。
     [SupplyParameterFromQuery(Name = "saved")] public string? Saved { get; set; }
     private ContentEdit? _model;
     private string _baseline = "";
@@ -225,16 +225,16 @@
     private List<PageOption> _pageOptions = [];
     private CancellationTokenSource? _autosaveCts;
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
-    // Do not feed ChildBusy into the outer fieldset or child Disabled parameters:
-    // each child must finish its operation and callbacks without disabling itself through the parent.
+    // 不要把 ChildBusy 串入外層 fieldset 或子元件的 Disabled 參數：
+    // 每個子元件都必須能完成自己的操作與回呼，不能被父層連帶停用。
     private bool SaveBlocked => Blocked || ChildBusy;
     private string KindLabel => _model?.Kind == ContentKind.Page ? "頁面" : "文章";
     private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
     private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
     private bool Dirty => _model is not null && (Snapshot(_model) != _baseline || ScheduleChanged);
-    // The schedule lives beside the model, so a changed publish time is an unsaved change too.
+    // 排程存在於模型之外，因此變更發布時間也算未儲存的變更。
     private bool ScheduleChanged => _model is not null && EffectiveSchedule() != _model.PublishAt;
-    /// <summary>The picked time in UTC; a wall-clock time that does not exist never matches a stored one.</summary>
+    /// <summary>換算為 UTC 的所選時間；不存在的牆上時間永遠不會等於已儲存值。</summary>
     private DateTimeOffset? EffectiveSchedule()
     {
         if (_scheduleLocal is null) return null;
@@ -266,8 +266,8 @@
         if (wasPublished) return "已撤回為草稿，文字內容不再公開。";
         return "已儲存為草稿，文字內容不對外公開。";
     }
-    // The snapshot covers the editable fields only: server-owned values and the share token
-    // never make the editor look dirty.
+    // 快照只涵蓋可編輯欄位：伺服器端管理的值與分享 token
+    // 不會讓編輯器誤顯為未儲存。
     private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(new
     {
         model.Id, model.Kind, model.Title, model.Slug, model.Markdown, model.Excerpt, model.IsSticky,
@@ -277,8 +277,8 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // A full document load creates a new component instance, so the identifier is
-        // the only state that decides whether the stored version must be reloaded.
+        // 完整文件載入會建立新的元件執行個體，因此識別碼是
+        // 唯一用來判斷是否必須重新載入已儲存版本的狀態。
         if (_loaded && _loadedId == Id) return;
         _loaded = true;
         _loadedId = Id;
@@ -299,20 +299,20 @@
             _ => null
         };
         await Load();
-        // The marker belongs to the document that performed the save, not to other tabs.
+        // 這個標記屬於執行儲存的那份文件，不屬於其他分頁。
         if (flash is not null) Notice = flash;
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        // The schedule input is interpreted in the visitor's own time zone.
+        // 排程輸入欄位以訪客自身的時區解讀。
         try { _timeZoneId = await JavaScript.InvokeAsync<string>("eval", "Intl.DateTimeFormat().resolvedOptions().timeZone"); }
         catch (JSException) { _timeZoneId = ""; }
-        catch (InvalidOperationException) { /* No JS runtime during prerendering; keep UTC. */ }
+        catch (InvalidOperationException) { /* 預渲染期間沒有 JS 執行階段；保持 UTC。 */ }
         try { _tzOffsetMinutes = (int)await JavaScript.InvokeAsync<double>("eval", "-new Date().getTimezoneOffset()"); }
         catch (JSException) { _tzOffsetMinutes = 0; }
-        catch (InvalidOperationException) { /* No JS runtime during prerendering; keep UTC. */ }
-        // The zone is known now: show the stored schedule in the visitor's own wall clock.
+        catch (InvalidOperationException) { /* 預渲染期間沒有 JS 執行階段；保持 UTC。 */ }
+        // 此時已得知時區：以訪客自己的牆上時間顯示已儲存的排程。
         if (_model is not null && !_scheduleTouched) _scheduleLocal = ToLocalOffset(_model.PublishAt);
         if (_model?.Id is not null)
         {
@@ -321,10 +321,10 @@
         }
         if (Saved is not null)
         {
-            // Keep the result marker out of the address bar so a reload does not repeat it.
+            // 把結果標記移出網址列，重新載入時才不會重複出現。
             try { await JavaScript.InvokeVoidAsync("history.replaceState", null, "", Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0]); }
-            catch (JSException) { /* Best-effort address cleanup; the marker only repeats a notice. */ }
-            catch (InvalidOperationException) { /* No JS runtime during prerendering; ignore. */ }
+            catch (JSException) { /* 盡力清理網址即可；該標記只是重複一次提示訊息。 */ }
+            catch (InvalidOperationException) { /* 預渲染期間沒有 JS 執行階段；忽略。 */ }
         }
     }
     protected override void Dispose(bool disposing)
@@ -345,12 +345,12 @@
                 await InvokeAsync(() => AutosaveTickAsync(cancellation));
             }
         }
-        catch (OperationCanceledException) { /* The circuit closed; nothing to save into. */ }
-        catch (ObjectDisposedException) { /* Component disposed while waiting on the timer. */ }
+        catch (OperationCanceledException) { /* circuit 已關閉；沒有可儲存的對象。 */ }
+        catch (ObjectDisposedException) { /* 等待計時器期間元件已被處置。 */ }
     }
     private async Task AutosaveTickAsync(CancellationToken cancellation)
     {
-        // Autosave only touches existing drafts; anything else keeps the manual flow.
+        // 自動儲存只處理既有草稿；其餘情況一律維持手動流程。
         if (_autosaveStopped || cancellation.IsCancellationRequested || Busy || SaveBlocked || ChildBusy
             || _model is not { Id: not null, Status: ContentStatus.Draft } || !Dirty) return;
         try
@@ -362,13 +362,13 @@
             if (_model is null) return;
             if (_model.Version != sentVersion)
             {
-                // Another save replaced the editor model while this one was running; that result wins.
+                // 這次儲存執行期間，另一筆儲存已取代編輯器模型；以那筆結果為準。
                 return;
             }
             if (Snapshot(_model) != sent)
             {
-                // The admin kept typing while the save was running: the newer text stays in the
-                // editor and the next autosave carries it; only the new version is adopted.
+                // 儲存執行期間管理員仍在輸入：較新的文字留在編輯器裡
+                // 交由下次自動儲存送出；這裡只採用新的版本號。
                 _model.Version = saved.Version;
                 _baseline = sent;
                 return;
@@ -379,14 +379,14 @@
         }
         catch (CmsException)
         {
-            // A conflict or validation failure must stop the loop; the manual flow shows the details.
+            // 衝突或驗證失敗必須停止此循環；細節由手動流程顯示。
             _autosaveStopped = true;
         }
         catch (UnauthorizedAccessException) { _autosaveStopped = true; }
-        catch (OperationCanceledException) { /* The circuit is closing; the manual flow resumes next time. */ }
+        catch (OperationCanceledException) { /* circuit 正在關閉；下次再由手動流程接手。 */ }
     }
-    // The datetime-local picker yields wall-clock values; the browser's own time zone converts
-    // them to UTC, so a date on the other side of a daylight-saving change keeps its wall clock.
+    // datetime-local 選擇器產生的是牆上時間值，由瀏覽器自身的時區換算成
+    // UTC，因此橫跨日光節約轉換的日期仍保有原本的牆上時間。
     private DateTimeOffset? ToLocalOffset(DateTimeOffset? utc)
     {
         if (utc is not { } value) return null;
@@ -397,7 +397,7 @@
         if (picked is not { } value) return null;
         return ScheduleTime.ToUtc(value, ResolveTimeZone());
     }
-    /// <summary>The visitor's time zone; a fixed browser offset is the fallback when the zone is unknown.</summary>
+    /// <summary>訪客的時區；時區未知時改用瀏覽器的固定偏移量。</summary>
     private TimeZoneInfo ResolveTimeZone() =>
         _timeZone ??= ScheduleTime.Resolve(_timeZoneId, TimeSpan.FromMinutes(_tzOffsetMinutes));
     private string PreviewUrl(Guid token) => Navigation.ToAbsoluteUri("/preview/" + token).ToString();
@@ -419,7 +419,7 @@
     });
     private void RestoreRevision(RevisionDetail revision)
     {
-        // Restore loads the snapshot into the editor; nothing is written until the admin saves.
+        // 還原只是把快照載入編輯器；管理員儲存前不會寫入任何資料。
         _model!.Title = revision.Title;
         _model.Markdown = revision.Markdown;
         _model.Excerpt = revision.Excerpt;
@@ -429,8 +429,8 @@
     private Task CyclePreview() => RunAsync(async ct =>
     {
         var token = await Content.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
-        // A share link is not a content edit: the editor keeps its own text and version, so a
-        // concurrent save elsewhere still ends in a visible conflict instead of a silent overwrite.
+        // 分享連結不算內容編輯：編輯器保有自己的文字與版本，因此
+        // 他處同時的儲存仍會以明顯衝突收場，而不是遭到靜默覆寫。
         _model.PreviewToken = token;
     }, "預覽連結已產生；舊連結（若有）已失效。");
     private Task RevokePreview() => RunAsync(async ct =>
@@ -444,8 +444,8 @@
         _model = loaded;
         if (loaded.Kind == ContentKind.Page) _pageOptions = await Content.PageOptionsAsync(ct);
         _baseline = Snapshot(loaded);
-        // The stored schedule belongs into the picker; the zone may still be unknown here and is
-        // applied again once the browser reported it.
+        // 已儲存的排程應填入選擇器；此時時區可能還無法得知，
+        // 等瀏覽器回報後會再次套用。
         _scheduleTouched = false;
         _scheduleLocal = ToLocalOffset(loaded.PublishAt);
         _preview = false;
@@ -457,7 +457,7 @@
         _model.ParentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
     }
 
-    /// <summary>Parent candidates with an ancestor-path label; the page itself and its subtree are excluded.</summary>
+    /// <summary>上層候選頁面（標籤含祖先路徑）；已排除頁面本身與其子樹。</summary>
     private List<(Guid Id, string Label)> ParentChoices()
     {
         if (_model is null) return [];
@@ -513,7 +513,7 @@
         var success = await RunAsync(async ct =>
         {
             ContentRules.Validate(input);
-            // The server decides the content kind; a submitted kind is only used when creating.
+            // 內容類型由伺服器決定；提交的類型只在建立時使用。
             _model = isNew
                 ? await Content.CreateAsync(input.Kind, input, ct)
                 : await Content.UpdateAsync(input, ct);
@@ -523,12 +523,12 @@
         }, SaveNotice(status, wasPublished));
         if (success && isNew && _model.Id is { } id)
         {
-            // A new content identifier changes this page's route. A document-level
-            // navigation guarantees a fresh component instance bound to the stored version.
+            // 新的內容識別碼會改變本頁路由。文件層級的導覽
+            // 可確保建立全新元件執行個體並繫結到已儲存的版本。
             var target = "/admin/content/" + id + "?saved=" + (status == ContentStatus.Published ? "published" : "draft");
             try { await JavaScript.InvokeVoidAsync("location.replace", target); }
-            catch (JSException) { /* The save already succeeded; the user can still navigate manually. */ }
-            catch (InvalidOperationException) { /* No JS runtime during prerendering; ignore. */ }
+            catch (JSException) { /* 儲存已成功；使用者仍可自行導覽。 */ }
+            catch (InvalidOperationException) { /* 預渲染期間沒有 JS 執行階段；忽略。 */ }
         }
     }
     private Task Preview() => SaveBlocked ? Task.CompletedTask : RunAsync(ct =>

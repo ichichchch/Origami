@@ -9,7 +9,7 @@
 <HeadContent>
     <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
     <meta name="description" content="@HomeDescription" />
-    @* Filtered listings canonicalize to the plain home URL to avoid duplicate-content URLs. *@
+    @* 帶篩選的列表以單純的首頁網址作為 canonical，避免產生重複內容的網址。 *@
     <link rel="canonical" href="@BaseUrl/" />
     <meta property="og:site_name" content="@_settings.Name" />
     <meta property="og:type" content="website" />
@@ -39,7 +39,7 @@ else
     private PublicContent? _homePage;
     private string _homePageHtml = "";
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
-    // A category or tag filter always reaches the article list, even when a static home page is set.
+    // 即使設定了靜態首頁，分類或標籤篩選一律導向文章列表。
     private bool HasFilter => !string.IsNullOrWhiteSpace(Category) || !string.IsNullOrWhiteSpace(Tag);
     private bool ServesHomePage => _homePage is not null && !HasFilter;
     private string HeadTitle => ServesHomePage ? _homePage!.Title : _settings.Name;
@@ -55,13 +55,13 @@ else
         {
             var ct = HttpContext?.RequestAborted ?? default;
             _settings = await Settings.GetAsync(ct);
-            // A configured static home page that stops being publicly readable falls back to the article list.
+            // 已設定的靜態首頁若不再公開可讀，改以文章列表呈現。
             if (_settings.HomePageContentId is { } homeId)
                 _homePage = await Content.GetPublishedPageAsync(homeId, ct);
             if (_homePage is not null)
                 _homePageHtml = Markdown.Render(_homePage.Markdown, await Media.PublicImageWidthsAsync(ct));
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex) { Logger.LogError(ex, "Home page unavailable"); }
     }
 }

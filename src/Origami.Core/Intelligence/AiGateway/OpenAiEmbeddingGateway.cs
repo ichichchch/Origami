@@ -1,6 +1,6 @@
 namespace Origami.Core.Intelligence.AiGateway;
 
-/// <summary>Calls an OpenAI-compatible /embeddings endpoint; the only place that knows the vendor's wire format.</summary>
+/// <summary>呼叫 OpenAI 相容的 /embeddings 端點；是唯一知道供應商傳輸格式的地方。</summary>
 public sealed partial class OpenAiEmbeddingGateway(
     HttpClient client, IOptionsMonitor<AiOptions> options, ILogger<OpenAiEmbeddingGateway> logger) : IEmbeddingGateway
 {
@@ -27,7 +27,7 @@ public sealed partial class OpenAiEmbeddingGateway(
         {
             Content = JsonContent.Create(new EmbeddingRequest(settings.Model, batch), options: Json),
         };
-        // The key exists only in the outbound header, never in logs or exceptions.
+        // 金鑰只存在於外送標頭，絕不出現在日誌或例外。
         request.Headers.Authorization = new("Bearer", settings.ApiKey);
         using var response = await client.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)

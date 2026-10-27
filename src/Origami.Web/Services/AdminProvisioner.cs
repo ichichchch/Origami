@@ -1,6 +1,6 @@
 namespace Origami.Web.Services;
 
-// Only CLI commands and tests call this service. There is deliberately no HTTP endpoint.
+// 僅有 CLI 命令與測試會呼叫此服務；刻意不提供 HTTP 端點。
 public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
 {
     public const int MaximumUserNameLength = 256;
@@ -17,7 +17,7 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
 
         try
         {
-            // UserManager's store/context lives only for this operation, never in a circuit.
+            // UserManager 的 store／context 只存活於本次操作，絕不進入電路。
             await using var scope = scopeFactory.CreateAsyncScope();
             var manager = scope.ServiceProvider.GetRequiredService<UserManager<AdminUser>>();
             if (await manager.Users.AnyAsync(cancellationToken))
@@ -27,7 +27,7 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
 
             var user = new AdminUser { UserName = username.Trim(), SingletonKey = 1, LockoutEnabled = true };
             cancellationToken.ThrowIfCancellationRequested();
-            // The database's unique checked SingletonKey also protects competing initializations.
+            // 資料庫對 SingletonKey 的唯一約束，同時防護並行競爭的初始化。
             EnsureSucceeded(await manager.CreateAsync(user, password));
         }
         catch (DbUpdateException)
@@ -58,14 +58,14 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
 
             cancellationToken.ThrowIfCancellationRequested();
             var token = await manager.GeneratePasswordResetTokenAsync(user);
-            // Recovery also clears lockout, in the same save as the password/security stamp.
+            // 復原時也一併清除鎖定，與密碼／安全戳記在同一筆儲存完成。
             user.AccessFailedCount = 0;
             user.LockoutEnd = null;
-            // A lost authenticator is recovered server-side: reset also disables two-factor.
+            // 驗證器遺失時由伺服器端復原：重設也會停用兩步驗證。
             user.TwoFactorEnabled = false;
             user.TwoFactorSecret = "";
             cancellationToken.ThrowIfCancellationRequested();
-            // Identity resets the security stamp atomically with the password hash.
+            // Identity 重設密碼雜湊時，會一併以原子方式重設安全戳記。
             EnsureSucceeded(await manager.ResetPasswordAsync(user, token, password));
         }
         catch (DbUpdateException)
@@ -117,5 +117,5 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
         new("管理員資料庫無法使用。請確認設定並套用遷移後再試。");
 }
 
-// Its messages are intentionally safe to display; underlying database errors are not exposed.
+// 其訊息刻意設計為可安全顯示；不暴露底層資料庫錯誤。
 public sealed class AdminProvisioningException(string message) : InvalidOperationException(message);

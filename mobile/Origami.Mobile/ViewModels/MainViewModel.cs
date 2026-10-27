@@ -6,7 +6,7 @@ using Origami.Mobile.Services;
 
 namespace Origami.Mobile.ViewModels;
 
-/// <summary>Published posts list with paging and hybrid search against /api/v1.</summary>
+/// <summary>對 /api/v1 進行分頁與混合搜尋的已發布文章列表。</summary>
 public sealed partial class MainViewModel(Navigator navigator, OrigamiApiClient api) : ViewModelBase
 {
     private const int PageSize = 10;
@@ -35,7 +35,7 @@ public sealed partial class MainViewModel(Navigator navigator, OrigamiApiClient 
     public MainViewModel(Navigator navigator, OrigamiApiClient api, bool startLoaded)
         : this(navigator, api)
     {
-        // Chained constructor runs first; load only when the shell asks for it.
+        // 鏈結建構子會先執行；僅在殼層要求載入時才載入。
         if (startLoaded) _ = LoadAsync();
     }
 
@@ -102,7 +102,7 @@ public sealed partial class MainViewModel(Navigator navigator, OrigamiApiClient 
         }
         catch (Exception error)
         {
-            // Network and server failures surface as a message, never a crash.
+            // 網路與伺服器錯誤以訊息呈現，絕不造成當機。
             Message = error.Message;
         }
         finally

@@ -69,7 +69,7 @@ namespace Origami.Core.Data.Migrations
                 column: "ContentId",
                 unique: true);
 
-            // Queue embedding work for content that was published before this migration existed.
+            // 為此遷移出現前已發布的內容排入嵌入工作。
             migrationBuilder.Sql("""
                 INSERT INTO "EmbeddingJobs" ("Id", "ContentId", "EnqueuedAt", "Attempts", "NextAttemptAt")
                 SELECT gen_random_uuid(), "Id", now(), 0, now() FROM "Contents" WHERE "Status" = 1;

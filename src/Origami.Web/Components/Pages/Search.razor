@@ -71,7 +71,7 @@
             SetStatus(StatusCodes.Status400BadRequest);
             return;
         }
-        // Opening the page (or submitting whitespace) must not incur an embedding call.
+        // 開啟頁面（或送出空白查詢）不得觸發嵌入呼叫。
         if (string.IsNullOrWhiteSpace(Query)) return;
         try
         {
@@ -81,7 +81,7 @@
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true)
         {
-            // The visitor disconnected; no provider details are rendered or logged.
+            // 訪客已斷線；不渲染也不記錄供應商細節。
         }
         catch (CmsException)
         {

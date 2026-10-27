@@ -2,7 +2,7 @@ namespace Origami.Core.Services;
 
 public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
 {
-    // The protection password is hashed with the same Identity hasher as the administrator account.
+    // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
     public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null, string? search = null)
     {
@@ -13,12 +13,12 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (!Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
         if (status is { } filter && !Enum.IsDefined(filter)) throw new CmsException("內容狀態無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
-        // Without an explicit filter the list hides the trash; it has its own tab and lifecycle.
+        // 未指定狀態篩選時列表會隱藏回收桶；回收桶另有專屬分頁與生命週期。
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == kind);
         query = status is null ? query.Where(x => x.Status != ContentStatus.Trashed) : query.Where(x => x.Status == status);
         if (!string.IsNullOrWhiteSpace(search))
         {
-            // Title and slug containment keeps the admin search predictable across CJK text.
+            // 以標題與 slug 的包含比對搜尋，讓 CJK 文字的後台搜尋結果可預期。
             var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
             query = query.Where(x => EF.Functions.ILike(x.Title, pattern) || EF.Functions.ILike(x.Slug, pattern));
         }
@@ -63,8 +63,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     public async Task<ContentEdit> SaveAsync(ContentEdit input, CancellationToken ct = default)
     {
-        // Convenience wrapper. The kind of an existing content always comes from the stored row;
-        // a new content states its kind explicitly and it is validated before use.
+        // 便利包裝。既有內容的類型一律來自儲存的資料列；
+        // 新內容則明確宣告類型，並在使用前驗證。
         return input.Id is null
             ? await CreateAsync(input.Kind, input, ct)
             : await UpdateAsync(input, ct);
@@ -85,8 +85,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>
-    /// The stored row decides the content kind. A caller may request a kind only when creating
-    /// content, and the value is validated against the persisted type on every update.
+    /// 內容類型由儲存的資料列決定。呼叫端僅能在建立內容時指定類型，
+    /// 且每次更新都會對照資料庫中保存的類型驗證。
     /// </summary>
     private async Task<ContentEdit> SaveCoreAsync(ContentKind? requestedKind, ContentEdit input, Guid? id, CancellationToken ct)
     {
@@ -103,9 +103,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException("私密與密碼保護不可同時啟用，請擇一。");
         entity.IsPrivate = input.IsPrivate;
         entity.ParentId = input.ParentId;
-        // A hierarchy change locks the page rows until the save commits. Two parallel saves that
-        // would close a cycle are therefore serialized, and the second one reads the committed
-        // state instead of a stale snapshot.
+        // 階層變更會鎖定頁面資料列直到儲存送出，因此兩個可能形成循環的
+        // 平行儲存會被序列化，後到者讀到的是已送出的狀態，
+        // 而不是過期的快照。
         IDbContextTransaction? hierarchyTransaction = null;
         if (input.ParentId is { } parentId)
         {
@@ -130,14 +130,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             entity.IsProtected = true;
         }
         input.NewProtectPassword = null;
-        // A schedule is a draft with a future time; publishing always abandons the schedule.
+        // 排程只是附帶未來時間的草稿；發布一律放棄排程。
         if (input.Status == ContentStatus.Published && input.PublishAt is not null)
             throw new CmsException("排程時間僅適用於草稿；發布前請先清除排程。");
         if (input.Status == ContentStatus.Draft && input.PublishAt is { } schedule
             && schedule <= now.AddMinutes(Limits.ScheduleLeadMinutes))
             throw new CmsException($"排程時間至少需在 {Limits.ScheduleLeadMinutes} 分鐘之後。");
         var oldSlug = entity.Slug;
-        // The state being overwritten becomes a revision; it rides in the same transaction as the save.
+        // 被覆寫的舊狀態成為修訂版本；與儲存共用同一個交易。
         ContentRevision? revision = null;
         if (id is not null)
             revision = new ContentRevision { ContentId = entity.Id, Title = entity.Title, Markdown = entity.Markdown, Excerpt = entity.Excerpt, CreatedAt = now };
@@ -165,11 +165,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         entity.Version = Guid.NewGuid();
         entity.Categories = categories;
         entity.Tags = tags;
-        // A slug retired by an update to already-published content keeps serving at its old URL
-        // through a permanent redirect to the content's live slug.
+        // 已發布內容因更新而退役的 slug，仍透過永久轉址指向內容現行 slug，
+        // 讓舊網址繼續可用。
         if (id is not null && entity.PublishedAt is not null && oldSlug != slug)
         {
-            // Another content may have owned this slug earlier; the redirect must follow the current owner.
+            // 這個 slug 可能早先屬於其他內容；轉址必須跟隨目前的所有者。
             var existing = await db.SlugRedirects.SingleOrDefaultAsync(x => x.OldSlug == oldSlug, ct);
             if (existing is null) db.SlugRedirects.Add(new ContentSlugRedirect { OldSlug = oldSlug, ContentId = entity.Id, CreatedAt = now });
             else existing.ContentId = entity.Id;
@@ -180,7 +180,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             await TrimRevisionsAsync(db, entity.Id, ct);
         }
         await SyncEmbeddingAsync(db, entity, now, ct);
-        // EF wraps the content update and both join-table updates in one transaction.
+        // EF Core 會把內容更新與兩個關聯表的更新包進同一個交易。
         await ContentRules.SaveAsync(db, ct);
         if (hierarchyTransaction is not null) await hierarchyTransaction.CommitAsync(ct);
         input.Id = entity.Id;
@@ -195,10 +195,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return input;
     }
 
-    /// <summary>Keeps only the newest revisions per content; runs inside the save transaction.</summary>
+    /// <summary>每份內容僅保留最新的修訂版本；在儲存交易內執行。</summary>
     private static async Task TrimRevisionsAsync(CmsDbContext db, Guid contentId, CancellationToken ct)
     {
-        // A tracking query also sees the revision pending in this transaction, keeping the cap exact.
+        // 追蹤查詢也看得到本交易中待寫入的修訂版本，讓保留上限精準。
         var stale = await db.ContentRevisions.Where(x => x.ContentId == contentId)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
             .Skip(Limits.RevisionKeep).ToListAsync(ct);
@@ -206,9 +206,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>
-    /// Page hierarchy rules: only pages may nest, the parent must be a page, a page can never be
-    /// its own ancestor. The ancestor walk stays in memory over one small query, so a hostile
-    /// chain cannot loop the server.
+    /// 頁面階層規則：僅獨立頁面可巢狀、上層必須是頁面、頁面不可成為自己的祖先。
+    /// 祖先走訪以單次小查詢在記憶體內完成，
+    /// 因此惡意鏈結無法讓伺服器陷入迴圈。
     /// </summary>
     private static async Task ValidateParentAsync(CmsDbContext db, Content entity, Guid parentId, CancellationToken ct)
     {
@@ -221,7 +221,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var byId = pages.ToDictionary(x => x.Id);
         if (!byId.ContainsKey(parentId))
             throw new CmsException("上層頁面不存在，請重新選擇。");
-        // Walk up from the candidate parent; meeting the saved page again means the link closes a cycle.
+        // 從候選上層往上走訪；若再次遇到儲存中的頁面，代表連結形成循環。
         var guard = 0;
         Guid? cursor = parentId;
         while (cursor is not null)
@@ -234,14 +234,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         }
     }
 
-    /// <summary>Locks the page rows in a stable order so hierarchy changes never overlap.</summary>
+    /// <summary>以穩定順序鎖定頁面資料列，確保階層變更不會重疊。</summary>
     private static async Task LockPageRowsAsync(CmsDbContext db, CancellationToken ct)
     {
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""SELECT "Id" FROM "Contents" WHERE "Kind" = {(int)ContentKind.Page} ORDER BY "Id" FOR UPDATE""", ct);
     }
 
-    /// <summary>Page candidates for the editor's parent selector; the trash is not selectable.</summary>
+    /// <summary>編輯器上層選擇器的頁面候選；回收桶內容不可選。</summary>
     public async Task<List<PageOption>> PageOptionsAsync(CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -251,7 +251,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PageOption(x.Id, x.Title, x.ParentId, x.Status, x.IsPrivate, x.IsProtected)).ToListAsync(ct);
     }
 
-    /// <summary>The page rendered as the static home page; anything not publicly readable returns null.</summary>
+    /// <summary>渲染為固定首頁的頁面；任何無法公開閱讀的內容回傳 null。</summary>
     public async Task<PublicContent?> GetPublishedPageAsync(Guid id, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -282,7 +282,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         }
         var entity = await db.Contents.Include(x => x.Categories).Include(x => x.Tags).AsSplitQuery().SingleOrDefaultAsync(x => x.Id == existingId, ct)
             ?? throw new CmsException("內容已被刪除。");
-        // The persisted kind is authoritative; a submitted change is refused, never applied.
+        // 資料庫保存的類型才是權威；送出的類型變更會被拒絕，絕不套用。
         if (input.Kind != entity.Kind) throw new CmsException("不可變更既有內容類型。");
         if (entity.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯。");
         if (entity.Version != input.Version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
@@ -292,10 +292,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     private static async Task SyncEmbeddingAsync(CmsDbContext db, Content entity, DateTimeOffset now, CancellationToken ct)
     {
-        // The embedding lifecycle rides in the same transaction as the content change:
-        // a published state queues re-embedding, any other state removes vectors immediately
-        // so withdrawn or draft content can never surface through semantic search. Password-
-        // protected and private content never enter the index: vectors would leak gated text.
+        // 嵌入生命週期與內容變更共用同一個交易：
+        // 發布狀態會排入重新嵌入工作，其他狀態則立即移除向量，
+        // 讓撤回或草稿內容無法經語意搜尋浮出。密碼保護與私密內容
+        // 永不進入索引：向量會外洩受門檻保護的文字。
         if (entity.Status == ContentStatus.Published && !entity.IsProtected && !entity.IsPrivate)
         {
             if (!await db.EmbeddingJobs.AnyAsync(x => x.ContentId == entity.Id, ct))
@@ -319,7 +319,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await ContentRules.SaveAsync(db, ct);
     }
 
-    /// <summary>Moves content to the trash: public routes and search stop serving it, nothing is destroyed.</summary>
+    /// <summary>把內容移入回收桶：公開路由與搜尋即停止提供，但不銷毀任何資料。</summary>
     public async Task TrashAsync(Guid id, Guid version, bool confirmed, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -331,15 +331,15 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var now = clock.GetUtcNow();
         entity.Status = ContentStatus.Trashed;
         entity.DeletedAt = now;
-        entity.PublishAt = null;      // a schedule dies with the trash action
-        entity.PreviewToken = null;   // preview links die immediately
+        entity.PublishAt = null;      // 排程隨移入回收桶而失效
+        entity.PreviewToken = null;   // 預覽連結立即失效
         entity.UpdatedAt = now;
         entity.Version = Guid.NewGuid();
         await SyncEmbeddingAsync(db, entity, now, ct);
         await ContentRules.SaveAsync(db, ct);
     }
 
-    /// <summary>Returns trashed content to the draft state for further editing.</summary>
+    /// <summary>把回收桶內容還原為草稿狀態以便繼續編輯。</summary>
     public async Task RestoreAsync(Guid id, Guid version, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -355,7 +355,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await ContentRules.SaveAsync(db, ct);
     }
 
-    /// <summary>System operation: publishes drafts whose scheduled time arrived. Returns promoted count.</summary>
+    /// <summary>系統操作：發布排程時間已到的草稿。回傳發布數量。</summary>
     public async Task<int> PromoteDueAsync(CancellationToken ct = default)
     {
         var promoted = 0;
@@ -366,8 +366,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             var due = await db.Contents.Where(x => x.Status == ContentStatus.Draft && x.PublishAt != null && x.PublishAt <= now)
                 .OrderBy(x => x.PublishAt).ThenBy(x => x.Id).FirstOrDefaultAsync(ct);
             if (due is null) break;
-            // The scheduled moment is the publish moment, so ordering by publish time stays honest.
-            // A re-publish after a withdrawal keeps the first publication date.
+            // 排程時刻即發布時刻，因此依發布時間排序保持真實。
+            // 撤回後再次發布仍保留首次發布日期。
             due.PublishedAt ??= due.PublishAt;
             due.PublishAt = null;
             due.Status = ContentStatus.Published;
@@ -380,7 +380,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return promoted;
     }
 
-    /// <summary>System operation: permanently deletes trashed content past the retention window.</summary>
+    /// <summary>系統操作：永久刪除超過保留期限的回收桶內容。</summary>
     public async Task<int> PurgeExpiredTrashAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -388,8 +388,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var expired = await db.Contents.Where(x => x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
             .Select(x => x.Id).ToListAsync(ct);
         if (expired.Count == 0) return 0;
-        // The delete repeats the trash conditions: content restored between the listing and the
-        // delete is a draft again and must survive the purge.
+        // 刪除時重複回收桶條件：列出到刪除之間被還原的內容
+        // 已回到草稿狀態，必須在清理中存活。
         return await db.Contents.Where(x => expired.Contains(x.Id)
                 && x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
             .ExecuteDeleteAsync(ct);
@@ -412,14 +412,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new RevisionDetail(x.Id, x.ContentId, x.Title, x.Markdown, x.Excerpt, x.CreatedAt)).SingleOrDefaultAsync(ct);
     }
 
-    /// <summary>Replaces the share token; the previous link stops working immediately.</summary>
+    /// <summary>替換分享 token；舊連結立即失效。</summary>
     public async Task<Guid> CyclePreviewTokenAsync(Guid contentId, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
         return (await ModifyPreviewTokenAsync(contentId, Guid.NewGuid(), ct))!.Value;
     }
 
-    /// <summary>Removes the share token; the preview link stops working immediately.</summary>
+    /// <summary>移除分享 token；預覽連結立即失效。</summary>
     public async Task RevokePreviewTokenAsync(Guid contentId, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -434,13 +434,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var now = clock.GetUtcNow();
         entity.PreviewToken = token;
         entity.UpdatedAt = now;
-        // The share token is not part of the edited content, so the concurrency version stays
-        // untouched; a parallel content save must still end in a conflict, not a silent overwrite.
+        // 分享 token 不屬於被編輯的內容，因此並發版本保持不變；
+        // 平行的內容儲存仍必須以衝突收場，不得靜默覆寫。
         await ContentRules.SaveAsync(db, ct);
         return entity.PreviewToken;
     }
 
-    /// <summary>Draft reachable through a share token; trashed and published content never render here.</summary>
+    /// <summary>透過分享 token 可讀取的草稿；回收桶與已發布內容不會在此渲染。</summary>
     public async Task<PublicContent?> GetPreviewAsync(Guid token, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -452,7 +452,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             { Excerpt = x.Excerpt }).SingleOrDefaultAsync(ct);
     }
 
-    /// <summary>A retired token whose content is now published resolves to the public URL.</summary>
+    /// <summary>內容已發布時，退役 token 會解析到公開網址。</summary>
     public async Task<SlugRedirectTarget?> ResolvePublishedPreviewAsync(Guid token, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -475,7 +475,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (year is { } filterYear) query = query.Where(x => x.PublishedAt!.Value.Year == filterYear);
         if (month is { } filterMonth) query = query.Where(x => x.PublishedAt!.Value.Month == filterMonth);
         var total = await query.CountAsync(ct);
-        // Sticky posts lead every page of the public list; the stable sort keys keep pagination consistent.
+        // 置頂文章排在公開列表每一頁前頭；穩定的排序鍵讓分頁結果一致。
         var items = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
             .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
@@ -501,7 +501,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (!Enum.IsDefined(kind)) throw new CmsException("分類類型無效。");
         slug = ContentRules.NormalizeSlug(slug);
         await using var db = await factory.CreateDbContextAsync(ct);
-        // A taxonomy used only by drafts is not part of the public site.
+        // 僅被草稿使用的分類或標籤不屬於公開網站。
         return kind == TaxonomyKind.Category
             ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
                 .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct)
@@ -519,7 +519,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate }).SingleOrDefaultAsync(ct);
     }
 
-    /// <summary>Verifies the protection password and returns the unlock token for the browser cookie.</summary>
+    /// <summary>驗證保護密碼並回傳瀏覽器 cookie 所用的解鎖 token。</summary>
     public async Task<string?> VerifyProtectionAsync(Guid contentId, string? password, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -531,7 +531,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return UnlockToken(stored.ProtectionHash);
     }
 
-    /// <summary>A cookie token derived from the stored hash; changing the password invalidates old cookies.</summary>
+    /// <summary>由儲存雜湊衍生的 cookie token；變更密碼會使舊 cookie 失效。</summary>
     public async Task<bool> IsUnlockedAsync(Guid contentId, string? token, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(token)) return false;
@@ -539,7 +539,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var hash = await db.Contents.AsNoTracking().Where(x => x.Id == contentId && x.Status == ContentStatus.Published && x.IsProtected)
             .Select(x => x.ProtectionHash).SingleOrDefaultAsync(ct);
         if (hash is null || hash == "") return false;
-        // A malformed or foreign cookie is simply an unlocked request, never a server error.
+        // 格式錯誤或來路不明的 cookie 視為未解鎖請求，絕不引發伺服器錯誤。
         if (!TryDecodeToken(token, out var presented) || !TryDecodeToken(UnlockToken(hash), out var expected)) return false;
         return CryptographicOperations.FixedTimeEquals(presented, expected);
     }
@@ -547,7 +547,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     private static bool TryDecodeToken(string value, out byte[] bytes)
     {
         bytes = [];
-        if (value.Length != 64) return false; // a SHA-256 digest in hex
+        if (value.Length != 64) return false; // SHA-256 摘要的十六進位表示
         try
         {
             bytes = Convert.FromHexString(value);
@@ -559,7 +559,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     private static string UnlockToken(string protectionHash) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(protectionHash)));
 
-    /// <summary>Records one public view as a daily counter; failures never break rendering.</summary>
+    /// <summary>以每日計數器記錄一次公開瀏覽；失敗絕不中斷渲染。</summary>
     public async Task RecordViewAsync(Guid contentId, CancellationToken ct = default)
     {
         try
@@ -573,13 +573,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            // View counting is best-effort; a failed counter must never fail a page render.
+            // 瀏覽計數採盡力而為；計數失敗絕不能讓頁面渲染失敗。
         }
     }
 
     /// <summary>
-    /// Resolves a retired slug to the content's live published slug. A redirect never surfaces
-    /// withdrawn or deleted content: those rows are removed by cascade or filtered here.
+    /// 把退役 slug 解析到內容現行的已發布 slug。轉址絕不會讓撤回或已刪除的
+    /// 內容浮出：這些資料列已隨串聯刪除移除，或在此被過濾掉。
     /// </summary>
     public async Task<SlugRedirectTarget?> RedirectTargetAsync(string slug, CancellationToken ct = default)
     {
@@ -591,9 +591,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>
-    /// Every public URL for the sitemap: the home page, published posts and pages, and category
-    /// listings that currently have at least one published post. Withdrawn content disappears
-    /// immediately because the query only considers the live published state.
+    /// sitemap 的所有公開網址：首頁、已發布文章與頁面，
+    /// 以及目前至少有一篇已發布文章的分類列表。撤回的內容會立即消失，
+    /// 因為查詢只考慮現行的已發布狀態。
     /// </summary>
     public async Task<List<SitemapItem>> SitemapAsync(CancellationToken ct = default)
     {
@@ -623,8 +623,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>
-    /// The two adjacent posts on the public timeline, strictly ordered by publish time then Id.
-    /// Private posts stay out of the walk: a neighbour link must not leak or dead-end for visitors.
+    /// 公開時間軸上相鄰的兩篇文章，嚴格依發布時間再依 Id 排序。
+    /// 私密文章不參與走訪：相鄰連結不得對訪客洩漏資訊或形成死路。
     /// </summary>
     public async Task<List<ContentNeighbor>> NeighborsAsync(Guid contentId, CancellationToken ct = default)
     {
@@ -648,12 +648,12 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return neighbors;
     }
 
-    /// <summary>Months of the public archive with their post counts, newest month first.</summary>
+    /// <summary>公開彙整的各月份與文章數，最新月份在前。</summary>
     public async Task<List<ArchiveMonth>> ArchiveMonthsAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        // Date-only projection keeps the payload tiny; grouping happens in memory where the
-        // provider's date-part translation cannot silently change the grouping semantics.
+        // 只投影日期讓傳輸量極小；分組在記憶體內進行，供應商的日期
+        // 部分轉譯便無法悄悄改變分組語意。
         var dates = await db.Contents.AsNoTracking()
             .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate && x.PublishedAt != null)
             .Select(x => x.PublishedAt!.Value).ToListAsync(ct);

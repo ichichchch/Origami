@@ -2,7 +2,7 @@ namespace Origami.Web.Services;
 
 public sealed record TwoFactorStatus(bool Enabled, bool SetupPending);
 
-/// <summary>Enables and disables TOTP two-factor sign-in for the single administrator.</summary>
+/// <summary>啟用與停用單一管理員的 TOTP 兩步驗證登入。</summary>
 public sealed class TwoFactorService(
     AdminAccess admin,
     UserManager<AdminUser> users,
@@ -16,7 +16,7 @@ public sealed class TwoFactorService(
         return new(user.TwoFactorEnabled, !user.TwoFactorEnabled && user.TwoFactorSecret != "");
     }
 
-    /// <summary>Generates (or regenerates) a pending secret and returns it with the otpauth URI.</summary>
+    /// <summary>產生（或重新產生）待確認的密鑰，連同 otpauth URI 一併回傳。</summary>
     public async Task<(string Secret, string Uri)> BeginSetupAsync(CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -27,7 +27,7 @@ public sealed class TwoFactorService(
         return (user.TwoFactorSecret, Totp.OtpAuthUri(user.TwoFactorSecret, user.UserName ?? "admin", "Origami"));
     }
 
-    /// <summary>Confirms a pending secret with a live code; enabling rotates the security stamp.</summary>
+    /// <summary>以有效驗證碼確認待確認密鑰；啟用時會輪替安全戳記。</summary>
     public async Task EnableAsync(string code, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -36,11 +36,11 @@ public sealed class TwoFactorService(
         if (!Totp.Verify(user.TwoFactorSecret, code, clock)) throw new CmsException("驗證碼不正確，請確認時間同步後再試。");
         user.TwoFactorEnabled = true;
         await UpdateAsync(user);
-        // Rotating the stamp keeps existing sign-ins honest about the new requirement.
+        // 輪替安全戳記，迫使既有登入遵守新加入的驗證要求。
         await users.UpdateSecurityStampAsync(user);
     }
 
-    /// <summary>Disables two-factor after re-verifying the password and a live code.</summary>
+    /// <summary>重新驗證密碼與有效驗證碼後，才停用兩步驗證。</summary>
     public async Task DisableAsync(string password, string code, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -54,7 +54,7 @@ public sealed class TwoFactorService(
         await users.UpdateSecurityStampAsync(user);
     }
 
-    /// <summary>Loads the singleton administrator through the same context the UserManager tracks.</summary>
+    /// <summary>經由 UserManager 追蹤的同一個 context 載入單例管理員。</summary>
     private async Task<AdminUser> SingleUserAsync(CancellationToken ct)
     {
         var user = await users.Users.SingleOrDefaultAsync(x => x.SingletonKey == 1, ct);

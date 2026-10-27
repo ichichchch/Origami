@@ -1,8 +1,8 @@
 namespace Origami.Core.Intelligence.Embedding;
 
 /// <summary>
-/// Drains the EmbeddingJobs outbox table. A job is deleted only after its vectors are
-/// written, so a publish can never be lost when the embedding provider is unavailable.
+/// 消化 EmbeddingJobs outbox 資料表中的工作。工作只在向量寫入完成後才刪除，
+/// 因此嵌入供應商無法使用時，發布也不會遺失。
 /// </summary>
 public sealed partial class EmbeddingJobWorker(
     IDbContextFactory<CmsDbContext> factory,
@@ -25,20 +25,20 @@ public sealed partial class EmbeddingJobWorker(
                 await timer.WaitForNextTickAsync(stoppingToken);
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { /* Host shutdown cancels the poll loop; nothing to clean up. */ }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { /* 主機關閉會取消輪詢迴圈；無需清理。 */ }
     }
 
     private async Task RunPassAsync(CancellationToken ct)
     {
         try { await ProcessPendingAsync(ct); }
-        // A failed pass must never kill the hosted service; the next tick retries.
+        // 單次處理失敗絕不能讓背景服務終止；下次輪詢會重試。
         catch (Exception error) when (error is not OperationCanceledException)
         {
             Log.PassFailed(logger, error);
         }
     }
 
-    /// <summary>Processes due jobs until none remain; exposed for tests and one-off runs.</summary>
+    /// <summary>處理到期工作直到沒有剩餘；公開供測試與一次性執行使用。</summary>
     public async Task<int> ProcessPendingAsync(CancellationToken ct = default)
     {
         var processed = 0;
@@ -63,8 +63,8 @@ public sealed partial class EmbeddingJobWorker(
         if (job is null) return true;
         var content = await db.Contents.AsNoTracking().Where(x => x.Id == job.ContentId)
             .Select(x => new { x.Status, x.IsPrivate, x.IsProtected, x.Markdown }).SingleOrDefaultAsync(ct);
-        // Withdrawn or deleted content must leave no vectors behind; withdrawal already removed
-        // them in its own transaction, so this is a defensive purge plus job cleanup.
+        // 已撤回或已刪除的內容不得留下任何向量；撤回時已在自身的交易中移除，
+        // 因此這裡是防禦性清除並順帶清理工作。
         if (content is null || content.Status != ContentStatus.Published)
         {
             db.EmbeddingJobs.Remove(job);
@@ -73,8 +73,8 @@ public sealed partial class EmbeddingJobWorker(
             await db.SaveChangesAsync(ct);
             return true;
         }
-        // Private and password-protected content never reaches the embedding provider. The
-        // visibility flags and the text come from the same read, so gated text cannot travel.
+        // 私密與密碼保護內容絕不送達嵌入供應商。可見性旗標與文字來自同一次讀取，
+        // 因此受管制的文字無法外流。
         if (content.IsPrivate || content.IsProtected)
         {
             db.EmbeddingJobs.Remove(job);
@@ -100,15 +100,15 @@ public sealed partial class EmbeddingJobWorker(
                 var delay = Backoff[Math.Min(job.Attempts - 1, Backoff.Length - 1)];
                 job.NextAttemptAt = clock.GetUtcNow() + delay;
                 await db.SaveChangesAsync(ct);
-                // The failure reason is logged with the retry count; the API key never appears
-                // because it exists only in the outbound request header.
+                // 失敗原因會連同重試次數一併記錄；API 金鑰只存在於外送請求標頭，
+                // 因此不會出現在日誌。
                 Log.JobFailed(logger, error, job.ContentId, job.Attempts, delay.ToString(@"dd\ hh\:mm"));
                 return false;
             }
         }
         if (vectors.Count != chunks.Count) throw new InvalidOperationException("嵌入結果數量與切塊數量不符。");
-        // The content may have turned private while the provider was answering; such text stays
-        // out of the index and the vectors that were just computed are dropped again.
+        // 內容可能在供應商回應期間轉為私密；這類文字不進入索引，
+        // 剛計算出的向量也再次丟棄。
         var stillPublic = await db.Contents.AsNoTracking().Where(x => x.Id == job.ContentId)
             .Select(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).SingleOrDefaultAsync(ct);
         if (!stillPublic)
@@ -118,7 +118,7 @@ public sealed partial class EmbeddingJobWorker(
             await db.SaveChangesAsync(ct);
             return true;
         }
-        // Vectors and the job row are replaced in one transaction: readers never see half of a re-embed.
+        // 向量與工作資料列在同一交易內替換：讀取者不會看到重新嵌入到一半的狀態。
         db.ContentEmbeddings.RemoveRange(await db.ContentEmbeddings.Where(x => x.ContentId == job.ContentId).ToListAsync(ct));
         for (var i = 0; i < chunks.Count; i++)
             db.ContentEmbeddings.Add(new ContentEmbedding { ContentId = job.ContentId, ChunkIndex = i, ChunkText = chunks[i], Embedding = new Vector(vectors[i]) });

@@ -3,9 +3,9 @@ namespace Origami.Core.Intelligence.Agents;
 public sealed record AssistantMessage(bool FromUser, string Text);
 
 /// <summary>
-/// Admin-facing conversational assistant assembled with Microsoft Agent Framework. Its function tools
-/// are the same read-only published-content queries the MCP endpoint exposes, so the assistant shares
-/// one tool set with external models and never gains write access.
+/// 以 Microsoft Agent Framework 組裝的後台對話助理。其 function tools 與 MCP 端點
+/// 暴露的唯讀已發布內容查詢相同，因此助理與外部模型共用同一組工具，
+/// 永遠不會取得寫入權限。
 /// </summary>
 public sealed class SiteAssistant(
     IAssistantChatClientFactory clients,
@@ -27,7 +27,7 @@ public sealed class SiteAssistant(
         if (question.Length == 0) throw new CmsException("請輸入問題。");
         if (question.Length > Limits.AssistantQuestionMax)
             throw new CmsException($"問題長度上限為 {Limits.AssistantQuestionMax} 字。");
-        // Only the recent bounded window is replayed; older turns fall out of the prompt.
+        // 只重放最近的有界視窗；較舊的對話輪次不會進入提示。
         var messages = conversation.TakeLast(Limits.AssistantHistoryLimit)
             .Select(turn => new ChatMessage(turn.FromUser ? ChatRole.User : ChatRole.Assistant, turn.Text))
             .Append(new ChatMessage(ChatRole.User, question))
@@ -38,7 +38,7 @@ public sealed class SiteAssistant(
             ChatOptions = new ChatOptions
             {
                 Instructions = Instructions,
-                // Read-only tools shared with the MCP endpoint (same names and scope); no write tools exist.
+                // 與 MCP 端點共用的唯讀工具（名稱與範圍相同）；不存在任何寫入工具。
                 Tools =
                 [
                     AIFunctionFactory.Create(tools.SearchPostsAsync, name: "search_posts",
@@ -59,7 +59,7 @@ public sealed class SiteAssistant(
         }
         catch (Exception error) when (error is not CmsException and not OperationCanceledException)
         {
-            // Provider failures stay generic: no endpoint, key, or response body leaks into the UI.
+            // 供應商失敗保持通用訊息：端點、金鑰或回應內容都不外洩到 UI。
             throw new CmsException("助理暫時無法回覆，請稍後再試。");
         }
     }

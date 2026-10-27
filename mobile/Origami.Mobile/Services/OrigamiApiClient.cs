@@ -5,7 +5,7 @@ using Origami.Mobile.Models;
 
 namespace Origami.Mobile.Services;
 
-/// <summary>Typed client for the read-only Origami /api/v1 endpoints. Drafts and hidden content return null.</summary>
+/// <summary>Origami 唯讀 /api/v1 端點的具型別用戶端。草稿與隱藏內容回傳 null。</summary>
 public sealed class OrigamiApiClient(AppSettings settings, HttpMessageHandler? handler = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -22,7 +22,7 @@ public sealed class OrigamiApiClient(AppSettings settings, HttpMessageHandler? h
                ?? throw new InvalidOperationException("API 回應不是有效的 JSON。");
     }
 
-    /// <summary>kind is "post" or "page"; null means the slug is unknown, unpublished, protected or private.</summary>
+    /// <summary>kind 為 "post" 或 "page"；null 表示 slug 不存在、未發布、受保護或私密。</summary>
     public async Task<ApiContentDetail?> GetContentAsync(string kind, string slug, CancellationToken ct = default)
     {
         var url = $"{BaseUrl}/api/v1/{kind}s/{Uri.EscapeDataString(slug)}";

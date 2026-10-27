@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Origami.Mobile.Models;
 
-/// <summary>Read-only JSON contract of the Origami /api/v1 endpoints (camelCase, enums as strings).</summary>
+/// <summary>Origami /api/v1 端點的唯讀 JSON 合約（camelCase，列舉以字串表示）。</summary>
 public sealed record ApiPagedResult<T>(
     [property: JsonPropertyName("items")] IReadOnlyList<T> Items,
     [property: JsonPropertyName("total")] int Total,

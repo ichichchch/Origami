@@ -8,7 +8,7 @@ public sealed class AdminAccess(
     public async Task RequireAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // Never accept a principal from a component, request payload, or caller.
+        // 絕不接受來自元件、請求內容或呼叫端的主體。
         var state = await authenticationStateProvider.GetAuthenticationStateAsync();
         if (!await ValidatePrincipalAsync(state.User, contextFactory, identityOptions.Value, cancellationToken))
         {
@@ -16,7 +16,7 @@ public sealed class AdminAccess(
         }
     }
 
-    /// <summary>Non-throwing variant for public pages that reveal private content to the administrator only.</summary>
+    /// <summary>不擲回例外的版本，供公開頁面僅對管理員顯示私密內容。</summary>
     public async Task<bool> IsAdminAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -43,7 +43,7 @@ public sealed class AdminAccess(
             return false;
         }
 
-        // A circuit must not retain a DbContext or trust its last periodic validation.
+        // 電路不得保有 DbContext，也不得信任上次的週期性驗證。
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var user = await context.Users.AsNoTracking()
             .Where(user => user.Id == userId && user.SingletonKey == 1)

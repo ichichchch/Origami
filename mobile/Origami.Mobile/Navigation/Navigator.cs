@@ -3,7 +3,7 @@ using Origami.Mobile.ViewModels;
 
 namespace Origami.Mobile.Navigation;
 
-/// <summary>Minimal view-model navigation stack shared by desktop and mobile lifetimes.</summary>
+/// <summary>供桌面與行動裝置生命週期共用的最小 ViewModel 導覽堆疊。</summary>
 public sealed class Navigator : ObservableObject
 {
     private readonly Stack<ViewModelBase> stack = [];

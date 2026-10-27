@@ -3,7 +3,7 @@
              xmlns:local="using:Origami.Mobile"
              x:Class="Origami.Mobile.App"
              RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             <!-- "Default" ThemeVariant 會跟隨系統主題；"Dark" 與 "Light" 是其他可用選項。 -->
 
     <Application.DataTemplates>
         <local:ViewLocator />

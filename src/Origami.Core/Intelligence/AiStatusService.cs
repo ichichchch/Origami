@@ -1,6 +1,6 @@
 namespace Origami.Core.Intelligence;
 
-/// <summary>Configuration completeness, not a provider connectivity or model compatibility check.</summary>
+/// <summary>僅反映設定完整性，不是供應商連線或模型相容性檢查。</summary>
 public sealed record AiStatus(
     bool EmbeddingConfigured,
     bool AssistantConfigured,
@@ -25,11 +25,11 @@ public sealed class AiStatusService(
             var posts = db.Contents.AsNoTracking()
                 .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published);
             var published = await posts.CountAsync(ct);
-            // Count articles, not chunks. Old vectors with a replacement job are not ready.
+            // 計算文章數而非切塊數。有待替換工作的舊向量不算就緒。
             var indexed = await posts.CountAsync(x =>
                 db.ContentEmbeddings.Any(e => e.ContentId == x.Id)
                 && !db.EmbeddingJobs.Any(j => j.ContentId == x.Id), ct);
-            // The outbox contains both post and page jobs; retries are a subset of pending jobs.
+            // outbox 同時包含文章與頁面工作；重試是待處理工作的子集。
             var jobs = await db.EmbeddingJobs.AsNoTracking().GroupBy(_ => 1)
                 .Select(g => new
                 {
@@ -44,7 +44,7 @@ public sealed class AiStatusService(
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception)
         {
-            // Never attach/log configuration values, connection details, or provider exceptions.
+            // 絕不附加或記錄設定值、連線細節或供應商例外。
             throw new CmsException("目前無法讀取 AI 狀態，請稍後重試。");
         }
     }

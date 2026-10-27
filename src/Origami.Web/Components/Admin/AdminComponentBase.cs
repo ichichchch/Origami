@@ -19,7 +19,7 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
 
     protected async Task<bool> RunAsync(Func<CancellationToken, Task> action, string? success = null)
     {
-        // Initial data loads also run during prerendering; only user controls wait for interactivity.
+        // 初始資料載入在預渲染期間也會執行；僅使用者控制項需等待互動模式。
         if (Busy || LoginRequired || Lifetime.IsCancellationRequested) return false;
         Busy = true;
         Error = null;
@@ -32,7 +32,7 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
         }
         catch (UnauthorizedAccessException) { RequireLogin(); }
         catch (CmsException ex) { Error = ex.Message; }
-        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { /* The component was disposed mid-operation; user input is intentionally left untouched. */ }
+        catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { /* 元件在操作進行中被處置；使用者輸入刻意保持原狀。 */ }
         catch (Exception ex)
         {
             Log.ComponentOperationFailed(Logger, ex);

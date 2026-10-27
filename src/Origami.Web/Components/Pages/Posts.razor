@@ -34,7 +34,7 @@
         {
             var ct = HttpContext?.RequestAborted ?? default;
             _settings = await Settings.GetAsync(ct);
-            // Without a static home page the list lives at "/", so /posts just points there.
+            // 未設定靜態首頁時文章列表位於 "/"，因此 /posts 直接指向該處。
             if (_settings.HomePageContentId is null)
             {
                 if (HttpContext is not null && !HttpContext.Response.HasStarted)
@@ -46,7 +46,7 @@
             }
             _serveList = true;
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Posts listing unavailable");

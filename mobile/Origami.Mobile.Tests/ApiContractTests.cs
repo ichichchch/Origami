@@ -6,8 +6,8 @@ using Origami.Mobile.Services;
 namespace Origami.Mobile.Tests;
 
 /// <summary>
-/// Parses payloads exactly as the Origami Api serializes them (camelCase, enums as strings,
-/// extra fields present in server records must be ignored).
+/// 以 Origami Api 序列化後的實際格式解析承載內容（camelCase、列舉以字串表示，
+/// 且必須忽略伺服器紀錄中出現的額外欄位）。
 /// </summary>
 public sealed class ApiContractTests
 {
@@ -99,7 +99,7 @@ public sealed class ApiContractTests
         Assert.Contains("限流", error.Message);
     }
 
-    /// <summary>A stub transport with scripted responses; no real network is involved.</summary>
+    /// <summary>附預排回應的虛設傳輸；不涉及真實網路。</summary>
     private sealed class FakeHandler : HttpMessageHandler
     {
         private readonly Queue<(HttpStatusCode Status, string Body)> responses = [];

@@ -4,7 +4,7 @@ using Origami.Mobile.Navigation;
 
 namespace Origami.Mobile.ViewModels;
 
-/// <summary>Root shell: hosts the navigator's current page and the back button.</summary>
+/// <summary>根殼層：承載導覽器目前的頁面與返回按鈕。</summary>
 public sealed partial class ShellViewModel(Navigator navigator) : ViewModelBase
 {
     public Navigator Navigator { get; } = navigator;

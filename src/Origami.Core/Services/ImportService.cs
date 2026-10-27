@@ -4,7 +4,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
 {
     public sealed record ImportPreview(string SiteName, int Categories, int Tags, int Posts, int Pages, int Media);
 
-    /// <summary>Counts what an import would restore, without touching any data.</summary>
+    /// <summary>統計匯入將還原的內容，不動任何資料。</summary>
     public async Task<ImportPreview> AnalyzeAsync(Stream input, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -13,9 +13,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
     }
 
     /// <summary>
-    /// Restore-style import: within one transaction the current settings, taxonomies, content and media
-    /// metadata are replaced by the export. Image binaries and accounts are never part of the file;
-    /// operators restore the storage directory alongside, as documented.
+    /// 還原式匯入：在單一交易內以匯出檔取代現行設定、分類標籤、內容與媒體
+    /// 中繼資料。圖片二進位資料與帳號一律不在此檔案內；
+    /// 作業人員須依文件說明一併還原儲存目錄。
     /// </summary>
     public async Task<ImportPreview> ApplyAsync(Stream input, bool confirmed, CancellationToken ct = default)
     {
@@ -26,8 +26,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var now = clock.GetUtcNow();
 
-        // Replace means replace: the join tables, embeddings, jobs, revisions, views and redirects
-        // all cascade from their content rows, so a single bulk delete clears them.
+        // 取代就是取代：關聯表、嵌入、工作、修訂版本、瀏覽與轉址
+        // 都隨內容資料列串聯刪除，一次批次刪除即可清空。
         await db.Contents.ExecuteDeleteAsync(ct);
         await db.Categories.ExecuteDeleteAsync(ct);
         await db.Tags.ExecuteDeleteAsync(ct);
@@ -66,7 +66,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
         {
             var fileName = Bounded(node, "fileName", 80, "媒體檔名");
-            // A stored name becomes a file path later; only a plain image file may be imported.
+            // 儲存檔名稍後會變成檔案路徑；僅允許匯入單純的圖片檔名。
             if (!ContentRules.IsSafeMediaFileName(fileName))
                 throw new CmsException($"匯入的媒體檔名不合法：{fileName}。");
             if (!mediaByFileName.TryAdd(fileName, new MediaAsset
@@ -85,7 +85,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         }
         foreach (var asset in mediaByFileName.Values) db.MediaAssets.Add(asset);
 
-        // First pass: create every content row; hierarchy links resolve on the in-memory entities.
+        // 第一輪：建立所有內容資料列；階層連結在記憶體中的實體上解析。
         Dictionary<string, Content> contentsBySlug = [];
         List<(Content Entity, string? ParentSlug)> hierarchy = [];
         foreach (var node in document.RootElement.GetProperty("contents").EnumerateArray())
@@ -118,7 +118,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 Version = Guid.NewGuid(),
             };
             if (content.Status == ContentStatus.Published && content.PublishedAt is null)
-                content.PublishedAt = now; // the check constraint requires a date on the live published state
+                content.PublishedAt = now; // 資料庫檢查約束要求現行發布狀態必須有日期
             if (content.IsProtected && content.ProtectionHash == "")
                 throw new CmsException($"受保護內容「{content.Title}」缺少保護資料，無法還原。");
             if (!contentsBySlug.TryAdd(content.Slug, content)) throw new CmsException($"匯入的內容代稱重複：{content.Slug}。");
@@ -136,7 +136,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             }
             db.Contents.Add(content);
         }
-        // Second pass: link page parents and refuse cycles with one in-memory walk over the slug chain.
+        // 第二輪：連結頁面上層，並以一次記憶體內的 slug 鏈走訪拒絕循環。
         var parentSlugBySlug = hierarchy.Where(x => x.ParentSlug is not null).ToDictionary(x => x.Entity.Slug, x => x.ParentSlug!);
         foreach (var (entity, parentSlug) in hierarchy)
         {
@@ -161,14 +161,14 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             ? Math.Clamp(feedItems.GetInt32(), 1, Limits.MaxFeedItems) : null;
         settings.HomePageContentId = site.GetString("homePageSlug") is { } homeSlug && contentsBySlug.GetValueOrDefault(homeSlug) is { Kind: ContentKind.Page, Status: ContentStatus.Published, IsProtected: false, IsPrivate: false } home
             ? home.Id : null;
-        // The imported media rows get new identifiers, so the icon is resolved from the file name.
+        // 匯入的媒體資料列會取得新識別碼，因此圖示改從檔名解析。
         Guid? siteIconId = null;
         if (site.GetString("siteIconFileName") is { } iconFile && mediaByFileName.TryGetValue(iconFile, out var icon))
             siteIconId = icon.Id;
         settings.SiteIconMediaId = siteIconId;
         settings.Version = Guid.NewGuid();
 
-        // Published public content re-enters the embedding pipeline exactly like a fresh publish.
+        // 已發布的公開內容與全新發布一樣，重新進入嵌入管道。
         foreach (var content in contentsBySlug.Values.Where(x => x.Status == ContentStatus.Published && !x.IsProtected && !x.IsPrivate))
             db.EmbeddingJobs.Add(new EmbeddingJob { ContentId = content.Id, EnqueuedAt = now, NextAttemptAt = now });
 

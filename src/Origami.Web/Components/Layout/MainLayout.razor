@@ -34,8 +34,8 @@
     private SiteSettings _settings = new();
     private List<PageNavItem> _pages = [];
 
-    /// <summary>Depth-aware flat order: children follow their parent; a child whose parent is
-    /// not part of the published set renders at the top level instead of disappearing.</summary>
+    /// <summary>帶深度的平面排序：子頁面跟在父頁面之後；若父頁面不在已發布集合內，
+    /// 子頁面改以頂層呈現而不會直接消失。</summary>
     private List<(PageNavItem Page, int Depth)> NavOrder()
     {
         var byId = _pages.ToDictionary(x => x.Id);
@@ -60,7 +60,7 @@
             _settings = await Settings.GetAsync(ct);
             _pages = await Content.NavigationAsync(ct);
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* The visitor disconnected mid-render; nothing to do. */ }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex) { Logger.LogError(ex, "Public navigation unavailable"); }
     }
 }

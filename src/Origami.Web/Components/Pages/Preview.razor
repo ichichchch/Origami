@@ -8,7 +8,7 @@
 <PageTitle>@(_content?.Title ?? "內容預覽")</PageTitle>
 @if (_redirecting)
 {
-    @* The redirect target is in the response headers; render no content. *@
+    @* 轉址目標已在回應標頭中；不渲染任何內容。 *@
 }
 else if (_error is not null)
 {
@@ -63,7 +63,7 @@ else
         {
             var ct = HttpContext?.RequestAborted ?? default;
             _content = await Content.GetPreviewAsync(Token, ct);
-            // A token whose content is already public points at the canonical URL instead.
+            // token 對應的內容若已公開，改指向 canonical 網址。
             if (_content is null)
             {
                 var published = await Content.ResolvePublishedPreviewAsync(Token, ct);
@@ -84,12 +84,12 @@ else
                 return;
             }
             _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
-            // Share links must never leak into search indexes, whatever the crawler honors.
+            // 分享連結絕不能外洩至搜尋索引，無論檢索器是否遵守指示。
             if (HttpContext is not null && !HttpContext.Response.HasStarted)
                 HttpContext.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
             _resolved = true;
         }
-        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* Visitor disconnected. */ }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客已斷線。 */ }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Preview unavailable");

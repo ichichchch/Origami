@@ -13,7 +13,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         var query = db.MediaAssets.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            // Administrators find images by the name they uploaded or the alt text they wrote.
+            // 管理員以上傳名稱或自行撰寫的替代文字搜尋圖片。
             var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
             query = query.Where(x => EF.Functions.ILike(x.OriginalName, pattern) || EF.Functions.ILike(x.AltText, pattern));
         }
@@ -36,13 +36,13 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return new(asset.Id, asset.FileName, asset.OriginalName, asset.ContentType, asset.Size, asset.Width, asset.Height, asset.UploadedAt) { AltText = asset.AltText };
     }
 
-    /// <summary>Variant file name for a responsive width, e.g. abc.png → abc_w480.png.</summary>
+    /// <summary>回應式寬度的變體檔名，例如 abc.png → abc_w480.png。</summary>
     public static string VariantName(string fileName, int width) =>
         Path.GetFileNameWithoutExtension(fileName) + "_w" + width + Path.GetExtension(fileName);
 
     public sealed record MediaReference(Guid ContentId, string Title, ContentKind Kind, ContentStatus Status);
 
-    /// <summary>Contents whose Markdown embeds this image, in any state — a draft or trashed piece still owns the reference.</summary>
+    /// <summary>Markdown 內嵌此圖片的內容，不限狀態——草稿或回收桶內容仍持有引用。</summary>
     public async Task<List<MediaReference>> ListReferencesAsync(Guid mediaId, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
@@ -61,7 +61,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return await ReferencedContents(db, fileName).CountAsync(ct);
     }
 
-    /// <summary>The markers a Markdown body can use to reference an image: the original and every variant.</summary>
+    /// <summary>Markdown 本文可用來引用圖片的標記：原圖與所有變體。</summary>
     public static string[] ReferenceMarkers(string fileName)
     {
         var markers = new List<string> { "/media/" + fileName };
@@ -70,11 +70,11 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return [.. markers];
     }
 
-    /// <summary>Contents whose Markdown embeds this image or one of its responsive variants, in any state.</summary>
+    /// <summary>Markdown 內嵌此圖片或其任一回應式變體的內容，不限狀態。</summary>
     private static IQueryable<Content> ReferencedContents(CmsDbContext db, string fileName)
     {
         var markers = ReferenceMarkers(fileName);
-        // Any marker counts as a reference: a body may embed the original or a variant.
+        // 任一標記都算引用：本文可能內嵌原圖或變體。
         var parameter = Expression.Parameter(typeof(Content), "x");
         var contains = typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
         Expression? body = null;
@@ -95,7 +95,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             .Select(x => new MediaReference(x.Id, x.Title, x.Kind, x.Status)).ToListAsync(ct);
     }
 
-    /// <summary>The stored file and content type behind the configured site icon; null when unset.</summary>
+    /// <summary>設定的網站圖示背後的儲存檔與內容類型；未設定時為 null。</summary>
     public async Task<SiteIconFile?> GetSiteIconAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -103,21 +103,21 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
                           join asset in db.MediaAssets.AsNoTracking() on settings.SiteIconMediaId equals asset.Id
                           where settings.Id == 1
                           select new { asset.FileName, asset.ContentType }).SingleOrDefaultAsync(ct);
-        // A stored name that is not a plain image file never becomes a readable path.
+        // 不是單純圖片檔的儲存檔名絕不會變成可讀取的路徑。
         if (icon is null || !ContentRules.IsSafeMediaFileName(icon.FileName)) return null;
         return new SiteIconFile(Path.Combine(storage.Images, icon.FileName), icon.ContentType);
     }
 
     public sealed record SiteIconFile(string Path, string ContentType);
 
-    /// <summary>Deletes an unreferenced image together with its variants. Referenced images are refused.</summary>
+    /// <summary>連同變體刪除未被引用的圖片；仍被引用的圖片予以拒絕。</summary>
     public async Task DeleteAsync(Guid mediaId, bool confirmed, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
         if (!confirmed) throw new CmsException("請先確認刪除圖片。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var asset = await db.MediaAssets.SingleOrDefaultAsync(x => x.Id == mediaId, ct) ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
-        // The stored name decides the path, so it must be a plain image file inside the image folder.
+        // 儲存檔名決定路徑，因此必須是圖片資料夾內的單純圖片檔。
         if (!ContentRules.IsSafeMediaFileName(asset.FileName))
             throw new CmsException("媒體檔名不合法，無法刪除。");
         if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.SiteIconMediaId == mediaId, ct))
@@ -131,13 +131,13 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         }
         db.MediaAssets.Remove(asset);
         await ContentRules.SaveAsync(db, ct);
-        // The row is gone; file removal is best-effort and never blocks the database outcome.
+        // 資料列已刪除；檔案移除採盡力而為，絕不阻擋資料庫結果。
         Cleanup(Path.Combine(storage.Images, asset.FileName));
         foreach (var width in Limits.ImageVariantWidths)
             Cleanup(Path.Combine(storage.Images, VariantName(asset.FileName, width)));
     }
 
-    /// <summary>System operation: regenerates missing variant files for assets uploaded before variants existed.</summary>
+    /// <summary>系統操作：為變體功能出現前上傳的圖片重新產生缺少的變體檔。</summary>
     public async Task<int> BackfillVariantsAsync(CancellationToken ct = default)
     {
         var repaired = 0;
@@ -199,7 +199,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         }
     }
 
-    /// <summary>Anonymous catalog of public image names and their pixel widths, used to build srcset attributes.</summary>
+    /// <summary>公開圖片檔名與像素寬度的匿名目錄，用於組出 srcset 屬性。</summary>
     public async Task<Dictionary<string, int>> PublicImageWidthsAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -242,7 +242,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             var fileName = id.ToString("N") + extension;
             var stagingPath = Path.Combine(storage.Staging, id.ToString("N") + ".tmp");
             var finalPath = Path.Combine(storage.Images, fileName);
-            // Responsive variants: only widths narrower than the source, never upscaled.
+            // 回應式變體：僅產生比原始圖窄的寬度，絕不放大。
             var variants = new List<(string Name, byte[] Bytes)>();
             foreach (var width in Limits.ImageVariantWidths)
             {
@@ -271,7 +271,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
                         await file.FlushAsync(ct);
                     }
                 }
-                // The completed re-encoded images become public atomically; source bytes are never served.
+                // 完成重新編碼的圖片以原子方式公開；原始位元組絕不對外提供。
                 await admin.RequireAsync(ct);
                 foreach (var (staging, final) in staged) File.Move(staging, final);
                 await using var db = await factory.CreateDbContextAsync(ct);

@@ -1,9 +1,9 @@
 namespace Origami.Core.Intelligence.Embedding;
 
-/// <summary>Splits Markdown into embeddable chunks at paragraph boundaries, deterministic and bounded.</summary>
+/// <summary>在段落邊界把 Markdown 切成可嵌入的切塊，結果具確定性且長度有上限。</summary>
 public static class MarkdownChunker
 {
-    /// <summary>Chunks never exceed Limits.EmbeddingChunkMax so they fit the storage column and model input limit.</summary>
+    /// <summary>切塊絕不超過 Limits.EmbeddingChunkMax，以符合儲存欄位與模型輸入上限。</summary>
     public static IReadOnlyList<string> Chunk(string markdown)
     {
         var chunks = new List<string>();

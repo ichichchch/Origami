@@ -7,7 +7,7 @@ public sealed partial class MarkdownService
     public string Render(string markdown, IReadOnlyDictionary<string, int>? mediaWidths = null)
     {
         if (markdown.Length > Limits.Body) throw new CmsException("本文超過長度上限。");
-        // A fresh sanitizer avoids shared mutable state across concurrent SSR requests.
+        // 每次建立新的清理器，避免並發 SSR 請求之間共用可變狀態。
         var sanitizer = new HtmlSanitizer();
         sanitizer.AllowedTags.Clear();
         sanitizer.AllowedTags.UnionWith(["p", "h1", "h2", "h3", "h4", "h5", "h6", "a", "img", "pre", "code",
@@ -21,13 +21,13 @@ public sealed partial class MarkdownService
             if (!IsAllowedUrl(e.SanitizedUrl)) e.SanitizedUrl = null;
         };
         var html = sanitizer.Sanitize(Markdown.ToHtml(markdown, pipeline));
-        // Raw HTML is disabled, so every <img> originates from Markdown syntax and lacks these
-        // attributes; content images defer loading below the initial article viewport.
+        // 原始 HTML 已停用，因此每個 <img> 都來自 Markdown 語法且缺少這些
+        // 屬性；內文圖片在文章首屏以下延後載入。
         html = html.Replace("<img ", "<img loading=\"lazy\" decoding=\"async\" ", StringComparison.Ordinal);
         return mediaWidths is { Count: > 0 } ? AddResponsiveSources(html, mediaWidths) : html;
     }
 
-    /// <summary>Adds srcset candidates for /media images whose variants are known to exist on disk.</summary>
+    /// <summary>為磁碟上已知存在變體的 /media 圖片加上 srcset 候選。</summary>
     private static string AddResponsiveSources(string html, IReadOnlyDictionary<string, int> mediaWidths)
     {
         return ContentImage().Replace(html, match =>
@@ -48,7 +48,7 @@ public sealed partial class MarkdownService
 
     public string Excerpt(string markdown)
     {
-        // List projections fetch only a bounded prefix; render the result as encoded text, never HTML.
+        // 列表投影只取有限前綴；結果以編碼文字輸出，絕不是 HTML。
         var text = Markdown.ToPlainText(markdown, pipeline);
         text = string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (text.Length <= 180) return text;
@@ -56,14 +56,14 @@ public sealed partial class MarkdownService
         return text[..length].TrimEnd() + "…";
     }
 
-    /// <summary>The first image link, or null when the content has no allowed image.</summary>
+    /// <summary>第一個圖片連結；內容沒有允許的圖片時為 null。</summary>
     public string? FirstImage(string markdown)
     {
         var match = FirstImageLink().Match(markdown);
         return match.Success && IsAllowedUrl(match.Groups[1].Value) ? match.Groups[1].Value : null;
     }
 
-    /// <summary>Markdown reduced to plain, whitespace-collapsed text without truncating.</summary>
+    /// <summary>把 Markdown 轉為純文字並摺疊空白，不截斷。</summary>
     public string PlainText(string markdown)
     {
         var text = Markdown.ToPlainText(markdown, pipeline);

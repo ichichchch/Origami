@@ -10,8 +10,8 @@ public sealed class StoragePaths
     public StoragePaths(IConfiguration configuration, IHostEnvironment environment)
     {
         var configured = configuration["Storage:RootPath"];
-        // An explicit setting must be absolute. Without one, the default keeps uploads and
-        // keys outside the application directory.
+        // 明確設定必須是絕對路徑。未設定時，預設值會讓上傳與
+        // 金鑰位於應用目錄之外。
         if (string.IsNullOrWhiteSpace(configured)) Root = Path.GetFullPath(DefaultRoot());
         else if (!Path.IsPathFullyQualified(configured))
             throw new InvalidOperationException("持久化儲存必須是絕對路徑。");

@@ -3,8 +3,8 @@ namespace Origami.Core.Intelligence.Agents;
 public sealed record McpContentResult(bool Found, PublicContent? Content);
 
 /// <summary>
-/// Read-only MCP tools exposing published content to models. There are deliberately no
-/// write tools here: state changes require human confirmation and are out of scope for MCP.
+/// 把已發布內容暴露給模型的唯讀 MCP 工具。這裡刻意不提供
+/// 寫入工具：狀態變更須經人類確認，不屬於 MCP 的範圍。
 /// </summary>
 [McpServerToolType]
 public sealed class McpReadTools(SemanticSearchService search, ContentService content)
@@ -29,8 +29,8 @@ public sealed class McpReadTools(SemanticSearchService search, ContentService co
     private async Task<McpContentResult> GetAsync(ContentKind kind, string slug, CancellationToken ct)
     {
         var found = await content.GetPublishedAsync(kind, slug, ct);
-        // Password-protected bodies are gated for humans and private content is admin-only;
-        // a model tool must not become a side door to either.
+        // 密碼保護的內文對人類也設有門檻，私密內容更僅限管理員；
+        // 模型工具不得成為其中任何一者的側門。
         return new(found is not null && !found.IsProtected && !found.IsPrivate,
             found is { IsProtected: false, IsPrivate: false } ? found : null);
     }

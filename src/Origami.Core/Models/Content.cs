@@ -33,9 +33,9 @@ public static class Limits
     public const int RevisionKeep = 20;
     public const int AutosaveSeconds = 60;
     public const int TrashRetentionDays = 30;
-    // A schedule must be at least this far ahead so the worker promotes it at the intended minute.
+    // 排程至少須提前這麼多分鐘，背景工作才能在預定的分鐘準時將其發布。
     public const int ScheduleLeadMinutes = 5;
-    // Responsive widths generated next to every upload; variants wider than the source are skipped.
+    // 隨每次上傳產生的響應式寬度；比原始圖更寬的變體會略過。
     public static readonly int[] ImageVariantWidths = [480, 960, 1600];
     public const int AssistantQuestionMax = 8_000;
     public const int AssistantHistoryLimit = 20;
@@ -43,11 +43,11 @@ public static class Limits
 
 public sealed class AdminUser : IdentityUser
 {
-    // A unique, checked constant prevents concurrent provisioning of a second administrator.
+    // 唯一且受檢查約束的常數，防止並發建立第二位管理員。
     public int SingletonKey { get; set; } = 1;
-    /// <summary>Base32 TOTP shared secret; empty until two-factor setup begins.</summary>
+    /// <summary>Base32 編碼的 TOTP 共用密鑰；兩步驗證設定開始前為空。</summary>
     public string TwoFactorSecret { get; set; } = "";
-    // Two-factor enablement reuses the inherited IdentityUser.TwoFactorEnabled column.
+    // 兩步驗證的啟用重用繼承自 IdentityUser.TwoFactorEnabled 的欄位。
 }
 
 public sealed class Content
@@ -59,24 +59,24 @@ public sealed class Content
     public string Markdown { get; set; } = "";
     public string Excerpt { get; set; } = "";
     public ContentStatus Status { get; set; }
-    // Sticky posts lead the public article list; pages ignore the flag.
+    // 置頂文章排在公開文章列表最前；頁面忽略此旗標。
     public bool IsSticky { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
-    /// <summary>Future publish time for a draft; the lifecycle worker promotes it when due.</summary>
+    /// <summary>草稿的未來發布時間；到期時由生命週期背景工作發布。</summary>
     public DateTimeOffset? PublishAt { get; set; }
-    /// <summary>Set while the content sits in the trash; drives the retention cleanup.</summary>
+    /// <summary>內容待在回收桶時設定；用於驅動保留期限清理。</summary>
     public DateTimeOffset? DeletedAt { get; set; }
-    /// <summary>Unguessable share link that renders this content before it is published.</summary>
+    /// <summary>無法猜測的分享連結，用於在內容發布前渲染檢視。</summary>
     public Guid? PreviewToken { get; set; }
-    /// <summary>True when the public URL requires a password before rendering the body.</summary>
+    /// <summary>為 true 時，公開網址需先輸入密碼才渲染內文。</summary>
     public bool IsProtected { get; set; }
-    /// <summary>Identity-hashed protection password; empty when unprotected.</summary>
+    /// <summary>以 Identity 雜湊的保護密碼；未受保護時為空。</summary>
     public string ProtectionHash { get; set; } = "";
-    /// <summary>True when only the signed-in administrator may read the public URL; everyone else gets 404.</summary>
+    /// <summary>為 true 時，僅已登入的管理員可讀取公開網址；其他人一律得到 404。</summary>
     public bool IsPrivate { get; set; }
-    /// <summary>Parent page for hierarchical navigation; null on top-level pages and always null on posts.</summary>
+    /// <summary>階層導覽用的父頁面；最上層頁面為 null，文章則一律為 null。</summary>
     public Guid? ParentId { get; set; }
     public Content? Parent { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
@@ -85,7 +85,7 @@ public sealed class Content
     public ICollection<ContentView> Views { get; set; } = new List<ContentView>();
 }
 
-/// <summary>Snapshot of the content as it was before a save; restore loads it back into the editor.</summary>
+/// <summary>內容儲存前的快照；還原時載回編輯器。</summary>
 public sealed class ContentRevision
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -97,7 +97,7 @@ public sealed class ContentRevision
     public Content Content { get; set; } = null!;
 }
 
-/// <summary>One day of view counts for one content; the only analytics surface.</summary>
+/// <summary>單一內容單日的瀏覽次數；為唯一的分析數據。</summary>
 public sealed class ContentView
 {
     public Guid ContentId { get; set; }
@@ -139,7 +139,7 @@ public sealed class MediaAsset
     public DateTimeOffset UploadedAt { get; set; }
 }
 
-/// <summary>Maps a retired public slug to the content that used to carry it, for permanent redirects.</summary>
+/// <summary>把已除役的公開 slug 對應到原本使用它的內容，用於永久轉址。</summary>
 public sealed class ContentSlugRedirect
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -149,7 +149,7 @@ public sealed class ContentSlugRedirect
     public Content Content { get; set; } = null!;
 }
 
-/// <summary>One chunk of a published content's text with its embedding vector.</summary>
+/// <summary>已發布內容文字的單一切塊及其嵌入向量。</summary>
 public sealed class ContentEmbedding
 {
     public Guid ContentId { get; set; }
@@ -158,7 +158,7 @@ public sealed class ContentEmbedding
     public required Vector Embedding { get; set; }
 }
 
-/// <summary>Outbox row for the background embedding worker; deleted when the job completes.</summary>
+/// <summary>背景嵌入工作的 outbox 資料列；工作完成時刪除。</summary>
 public sealed class EmbeddingJob
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -173,13 +173,13 @@ public sealed class SiteSettings
     public int Id { get; set; } = 1;
     [Required, StringLength(Limits.SiteName)] public string Name { get; set; } = "Origami";
     [StringLength(Limits.Description)] public string Description { get; set; } = "用文字，分享你的世界。";
-    /// <summary>Articles per public list page; null falls back to <see cref="Limits.PageSize"/>.</summary>
+    /// <summary>公開列表每頁的文章數；null 時退回 <see cref="Limits.PageSize"/>。</summary>
     public int? PostsPerPage { get; set; }
-    /// <summary>Items in the RSS feed; null falls back to <see cref="Limits.FeedItems"/>.</summary>
+    /// <summary>RSS feed 中的項目數；null 時退回 <see cref="Limits.FeedItems"/>。</summary>
     public int? FeedItems { get; set; }
-    /// <summary>Published page rendered as the home page; null keeps the home page as the article list.</summary>
+    /// <summary>渲染為首頁的已發布頁面；null 時首頁維持為文章列表。</summary>
     public Guid? HomePageContentId { get; set; }
-    /// <summary>Media asset used as the site icon; null serves no favicon.</summary>
+    /// <summary>用作網站圖示的媒體資產；null 時不提供 favicon。</summary>
     public Guid? SiteIconMediaId { get; set; }
     public Guid Version { get; set; }
 }

@@ -1,14 +1,14 @@
 namespace Origami.Core.Intelligence.AiGateway;
 
-/// <summary>Seam for tests: lets the assistant run against a fake IChatClient without provider configuration.</summary>
+/// <summary>供測試使用的接縫：讓助理無需供應商設定即可對假的 IChatClient 執行。</summary>
 public interface IAssistantChatClientFactory
 {
     IChatClient Create();
 }
 
 /// <summary>
-/// Builds the assistant chat client from an OpenAI-compatible endpoint. The API key exists only in
-/// the outbound Authorization header of the underlying client; it never enters source control or logs.
+/// 由 OpenAI 相容端點建立助理對話用戶端。API 金鑰只存在於底層用戶端的
+/// 外送 Authorization 標頭，絕不進入原始碼版控或日誌。
 /// </summary>
 public sealed class AssistantChatClientFactory(IOptionsMonitor<AiOptions> options) : IAssistantChatClientFactory
 {
@@ -25,9 +25,9 @@ public sealed class AssistantChatClientFactory(IOptionsMonitor<AiOptions> option
         var config = (settings.Endpoint, settings.Model, settings.ApiKey);
         lock (_gate)
         {
-            // Rebuild only when external configuration actually changes; the client itself is reused.
+            // 只有外部設定實際變更時才重建；用戶端本身會重複使用。
             if (_client is not null && _built == config) return _client;
-            // Chat Completions keeps every OpenAI-compatible endpoint usable (the Responses API is not).
+            // 採用 Chat Completions 讓每個 OpenAI 相容端點皆可用（Responses API 則不然）。
             var client = new OpenAI.OpenAIClient(new System.ClientModel.ApiKeyCredential(settings.ApiKey),
                     new OpenAI.OpenAIClientOptions { Endpoint = new Uri(settings.Endpoint) })
                 .GetChatClient(settings.Model)

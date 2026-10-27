@@ -1,6 +1,6 @@
 namespace Origami.Web.Services;
 
-/// <summary>Bounds all credential attempts per connection source, regardless of sign-in outcome.</summary>
+/// <summary>依連線來源限制所有憑證嘗試次數，不論登入結果為何。</summary>
 public sealed class LoginThrottle(TimeProvider clock)
 {
     public const int MaxAttempts = 20;
@@ -9,10 +9,10 @@ public sealed class LoginThrottle(TimeProvider clock)
 
     private readonly object gate = new();
     private readonly Dictionary<string, Queue<DateTimeOffset>> attempts = new(StringComparer.Ordinal);
-    // Exactly one expiry entry per source; requests visit only sources with expired attempts.
+    // 每個來源恰保留一筆到期記錄；清理時只走訪已有過期嘗試的來源。
     private readonly PriorityQueue<string, DateTimeOffset> expirations = new();
 
-    /// <summary>Atomically consumes a permit before checking credentials. Missing sources share one budget.</summary>
+    /// <summary>在驗證憑證前以原子方式消耗一個許可。缺少來源資訊者共用同一份預算。</summary>
     public bool TryAcquire(string? source)
     {
         source = string.IsNullOrEmpty(source) ? "unknown" : source;
@@ -22,7 +22,7 @@ public sealed class LoginThrottle(TimeProvider clock)
             RemoveExpired(now);
             if (!attempts.TryGetValue(source, out var queue))
             {
-                // At capacity, new sources fail closed until an entry expires; live entries are never evicted.
+                // 容量滿時保守拒絕新來源，直到有記錄到期；活躍記錄絕不逐出。
                 if (attempts.Count >= MaxSources) return false;
                 queue = new Queue<DateTimeOffset>(MaxAttempts);
                 attempts.Add(source, queue);

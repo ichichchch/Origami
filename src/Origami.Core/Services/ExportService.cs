@@ -1,9 +1,9 @@
 namespace Origami.Core.Services;
 
 /// <summary>
-/// Streams the site's settings, taxonomies, full content and media metadata as JSON. Uploaded image
-/// binaries, accounts and every kind of secret stay out of the export on purpose; content protection
-/// hashes travel along so password gates survive an import round trip.
+/// 以串流將網站設定、分類標籤、完整內容與媒體中繼資料輸出為 JSON。上傳的圖片
+/// 二進位資料、帳號與任何機密都刻意不進入匯出檔；內容保護雜湊隨檔同行，
+/// 讓密碼門檻在匯入往返後仍可運作。
 /// </summary>
 public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin)
 {
@@ -17,7 +17,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         writer.WriteNumber("version", 2);
         writer.WriteString("exportedAt", DateTimeOffset.UtcNow);
 
-        // Content ids never leave the site; slugs are the stable identity for import-time links.
+        // 內容識別碼絕不離站；slug 才是匯入時建立連結的穩定識別。
         var slugById = await db.Contents.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         var settings = await db.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, ct);
         writer.WriteStartObject("site");

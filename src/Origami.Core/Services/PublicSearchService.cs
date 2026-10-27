@@ -3,9 +3,9 @@ namespace Origami.Core.Services;
 public sealed record PublicSearchHit(Guid Id, string Title, string Slug, string Snippet, string Source);
 
 /// <summary>
-/// Hybrid public search: exact keyword matching (which semantic search misses for precise terms
-/// like product names or error codes) merged with semantic results. Keyword matching keeps working
-/// without an embedding provider; semantic failures degrade instead of failing the whole search.
+/// 混合式公開搜尋：精確關鍵字比對（語意搜尋對產品名稱或錯誤代碼等精確詞彙
+/// 力有未逮）與語意結果合併。沒有嵌入供應商時關鍵字比對仍可運作；
+/// 語意失敗只降級，不讓整個搜尋失敗。
 /// </summary>
 public sealed class PublicSearchService(
     SemanticSearchService semantic,
@@ -25,13 +25,13 @@ public sealed class PublicSearchService(
         var semanticAvailable = true;
         try
         {
-            // The gateway is the only failure point; any of its failures (including missing
-            // configuration) only disables the semantic leg, keyword results still serve.
+            // 閘道是唯一的失敗點；其任何失敗（包括缺少設定）
+            // 只停用語意搜尋這一路，關鍵字結果仍照常提供。
             semanticHits = [.. await semantic.SearchAsync(query, limit, ct)];
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            // A provider timeout is a failed leg, not a cancelled visitor: keyword results still serve.
+            // 供應商逾時視為該路失敗，而非訪客取消：關鍵字結果仍照常提供。
             semanticAvailable = false;
         }
         catch (Exception error) when (error is not OperationCanceledException)
@@ -47,7 +47,7 @@ public sealed class PublicSearchService(
         return new(bySlug.Values.Take(limit).ToList(), semanticAvailable);
     }
 
-    /// <summary>Case-insensitive containment across title, excerpt and body of published posts.</summary>
+    /// <summary>對已發布文章的標題、摘要與本文進行不區分大小寫的包含比對。</summary>
     private async Task<List<PublicSearchHit>> KeywordAsync(string query, int limit, CancellationToken ct)
     {
         var pattern = "%" + ContentRules.EscapeLike(query) + "%";

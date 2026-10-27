@@ -4,7 +4,7 @@ public sealed record SemanticHit(Guid Id, ContentKind Kind, string Title, string
 
 public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factory, IEmbeddingGateway gateway)
 {
-    /// <summary>Searches published posts by meaning. Drafts, withdrawn and deleted content are filtered in SQL.</summary>
+    /// <summary>依語意搜尋已發布文章。草稿、已撤回與已刪除內容都在 SQL 中過濾。</summary>
     public async Task<IReadOnlyList<SemanticHit>> SearchAsync(string query, int limit = Limits.PageSize, CancellationToken ct = default)
     {
         if (query?.Length > Limits.SearchQueryMax)
@@ -14,7 +14,7 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
         limit = Math.Clamp(limit, 1, Limits.SearchMaxResults);
         var queryVector = new Vector(await gateway.EmbedQueryAsync(query, ct));
         await using var db = await factory.CreateDbContextAsync(ct);
-        // The publish filter is part of the SQL, never a post-hoc memory filter.
+        // 發布過濾條件是 SQL 的一部分，絕不是事後的記憶體過濾。
         var rows = await (from e in db.ContentEmbeddings.AsNoTracking()
                           join c in db.Contents.AsNoTracking() on e.ContentId equals c.Id
                           where c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate
@@ -31,8 +31,8 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
     private static string Snippet(string text) => text.Length <= 200 ? text : text[..200] + "…";
 
     /// <summary>
-    /// Related published posts for one article, ranked by cosine similarity against the centroid of
-    /// its own chunk vectors. Private and password-protected posts never appear as recommendations.
+    /// 取得單篇文章的相關已發布文章，以自身切塊向量的質心（centroid）計算餘弦相似度排序。
+    /// 私密與密碼保護文章絕不出現在推薦中。
     /// </summary>
     public async Task<IReadOnlyList<SemanticHit>> RelatedAsync(Guid contentId, int limit = 3, CancellationToken ct = default)
     {
