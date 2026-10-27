@@ -1,5 +1,5 @@
 @page "/posts"
-@inject SettingsService Settings
+@inject OrigamiClient Api
 @inject ILogger<Posts> Logger
 
 <PageTitle>最新文章</PageTitle>
@@ -23,7 +23,7 @@
     [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
     [SupplyParameterFromQuery(Name = "tag")] public string? Tag { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
-    private SiteSettings _settings = new();
+    private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private bool _serveList;
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
 
@@ -33,7 +33,7 @@
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _settings = await Settings.GetAsync(ct);
+            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
             // 未設定靜態首頁時文章列表位於 "/"，因此 /posts 直接指向該處。
             if (_settings.HomePageContentId is null)
             {

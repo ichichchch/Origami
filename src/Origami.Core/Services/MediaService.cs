@@ -13,27 +13,31 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         var query = db.MediaAssets.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            // 管理員以上傳名稱或自行撰寫的替代文字搜尋圖片。
+            // 管理員以上傳名稱、替代文字或說明文字搜尋圖片。
             var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
-            query = query.Where(x => EF.Functions.ILike(x.OriginalName, pattern) || EF.Functions.ILike(x.AltText, pattern));
+            query = query.Where(x => EF.Functions.ILike(x.OriginalName, pattern) || EF.Functions.ILike(x.AltText, pattern) || EF.Functions.ILike(x.Caption, pattern));
         }
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.UploadedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize).Select(x => new MediaItem(x.Id, x.FileName, x.OriginalName, x.ContentType, x.Size, x.Width, x.Height, x.UploadedAt)
-            { AltText = x.AltText }).ToListAsync(ct);
+            { AltText = x.AltText, Caption = x.Caption }).ToListAsync(ct);
         return new(items, total, page, pageSize);
     }
 
-    public async Task<MediaItem> UpdateAltAsync(Guid id, string? altText, CancellationToken ct = default)
+    public async Task<MediaItem> UpdateMetaAsync(Guid id, string? altText, string? caption, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
         var alt = (altText ?? "").Trim();
         if (alt.Length > Limits.AltText) throw new CmsException($"替代文字上限為 {Limits.AltText} 字。");
+        var cap = (caption ?? "").Trim();
+        if (cap.Length > Limits.Caption) throw new CmsException($"說明文字上限為 {Limits.Caption} 字。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var asset = await db.MediaAssets.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
         asset.AltText = alt;
+        asset.Caption = cap;
         await ContentRules.SaveAsync(db, ct);
-        return new(asset.Id, asset.FileName, asset.OriginalName, asset.ContentType, asset.Size, asset.Width, asset.Height, asset.UploadedAt) { AltText = asset.AltText };
+        return new(asset.Id, asset.FileName, asset.OriginalName, asset.ContentType, asset.Size, asset.Width, asset.Height, asset.UploadedAt)
+            { AltText = asset.AltText, Caption = asset.Caption };
     }
 
     /// <summary>回應式寬度的變體檔名，例如 abc.png → abc_w480.png。</summary>
@@ -49,7 +53,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         await using var db = await factory.CreateDbContextAsync(ct);
         var fileName = await db.MediaAssets.Where(x => x.Id == mediaId).Select(x => x.FileName).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
-        return await QueryReferencesAsync(db, fileName, ct);
+        return await QueryReferencesAsync(db, mediaId, fileName, ct);
     }
 
     public async Task<int> CountReferencesAsync(Guid mediaId, CancellationToken ct = default)
@@ -58,7 +62,25 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         await using var db = await factory.CreateDbContextAsync(ct);
         var fileName = await db.MediaAssets.Where(x => x.Id == mediaId).Select(x => x.FileName).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
-        return await ReferencedContents(db, fileName).CountAsync(ct);
+        return await ReferencedContents(db, mediaId, fileName).CountAsync(ct);
+    }
+
+    /// <summary>
+    /// 一次取回整頁媒體的引用數；供列表端點填入 <see cref="MediaItem.ReferenceCount"/>，避免呼叫端逐筆往返。
+    /// 已知取舍：引用標記含響應式變體（每檔多名），無法以單條 GROUP BY 聚合，
+    /// 因此逐媒體計數——每頁至多 <see cref="Limits.MaxPageSize"/> 條順序查詢，僅管理端列表使用。
+    /// </summary>
+    public async Task<Dictionary<Guid, int>> ReferenceCountsAsync(IReadOnlyCollection<Guid> mediaIds, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        if (mediaIds.Count == 0) return [];
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var names = await db.MediaAssets.AsNoTracking().Where(x => mediaIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.FileName, ct);
+        var counts = new Dictionary<Guid, int>();
+        foreach (var id in mediaIds)
+            counts[id] = names.TryGetValue(id, out var fileName) ? await ReferencedContents(db, id, fileName).CountAsync(ct) : 0;
+        return counts;
     }
 
     /// <summary>Markdown 本文可用來引用圖片的標記：原圖與所有變體。</summary>
@@ -70,8 +92,8 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return [.. markers];
     }
 
-    /// <summary>Markdown 內嵌此圖片或其任一回應式變體的內容，不限狀態。</summary>
-    private static IQueryable<Content> ReferencedContents(CmsDbContext db, string fileName)
+    /// <summary>以檔名標記內嵌此圖片的內容查詢；不含封面引用。</summary>
+    private static IQueryable<Content> ReferencedByMarkdown(CmsDbContext db, string fileName)
     {
         var markers = ReferenceMarkers(fileName);
         // 任一標記都算引用：本文可能內嵌原圖或變體。
@@ -88,9 +110,13 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return db.Contents.AsNoTracking().Where(predicate);
     }
 
-    private static async Task<List<MediaReference>> QueryReferencesAsync(CmsDbContext db, string fileName, CancellationToken ct)
+    /// <summary>內嵌此圖片（含變體）或以它作為封面的內容，不限狀態。</summary>
+    private static IQueryable<Content> ReferencedContents(CmsDbContext db, Guid mediaId, string fileName) =>
+        ReferencedByMarkdown(db, fileName).Union(db.Contents.AsNoTracking().Where(x => x.CoverMediaId == mediaId));
+
+    private static async Task<List<MediaReference>> QueryReferencesAsync(CmsDbContext db, Guid mediaId, string fileName, CancellationToken ct)
     {
-        return await ReferencedContents(db, fileName)
+        return await ReferencedContents(db, mediaId, fileName)
             .OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id)
             .Select(x => new MediaReference(x.Id, x.Title, x.Kind, x.Status)).ToListAsync(ct);
     }
@@ -122,7 +148,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             throw new CmsException("媒體檔名不合法，無法刪除。");
         if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.SiteIconMediaId == mediaId, ct))
             throw new CmsException("此圖片是目前的網站圖示，請先在網站設定改用其他圖片或清除圖示後再刪除。");
-        var references = await QueryReferencesAsync(db, asset.FileName, ct);
+        var references = await QueryReferencesAsync(db, mediaId, asset.FileName, ct);
         if (references.Count > 0)
         {
             var titles = string.Join("、", references.Take(3).Select(x => "「" + x.Title + "」"));

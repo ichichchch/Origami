@@ -11,6 +11,7 @@ public static class Limits
     public const int Body = 200_000;
     public const int Excerpt = 500;
     public const int AltText = 300;
+    public const int Caption = 300;
     public const int TaxonomyName = 80;
     public const int SiteName = 100;
     public const int Description = 500;
@@ -19,6 +20,7 @@ public static class Limits
     public const int MaxFeedItems = 50;
     public const int TaxonomyDescription = 500;
     public const int MaxTaxonomiesPerKind = 30;
+    public const int AuthorName = 80;
     public const long UploadBytes = 5 * 1024 * 1024;
     public const long ImportMaxBytes = 50 * 1024 * 1024;
     public const long ImagePixels = 20_000_000;
@@ -33,6 +35,8 @@ public static class Limits
     public const int RevisionKeep = 20;
     public const int AutosaveSeconds = 60;
     public const int TrashRetentionDays = 30;
+    // 單次批次操作的項目上限；版本逐筆攜帶，因此一次清單操作必須有界。
+    public const int BulkMaxItems = 50;
     // 排程至少須提前這麼多分鐘，背景工作才能在預定的分鐘準時將其發布。
     public const int ScheduleLeadMinutes = 5;
     // 隨每次上傳產生的響應式寬度；比原始圖更寬的變體會略過。
@@ -79,6 +83,9 @@ public sealed class Content
     /// <summary>階層導覽用的父頁面；最上層頁面為 null，文章則一律為 null。</summary>
     public Guid? ParentId { get; set; }
     public Content? Parent { get; set; }
+    /// <summary>內容的封面圖（Featured Image）；未設定時為 null。僅引用媒體資產，本文內嵌與否不影響此欄位。</summary>
+    public Guid? CoverMediaId { get; set; }
+    public MediaAsset? Cover { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Category> Categories { get; set; } = new List<Category>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();
@@ -133,6 +140,8 @@ public sealed class MediaAsset
     public string OriginalName { get; set; } = "";
     public string ContentType { get; set; } = "";
     public string AltText { get; set; } = "";
+    /// <summary>封面或圖片說明文字；顯示於前台封面下方，可留空。</summary>
+    public string Caption { get; set; } = "";
     public long Size { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
@@ -177,6 +186,10 @@ public sealed class SiteSettings
     public int? PostsPerPage { get; set; }
     /// <summary>RSS feed 中的項目數；null 時退回 <see cref="Limits.FeedItems"/>。</summary>
     public int? FeedItems { get; set; }
+    /// <summary>為 true 時 feed 輸出全文（content:encoded／Atom content）；null 或 false 維持摘要。</summary>
+    public bool? FeedShowFullText { get; set; }
+    /// <summary>文章 byline 顯示的作者名稱；空字串不顯示。</summary>
+    [StringLength(Limits.AuthorName)] public string AuthorDisplayName { get; set; } = "";
     /// <summary>渲染為首頁的已發布頁面；null 時首頁維持為文章列表。</summary>
     public Guid? HomePageContentId { get; set; }
     /// <summary>用作網站圖示的媒體資產；null 時不提供 favicon。</summary>

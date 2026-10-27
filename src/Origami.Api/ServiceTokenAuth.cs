@@ -49,9 +49,10 @@ public sealed class ServiceTokenHandler(
 }
 
 /// <summary>
-/// 提供現行的管理員主體，讓 AdminAccess 在每次操作時重新向資料庫驗證使用者 id 與
-/// 安全戳記，與網站主機內的做法完全一致：密碼重設（安全戳記輪替）
-/// 也會立即撤銷此處的寫入權限。
+/// 提供現行管理員主體，讓 AdminAccess 在每次操作時重新向資料庫驗證使用者 id 與安全戳記。
+/// 服務通行證是唯一信任邊界：管理員工作階段（Cookie＋兩步驗證）已在網站主機把關，
+/// 這裡不轉發、也不重驗工作階段；密碼重設（戳記輪替）或管理員不存在時，
+/// 戳記比對仍會立即撤銷此處的寫入權限。
 /// </summary>
 public sealed class AdminPrincipalProvider(
     IDbContextFactory<CmsDbContext> factory,
@@ -59,6 +60,7 @@ public sealed class AdminPrincipalProvider(
 {
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
+        // 由資料庫合成現行管理員；戳記隨後由 AdminAccess 與資料庫比對。
         await using var db = await factory.CreateDbContextAsync(CancellationToken.None);
         var admin = await db.Users.AsNoTracking()
             .Where(user => user.SingletonKey == 1)
@@ -66,11 +68,11 @@ public sealed class AdminPrincipalProvider(
             .SingleOrDefaultAsync(CancellationToken.None);
         if (admin is null || string.IsNullOrEmpty(admin.SecurityStamp))
             return new(new ClaimsPrincipal(new ClaimsIdentity()));
-        var claimTypes = identityOptions.Value.ClaimsIdentity;
+        var types = identityOptions.Value.ClaimsIdentity;
         var identity = new ClaimsIdentity(
         [
-            new Claim(claimTypes.UserIdClaimType, admin.Id),
-            new Claim(claimTypes.SecurityStampClaimType, admin.SecurityStamp),
+            new Claim(types.UserIdClaimType, admin.Id),
+            new Claim(types.SecurityStampClaimType, admin.SecurityStamp),
         ], ServiceTokenAuth.SchemeName);
         return new(new ClaimsPrincipal(identity));
     }

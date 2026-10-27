@@ -70,7 +70,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
         var fileName = (string)media["fileName"]!;
         Assert.EndsWith(".png", fileName);
 
-        using var alt = await admin.PutAsJsonAsync($"/api/v1/admin/media/{(Guid)media["id"]!}/alt", new { altText = "替代文字" });
+        using var alt = await admin.PutAsJsonAsync($"/api/v1/admin/media/{(Guid)media["id"]!}/meta", new { altText = "替代文字", caption = "說明文字" });
         Assert.Equal(HttpStatusCode.OK, alt.StatusCode);
         using var references = await admin.GetAsync($"/api/v1/admin/media/{(Guid)media["id"]!}/references");
         Assert.Equal(HttpStatusCode.OK, references.StatusCode);

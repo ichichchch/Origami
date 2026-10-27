@@ -112,19 +112,20 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
             actor.Services.GetRequiredService<AdminAccess>(), storage, TimeProvider.System, NullLogger<MediaService>.Instance);
         var service = For(admin);
 
-        var updated = await service.UpdateAltAsync(asset.Id, "  山林的清晨 [晨霧]  ");
+        var updated = await service.UpdateMetaAsync(asset.Id, "  山林的清晨 [晨霧]  ", "  清晨五點的展望  ");
         Assert.Equal("山林的清晨 [晨霧]", updated.AltText);
+        Assert.Equal("清晨五點的展望", updated.Caption);
         Assert.Equal("![山林的清晨 \\[晨霧\\]](/media/demo.png)", updated.Markdown);
 
         var listed = (await service.ListAsync()).Items.Single();
         Assert.Equal("山林的清晨 [晨霧]", listed.AltText);
 
-        var tooLong = await Assert.ThrowsAsync<CmsException>(() => service.UpdateAltAsync(asset.Id, new string('長', Limits.AltText + 1)));
+        var tooLong = await Assert.ThrowsAsync<CmsException>(() => service.UpdateMetaAsync(asset.Id, new string('長', Limits.AltText + 1), null));
         Assert.Contains("替代文字", tooLong.Message, StringComparison.Ordinal);
 
         using (var anonymous = App.Anonymous())
         {
-            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => For(anonymous).UpdateAltAsync(asset.Id, "x"));
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => For(anonymous).UpdateMetaAsync(asset.Id, "x", null));
         }
     }
 

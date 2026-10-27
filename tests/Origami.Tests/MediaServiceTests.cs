@@ -75,7 +75,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
         {
             described = await service.UploadAsync(stream, "random-name.png");
         }
-        described = await service.UpdateAltAsync(described.Id, "京都的街道");
+        described = await service.UpdateMetaAsync(described.Id, "京都的街道", null);
 
         Assert.Single((await service.ListAsync(search: "skyline")).Items);
         Assert.Single((await service.ListAsync(search: "SKYLINE")).Items);

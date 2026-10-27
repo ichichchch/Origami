@@ -302,6 +302,9 @@ namespace Origami.Core.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CoverMediaId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -368,6 +371,8 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CoverMediaId");
 
                     b.HasIndex("ParentId");
 
@@ -544,6 +549,11 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("Caption")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -589,6 +599,11 @@ namespace Origami.Core.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AuthorDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -596,6 +611,9 @@ namespace Origami.Core.Data.Migrations
 
                     b.Property<int?>("FeedItems")
                         .HasColumnType("integer");
+
+                    b.Property<bool?>("FeedShowFullText")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("HomePageContentId")
                         .HasColumnType("uuid");
@@ -634,6 +652,7 @@ namespace Origami.Core.Data.Migrations
                         new
                         {
                             Id = 1,
+                            AuthorDisplayName = "",
                             Description = "用文字，分享你的世界。",
                             Name = "Origami",
                             Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84")
@@ -756,10 +775,17 @@ namespace Origami.Core.Data.Migrations
 
             modelBuilder.Entity("Origami.Core.Models.Content", b =>
                 {
+                    b.HasOne("Origami.Core.Models.MediaAsset", "Cover")
+                        .WithMany()
+                        .HasForeignKey("CoverMediaId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Origami.Core.Models.Content", "Parent")
                         .WithMany()
                         .HasForeignKey("ParentId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Cover");
 
                     b.Navigation("Parent");
                 });

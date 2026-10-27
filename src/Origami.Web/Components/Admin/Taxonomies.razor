@@ -3,7 +3,7 @@
 @attribute [Authorize]
 @layout AdminLayout
 @inherits AdminComponentBase
-@inject TaxonomyService TaxonomiesService
+@inject OrigamiClient Api
 
 <PageTitle>分類與標籤 · 內容管理</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="Busy" />
@@ -69,7 +69,7 @@
     private bool Dirty => Snapshot() != _baseline;
     private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(_edit);
     protected override async Task OnInitializedAsync() { _baseline = Snapshot(); await Load(); }
-    private Task<bool> Load() => RunAsync(async ct => { _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct); });
+    private Task<bool> Load() => RunAsync(async ct => { _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); });
     private Task NewEdit() { _edit = new(); _baseline = Snapshot(); _delete = null; return Task.CompletedTask; }
     private async Task ResetAndLoad() { await NewEdit(); await Load(); }
     private async Task RequestChange(Func<Task> action)
@@ -108,20 +108,20 @@
     {
         ContentRules.Validate(_edit);
         var input = new TaxonomyEdit { Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Version = _edit.Version };
-        _edit = await TaxonomiesService.SaveAsync(_kind, input, ct);
+        _edit = await Api.SaveTaxonomyAsync(_kind, input, ct) ?? _edit;
         _baseline = Snapshot();
-        _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct);
+        _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
     }, "已儲存" + Label + "。");
     private async Task Delete()
     {
         if (_delete is not { } item) return;
         await RunAsync(async ct =>
         {
-            await TaxonomiesService.DeleteAsync(_kind, item.Id, item.Version, ct);
+            await Api.DeleteTaxonomyAsync(_kind, item.Id, item.Version, ct);
             if (_edit.Id == item.Id) await NewEdit();
             _delete = null;
-            _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct);
-            if (_result.Items.Count == 0 && _page > 1) { _page--; _result = await TaxonomiesService.ListAsync(_kind, _page, 50, ct); }
+            _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
+            if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
         }, "已永久刪除" + Label + "，文章未被刪除。");
         _delete = null;
     }

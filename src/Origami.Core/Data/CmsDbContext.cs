@@ -36,6 +36,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.ParentId);
             e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.SetNull);
+            // 封面僅為參照：媒體資產列被刪除時封面退回未設定，不串聯刪除內容。
+            e.HasOne(x => x.Cover).WithMany().HasForeignKey(x => x.CoverMediaId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.CoverMediaId);
             e.HasMany(x => x.Categories).WithMany(x => x.Contents).UsingEntity("ContentCategories");
             e.HasMany(x => x.Tags).WithMany(x => x.Contents).UsingEntity("ContentTags");
             e.ToTable(t =>
@@ -89,6 +92,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
             e.Property(x => x.OriginalName).HasMaxLength(200).IsRequired();
             e.Property(x => x.ContentType).HasMaxLength(40).IsRequired();
             e.Property(x => x.AltText).HasMaxLength(Limits.AltText).IsRequired();
+            e.Property(x => x.Caption).HasMaxLength(Limits.Caption).IsRequired();
             e.HasIndex(x => x.FileName).IsUnique();
             e.HasIndex(x => new { x.UploadedAt, x.Id });
         });
@@ -101,6 +105,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options) : Ident
         builder.Entity<SiteSettings>(e =>
         {
             e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.AuthorDisplayName).HasMaxLength(Limits.AuthorName).IsRequired();
             e.HasOne<Content>().WithMany().HasForeignKey(x => x.HomePageContentId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne<MediaAsset>().WithMany().HasForeignKey(x => x.SiteIconMediaId).OnDelete(DeleteBehavior.SetNull);
             e.ToTable(t =>

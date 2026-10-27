@@ -33,6 +33,8 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.Description = input.Description?.Trim() ?? "";
         entity.PostsPerPage = input.PostsPerPage;
         entity.FeedItems = input.FeedItems;
+        entity.FeedShowFullText = input.FeedShowFullText;
+        entity.AuthorDisplayName = (input.AuthorDisplayName ?? "").Trim();
         entity.HomePageContentId = input.HomePageContentId;
         entity.SiteIconMediaId = input.SiteIconMediaId;
         entity.Version = Guid.NewGuid();

@@ -28,6 +28,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             {
                 PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 ParentId = x.ParentId, ParentTitle = x.Parent != null ? x.Parent.Title : "",
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "", CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 Views = x.Views.Sum(v => (int?)v.Count) ?? 0
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
@@ -53,7 +54,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
             IsSticky = x.IsSticky, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate, HasProtectPassword = x.ProtectionHash != "",
-            ParentId = x.ParentId,
+            ParentId = x.ParentId, CoverMediaId = x.CoverMediaId,
+            CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+            CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+            CoverCaption = x.Cover != null ? x.Cover.Caption : "",
             PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
             Status = x.Status, Version = x.Version,
             Views = x.Views.Sum(v => (int?)v.Count) ?? 0,
@@ -103,6 +107,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException("私密與密碼保護不可同時啟用，請擇一。");
         entity.IsPrivate = input.IsPrivate;
         entity.ParentId = input.ParentId;
+        // 封面必須是媒體庫中現存的圖片；一次查詢同時完成驗證與回填素材。
+        var cover = input.CoverMediaId is { } coverId
+            ? await db.MediaAssets.AsNoTracking().Where(x => x.Id == coverId)
+                .Select(x => new { x.FileName, x.AltText, x.Caption }).SingleOrDefaultAsync(ct)
+            : null;
+        if (input.CoverMediaId is not null && cover is null)
+            throw new CmsException("封面圖片不存在，請重新選擇。");
+        entity.CoverMediaId = input.CoverMediaId;
         // 階層變更會鎖定頁面資料列直到儲存送出，因此兩個可能形成循環的
         // 平行儲存會被序列化，後到者讀到的是已送出的狀態，
         // 而不是過期的快照。
@@ -191,6 +203,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         input.PreviewToken = entity.PreviewToken;
         input.PublishedAt = entity.PublishedAt;
         input.HasProtectPassword = entity.ProtectionHash != "";
+        input.CoverFileName = cover?.FileName ?? "";
+        input.CoverAltText = cover?.AltText ?? "";
+        input.CoverCaption = cover?.Caption ?? "";
         input.Version = entity.Version;
         return input;
     }
@@ -260,7 +275,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate }).SingleOrDefaultAsync(ct);
+            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "" }).SingleOrDefaultAsync(ct);
     }
 
     private static void ValidateSaveInput(ContentEdit input, ContentKind? requestedKind)
@@ -353,6 +371,43 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         entity.UpdatedAt = now;
         entity.Version = Guid.NewGuid();
         await ContentRules.SaveAsync(db, ct);
+    }
+
+    /// <summary>
+    /// 內容清單的批次操作：逐筆執行既有單筆流程（含各自的並發版本檢查與人工確認契約），
+    /// 逐筆回報結果；單筆失敗不中斷其餘項目。
+    /// </summary>
+    public async Task<List<BulkItemResult>> BulkAsync(BulkAction action, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        if (items.Count == 0) throw new CmsException("請先選擇要操作的內容。");
+        if (items.Count > Limits.BulkMaxItems) throw new CmsException($"單次批次操作最多 {Limits.BulkMaxItems} 筆。");
+        if (!Enum.IsDefined(action)) throw new CmsException("未知的批次操作。");
+        List<BulkItemResult> results = new(items.Count);
+        foreach (var (id, version) in items)
+        {
+            try
+            {
+                switch (action)
+                {
+                    case BulkAction.Trash:
+                        await TrashAsync(id, version, confirmed: true, ct);
+                        break;
+                    case BulkAction.Restore:
+                        await RestoreAsync(id, version, ct);
+                        break;
+                    case BulkAction.Delete:
+                        await DeleteAsync(id, version, confirmed: true, ct);
+                        break;
+                }
+                results.Add(new BulkItemResult(id, true, ""));
+            }
+            catch (CmsException error)
+            {
+                results.Add(new BulkItemResult(id, false, error.Message));
+            }
+        }
+        return results;
     }
 
     /// <summary>系統操作：發布排程時間已到的草稿。回傳發布數量。</summary>
@@ -449,7 +504,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt }).SingleOrDefaultAsync(ct);
+            { Excerpt = x.Excerpt,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "" }).SingleOrDefaultAsync(ct);
     }
 
     /// <summary>內容已發布時，退役 token 會解析到公開網址。</summary>
@@ -482,7 +540,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 Excerpt = x.IsProtected ? "此內容受密碼保護。" : x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
                 ExcerptIsManual = x.IsProtected || x.Excerpt != "",
                 IsSticky = x.IsSticky,
-                IsProtected = x.IsProtected
+                IsProtected = x.IsProtected,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : ""
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
     }
@@ -516,7 +576,43 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate }).SingleOrDefaultAsync(ct);
+            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "" }).SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// 以路徑段解析已發布頁面：最後一段是頁面 slug，前段必須依序符合其已發布祖先。
+    /// 祖先未發布或私密時子頁仍以平面形式提供（Segments 僅含自身，與 sitemap／導覽一致）；
+    /// 鏈上段數不符由呼叫端決定 404 或轉址。
+    /// </summary>
+    public async Task<PagePathContent?> ResolvePublishedPagePathAsync(string[] segments, CancellationToken ct = default)
+    {
+        if (segments.Length is < 1 or > 6) return null;
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var slug = segments[^1];
+        var target = await db.Contents.AsNoTracking()
+            .Where(x => x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && x.Slug == slug)
+            .Select(x => new { x.Id, x.ParentId }).SingleOrDefaultAsync(ct);
+        if (target is null) return null;
+        // 由下往上蒐集已發布且非私密的祖先；遇到未發布、私密或缺失的祖先即停止
+        // （子頁退回平面網址——私密頁 slug 不得出現在公開鏈上）。
+        var chain = new List<string>();
+        Guid? cursor = target.ParentId;
+        var guard = 0;
+        while (cursor is { } currentId && ++guard <= 10)
+        {
+            var node = await db.Contents.AsNoTracking()
+                .Where(x => x.Id == currentId && x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate)
+                .Select(x => new { x.Slug, x.ParentId }).SingleOrDefaultAsync(ct);
+            if (node is null) break;
+            chain.Add(node.Slug);
+            cursor = node.ParentId;
+        }
+        chain.Reverse();
+        var content = await GetPublishedAsync(ContentKind.Page, slug, ct);
+        return content is null ? null : new PagePathContent(content, [.. chain, slug]);
     }
 
     /// <summary>驗證保護密碼並回傳瀏覽器 cookie 所用的解鎖 token。</summary>
@@ -598,18 +694,33 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     public async Task<List<SitemapItem>> SitemapAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        var contents = await db.Contents.AsNoTracking()
+        // 一次投影足夠的欄位：文章平面路徑、頁面階層路徑與各自的更新時間。
+        var rows = await db.Contents.AsNoTracking()
             .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate)
-            .Select(x => new { x.Kind, x.Slug, x.UpdatedAt }).ToListAsync(ct);
+            .Select(x => new { x.Id, x.Kind, x.Slug, x.ParentId, x.UpdatedAt }).ToListAsync(ct);
+        var pages = rows.Where(x => x.Kind == ContentKind.Page).ToDictionary(x => x.Id);
+        // 頁面公開路徑走訪已發布且非私密的祖先；未發布或私密祖先使子頁回退為平面路徑（與公開路由一致）。
+        string PagePath(Guid id)
+        {
+            var parts = new List<string>();
+            Guid? cursor = id;
+            var guard = 0;
+            while (cursor is { } current && pages.TryGetValue(current, out var node) && ++guard <= 10)
+            {
+                parts.Insert(0, node.Slug);
+                cursor = node.ParentId;
+            }
+            return string.Join("/", parts);
+        }
         var categories = await db.Categories.AsNoTracking()
             .Select(x => new { x.Slug, Latest = x.Contents
                 .Where(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate)
                 .Max(c => (DateTimeOffset?)c.PublishedAt) })
             .Where(x => x.Latest != null).ToListAsync(ct);
-        var homeLastModified = contents.Count == 0 ? null : (DateTimeOffset?)contents.Max(x => x.UpdatedAt);
+        var homeLastModified = rows.Count == 0 ? null : (DateTimeOffset?)rows.Max(x => x.UpdatedAt);
         List<SitemapItem> items = [new("/", homeLastModified), new("/archives", homeLastModified)];
-        items.AddRange(contents.Where(x => x.Kind == ContentKind.Post).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
-        items.AddRange(contents.Where(x => x.Kind == ContentKind.Page).Select(x => new SitemapItem("/pages/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(rows.Where(x => x.Kind == ContentKind.Post).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(pages.Values.Select(x => new SitemapItem("/pages/" + PagePath(x.Id), x.UpdatedAt)));
         items.AddRange(categories.Select(x => new SitemapItem("/?category=" + x.Slug, x.Latest)));
         return items;
     }

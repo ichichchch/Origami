@@ -1,6 +1,6 @@
 @page "/archives"
 @page "/archives/{Year:int}/{Month:int}"
-@inject ContentService Content
+@inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject ILogger<Archives> Logger
@@ -77,7 +77,7 @@ else
             var ct = default(CancellationToken);
             if (IsOverview)
             {
-                _months = await Content.ArchiveMonthsAsync(ct);
+                _months = await Api.GetArchivesAsync(ct) ?? [];
                 return;
             }
             if (Month is < 1 or > 12)
@@ -86,7 +86,7 @@ else
                 return;
             }
             var page = int.TryParse(Page, out var parsed) && parsed > 0 ? parsed : 1;
-            _result = await Content.ListPublishedAsync(page, Limits.MaxPageSize, ct, year: Year, month: Month);
+            _result = await Api.ListPublishedAsync(page, Limits.MaxPageSize, year: Year, month: Month, ct: ct);
         }
         catch (CmsException)
         {

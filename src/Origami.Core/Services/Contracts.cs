@@ -17,6 +17,14 @@ public sealed class ContentEdit
     public bool IsPrivate { get; set; }
     /// <summary>導覽階層的上層頁面；僅頁面可用，文章一律保持 null。</summary>
     public Guid? ParentId { get; set; }
+    /// <summary>封面圖片的媒體識別；null 表示未設定封面。</summary>
+    public Guid? CoverMediaId { get; set; }
+    /// <summary>已儲存封面檔名的唯讀回報；未設定時為空字串。</summary>
+    public string CoverFileName { get; set; } = "";
+    /// <summary>已儲存封面替代文字的唯讀回報。</summary>
+    public string CoverAltText { get; set; } = "";
+    /// <summary>已儲存封面說明文字的唯讀回報。</summary>
+    public string CoverCaption { get; set; } = "";
     /// <summary>設定新的保護密碼；空字串保留已儲存者。未變更時為 null。</summary>
     public string? NewProtectPassword { get; set; }
     /// <summary>唯讀回報：已儲存保護密碼。</summary>
@@ -34,7 +42,7 @@ public sealed class ContentEdit
     public List<Guid> TagIds { get; set; } = [];
 }
 
-public sealed class TaxonomyEdit
+public sealed record TaxonomyEdit
 {
     public Guid? Id { get; set; }
     [Required, StringLength(Limits.TaxonomyName)] public string Name { get; set; } = "";
@@ -42,6 +50,11 @@ public sealed class TaxonomyEdit
     [StringLength(Limits.TaxonomyDescription)] public string? Description { get; set; }
     public Guid Version { get; set; }
 }
+
+/// <summary>內容清單的批次操作種類。</summary>
+public enum BulkAction { Trash, Restore, Delete }
+/// <summary>批次操作的單筆結果；失敗時附原因，單筆失敗不影響其餘項目。</summary>
+public sealed record BulkItemResult(Guid Id, bool Succeeded, string Message);
 
 public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, string Slug,
     ContentStatus Status, DateTimeOffset UpdatedAt, DateTimeOffset? PublishedAt, Guid Version)
@@ -57,6 +70,10 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public Guid? ParentId { get; init; }
     public string ParentTitle { get; init; } = "";
     public int Views { get; init; }
+    public string CoverFileName { get; init; } = "";
+    public string CoverAltText { get; init; } = "";
+    /// <summary>封面網址；未設定封面時為 null。</summary>
+    public string? CoverUrl => CoverFileName.Length == 0 ? null : "/media/" + CoverFileName;
 }
 public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
 {
@@ -79,8 +96,15 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public string Excerpt { get; init; } = "";
     public bool IsProtected { get; init; }
     public bool IsPrivate { get; init; }
+    public string CoverFileName { get; init; } = "";
+    public string CoverAltText { get; init; } = "";
+    public string CoverCaption { get; init; } = "";
+    /// <summary>封面網址；未設定封面時為 null。</summary>
+    public string? CoverUrl => CoverFileName.Length == 0 ? null : "/media/" + CoverFileName;
 }
 public sealed record NavigationItem(string Title, string Slug);
+/// <summary>以路徑解析的已發布頁面；Segments 為根到本頁的完整 slug 鏈（未含 /pages/ 前綴）。</summary>
+public sealed record PagePathContent(PublicContent Content, IReadOnlyList<string> Segments);
 /// <summary>公開導覽中的已發布頁面，附階層指標。</summary>
 public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId);
 /// <summary>編輯器與網站設定中選擇器的頁面候選。</summary>
@@ -92,6 +116,8 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
     long Size, int Width, int Height, DateTimeOffset UploadedAt)
 {
     public string AltText { get; init; } = "";
+    /// <summary>封面或圖片說明文字；顯示於前台封面下方。</summary>
+    public string Caption { get; init; } = "";
     /// <summary>由列表填入；有多少內容在任何狀態下內嵌此圖片。</summary>
     public int ReferenceCount { get; set; }
     public string Url => "/media/" + FileName;
@@ -165,6 +191,6 @@ public static partial class ContentRules
             });
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation })
-        { throw new CmsException("所選分類或標籤已被變更，請重新載入。"); }
+        { throw new CmsException("所選分類、標籤或封面圖已被變更，請重新載入。"); }
     }
 }

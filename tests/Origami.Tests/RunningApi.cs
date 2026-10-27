@@ -30,18 +30,25 @@ internal sealed class RunningApi : IAsyncDisposable
         File.WriteAllBytes(Path.Combine(root, "test.pfx"), certificate.Export(X509ContentType.Pfx, certificatePassword));
     }
 
-    public async Task StartAsync(string environment = "Development", string? serviceToken = null)
+    public async Task StartAsync(string environment = "Development", string? serviceToken = null, bool listenOnHttp = false)
     {
         if (process is not null) throw new InvalidOperationException("The test API server is already running.");
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
-        Address = new Uri($"https://127.0.0.1:{port}");
+        // 網站主機以 BFF 身份呼叫此 Api；測試用 HTTP 免去自簽憑證信任問題（僅本機回環）。
+        Address = new Uri($"{(listenOnHttp ? "http" : "https")}://127.0.0.1:{port}");
         var solutionRoot = RunningSite.FindSolutionRoot();
         var project = Path.Combine(solutionRoot, "src", "Origami.Api");
-        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        var assembly = Path.Combine(project, "bin", configuration, "net10.0", "Origami.Api.dll");
+        // 優先載入與測試組件同目錄的主機輸出：隔離輸出目錄建置時，bin 配置
+        // 路徑推斷會失效，而且測試輸出內的複本即為本次組建的新程式。
+        var assembly = Path.Combine(AppContext.BaseDirectory, "Origami.Api.dll");
+        if (!File.Exists(assembly))
+        {
+            var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+            assembly = Path.Combine(project, "bin", configuration, "net10.0", "Origami.Api.dll");
+        }
         if (!File.Exists(assembly)) throw new InvalidOperationException("Build the Api project before API tests.");
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
@@ -59,6 +66,12 @@ internal sealed class RunningApi : IAsyncDisposable
         start.Environment["Storage__RootPath"] = Path.Combine(root, "storage");
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = Path.Combine(root, "test.pfx");
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Password"] = certificatePassword;
+        if (listenOnHttp)
+        {
+            // HTTP 模式不註冊憑證設定，Kestrel 直接以 http 監聽。
+            start.Environment.Remove("ASPNETCORE_Kestrel__Certificates__Default__Path");
+            start.Environment.Remove("ASPNETCORE_Kestrel__Certificates__Default__Password");
+        }
         start.Environment["Logging__LogLevel__Default"] = "Warning";
         start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -1,6 +1,5 @@
 @inherits LayoutComponentBase
-@inject SettingsService Settings
-@inject ContentService Content
+@inject OrigamiClient Api
 @inject ILogger<MainLayout> Logger
 
 <a class="skip-link" href="#main-content">跳至主要內容</a>
@@ -11,7 +10,7 @@
             <a href="/">首頁</a>
             @foreach (var (page, depth) in NavOrder())
             {
-                <a class="@(depth > 0 ? "nav-child" : "")" href="@("/pages/" + Uri.EscapeDataString(page.Slug))">@(depth > 0 ? "└ " : "")@(page.Title)</a>
+                <a class="@(depth > 0 ? "nav-child" : "")" href="@PageHref(page)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
             }
             <a href="/archives">歸檔</a>
             <a href="/search">搜尋文章</a>
@@ -31,7 +30,7 @@
 
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
-    private SiteSettings _settings = new();
+    private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private List<PageNavItem> _pages = [];
 
     /// <summary>帶深度的平面排序：子頁面跟在父頁面之後；若父頁面不在已發布集合內，
@@ -52,13 +51,28 @@
         return ordered;
     }
 
+    /// <summary>頁面的完整階層網址；父頁面未發布或私密時退回平面網址（與公開路由一致）。</summary>
+    private string PageHref(PageNavItem page)
+    {
+        var byId = _pages.ToDictionary(x => x.Id);
+        var parts = new List<string>();
+        Guid? cursor = page.Id;
+        var guard = 0;
+        while (cursor is { } current && byId.TryGetValue(current, out var node) && ++guard <= 10)
+        {
+            parts.Insert(0, Uri.EscapeDataString(node.Slug));
+            cursor = node.ParentId;
+        }
+        return "/pages/" + string.Join("/", parts);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _settings = await Settings.GetAsync(ct);
-            _pages = await Content.NavigationAsync(ct);
+            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
+            _pages = await Api.GetNavigationAsync(ct) ?? [];
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex) { Logger.LogError(ex, "Public navigation unavailable"); }

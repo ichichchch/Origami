@@ -55,8 +55,12 @@ builder.Services.AddRateLimiter(options =>
         await context.HttpContext.Response.WriteAsync("Too many requests.", context.HttpContext.RequestAborted);
     };
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-        context.Request.Path.StartsWithSegments("/api/v1/admin", StringComparison.OrdinalIgnoreCase)
-            // 網站主機代表單一管理員爆量呼叫，因此享有獨立且較寬鬆的預算。
+        // 持服務通行證的網站主機（BFF）代表所有訪客發起呼叫，不得共用匿名配額；
+        // 驗證在限流之前完成，因此這裡能看到已認證的主體。
+        context.User.Identity?.IsAuthenticated == true
+            ? RateLimitPartition.GetNoLimiter("bff")
+            : context.Request.Path.StartsWithSegments("/api/v1/admin", StringComparison.OrdinalIgnoreCase)
+            // 未認證的管理路徑仍保留獨立配額，作為通行證猜測的成本上限。
             ? RateLimitPartition.GetFixedWindowLimiter(
                 "admin:" + (context.Connection.RemoteIpAddress ?? IPAddress.Loopback).ToString(),
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1) })
@@ -81,6 +85,13 @@ app.UseExceptionHandler(error =>
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsJsonAsync(new { message = exception.Message }, context.RequestAborted);
+            return;
+        }
+        // AdminAccess 拒絕（資料庫中不存在管理員、或安全戳記為空）：401 讓網站端引導重新設置。
+        if (exception is UnauthorizedAccessException)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { message = "登入已失效，請重新登入。" }, context.RequestAborted);
             return;
         }
         // 繫結失敗（查詢或路由值缺少、無效）屬用戶端錯誤，不應回 500。

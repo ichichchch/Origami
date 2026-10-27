@@ -3,7 +3,7 @@
 @attribute [Authorize]
 @layout AdminLayout
 @inherits AdminComponentBase
-@inject MediaService MediaService
+@inject OrigamiClient Api
 
 <PageTitle>媒體庫 · 內容管理</PageTitle>
 <UnsavedGuard Busy="Busy" />
@@ -47,7 +47,7 @@
     <div class="panel-toolbar"><h2>所有圖片 <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">依上傳時間排序</span></div>
     <div class="content-search">
         <label class="sr-only" for="media-search">搜尋圖片</label>
-        <input id="media-search" type="search" placeholder="搜尋檔名或替代文字…" maxlength="300" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
+        <input id="media-search" type="search" placeholder="搜尋檔名、替代或說明文字…" maxlength="300" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
         @if (_search.Length > 0)
         {
             <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">清除</button>
@@ -68,7 +68,8 @@
 @if (item.ReferenceCount > 0)
 {
     <p class="field-help">被 @item.ReferenceCount 篇內容引用</p>
-}<label for="@("media-alt-" + item.Id)">替代文字（alt）</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value.ToString() ?? "")" disabled="@Blocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">最多 @Limits.AltText 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。</p><button type="button" class="button button-secondary button-small" disabled="@(Blocked || !_altEdits.ContainsKey(item.Id))" @onclick="() => SaveAlt(item.Id)">儲存替代文字</button>
+}<label for="@("media-alt-" + item.Id)">替代文字（alt）</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@Blocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">最多 @Limits.AltText 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。</p>
+<label for="@("media-caption-" + item.Id)">說明文字（caption）</label><input id="@("media-caption-" + item.Id)" value="@CaptionValue(item)" maxlength="@Limits.Caption" @oninput="@(e => _captionEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@Blocked" aria-describedby="@("media-caption-help-" + item.Id)" /><p id="@("media-caption-help-" + item.Id)" class="field-help">最多 @Limits.Caption 字；圖片作為封面時顯示於圖片下方。</p><button type="button" class="button button-secondary button-small" disabled="@(Blocked || (!_altEdits.ContainsKey(item.Id) && !_captionEdits.ContainsKey(item.Id)))" @onclick="() => SaveMeta(item.Id)">儲存圖片資訊</button>
 <button type="button" class="text-danger" disabled="@Blocked" @onclick="() => RequestDelete(item)">刪除圖片<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
             }
             </div>
@@ -84,17 +85,17 @@
     private MediaItem? _uploaded;
     private string? _uploadName;
     private readonly Dictionary<Guid, string> _altEdits = [];
+    private readonly Dictionary<Guid, string> _captionEdits = [];
     private MediaItem? _pendingDelete;
     private List<MediaService.MediaReference> _pendingReferences = [];
     protected override Task OnInitializedAsync() => Load();
     private string? ListSearch() => string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
-    private Task<bool> Load() => RunAsync(async ct =>
-    {
-        var result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
-        foreach (var item in result.Items)
-            item.ReferenceCount = await MediaService.CountReferencesAsync(item.Id, ct);
-        _result = result;
-    });
+    private Task<bool> Load() => RunAsync(async ct => { _result = await ListWithCountsAsync(ct); });
+
+    // 引用數已由列表端點一次填入 MediaItem.ReferenceCount。
+    private async Task<PagedResult<MediaItem>> ListWithCountsAsync(CancellationToken ct) =>
+        await Api.ListMediaAsync(_page, search: ListSearch(), ct: ct)
+            ?? new PagedResult<MediaItem>([], 0, _page, Limits.PageSize);
     private async Task SearchChanged(ChangeEventArgs args)
     {
         if (Blocked) return;
@@ -114,7 +115,7 @@
         if (Blocked) return;
         _pendingDelete = item;
         _pendingReferences = [];
-        var ok = await RunAsync(async ct => { _pendingReferences = await MediaService.ListReferencesAsync(item.Id, ct); });
+        var ok = await RunAsync(async ct => { _pendingReferences = await Api.ListMediaReferencesAsync(item.Id, ct) ?? []; });
         if (!ok) _pendingDelete = null;
     }
     private async Task DeleteAsync()
@@ -122,26 +123,25 @@
         if (_pendingDelete is not { } item || Blocked) return;
         var deleted = await RunAsync(async ct =>
         {
-            await MediaService.DeleteAsync(item.Id, true, ct);
+            await Api.DeleteMediaAsync(item.Id, ct);
             _pendingDelete = null;
-            var result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
-            foreach (var media in result.Items)
-                media.ReferenceCount = await MediaService.CountReferencesAsync(media.Id, ct);
-            _result = result;
+            _result = await ListWithCountsAsync(ct);
         }, "圖片已刪除（含縮圖變體）。");
         if (!deleted) _pendingDelete = null;
     }
     private string AltValue(MediaItem item) => _altEdits.TryGetValue(item.Id, out var value) ? value : item.AltText;
-    private Task SaveAlt(Guid id) => RunAsync(async ct =>
+    private string CaptionValue(MediaItem item) => _captionEdits.TryGetValue(item.Id, out var value) ? value : item.Caption;
+    private Task SaveMeta(Guid id) => RunAsync(async ct =>
     {
-        var value = _altEdits.TryGetValue(id, out var edit) ? edit : "";
-        await MediaService.UpdateAltAsync(id, value, ct);
+        // 未動過的欄位沿用已儲存值；只有編輯中的欄位會覆寫。
+        var stored = _result?.Items.FirstOrDefault(x => x.Id == id);
+        var alt = _altEdits.TryGetValue(id, out var altEdit) ? altEdit : stored?.AltText ?? "";
+        var caption = _captionEdits.TryGetValue(id, out var captionEdit) ? captionEdit : stored?.Caption ?? "";
+        await Api.UpdateMediaMetaAsync(id, alt, caption, ct);
         _altEdits.Remove(id);
-        var result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
-        foreach (var media in result.Items)
-            media.ReferenceCount = await MediaService.CountReferencesAsync(media.Id, ct);
-        _result = result;
-    }, "替代文字已儲存，插入圖片時會自動帶入。");
+        _captionEdits.Remove(id);
+        _result = await ListWithCountsAsync(ct);
+    }, "圖片資訊已儲存，替代文字會自動帶入插入語法。");
     private async Task Move(int delta)
     {
         if (Blocked) return;
@@ -158,9 +158,11 @@
             if (file.Size > Limits.UploadBytes) throw new CmsException($"圖片超過 {Limits.UploadBytes / 1024 / 1024} MB 上限，請選擇較小的檔案。");
             _uploadName = file.Name;
             await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
-            _uploaded = await MediaService.UploadAsync(stream, file.Name, ct);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer, ct);
+            _uploaded = await Api.UploadMediaAsync(buffer.ToArray(), file.Name, ct);
             _page = 1;
-            _result = await MediaService.ListAsync(_page, ct: ct, search: ListSearch());
+            _result = await ListWithCountsAsync(ct);
         }, "圖片已上傳，現在可在編輯器中插入。");
         _uploadName = null;
     }

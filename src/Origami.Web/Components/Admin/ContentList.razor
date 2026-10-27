@@ -4,7 +4,7 @@
 @attribute [Authorize]
 @layout AdminLayout
 @inherits AdminComponentBase
-@inject ContentService Content
+@inject OrigamiClient Api
 @inject NavigationManager Navigation
 
 <PageTitle>@(Label) · 內容管理</PageTitle>
@@ -31,6 +31,14 @@
         <h2 id="delete-title">永久刪除「@_pendingDelete.Title」？</h2>
         <p id="delete-description">刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開。</p>
         <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteAsync">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">取消</button></div>
+    </section>
+}
+@if (_pendingBulkDelete)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="bulk-delete-title" aria-describedby="bulk-delete-description">
+        <h2 id="bulk-delete-title">永久刪除已選擇的 @_selected.Count 筆內容？</h2>
+        <p id="bulk-delete-description">刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開；與其他分頁衝突的項目會被略過並回報。</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="() => BulkAsync(BulkAction.Delete)">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingBulkDelete = false">取消</button></div>
     </section>
 }
 @if (_result is not null && _counts is not null)
@@ -66,16 +74,34 @@
     </div>
     <section class="panel" aria-busy="@Busy.ToString().ToLowerInvariant()">
         <div class="panel-toolbar"><h2>@FilterLabel@(Label) <span class="count">@_result.Total</span></h2><span class="muted">依最後更新排序 · UTC</span></div>
+        @if (_selected.Count > 0)
+        {
+            <div class="bulk-bar" role="group" aria-label="批次操作">
+                <span class="bulk-count">已選 @_selected.Count 筆</span>
+                <div class="button-row">
+                    @if (_status == ContentStatus.Trashed)
+                    {
+                        <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => BulkAsync(BulkAction.Restore)">批次還原為草稿</button>
+                        <button type="button" class="text-danger" disabled="@Blocked" @onclick="RequestBulkDelete">批次永久刪除</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => BulkAsync(BulkAction.Trash)">批次移入回收桶</button>
+                    }
+                    <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSelection">取消選取</button>
+                </div>
+            </div>
+        }
         @if (_result.Items.Count == 0)
         {
             <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@(_status is null ? "從第一個想法開始" : "目前沒有" + FilterLabel + Label)</h2><p>@(_status == ContentStatus.Published ? "將草稿儲存並發布後，內容會出現在這裡與公開網站。" : "新增草稿，準備好再發布。")</p><a href="@(ListPath + "/new")">建立@(Kind == ContentKind.Post ? "文章" : "頁面") →</a></div>
         }
         else
         {
-            <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col">標題 / 網址</th><th scope="col">狀態</th><th scope="col">最後更新</th><th scope="col">瀏覽</th><th scope="col">操作</th></tr></thead><tbody>
+            <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="bulk-select-all">全選本頁</label><input id="bulk-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@Blocked" /></th><th scope="col">標題 / 網址</th><th scope="col">狀態</th><th scope="col">最後更新</th><th scope="col">瀏覽</th><th scope="col">操作</th></tr></thead><tbody>
             @foreach (var item in _result.Items)
             {
-                <tr @key="item.Id"><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug@if (item.IsProtected) { <span class="locked-mark" title="受密碼保護">🔒</span> }@if (item.IsPrivate) { <span class="locked-mark" title="私密，僅管理員可見">🚫</span> }@if (!string.IsNullOrEmpty(item.ParentTitle)) { <text> · 上層 @item.ParentTitle</text> }</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status switch { ContentStatus.Published => "已發布", ContentStatus.Trashed => "回收桶", _ => "草稿" })</span>@if (item.Status == ContentStatus.Draft && item.PublishAt is { } scheduled) { <small class="schedule-hint" title="@scheduled.ToString("O")">排程 @scheduled.ToString("MM.dd HH:mm") UTC</small> }</td><td class="date-cell">@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deleted ? deleted.ToString("yyyy.MM.dd") : item.UpdatedAt.ToString("yyyy.MM.dd"))<small>@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deletedAt ? "刪除於 " + deletedAt.ToString("HH:mm") : item.UpdatedAt.ToString("HH:mm"))</small></td><td class="views-cell">@(item.Views.ToString("N0"))</td><td><div class="table-actions">@if (item.Status == ContentStatus.Trashed) { <button disabled="@Blocked" @onclick="() => RestoreAsync(item)">還原<span class="sr-only"> @item.Title</span></button><button class="text-danger" disabled="@Blocked" @onclick="() => _pendingDelete = item">永久刪除<span class="sr-only"> @item.Title</span></button> } else { <a href="@("/admin/content/" + item.Id)">編輯<span class="sr-only"> @item.Title</span></a>@if (item.Status == ContentStatus.Published) { <a href="@((item.Kind == ContentKind.Post ? "/posts/" : "/pages/") + Uri.EscapeDataString(item.Slug))" target="_blank" rel="noopener" data-enhance-nav="false">檢視<span class="sr-only"> @item.Title</span></a> }<button class="text-danger" disabled="@Blocked" @onclick="() => _pendingTrash = item">刪除<span class="sr-only"> @item.Title</span></button> }</div></td></tr>
+                <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("bulk-" + item.Id)">選擇 @item.Title</label><input id="@("bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@Blocked" /></td><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug@if (item.IsProtected) { <span class="locked-mark" title="受密碼保護">🔒</span> }@if (item.IsPrivate) { <span class="locked-mark" title="私密，僅管理員可見">🚫</span> }@if (!string.IsNullOrEmpty(item.ParentTitle)) { <text> · 上層 @item.ParentTitle</text> }</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status switch { ContentStatus.Published => "已發布", ContentStatus.Trashed => "回收桶", _ => "草稿" })</span>@if (item.Status == ContentStatus.Draft && item.PublishAt is { } scheduled) { <small class="schedule-hint" title="@scheduled.ToString("O")">排程 @scheduled.ToString("MM.dd HH:mm") UTC</small> }</td><td class="date-cell">@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deleted ? deleted.ToString("yyyy.MM.dd") : item.UpdatedAt.ToString("yyyy.MM.dd"))<small>@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deletedAt ? "刪除於 " + deletedAt.ToString("HH:mm") : item.UpdatedAt.ToString("HH:mm"))</small></td><td class="views-cell">@(item.Views.ToString("N0"))</td><td><div class="table-actions">@if (item.Status == ContentStatus.Trashed) { <button disabled="@Blocked" @onclick="() => RestoreAsync(item)">還原<span class="sr-only"> @item.Title</span></button><button class="text-danger" disabled="@Blocked" @onclick="() => _pendingDelete = item">永久刪除<span class="sr-only"> @item.Title</span></button> } else { <a href="@("/admin/content/" + item.Id)">編輯<span class="sr-only"> @item.Title</span></a>@if (item.Status == ContentStatus.Published) { <a href="@((item.Kind == ContentKind.Post ? "/posts/" : "/pages/") + Uri.EscapeDataString(item.Slug))" target="_blank" rel="noopener" data-enhance-nav="false">檢視<span class="sr-only"> @item.Title</span></a> }<button class="text-danger" disabled="@Blocked" @onclick="() => _pendingTrash = item">刪除<span class="sr-only"> @item.Title</span></button> }</div></td></tr>
             }
             </tbody></table></div>
         }
@@ -101,6 +127,10 @@
     private PagedResult<ContentSummary>? _result;
     private ContentSummary? _pendingDelete;
     private ContentSummary? _pendingTrash;
+    // 批次選取僅對目前頁面快照有效：版本號取自當前列表，換頁或重篩選後清空。
+    private readonly HashSet<Guid> _selected = [];
+    private bool _pendingBulkDelete;
+    private bool AllPageSelected => _result is not null && _result.Items.Count > 0 && _result.Items.All(x => _selected.Contains(x.Id));
     protected override async Task OnParametersSetAsync()
     {
         Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
@@ -110,16 +140,19 @@
         _result = null;
         _pendingDelete = null;
         _pendingTrash = null;
+        _pendingBulkDelete = false;
+        _selected.Clear();
         await LoadAsync();
     }
     private Task<bool> LoadAsync() => RunAsync(RefreshAsync);
     private async Task RefreshAsync(CancellationToken ct)
     {
         var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
-        var result = await Content.ListAdminAsync(Kind, _page, ct: ct, status: _status, search: search);
+        var result = await Api.ListAdminAsync(Kind, _page, status: _status, search: search, ct: ct)
+            ?? throw new CmsException("無法載入內容列表。");
         if (_page > result.TotalPages)
-            result = await Content.ListAdminAsync(Kind, result.TotalPages, ct: ct, status: _status, search: search);
-        var counts = await Content.CountAdminAsync(Kind, ct);
+            result = await Api.ListAdminAsync(Kind, result.TotalPages, status: _status, search: search, ct: ct) ?? result;
+        var counts = await Api.CountAdminAsync(Kind, ct) ?? new ContentCounts(0, 0);
         _result = result;
         _page = result.Page;
         _counts = counts;
@@ -129,6 +162,7 @@
         if (Blocked) return;
         _search = args.Value?.ToString() ?? "";
         _page = 1;
+        _selected.Clear();
         await LoadAsync();
     }
     private async Task ClearSearch()
@@ -136,6 +170,7 @@
         if (Blocked) return;
         _search = "";
         _page = 1;
+        _selected.Clear();
         await LoadAsync();
     }
     private async Task ChangeStatus(ContentStatus? status)
@@ -146,6 +181,7 @@
         _status = status;
         _page = 1;
         _pendingDelete = null;
+        _selected.Clear();
         if (!await LoadAsync()) { _status = previousStatus; _page = previousPage; }
     }
     private async Task ChangePage(int delta)
@@ -154,6 +190,7 @@
         var previousPage = _page;
         _page += delta;
         _pendingDelete = null;
+        _selected.Clear();
         if (!await LoadAsync()) _page = previousPage;
     }
     private async Task DeleteAsync()
@@ -161,7 +198,7 @@
         if (_pendingDelete is not { } item) return;
         var deleted = await RunAsync(async ct =>
         {
-            await Content.DeleteAsync(item.Id, item.Version, true, ct);
+            await Api.PurgeContentAsync(item.Id, item.Version, ct);
             _pendingDelete = null;
             await RefreshAsync(ct);
         }, "已永久刪除內容。圖片未被刪除。");
@@ -172,7 +209,7 @@
         if (_pendingTrash is not { } item) return;
         var trashed = await RunAsync(async ct =>
         {
-            await Content.TrashAsync(item.Id, item.Version, true, ct);
+            await Api.TrashContentAsync(item.Id, item.Version, ct);
             _pendingTrash = null;
             await RefreshAsync(ct);
         }, "已移入回收桶，可於 30 天內還原。");
@@ -183,8 +220,42 @@
         if (Blocked) return;
         await RunAsync(async ct =>
         {
-            await Content.RestoreAsync(item.Id, item.Version, ct);
+            await Api.RestoreContentAsync(item.Id, item.Version, ct);
             await RefreshAsync(ct);
         }, "已還原為草稿。");
+    }
+    private void ToggleAll(ChangeEventArgs args)
+    {
+        if (Blocked || _result is null) return;
+        if (args.Value is true) foreach (var item in _result.Items) _selected.Add(item.Id);
+        else foreach (var item in _result.Items) _selected.Remove(item.Id);
+    }
+    private void ToggleSelect(ContentSummary item, ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        if (args.Value is true) _selected.Add(item.Id);
+        else _selected.Remove(item.Id);
+    }
+    private void ClearSelection() => _selected.Clear();
+    private void RequestBulkDelete()
+    {
+        if (!Blocked && _selected.Count > 0) _pendingBulkDelete = true;
+    }
+    private async Task BulkAsync(BulkAction action)
+    {
+        if (Blocked || _result is null) return;
+        _pendingBulkDelete = false;
+        var targets = _result.Items.Where(x => _selected.Contains(x.Id)).Select(x => (x.Id, x.Version)).ToList();
+        if (targets.Count == 0) return;
+        var label = action switch { BulkAction.Trash => "移入回收桶", BulkAction.Restore => "還原", _ => "永久刪除" };
+        await RunAsync(async ct =>
+        {
+            var results = await Api.BulkContentsAsync(action, targets, ct) ?? throw new CmsException("批次操作無法執行，請重試。");
+            _selected.Clear();
+            await RefreshAsync(ct);
+            var failed = results.Where(x => !x.Succeeded).ToList();
+            if (failed.Count > 0)
+                throw new CmsException($"批次{label}完成：成功 {results.Count - failed.Count} 筆、失敗 {failed.Count} 筆。例：{failed[0].Message}");
+        }, $"已批次{label} {targets.Count} 筆內容。");
     }
 }

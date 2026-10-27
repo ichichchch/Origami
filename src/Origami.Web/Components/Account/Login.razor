@@ -45,6 +45,9 @@
                 @* 表單對應在 POST 時讀取此欄位；絕不繫結或渲染其送出值。 *@
                 <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
             </div>
+            <div class="field checkbox-field">
+                <label for="remember"><input id="remember" name="Input.Remember" type="checkbox" value="true" /> 記住我（在此瀏覽器保持登入）</label>
+            </div>
             <button type="submit" class="button full-width">登入</button>
         </EditForm>
     }
@@ -148,13 +151,13 @@
             // 變更都會在伺服器端結束待驗證期間，而不只是瀏覽器端。
             var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
                 .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
-            context.Response.Cookies.Append(PendingCookie, protector.Protect(PendingPayload(user), TimeSpan.FromMinutes(5)),
+            context.Response.Cookies.Append(PendingCookie, protector.Protect(PendingPayload(user, Input.Remember), TimeSpan.FromMinutes(5)),
                 new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromMinutes(5) });
             awaitingCode = true;
             CodeForm.Code = string.Empty;
             return;
         }
-        await signInManager.SignInAsync(user, isPersistent: false);
+        await signInManager.SignInAsync(user, isPersistent: Input.Remember);
         // 絕不採用呼叫端提供的返回網址。Cookie 需要完整的 HTTP 導覽。
         Navigation.NavigateTo("/admin/posts", forceLoad: true);
     }
@@ -213,11 +216,12 @@
         }
         await userManager.ResetAccessFailedCountAsync(user);
         context.Response.Cookies.Delete(PendingCookie);
-        await signInManager.SignInAsync(user, isPersistent: false);
+        await signInManager.SignInAsync(user, isPersistent: pending.Remember);
         Navigation.NavigateTo("/admin/posts", forceLoad: true);
     }
 
-    private static string PendingPayload(AdminUser user) => user.Id + "|" + user.SecurityStamp;
+    /// <summary>待驗證 cookie 的酬載：使用者、安全戳記，與「記住我」的選擇（兩步驟登入時沿用）。</summary>
+    private static string PendingPayload(AdminUser user, bool remember) => user.Id + "|" + user.SecurityStamp + "|" + (remember ? "1" : "0");
 
     private static PendingSignIn? TryReadPendingUser(HttpContext context)
     {
@@ -228,16 +232,16 @@
                 var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
                     .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
                 var payload = protector.Unprotect(value);
-                var separator = payload.IndexOf('|', StringComparison.Ordinal);
-                if (separator <= 0 || separator == payload.Length - 1) return null;
-                return new PendingSignIn(payload[..separator], payload[(separator + 1)..]);
+                var parts = payload.Split('|');
+                if (parts.Length != 3 || parts.Any(string.IsNullOrEmpty)) return null;
+                return new PendingSignIn(parts[0], parts[1], parts[2] == "1");
             }
             catch (CryptographicException) { /* 已過期或遭竄改的待驗證 cookie 只是重新開始流程。 */ }
         }
         return null;
     }
 
-    private sealed record PendingSignIn(string UserId, string SecurityStamp);
+    private sealed record PendingSignIn(string UserId, string SecurityStamp, bool Remember);
 
     private void ClearPassword() => Input.Password = string.Empty;
     private void ClearCode() => CodeForm.Code = string.Empty;
@@ -251,6 +255,9 @@
         [Required(ErrorMessage = "請輸入密碼。")]
         [StringLength(AdminProvisioner.MaximumPasswordLength, ErrorMessage = "密碼過長。")]
         public string Password { get; set; } = string.Empty;
+
+        /// <summary>勾選後以持久 Cookie 登入（兩步驗證路徑會把此選擇帶到第二階段）。</summary>
+        public bool Remember { get; set; }
     }
 
     public sealed class CodeInput

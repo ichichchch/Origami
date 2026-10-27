@@ -3,10 +3,7 @@
 @attribute [Authorize]
 @layout AdminLayout
 @inherits AdminComponentBase
-@inject SettingsService SettingsService
-@inject ContentService Content
-@inject MediaService Media
-@inject ImportService Importer
+@inject OrigamiClient Api
 
 <PageTitle>網站設定 · 內容管理</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="Busy" />
@@ -38,6 +35,11 @@
                 </div>
                 <div class="field"><label for="posts-per-page">每頁文章數</label><input id="posts-per-page" type="number" min="1" max="@Limits.MaxPageSize" @bind="_model.PostsPerPage" disabled="@Blocked" aria-describedby="posts-per-page-help" /><span id="posts-per-page-help" class="field-help">1–@Limits.MaxPageSize；留空使用預設 @Limits.PageSize 篇。</span></div>
                 <div class="field"><label for="feed-items">RSS Feed 條數</label><input id="feed-items" type="number" min="1" max="@Limits.MaxFeedItems" @bind="_model.FeedItems" disabled="@Blocked" aria-describedby="feed-items-help" /><span id="feed-items-help" class="field-help">1–@Limits.MaxFeedItems；留空使用預設 @Limits.FeedItems 篇。</span></div>
+                <div class="field checkbox-field">
+                    <label for="feed-full-text"><input id="feed-full-text" type="checkbox" @bind="_model.FeedShowFullText" disabled="@Blocked" /> Feed 輸出全文</label>
+                    <p class="field-help">開啟後 RSS（content:encoded）與 Atom（content）包含完整渲染後的本文；關閉則僅摘要。</p>
+                </div>
+                <div class="field"><label for="author-name">作者顯示名稱（選填）</label><input id="author-name" @bind="_model.AuthorDisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" disabled="@Blocked" aria-describedby="author-name-help" placeholder="例如：單文浩" /><span id="author-name-help" class="field-help">最多 @Limits.AuthorName 字；顯示於文章詳情的作者列與 feed 作者欄位，留空不顯示。</span></div>
                 <div class="field">
                     <label for="site-icon">網站圖示（favicon）</label>
                     <select id="site-icon" disabled="@Blocked" value="@(_model.SiteIconMediaId?.ToString() ?? "")" @onchange="IconChanged">
@@ -106,10 +108,11 @@
     protected override Task OnInitializedAsync() => Load();
     private Task Load() => RunAsync(async ct =>
     {
-        _model = await SettingsService.GetAsync(ct);
-        _homeOptions = (await Content.PageOptionsAsync(ct))
+        _model = await Api.GetSettingsAsync(ct) ?? new SiteSettings();
+        _homeOptions = (await Api.PageOptionsAsync(ct) ?? [])
             .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).ToList();
-        var media = await Media.ListAsync(1, Limits.MaxPageSize, ct);
+        var media = await Api.ListMediaAsync(1, Limits.MaxPageSize, ct: ct)
+            ?? new PagedResult<MediaItem>([], 0, 1, Limits.MaxPageSize);
         _iconOptions = [.. media.Items.Select(x => (x.Id, $"{x.OriginalName}（{x.Width}×{x.Height}）"))];
         _baseline = Snapshot(_model);
     });
@@ -141,8 +144,7 @@
                 await stream.CopyToAsync(buffer);
                 _importFile = buffer.ToArray();
             }
-            using var input = new MemoryStream(_importFile);
-            _importPreview = await Importer.AnalyzeAsync(input);
+            _importPreview = await Api.AnalyzeImportAsync(_importFile);
         }
         catch (CmsException error) { _importError = error.Message; }
         catch (IOException) { _importError = "匯入檔超過大小上限。"; }
@@ -151,8 +153,7 @@
     private Task ApplyImport() => RunAsync(async ct =>
     {
         if (_importFile is null) return;
-        using var input = new MemoryStream(_importFile);
-        await Importer.ApplyAsync(input, confirmed: true, ct);
+        await Api.ApplyImportAsync(_importFile, ct);
         _importFile = null;
         _importPreview = null;
         await Load();
@@ -178,9 +179,10 @@
         {
             Id = _model.Id, Name = _model.Name, Description = _model.Description, Version = _model.Version,
             PostsPerPage = _model.PostsPerPage, FeedItems = _model.FeedItems,
+            FeedShowFullText = _model.FeedShowFullText, AuthorDisplayName = _model.AuthorDisplayName,
             HomePageContentId = _model.HomePageContentId, SiteIconMediaId = _model.SiteIconMediaId,
         };
-        _model = await SettingsService.SaveAsync(input, ct);
+        _model = await Api.SaveSettingsAsync(input, ct) ?? input;
         _baseline = Snapshot(_model);
     }, "網站設定已儲存，公開網站已更新。");
 }

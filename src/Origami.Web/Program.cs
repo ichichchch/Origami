@@ -5,23 +5,23 @@ if (isCommand && args.Length != 1)
     return 2;
 }
 var builder = WebApplication.CreateBuilder(isCommand ? [] : args);
-// Load build-time assets even when an unpublished build runs in Production.
+// 即使未發布的組建以 Production 環境執行，也載入組建時期的靜態資產。
 builder.WebHost.UseStaticWebAssets();
 string connection;
 try
 {
     connection = builder.Configuration.GetConnectionString("CMS")
-        ?? throw new InvalidOperationException("缺少 ConnectionStrings__CMS 設定。");
+        ?? throw new InvalidOperationException("缺少 ConnectionStrings CMS 設定。");
 }
 catch (InvalidOperationException error)
 {
-    // A missing setting is an operator problem, not a reason to print a stack trace.
+    // 缺少設定屬於維運層面的問題，不因此輸出堆疊追蹤。
     await Console.Error.WriteLineAsync(error.Message + " 請透過安全的外部設定提供，勿將連線密碼寫入原始碼。");
     return 1;
 }
 builder.Services.AddDbContextFactory<CmsDbContext>(options => options.UseNpgsql(connection, o => o.UseVector()));
-// A 200,000-character editor value may expand sixfold during JSON escaping.
-// Keep transport bounded while allowing the service's independently validated body limit.
+// 編輯器 200,000 字的值經 JSON 轉義後可能膨脹六倍。
+// 傳輸大小保持受限，同時仍允許服務層獨立驗證本文上限。
 builder.Services.AddRazorComponents().AddInteractiveServerComponents()
     .AddHubOptions(options => options.MaximumReceiveMessageSize = 2 * 1024 * 1024);
 builder.Services.AddCmsIdentity();
@@ -37,24 +37,23 @@ builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout 
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
 builder.Services.AddScoped<SemanticSearchService>();
 builder.Services.AddScoped<PublicSearchService>();
-// The admin assistant reuses the MCP read tools as its function tools; only the /mcp endpoint moved to Origami.Api.
+// 管理助理重用 MCP 唯讀工具作為 function tools；只有 /mcp 端點搬到了 Origami.Api。
 builder.Services.AddScoped<McpReadTools>();
 builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFactory>();
 builder.Services.AddScoped<SiteAssistant>();
 builder.Services.AddScoped<AiStatusService>();
-builder.Services.AddScoped<ExportService>();
-builder.Services.AddScoped<ImportService>();
+// 匯入匯出自 API-first 起經 OrigamiClient 走 Api 主機；本機不再註冊 Export／Import 服務。
 builder.Services.AddScoped<TwoFactorService>();
 builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
 builder.Services.AddHostedService<EmbeddingJobWorker>();
 builder.Services.AddHostedService<ContentLifecycleWorker>();
 builder.Services.AddHostedService<MediaVariantBackfillService>();
-// Anonymous public searches keep one provider-cost budget per source IP; the MCP endpoint
-// now lives in the Origami.Api host and carries its own limiter there.
+// 匿名公開搜尋對每個來源 IP 維持一份供應商成本預算；MCP 端點
+// 現位於 Origami.Api 主機，並在該主機自帶速率限制器。
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    // A written body keeps the status-code-pages middleware from rewriting the 429 into an HTML page.
+    // 寫入回應本文可避免狀態碼頁面中介軟體把 429 改寫成 HTML 頁面。
     options.OnRejected = async (context, _) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -69,6 +68,14 @@ builder.Services.AddRateLimiter(options =>
 });
 var storage = new StoragePaths(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton(storage);
+// BFF 資料通道：頁面讀寫經 Origami.Api；通行證由安全外部設定提供，瀏覽器不持有。
+builder.Services.AddHttpClient<OrigamiClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Api:BaseUrl"] ?? "http://127.0.0.1:5100");
+    var serviceToken = builder.Configuration["Api:ServiceToken"];
+    if (!string.IsNullOrWhiteSpace(serviceToken))
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", serviceToken);
+});
 var protection = builder.Services.AddDataProtection().SetApplicationName("Origami.SingleSite")
     .PersistKeysToFileSystem(new DirectoryInfo(storage.Keys));
 if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
@@ -76,7 +83,7 @@ if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
 var app = builder.Build();
 if (isCommand) return await RunCommandAsync(args, app);
 
-// Public errors never return exception details, including in local development.
+// 公開錯誤絕不回傳例外細節，本機開發環境也不例外。
 app.UseExceptionHandler("/Error", createScopeForErrors: true);
 if (!app.Environment.IsDevelopment()) app.UseHsts();
 app.UseHttpsRedirection();
@@ -105,20 +112,23 @@ app.UseRateLimiter();
 app.MapStaticAssets();
 app.MapCmsIdentity();
 app.MapPublicEndpoints();
-// Browsers request this URL by convention; the configured media asset is served without any library query UI.
+// 瀏覽器依慣例請求這個網址；直接提供已設定的媒體資產，不經媒體庫查詢介面。
 app.MapGet("/favicon.ico", async (MediaService media, CancellationToken ct) =>
 {
     var icon = await media.GetSiteIconAsync(ct);
     return icon is { } file && File.Exists(file.Path) ? Results.File(file.Path, file.ContentType) : Results.NotFound();
 });
-app.MapHealthChecks("/health");
-// The buffer keeps a failed export from streaming a truncated file with a 200 status.
-app.MapGet("/admin/export", async (ExportService export, CancellationToken ct) =>
+// iOS 主畫面圖示慣例網址；規格要求 PNG，其他格式的網站圖示寧可 404 也不提供錯誤格式。
+app.MapGet("/apple-touch-icon.png", async (MediaService media, CancellationToken ct) =>
 {
-    using var buffer = new MemoryStream();
-    await export.WriteAsync(buffer, ct);
-    return Results.File(buffer.ToArray(), "application/json", "origami-export.json");
-}).RequireAuthorization();
+    var icon = await media.GetSiteIconAsync(ct);
+    return icon is { Path: var path, ContentType: "image/png" } && File.Exists(path) ? Results.File(path, "image/png") : Results.NotFound();
+});
+app.MapHealthChecks("/health");
+// 匯出資料同樣經 Api（BFF 通道）；Api 端緩衝後一次輸出，失敗不會以 200 狀態串流出被截斷的檔案。
+app.MapGet("/admin/export", async (OrigamiClient api, CancellationToken ct) =>
+    Results.File(await api.ExportAsync(ct), "application/json", "origami-export.json"))
+    .RequireAuthorization();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 await app.RunAsync();
 return 0;

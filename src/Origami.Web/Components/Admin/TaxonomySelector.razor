@@ -1,5 +1,5 @@
 @inherits AdminComponentBase
-@inject TaxonomyService Taxonomies
+@inject OrigamiClient Api
 
 <section class="taxonomy-selector" aria-label="@(Label)">
     <div class="panel-toolbar compact"><h3>@(Label)</h3><span class="muted">已選 @Selected.Count / @Limits.MaxTaxonomiesPerKind</span></div>
@@ -57,9 +57,10 @@
     private Task<bool> Load() => RunOperationAsync(LoadOptions);
     private async Task LoadOptions(CancellationToken ct)
     {
-        var result = await Taxonomies.ListAsync(Kind, _page, Limits.MaxPageSize, ct);
+        var result = await Api.ListTaxonomiesAsync(Kind, _page, Limits.MaxPageSize, ct)
+            ?? throw new CmsException("無法載入選項。");
         if (_page > result.TotalPages)
-            result = await Taxonomies.ListAsync(Kind, result.TotalPages, Limits.MaxPageSize, ct);
+            result = await Api.ListTaxonomiesAsync(Kind, result.TotalPages, Limits.MaxPageSize, ct) ?? result;
         _page = result.Page;
         _result = result;
     }
@@ -93,7 +94,8 @@
         {
             if (AtLimit) throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個{Label}，請先取消選取。");
             TaxonomyEdit saved;
-            try { saved = await Taxonomies.SaveAsync(Kind, new TaxonomyEdit { Name = _newName.Trim() }, ct); }
+            try { saved = await Api.SaveTaxonomyAsync(Kind, new TaxonomyEdit { Name = _newName.Trim() }, ct)
+                    ?? throw new CmsException("無法建立項目。"); }
             catch (CmsException ex) when (ex.Message == "網址代稱已存在，請使用其他代稱。")
             {
                 throw new CmsException($"相同名稱或網址代稱的{Label}已存在。請刷新選項後選取既有項目，或改用其他名稱。");

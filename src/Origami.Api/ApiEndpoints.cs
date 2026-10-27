@@ -27,24 +27,33 @@ public static class ApiEndpoints
         group.MapGet("/pages/{slug}", async (string slug, ContentService content, CancellationToken ct) =>
             PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Page, slug, ct)));
 
-        group.MapGet("/search", async (string? q, int? limit, PublicSearchService search, CancellationToken ct) =>
+        group.MapGet("/search", async (string? q, int? limit, int? page, PublicSearchService search, CancellationToken ct) =>
         {
             var query = (q ?? "").Trim();
             if (query.Length == 0) return Results.BadRequest(new { message = "請輸入搜尋文字。" });
             if (query.Length > Limits.SearchQueryMax) return Results.BadRequest(new { message = "搜尋文字過長。" });
+            if (page is < 1) return Results.BadRequest(new { message = "參數 page 無效。" });
             // 缺少嵌入供應商時關鍵字比對仍可運作，僅語意搜尋這一環降級。
-            return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, ct));
+            return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, page ?? 1, ct));
         });
 
         group.MapGet("/settings", async (SettingsService settings, CancellationToken ct) =>
         {
             var value = await settings.GetAsync(ct);
             return Results.Ok(new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
-                value.FeedItems, value.HomePageContentId, value.SiteIconMediaId));
+                value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId));
         });
 
         group.MapGet("/navigation", async (ContentService content, CancellationToken ct) =>
             Results.Ok(await content.NavigationAsync(ct)));
+
+        // 已設定為靜態首頁的頁面：以內容識別取得已發布頁面。
+        group.MapGet("/contents/{id}/published", async (Guid id, ContentService content, CancellationToken ct) =>
+            await content.GetPublishedPageAsync(id, ct) is { } page ? Results.Ok(page) : Results.NotFound());
+
+        // 公開圖片寬度表：前台 srcset 渲染所需的變體資訊。
+        group.MapGet("/media/widths", async (MediaService media, CancellationToken ct) =>
+            Results.Ok(await media.PublicImageWidthsAsync(ct)));
 
         group.MapGet("/contents/{id}/neighbors", async (Guid id, ContentService content, CancellationToken ct) =>
             Results.Ok(await content.NeighborsAsync(id, ct)));
@@ -74,37 +83,41 @@ public static class ApiEndpoints
         group.MapGet("/preview/{token}", async (Guid token, ContentService content, CancellationToken ct) =>
         {
             var preview = await content.GetPreviewAsync(token, ct);
-            if (preview is null) return Results.NotFound();
             var published = await content.ResolvePublishedPreviewAsync(token, ct);
+            // 已發布後草稿投影為 null；此時仍須以轉址資訊回應，不得簡化成 404。
+            if (preview is null && published is null) return Results.NotFound();
             return Results.Ok(new ApiPreview(preview, published?.Kind.ToString(), published?.Slug));
         });
 
         group.MapGet("/sitemap", async (ContentService content, CancellationToken ct) =>
             Results.Ok(await content.SitemapAsync(ct)));
 
-        group.MapGet("/feed", async (ContentService content, SettingsService settings, CancellationToken ct) =>
+        group.MapGet("/feed", async (ContentService content, SettingsService settings, HttpContext http, CancellationToken ct) =>
         {
             var configured = await settings.GetAsync(ct);
             var count = Math.Clamp(configured.FeedItems ?? Limits.FeedItems, 1, Limits.MaxFeedItems);
-            var page = await content.ListPublishedAsync(1, count, ct);
+            string? category = http.Request.Query["category"].Count > 0 ? http.Request.Query["category"].ToString() : null;
+            string? tag = http.Request.Query["tag"].Count > 0 ? http.Request.Query["tag"].ToString() : null;
+            var page = await content.ListPublishedAsync(1, count, ct, category, tag);
             var items = new List<ApiFeedItem>();
             foreach (var summary in page.Items)
             {
                 var detail = await content.GetPublishedAsync(ContentKind.Post, summary.Slug, ct);
                 items.Add(new(summary.Id, summary.Title, summary.Slug, summary.PublishedAt,
-                    summary.Excerpt, detail?.Markdown ?? ""));
+                    summary.Excerpt, detail?.Markdown ?? "", summary.ExcerptIsManual));
             }
             return Results.Ok(items);
         });
     }
 
     public sealed record PublicSiteSettings(string Name, string Description, int? PostsPerPage, int? FeedItems,
-        Guid? HomePageContentId, Guid? SiteIconMediaId);
+        bool? FeedShowFullText, string AuthorDisplayName, Guid? HomePageContentId, Guid? SiteIconMediaId);
 
-    public sealed record ApiPreview(PublicContent Content, string? PublishedKind, string? PublishedSlug);
+    /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>
+    public sealed record ApiPreview(PublicContent? Content, string? PublishedKind, string? PublishedSlug);
 
     public sealed record ApiFeedItem(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
-        string Excerpt, string Markdown);
+        string Excerpt, string Markdown, bool ExcerptIsManual);
 
     /// <summary>受密碼保護與私密內容對機器用戶端不可見，與 MCP 工具的行為一致。</summary>
     private static IResult PublishedOrNotFound(PublicContent? found) =>

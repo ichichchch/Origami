@@ -5,7 +5,7 @@
 @attribute [Authorize]
 @layout AdminLayout
 @inherits AdminComponentBase
-@inject ContentService Content
+@inject OrigamiClient Api
 @inject MarkdownService MarkdownRenderer
 @inject NavigationManager Navigation
 @inject IJSRuntime JavaScript
@@ -41,6 +41,27 @@
                     <div class="field"><label for="content-title">標題 <span class="required">必填</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="給這個想法一個標題" /><span class="field-help">最多 @Limits.Title 字。</span></div>
                     <div class="field"><label for="content-slug">網址代稱</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="首次儲存可留空，自標題產生" /></div><span id="slug-help" class="field-help">代稱須全站唯一；修改後舊網址不會自動轉址。</span></div>
                     <div class="field"><label for="content-excerpt">摘要</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="用一兩句話介紹這篇內容；留空則自動使用開頭文字"></textarea><span id="excerpt-help" class="field-help">純文字，最多 @Limits.Excerpt 字；顯示於文章列表、搜尋結果與社群分享描述。</span></div>
+                    <div class="field">
+                        <label id="content-cover-label">封面圖片（選填）</label>
+                        <div class="cover-control">
+                            @if (_model.CoverFileName != "")
+                            {
+                                <img class="cover-preview" src="@("/media/" + _model.CoverFileName)" alt="@_model.CoverAltText" loading="lazy" />
+                            }
+                            else
+                            {
+                                <p class="field-help cover-empty">未設定封面。</p>
+                            }
+                            <div class="button-row">
+                                <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="OpenCoverPicker">@(_model.CoverFileName == "" ? "選擇封面" : "更換封面")</button>
+                                @if (_model.CoverFileName != "")
+                                {
+                                    <button type="button" class="text-button" disabled="@Blocked" @onclick="RemoveCover">移除封面</button>
+                                }
+                            </div>
+                        </div>
+                        <span class="field-help">封面顯示於文章列表與內容開頭；社群分享圖以封面優先，未設定時退回本文第一張圖。說明文字（caption）在媒體庫編輯。</span>
+                    </div>
                     @if (_model.Kind == ContentKind.Page)
                     {
                         <div class="field">
@@ -69,9 +90,9 @@
                         <div class="editor-footnote"><span id="markdown-help">支援 Markdown；不執行原始 HTML。</span><span>@((_model.Markdown?.Length ?? 0).ToString("N0")) / @Limits.Body.ToString("N0") 字</span></div>
                     }
                 </section>
-                @if (_mediaOpen)
+                @if (_mediaOpen || _coverPickerOpen)
                 {
-                    <MediaPicker Disabled="Blocked" Select="InsertMedia" Close="ToggleMedia" BusyChanged="value => _mediaBusy = value" OnUnauthorized="RequireLogin" />
+                    <MediaPicker Disabled="Blocked" Select="SelectMedia" Close="CloseMedia" BusyChanged="value => _mediaBusy = value" OnUnauthorized="RequireLogin" />
                 }
             </div>
             <aside class="editor-aside">
@@ -173,6 +194,24 @@
                                     <p class="field-help">載入會覆蓋編輯器目前內容（未儲存前可再次還原），確認後仍需手動儲存。</p>
                                 </div>
                             }
+                            @if (_revisionDiff is { } diff)
+                            {
+                                <div class="revision-diff">
+                                    <p><strong>與目前編輯器內容的差異</strong></p>
+                                    <p class="field-help">紅色＝修訂版有、目前沒有（還原會加回）；綠色＝目前有、修訂版沒有（還原會移除）。</p>
+                                    <div class="diff-output" role="region" aria-label="修訂與目前內容的行差異">
+                                        @foreach (var line in diff)
+                                        {
+                                            <span class="diff-line @(line.Kind switch { TextDiff.DiffKind.Added => "diff-added", TextDiff.DiffKind.Removed => "diff-removed", _ => "diff-same" })" data-mark="@(line.Kind switch { TextDiff.DiffKind.Added => "+", TextDiff.DiffKind.Removed => "−", _ => " " })">@line.Text</span>
+                                        }
+                                    </div>
+                                    <div class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionDiff = null">關閉差異</button></div>
+                                </div>
+                            }
+                            @if (_diffTooLarge)
+                            {
+                                <p class="field-help">本文行數過多，無法逐行比對；請改用「查看」對照全文。</p>
+                            }
                             @if (_revisions.Count == 0)
                             {
                                 <p class="field-help">還沒有修訂記錄；每次儲存都會保留前一版，最多 @Limits.RevisionKeep 筆。</p>
@@ -182,7 +221,7 @@
                                 <ul class="revision-list">
                                     @foreach (var revision in _revisions)
                                     {
-                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">查看</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">還原</button></span></li>
+                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">查看</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => CompareRevision(revision.Id)">比較</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">還原</button></span></li>
                                     }
                                 </ul>
                             }
@@ -207,6 +246,7 @@
     private bool _preview;
     private string _previewHtml = "";
     private bool _mediaOpen;
+    private bool _coverPickerOpen;
     private bool _reloadRequested;
     private bool _mediaBusy;
     private bool _categoryBusy;
@@ -214,6 +254,8 @@
     private bool _revisionsOpen;
     private List<RevisionItem> _revisions = [];
     private RevisionDetail? _revisionView;
+    private List<TextDiff.DiffLine>? _revisionDiff;
+    private bool _diffTooLarge;
     private DateTimeOffset? _autosaveAt;
     private bool _autosaveStopped;
     private int _tzOffsetMinutes;
@@ -271,7 +313,7 @@
     private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(new
     {
         model.Id, model.Kind, model.Title, model.Slug, model.Markdown, model.Excerpt, model.IsSticky,
-        model.IsProtected, model.IsPrivate, model.ParentId, model.PublishAt, model.Status, model.Version,
+        model.IsProtected, model.IsPrivate, model.ParentId, model.CoverMediaId, model.PublishAt, model.Status, model.Version,
         model.CategoryIds, model.TagIds
     });
 
@@ -284,6 +326,7 @@
         _loadedId = Id;
         _model = null;
         _mediaOpen = false;
+        _coverPickerOpen = false;
         _preview = false;
         _reloadRequested = false;
         _revisionsOpen = false;
@@ -358,8 +401,10 @@
             var input = BuildInput(ContentStatus.Draft);
             var sent = Snapshot(input);
             var sentVersion = input.Version;
-            var saved = await Content.UpdateAsync(input, cancellation);
+            var saved = await Api.UpdateContentAsync(input.Id!.Value, input, cancellation);
             if (_model is null) return;
+            // 內容已在其他分頁被刪除（API 回 404）：停止自動儲存循環，交由手動流程處理。
+            if (saved is null) { _autosaveStopped = true; return; }
             if (_model.Version != sentVersion)
             {
                 // 這次儲存執行期間，另一筆儲存已取代編輯器模型；以那筆結果為準。
@@ -404,17 +449,29 @@
     private Task ToggleRevisions() => _revisionsOpen ? Task.CompletedTask : LoadRevisions();
     private Task LoadRevisions() => RunAsync(async ct =>
     {
-        _revisions = await Content.ListRevisionsAsync(_model!.Id!.Value, ct);
+        _revisions = await Api.ListRevisionsAsync(_model!.Id!.Value, ct) ?? [];
         _revisionsOpen = true;
         _revisionView = null;
+        _revisionDiff = null;
+        _diffTooLarge = false;
     });
     private Task ViewRevision(Guid revisionId) => RunAsync(async ct =>
     {
-        _revisionView = await Content.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        _revisionView = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        _revisionDiff = null;
+        _diffTooLarge = false;
+    });
+    /// <summary>以行差異比較修訂版與目前編輯器內容；過長內容退回全文對照。</summary>
+    private Task CompareRevision(Guid revisionId) => RunAsync(async ct =>
+    {
+        var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        _revisionView = null;
+        _revisionDiff = TextDiff.Compare(revision.Markdown, _model?.Markdown ?? "");
+        _diffTooLarge = _revisionDiff is null;
     });
     private Task RestoreRevisionById(Guid revisionId) => RunAsync(async ct =>
     {
-        var revision = await Content.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
         RestoreRevision(revision);
     });
     private void RestoreRevision(RevisionDetail revision)
@@ -424,25 +481,29 @@
         _model.Markdown = revision.Markdown;
         _model.Excerpt = revision.Excerpt;
         _revisionView = null;
+        _revisionDiff = null;
+        _diffTooLarge = false;
         _preview = false;
     }
     private Task CyclePreview() => RunAsync(async ct =>
     {
-        var token = await Content.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
+        var token = await Api.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
         // 分享連結不算內容編輯：編輯器保有自己的文字與版本，因此
         // 他處同時的儲存仍會以明顯衝突收場，而不是遭到靜默覆寫。
         _model.PreviewToken = token;
     }, "預覽連結已產生；舊連結（若有）已失效。");
     private Task RevokePreview() => RunAsync(async ct =>
     {
-        await Content.RevokePreviewTokenAsync(_model!.Id!.Value, ct);
+        await Api.RevokePreviewTokenAsync(_model!.Id!.Value, ct);
         _model.PreviewToken = null;
     }, "預覽連結已撤銷。");
     private Task Load() => RunAsync(async ct =>
     {
-        var loaded = Id is { } id ? await Content.GetEditAsync(id, ct) : new ContentEdit { Kind = InferNewKind() };
+        var loaded = Id is { } id
+            ? await Api.GetEditAsync(id, ct) ?? throw new CmsException("內容不存在，請重新載入列表。")
+            : new ContentEdit { Kind = InferNewKind() };
         _model = loaded;
-        if (loaded.Kind == ContentKind.Page) _pageOptions = await Content.PageOptionsAsync(ct);
+        if (loaded.Kind == ContentKind.Page) _pageOptions = await Api.PageOptionsAsync(ct) ?? [];
         _baseline = Snapshot(loaded);
         // 已儲存的排程應填入選擇器；此時時區可能還無法得知，
         // 等瀏覽器回報後會再次套用。
@@ -490,7 +551,32 @@
         _reloadRequested = false;
         await Load();
     }
-    private void ToggleMedia() { if (!Blocked && !_mediaBusy) _mediaOpen = !_mediaOpen; }
+    private void ToggleMedia() { if (!Blocked && !_mediaBusy) { _coverPickerOpen = false; _mediaOpen = !_mediaOpen; } }
+    private void OpenCoverPicker() { if (!Blocked && !_mediaBusy) { _mediaOpen = false; _coverPickerOpen = true; } }
+    private void CloseMedia() { _mediaOpen = false; _coverPickerOpen = false; }
+    private async Task SelectMedia(MediaItem item)
+    {
+        if (_coverPickerOpen) await SelectCover(item);
+        else InsertMedia(item);
+    }
+    private Task SelectCover(MediaItem item)
+    {
+        if (_model is null || Blocked) return Task.CompletedTask;
+        _model.CoverMediaId = item.Id;
+        _model.CoverFileName = item.FileName;
+        _model.CoverAltText = item.AltText;
+        _model.CoverCaption = item.Caption;
+        _coverPickerOpen = false;
+        return Task.CompletedTask;
+    }
+    private void RemoveCover()
+    {
+        if (_model is null || Blocked) return;
+        _model.CoverMediaId = null;
+        _model.CoverFileName = "";
+        _model.CoverAltText = "";
+        _model.CoverCaption = "";
+    }
     private Task SaveCurrent() => Save(_model?.Status ?? ContentStatus.Draft);
     private ContentEdit BuildInput(ContentStatus status) => new()
     {
@@ -498,6 +584,7 @@
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
         IsProtected = _model.IsProtected, IsPrivate = _model.IsPrivate, NewProtectPassword = _protectPassword,
         ParentId = _model.Kind == ContentKind.Page ? _model.ParentId : null,
+        CoverMediaId = _model.CoverMediaId,
         PublishAt = status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
         Version = _model.Version, Status = status,
         CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]
@@ -514,9 +601,10 @@
         {
             ContentRules.Validate(input);
             // 內容類型由伺服器決定；提交的類型只在建立時使用。
-            _model = isNew
-                ? await Content.CreateAsync(input.Kind, input, ct)
-                : await Content.UpdateAsync(input, ct);
+            _model = (isNew
+                ? await Api.CreateContentAsync(input, ct)
+                : await Api.UpdateContentAsync(input.Id!.Value, input, ct))
+                ?? throw new CmsException("內容已不存在，請重新載入列表。");
             _baseline = Snapshot(_model);
             _scheduleTouched = false;
             _scheduleLocal = ToLocalOffset(_model.PublishAt);

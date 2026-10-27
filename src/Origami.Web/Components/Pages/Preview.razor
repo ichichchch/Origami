@@ -1,6 +1,5 @@
 @page "/preview/{Token:guid}"
-@inject ContentService Content
-@inject MediaService Media
+@inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject ILogger<Preview> Logger
@@ -32,6 +31,10 @@ else if (_content is not null)
                 <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))" data-enhance-nav="false">@category.Title</a> }</div>
             }
         </header>
+        @if (_content.CoverUrl is { } coverUrl)
+        {
+            <figure class="cover-figure"><img src="@coverUrl" alt="@_content.CoverAltText" />@if (_content.CoverCaption != "") { <figcaption>@_content.CoverCaption</figcaption> }</figure>
+        }
         <div class="prose">@((MarkupString)_html)</div>
         @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
         {
@@ -62,28 +65,38 @@ else
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _content = await Content.GetPreviewAsync(Token, ct);
+            var preview = await Api.GetPreviewAsync(Token, ct);
             // token 對應的內容若已公開，改指向 canonical 網址。
-            if (_content is null)
+            if (preview is null)
             {
-                var published = await Content.ResolvePublishedPreviewAsync(Token, ct);
-                if (published is not null)
-                {
-                    if (HttpContext is not null && !HttpContext.Response.HasStarted)
-                    {
-                        HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
-                        HttpContext.Response.Headers.Location = "/" + (published.Kind == ContentKind.Page ? "pages/" : "posts/") + Uri.EscapeDataString(published.Slug);
-                    }
-                    _redirecting = true;
-                    _resolved = true;
-                    return;
-                }
                 if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
                 Navigation.NotFound();
                 _resolved = true;
                 return;
             }
-            _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
+            if (preview.PublishedKind is { } publishedKind)
+            {
+                // 已發布內容改指向 canonical 網址；層級頁面直接解析完整路徑，避免平面形式再轉一跳。
+                var slug = preview.PublishedSlug ?? preview.Content?.Slug ?? "";
+                var prefix = publishedKind == nameof(ContentKind.Page) ? "/pages/" : "/posts/";
+                var location = prefix + Uri.EscapeDataString(slug);
+                if (publishedKind == nameof(ContentKind.Page))
+                {
+                    var resolved = await Api.ResolvePublishedPagePathAsync([slug], ct);
+                    if (resolved is { Segments: { Count: > 1 } segments })
+                        location = prefix + string.Join("/", segments.Select(Uri.EscapeDataString));
+                }
+                if (HttpContext is not null && !HttpContext.Response.HasStarted)
+                {
+                    HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                    HttpContext.Response.Headers.Location = location;
+                }
+                _redirecting = true;
+                _resolved = true;
+                return;
+            }
+            _content = preview.Content;
+            _html = Markdown.Render(_content.Markdown, await Api.GetPublicImageWidthsAsync(ct) ?? []);
             // 分享連結絕不能外洩至搜尋索引，無論檢索器是否遵守指示。
             if (HttpContext is not null && !HttpContext.Response.HasStarted)
                 HttpContext.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";

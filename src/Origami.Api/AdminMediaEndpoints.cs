@@ -15,7 +15,11 @@ public static class AdminMediaEndpoints
             if (!ApiEndpoints.TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
             if (!ApiEndpoints.TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
             var search = http.Request.Query["search"].ToString();
-            return Results.Ok(await media.ListAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, search.Length == 0 ? null : search));
+            var result = await media.ListAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, search.Length == 0 ? null : search);
+            // 引用數隨列表一次填入，呼叫端不必逐筆再問。
+            var counts = await media.ReferenceCountsAsync([.. result.Items.Select(x => x.Id)], ct);
+            foreach (var item in result.Items) item.ReferenceCount = counts.GetValueOrDefault(item.Id);
+            return Results.Ok(result);
         });
 
         group.MapPost("", async (IFormFile file, MediaService media, CancellationToken ct) =>
@@ -28,8 +32,8 @@ public static class AdminMediaEndpoints
             return Results.Created($"/api/v1/admin/media/{item.Id}", item);
         }).DisableAntiforgery(); // BFF 通行證即認證；表單端點明確退出瀏覽器防偽機制
 
-        group.MapPut("/{id}/alt", async (Guid id, AltTextInput input, MediaService media, CancellationToken ct) =>
-            Results.Ok(await media.UpdateAltAsync(id, input.AltText, ct)));
+        group.MapPut("/{id}/meta", async (Guid id, MediaMetaInput input, MediaService media, CancellationToken ct) =>
+            Results.Ok(await media.UpdateMetaAsync(id, input.AltText, input.Caption, ct)));
 
         // 引用資訊支撐刪除確認 UI：媒體仍在使用中時拒絕刪除。
         group.MapGet("/{id}/references", async (Guid id, MediaService media, CancellationToken ct) =>
@@ -43,5 +47,5 @@ public static class AdminMediaEndpoints
         });
     }
 
-    public sealed record AltTextInput(string? AltText);
+    public sealed record MediaMetaInput(string? AltText, string? Caption);
 }

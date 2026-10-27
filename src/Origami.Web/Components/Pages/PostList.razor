@@ -1,4 +1,4 @@
-@inject ContentService Content
+@inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject ILogger<PostList> Logger
@@ -16,7 +16,7 @@
 }
 @if (HasFilter)
 {
-    <p class="field-help"><a href="@BasePath">清除篩選，查看全部文章</a>@if (_result is not null) { <span> · 共 @_result.Total 篇</span> }</p>
+    <p class="field-help"><a href="@BasePath">清除篩選，查看全部文章</a>@if (_result is not null) { <span> · 共 @_result.Total 篇</span> } · <a href="@FilteredFeedHref">訂閱此篩選的文章 feed</a></p>
 }
 @if (_error is not null)
 {
@@ -50,7 +50,7 @@ else
         {
             <article class="post-preview">
                 <time datetime="@post.PublishedAt?.ToString("O")">@post.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
-                <div class="post-summary"><h2>@if (post.IsSticky) { <span class="chip sticky-chip">置頂</span> } <a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2><p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
+                <div class="post-summary"><h2>@if (post.IsSticky) { <span class="chip sticky-chip">置頂</span> } <a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2>@if (post.CoverUrl is { } cover) { <a class="post-cover" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" tabindex="-1" aria-hidden="true"><img src="@cover" alt="" loading="lazy" /></a> }<p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
                 <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@("閱讀：" + post.Title)">閱讀全文 <span aria-hidden="true">↗</span></a>
             </article>
         }
@@ -89,6 +89,17 @@ else
     private string PageUrl(int page) => BasePath + (BasePath.Contains('?') ? "&" : "?") + "page=" + page
         + (_category is not null ? "&category=" + Uri.EscapeDataString(_category.Slug) : "")
         + (_tag is not null ? "&tag=" + Uri.EscapeDataString(_tag.Slug) : "");
+    /// <summary>目前篩選條件的 RSS 訂閱網址（Atom 版本為 /feed/atom）。</summary>
+    private string FilteredFeedHref
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (_category is not null) parts.Add("category=" + Uri.EscapeDataString(_category.Slug));
+            if (_tag is not null) parts.Add("tag=" + Uri.EscapeDataString(_tag.Slug));
+            return parts.Count == 0 ? "/feed" : "/feed?" + string.Join("&", parts);
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -106,19 +117,19 @@ else
             var ct = HttpContext?.RequestAborted ?? default;
             if (Category is not null)
             {
-                _category = await Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, Category, ct);
+                _category = await Api.GetTaxonomyViewAsync(TaxonomyKind.Category, Category, ct);
                 if (_category is null) { Missing(); return; }
                 _taxonomyDescription = _category.Description != "" ? _category.Description : null;
             }
             if (Tag is not null)
             {
-                _tag = await Content.GetPublicTaxonomyAsync(TaxonomyKind.Tag, Tag, ct);
+                _tag = await Api.GetTaxonomyViewAsync(TaxonomyKind.Tag, Tag, ct);
                 if (_tag is null) { Missing(); return; }
                 _taxonomyDescription ??= _tag.Description != "" ? _tag.Description : null;
             }
-            _result = await Content.ListPublishedAsync(page, PageSize, ct, category: _category?.Slug, tag: _tag?.Slug);
-            if (page > _result.TotalPages) { Missing(); return; }
-            _categories = await Content.PopularCategoriesAsync(ct);
+            _result = await Api.ListPublishedAsync(page, PageSize, _category?.Slug, _tag?.Slug, ct: ct);
+            if (_result is null || page > _result.TotalPages) { Missing(); return; }
+            _categories = await Api.GetPopularCategoriesAsync(ct) ?? [];
         }
         catch (CmsException) { Missing(); }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }

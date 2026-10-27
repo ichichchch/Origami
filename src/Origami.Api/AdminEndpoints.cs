@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Mvc;
+
 namespace Origami.Api;
 
 /// <summary>
@@ -65,6 +67,19 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
+        // 清單批次操作：逐筆攜帶並發版本，逐筆回報結果；確認契約與單筆端點相同（由 BFF 呼叫方滿足）。
+        group.MapPost("/contents/bulk", async (BulkContentInput input, ContentService content, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<BulkAction>(input.Action, ignoreCase: true, out var action) || !Enum.IsDefined(action))
+                return Results.BadRequest(new { message = "參數 action 無效。" });
+            if (input.Items is null || input.Items.Count == 0)
+                return Results.BadRequest(new { message = "請先選擇要操作的內容。" });
+            if (input.Items.Count > Limits.BulkMaxItems)
+                return Results.BadRequest(new { message = $"單次批次操作最多 {Limits.BulkMaxItems} 筆。" });
+            var results = await content.BulkAsync(action, [.. input.Items.Select(x => (x.Id, x.Version))], ct);
+            return Results.Ok(results);
+        });
+
         group.MapGet("/contents/counts", async (HttpContext http, ContentService content, CancellationToken ct) =>
         {
             if (!Enum.TryParse<ContentKind>(http.Request.Query["kind"].ToString(), ignoreCase: true, out var kind)
@@ -91,7 +106,44 @@ public static class AdminEndpoints
 
         group.MapGet("/pages/options", async (ContentService content, CancellationToken ct) =>
             Results.Ok(await content.PageOptionsAsync(ct)));
+
+        // 網站渲染用的完整詳情：機器端點會隱藏受保護與私密內容，網站需要旗標與本文才能呈現解鎖閘門。
+        group.MapGet("/contents/published/{kind}/{slug}", async (string kind, string slug, ContentService content, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<ContentKind>(kind, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                return Results.BadRequest(new { message = "參數 kind 無效。" });
+            return await content.GetPublishedAsync(parsed, slug, ct) is { } detail
+                ? Results.Ok(detail)
+                : Results.NotFound();
+        });
+
+        // 層級頁面網址的解析：多段路徑一次驗證父鏈，回傳內容與完整路徑段供轉址判斷。
+        group.MapGet("/contents/published-page/{**path}", async (string path, ContentService content, CancellationToken ct) =>
+        {
+            var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var resolved = await content.ResolvePublishedPagePathAsync(segments, ct);
+            return resolved is null ? Results.NotFound() : Results.Ok(resolved);
+        });
+
+        // 解鎖 token 以自訂標頭遞送，避免查詢字串形式的憑證進入 URL 型日誌。
+        group.MapGet("/contents/{id}/unlock-state", async (Guid id,
+            [FromHeader(Name = "X-Unlock-Token")] string? token, ContentService content, CancellationToken ct) =>
+            Results.Ok(new { unlocked = await content.IsUnlockedAsync(id, token, ct) }));
+
+        group.MapPost("/contents/{id}/unlock", async (Guid id, ProtectionUnlockInput input, ContentService content, CancellationToken ct) =>
+            Results.Ok(new { token = await content.VerifyProtectionAsync(id, input.Password, ct) }));
+
+        // 瀏覽計數屬網站渲染的一部分；失敗不影響頁面。
+        group.MapPost("/contents/{id}/view", async (Guid id, ContentService content, CancellationToken ct) =>
+        {
+            await content.RecordViewAsync(id, ct);
+            return Results.NoContent();
+        });
     }
+
+    public sealed record ProtectionUnlockInput(string? Password);
+    public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items);
+    public sealed record BulkContentItem(Guid Id, Guid Version);
 
     private static ContentKind? ParseKind(string raw, ContentKind fallback, out IResult? error)
     {

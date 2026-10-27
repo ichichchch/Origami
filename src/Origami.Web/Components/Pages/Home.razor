@@ -1,7 +1,5 @@
 @page "/"
-@inject ContentService Content
-@inject SettingsService Settings
-@inject MediaService Media
+@inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject ILogger<Home> Logger
 
@@ -35,7 +33,7 @@ else
     [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
     [SupplyParameterFromQuery(Name = "tag")] public string? Tag { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
-    private SiteSettings _settings = new();
+    private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private PublicContent? _homePage;
     private string _homePageHtml = "";
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
@@ -54,12 +52,12 @@ else
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _settings = await Settings.GetAsync(ct);
+            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
             // 已設定的靜態首頁若不再公開可讀，改以文章列表呈現。
             if (_settings.HomePageContentId is { } homeId)
-                _homePage = await Content.GetPublishedPageAsync(homeId, ct);
+                _homePage = await Api.GetPublishedPageByIdAsync(homeId, ct);
             if (_homePage is not null)
-                _homePageHtml = Markdown.Render(_homePage.Markdown, await Media.PublicImageWidthsAsync(ct));
+                _homePageHtml = Markdown.Render(_homePage.Markdown, await Api.GetPublicImageWidthsAsync(ct) ?? []);
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex) { Logger.LogError(ex, "Home page unavailable"); }

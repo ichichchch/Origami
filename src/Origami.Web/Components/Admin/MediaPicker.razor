@@ -1,5 +1,5 @@
 @inherits AdminComponentBase
-@inject MediaService Media
+@inject OrigamiClient Api
 
 <section class="media-picker panel" aria-labelledby="media-picker-title">
     <div class="panel-toolbar"><h2 id="media-picker-title">從媒體庫插入</h2><button type="button" class="text-button" disabled="@(Disabled || Blocked)" @onclick="ClosePicker">關閉</button></div>
@@ -43,7 +43,7 @@
     private MediaItem? _uploaded;
     private PagedResult<MediaItem>? _result;
     protected override Task OnInitializedAsync() => Load();
-    private Task<bool> Load() => RunOperationAsync(async ct => { _result = await Media.ListAsync(_page, ct: ct); });
+    private Task<bool> Load() => RunOperationAsync(async ct => { _result = await Api.ListMediaAsync(_page, ct: ct); });
     private async Task Refresh()
     {
         if (Disabled || Blocked) return;
@@ -79,10 +79,12 @@
                 if (file.Size > Limits.UploadBytes) throw new CmsException($"圖片超過 {Limits.UploadBytes / 1024 / 1024} MB 上限，請選擇較小的檔案。");
                 _uploadName = file.Name;
                 await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
-                _uploaded = await Media.UploadAsync(stream, file.Name, ct);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer, ct);
+                _uploaded = await Api.UploadMediaAsync(buffer.ToArray(), file.Name, ct);
                 // 即使之後載入列表失敗，仍保留上傳結果供插入使用。
                 _page = 1;
-                _result = await Media.ListAsync(_page, ct: ct);
+                _result = await Api.ListMediaAsync(_page, ct: ct);
             }, "圖片已上傳，請點選圖片插入；本文尚未儲存。");
         }
         finally

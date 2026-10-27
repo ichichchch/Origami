@@ -1,12 +1,9 @@
 @page "/posts/{Slug}"
-@page "/pages/{Slug}"
-@inject ContentService Content
-@inject SettingsService Settings
-@inject MediaService Media
+@page "/pages/{*SlugPath}"
+@inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject AdminAccess Admin
-@inject SemanticSearchService Semantic
 @inject ILogger<ContentDetail> Logger
 
 <PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
@@ -23,6 +20,7 @@
         {
             <meta name="description" content="@MetaDescription" />
             <link rel="canonical" href="@Canonical" />
+            <link rel="alternate" type="application/json+oembed" href="@OembedUrl" title="@_content.Title" />
             <meta property="og:site_name" content="@_settings.Name" />
             <meta property="og:title" content="@_content.Title" />
             <meta property="og:type" content="@(_content.Kind == ContentKind.Post ? "article" : "website")" />
@@ -31,6 +29,10 @@
             @if (_firstImage is not null)
             {
                 <meta property="og:image" content="@AbsoluteImage" />
+            }
+            @if (_ogImageAlt is { Length: > 0 })
+            {
+                <meta property="og:image:alt" content="@_ogImageAlt" />
             }
             @if (_content.Kind == ContentKind.Post && _content.PublishedAt is { } published)
             {
@@ -50,6 +52,10 @@ else if (_content is not null)
         <header class="article-heading">
             <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")@(_locked ? " · 受密碼保護" : "")@(_isPrivate ? " · 私密" : "")</p>
             <h1>@_content.Title</h1>
+            @if (!_locked && _content.Kind == ContentKind.Post && !string.IsNullOrWhiteSpace(_settings.AuthorDisplayName))
+            {
+                <p class="byline">作者 · @_settings.AuthorDisplayName</p>
+            }
             @if (!_locked && _content.Kind == ContentKind.Post)
             {
                 <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString("yyyy 年 MM 月 dd 日") <span class="sr-only">UTC</span></time>
@@ -82,6 +88,13 @@ else if (_content is not null)
         }
         else
         {
+            @if (_content.CoverUrl is { } coverUrl)
+            {
+                <figure class="cover-figure">
+                    <img src="@coverUrl" alt="@_content.CoverAltText" @attributes="CoverAttributes" />
+                    @if (_content.CoverCaption != "") { <figcaption>@_content.CoverCaption</figcaption> }
+                </figure>
+            }
             <div class="prose">@((MarkupString)_html)</div>
             @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
             {
@@ -121,16 +134,21 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    /// <summary>頁面的階層網址路徑（可能含多段）；文章路由使用 <see cref="Slug"/>。</summary>
+    [Parameter] public string SlugPath { get; set; } = "";
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PublicContent? _content;
-    private SiteSettings _settings = new();
+    private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private string? _firstImage;
+    private string? _ogImageAlt;
     private string _html = "";
+    private IReadOnlyDictionary<string, int> _imageWidths = new Dictionary<string, int>();
     private string? _error;
     private bool _redirecting;
     private bool _locked;
     private bool _isPrivate;
     private bool _readable;
+    private List<string> _canonicalSegments = [];
     private List<ContentNeighbor> _neighbors = [];
     private IReadOnlyList<SemanticHit> _related = [];
     private string? _unlockError;
@@ -144,16 +162,59 @@ else
     }
     private string UnlockCookieName => "origami.unlock." + _content?.Id.ToString("N");
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
-    private string Canonical => BaseUrl + (_content?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_content?.Slug ?? "");
+    /// <summary>退役 slug 的永久轉址；命中時已寫入回應標頭並回傳 true。</summary>
+    private async Task<bool> ResolveRetiredSlugAsync(string slug, CancellationToken ct)
+    {
+        var redirect = await Api.ResolveRedirectAsync(slug, ct);
+        if (redirect is null) return false;
+        RedirectMovedPermanently("/" + (redirect.Kind == ContentKind.Page ? "pages/" : "posts/") + Uri.EscapeDataString(redirect.Slug));
+        return true;
+    }
+    private void RedirectMovedPermanently(string location)
+    {
+        if (HttpContext is not null && !HttpContext.Response.HasStarted)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+            HttpContext.Response.Headers.Location = location;
+        }
+        _redirecting = true;
+    }
+    private void ServeNotFound()
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+        Navigation.NotFound();
+    }
+    private string Canonical => BaseUrl + (_content?.Kind == ContentKind.Page
+        ? "/pages/" + string.Join("/", _canonicalSegments.Select(Uri.EscapeDataString))
+        : "/posts/" + Uri.EscapeDataString(_content?.Slug ?? ""));
+    /// <summary>oEmbed 探索連結；讓支援的站台以文章網址取得嵌入資訊。</summary>
+    private string OembedUrl => BaseUrl + "/oembed?url=" + Uri.EscapeDataString(Canonical) + "&format=json";
     private string MetaDescription => _content is null ? "" : _content.Excerpt != "" ? _content.Excerpt : Markdown.Excerpt(_content.Markdown);
     private string AbsoluteImage => _firstImage![0] == '/' ? BaseUrl + _firstImage : _firstImage!;
+    /// <summary>封面圖的回應式屬性；僅在媒體寬度已知時提供 srcset 候選（與本文圖片同一組變體）。</summary>
+    private Dictionary<string, object>? CoverAttributes
+    {
+        get
+        {
+            if (_content?.CoverFileName is not { Length: > 0 } fileName
+                || !_imageWidths.TryGetValue(fileName, out var width) || width <= 0) return null;
+            var stem = Path.GetFileNameWithoutExtension(fileName);
+            var extension = Path.GetExtension(fileName);
+            var candidates = Limits.ImageVariantWidths.Where(w => w < width)
+                .Select(w => "/media/" + stem + "_w" + w + extension + " " + w + "w").ToList();
+            candidates.Add("/media/" + fileName + " " + width + "w");
+            return new Dictionary<string, object> { ["srcset"] = string.Join(", ", candidates), ["sizes"] = "(min-width: 800px) 720px, 100vw" };
+        }
+    }
     protected override async Task OnParametersSetAsync()
     {
         // Static SSR 的 POST 會替換表單模型；單純瀏覽則從空的模型開始。
         Unlock ??= new UnlockInput();
         _content = null;
         _firstImage = null;
+        _ogImageAlt = null;
         _html = "";
+        _imageWidths = new Dictionary<string, int>();
         _error = null;
         _redirecting = false;
         _locked = false;
@@ -161,33 +222,51 @@ else
         _readable = false;
         _neighbors = [];
         _related = [];
+        _canonicalSegments = [];
         _unlockError = null;
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _settings = await Settings.GetAsync(ct);
+            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
             var kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("pages/", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
-            _content = await Content.GetPublishedAsync(kind, Slug, ct);
-            if (_content is null)
+            if (kind == ContentKind.Page)
             {
-                // 已發布內容的汰換 slug 透過永久轉址持續可用。
-                var redirect = await Content.RedirectTargetAsync(Slug, ct);
-                if (redirect is not null)
+                // 層級頁面網址：多段路徑一次驗證父鏈；平面網址會轉址到完整階層路徑。
+                var segments = SlugPath.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var resolved = segments.Length == 0 ? null : await Api.ResolvePublishedPagePathAsync(segments, ct);
+                if (resolved is null)
                 {
-                    if (HttpContext is not null && !HttpContext.Response.HasStarted)
-                    {
-                        HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
-                        HttpContext.Response.Headers.Location = "/" + (redirect.Kind == ContentKind.Page ? "pages/" : "posts/") + Uri.EscapeDataString(redirect.Slug);
-                    }
-                    _redirecting = true;
+                    // 平面形式仍可能命中退役 slug 的轉址表；多段路徑不符合父鏈即為 404。
+                    if (segments.Length == 1 && await ResolveRetiredSlugAsync(segments[0], ct)) return;
+                    ServeNotFound();
                     return;
                 }
-                if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
-                Navigation.NotFound();
-                return;
+                _content = resolved.Content;
+                _canonicalSegments = [.. resolved.Segments];
+                if (!segments.SequenceEqual(_canonicalSegments, StringComparer.Ordinal))
+                {
+                    if (segments.Length == 1 && _canonicalSegments.Count > 1)
+                    {
+                        RedirectMovedPermanently("/pages/" + string.Join("/", _canonicalSegments.Select(Uri.EscapeDataString)));
+                        return;
+                    }
+                    ServeNotFound();
+                    return;
+                }
+            }
+            else
+            {
+                _content = await Api.GetPublishedDetailAsync(ContentKind.Post, Slug, ct);
+                if (_content is null)
+                {
+                    // 已發布內容的汰換 slug 透過永久轉址持續可用。
+                    if (await ResolveRetiredSlugAsync(Slug, ct)) return;
+                    ServeNotFound();
+                    return;
+                }
             }
             _locked = _content.IsProtected
-                && !await Content.IsUnlockedAsync(_content.Id, HttpContext?.Request.Cookies[UnlockCookieName], ct);
+                && !await Api.GetUnlockStateAsync(_content.Id, HttpContext?.Request.Cookies[UnlockCookieName], ct);
             if (_content.IsPrivate)
             {
                 // 對已登入管理員以外的任何人，私密內容與不存在的內容無從區分。
@@ -202,7 +281,10 @@ else
             if (!_locked)
             {
                 await RenderBodyAsync(ct);
-                await Content.RecordViewAsync(_content.Id, ct);
+                // 瀏覽計數採盡力而為：資料服務暫時不可用不得讓已渲染的頁面降級成錯誤頁。
+                try { await Api.RecordViewAsync(_content.Id, ct); }
+                catch (OperationCanceledException) { /* 訪客中斷連線或計數逾時；無需處理。 */ }
+                catch (Exception error) { Logger.LogWarning(error, "瀏覽計數失敗"); }
             }
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客於渲染期間中斷連線；無需處理。 */ }
@@ -213,6 +295,7 @@ else
             // 回應標頭外洩；訪客只會得知頁面無法使用。
             _content = null;
             _firstImage = null;
+            _ogImageAlt = null;
             _html = "";
             _error = "目前無法讀取這篇內容，請稍後再試。";
             if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
@@ -223,7 +306,7 @@ else
         if (_content is null || HttpContext is null || HttpContext.Response.HasStarted) return;
         try
         {
-            var token = await Content.VerifyProtectionAsync(_content.Id, Unlock.Password, HttpContext.RequestAborted);
+            var token = await Api.UnlockAsync(_content.Id, Unlock.Password, HttpContext.RequestAborted);
             if (token is null)
             {
                 Unlock.Password = "";
@@ -247,13 +330,16 @@ else
     }
     private async Task RenderBodyAsync(CancellationToken ct)
     {
-        _firstImage = Markdown.FirstImage(_content!.Markdown);
-        _html = Markdown.Render(_content.Markdown, await Media.PublicImageWidthsAsync(ct));
+        _imageWidths = await Api.GetPublicImageWidthsAsync(ct) ?? [];
+        // 社群分享圖以封面優先；未設定封面時退回本文第一張圖。
+        _firstImage = _content!.CoverUrl ?? Markdown.FirstImage(_content.Markdown);
+        _ogImageAlt = _content.CoverUrl is null ? null : _content.CoverAltText;
+        _html = Markdown.Render(_content.Markdown, _imageWidths);
         if (_content.Kind == ContentKind.Post)
         {
-            _neighbors = await Content.NeighborsAsync(_content.Id, ct);
+            _neighbors = await Api.GetNeighborsAsync(_content.Id, ct) ?? [];
             // 相關文章只讀取已儲存的向量；尚未建立索引的網站就不顯示。
-            _related = await Semantic.RelatedAsync(_content.Id, 3, ct);
+            _related = await Api.GetRelatedAsync(_content.Id, ct) ?? [];
         }
         // 只有本文確實渲染後，才公開描述、canonical 連結與 Open Graph 標籤。
         _readable = true;

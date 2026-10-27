@@ -8,7 +8,9 @@ internal sealed class RunningSite : IAsyncDisposable
     private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly X509Certificate2 certificate;
     private readonly ConcurrentQueue<string> warningCategories = new();
+    private readonly string apiToken = "site-test-token-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
     private Process? process;
+    private RunningApi? api;
     public Uri Address { get; private set; } = null!;
     public Uri? HttpAddress { get; private set; }
     public IReadOnlyCollection<string> WarningCategories => warningCategories.ToArray();
@@ -53,16 +55,27 @@ internal sealed class RunningSite : IAsyncDisposable
         }
         var solutionRoot = FindSolutionRoot();
         var project = Path.Combine(solutionRoot, "src", "Origami.Web");
-        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        var assembly = Path.Combine(project, "bin", configuration, "net10.0", "Origami.Web.dll");
+        // 優先載入與測試組件同目錄的主機輸出：隔離輸出目錄建置時，bin 配置
+        // 路徑推斷會失效，而且測試輸出內的複本即為本次組建的新程式。
+        var assembly = Path.Combine(AppContext.BaseDirectory, "Origami.Web.dll");
+        if (!File.Exists(assembly))
+        {
+            var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+            assembly = Path.Combine(project, "bin", configuration, "net10.0", "Origami.Web.dll");
+        }
         if (!File.Exists(assembly)) throw new InvalidOperationException("Build the Web project before browser tests.");
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
             WorkingDirectory = project, RedirectStandardOutput = true, RedirectStandardError = true,
             UseShellExecute = false, CreateNoWindow = true
         };
+        // 頁面資料一律經 Api 主機（BFF）：先以同一資料庫與服務通行證啟動它，再讓網站指向。
+        api = new RunningApi(connectionString);
+        await api.StartAsync(serviceToken: apiToken, listenOnHttp: true);
         start.ArgumentList.Add(assembly);
         ConfigureAiEnvironment(start.Environment, configurationOverrides);
+        SetEnvironment(start.Environment, "Api__BaseUrl", api.Address.ToString());
+        SetEnvironment(start.Environment, "Api__ServiceToken", apiToken);
         SetEnvironment(start.Environment, "ASPNETCORE_URLS", HttpAddress is null ? Address.ToString() : $"{Address};{HttpAddress}");
         // 在 WebApplication 中，DOTNET_ENVIRONMENT 的優先順序高於 ASPNETCORE_ENVIRONMENT。
         SetEnvironment(start.Environment, "DOTNET_ENVIRONMENT", environment);
@@ -155,6 +168,11 @@ internal sealed class RunningSite : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
+        if (api is not null)
+        {
+            await api.DisposeAsync();
+            api = null;
+        }
         certificate.Dispose();
         Directory.Delete(root, recursive: true);
     }
