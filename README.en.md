@@ -22,7 +22,7 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 | Categories & tags | Flat structure, many-to-many assignment, descriptions, deletion never removes articles |
 | Media | Image upload, media library, insert as Markdown, alt text, reference-protected deletion, responsive variants with srcset |
 | Public site | Article list with pagination, article and page detail, neighbour and related posts, monthly archives, hybrid search, basic navigation, mobile-friendly |
-| Openness | RSS 2.0 feed, sitemap.xml, robots.txt, article-level Open Graph and canonical meta, 301 redirects for retired slugs, JSON data export and import, `/health` database liveness |
+| Openness | RSS 2.0 feed, sitemap.xml, robots.txt, article-level Open Graph and canonical meta, 301 redirects for retired slugs, JSON data export and import, `/health` database liveness, read-only JSON API `/api/v1` and the MCP endpoint on a dedicated Api host |
 | Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item), trash with 30-day retention and restore, revocable draft preview links |
 | Visibility | Private content is readable by the administrator only, password-protected content needs the password, and neither enters search or AI retrieval |
 | Site settings | Site name and description, articles per page, feed items, fixed home page, site icon, JSON data export and import |
@@ -78,23 +78,33 @@ existing sessions.
 
 ```bash
 dotnet run --project src/Origami.Web
+
+# optional: the read-only API host for native/mobile clients and MCP
+dotnet run --project src/Origami.Api
 ```
 
-The public site is at `/`, the admin area at `/admin/posts`.
+The public site is at `/`, the admin area at `/admin/posts`. The Api host shares the same database
+and schema (migrations are applied only through the Web host's `migrate` command); uploaded images
+are still served by the website at `/media`.
 
 ## Project layout
 
 ```text
-src/Origami.Web/
+src/Origami.Core/              # Shared domain layer (referenced by both hosts)
+  Data/            # DbContext, design-time factory, migrations
+  Models/          # Content, Category, Tag, MediaAsset, SiteSettings, AdminUser
+  Services/        # Content, taxonomies, media, Markdown, settings, authorization, hybrid search
+  Intelligence/    # AiGateway, Embedding, SemanticSearch, Agents (MCP tools, site assistant)
+src/Origami.Web/              # Website host
   Components/
     Pages/          # Public site (Static SSR): home, article and page detail, 404, error page
     Admin/          # Admin area (Interactive Server): content, taxonomies, media, settings
     Account/        # Sign-in, sign-out, identity revalidation
     Layout/         # Public and admin layouts, reconnection notice
-  Data/             # DbContext, Identity registration, migrations
-  Models/           # Content, Category, Tag, MediaAsset, SiteSettings, AdminUser
-  Services/         # Content, taxonomies, media, Markdown, settings, authorization, admin commands
+  Services/         # Host services: login throttling, two-factor, admin provisioning, robots/sitemap/feed
   wwwroot/          # Bundled CSS; persistent uploads never live here
+src/Origami.Api/              # Machine-facing host: read-only JSON /api/v1 and MCP /mcp
+mobile/                       # Mobile reader client (Avalonia 12, separate solution), see mobile/README.md
 tests/Origami.Tests/
 ```
 
@@ -157,6 +167,16 @@ Public site (Static SSR, HTML rendered per request):
 | `/preview/{token}` | Draft share preview (noindex; revoked or published links stop working, published content redirects) |
 | `/account/login` | Administrator sign-in (Static SSR, cookie authentication) |
 
+Read-only machine interface (the dedicated `Origami.Api` host; anonymous, 30 requests per minute per
+source IP, `no-store` responses):
+
+| Route | Content |
+| --- | --- |
+| `/api/v1/posts` | Published article list: pagination (`page`, `pageSize`) plus `category`/`tag`/`year`/`month` filters |
+| `/api/v1/posts/{slug}`, `/api/v1/pages/{slug}` | Article and page detail (raw Markdown); drafts, protected and private content always return `404` |
+| `/api/v1/search?q=` | Hybrid search with the same rules as `/search`; keyword-only when no model is configured |
+| `/mcp`, `/health` | Read-only MCP tools (`search_posts`, `get_post`, `get_page`) and database liveness |
+
 Admin area (Interactive Server, per page render mode):
 
 | Route | Content |
@@ -218,6 +238,8 @@ tests are reported as *skipped* with a diagnostic instead of silently passing on
 | `LifecycleRegressionTests` | The trash purge keeps restored content, parallel saves never close a page cycle, a scheduled re-publish keeps the first publish time, a fixed home page still reaches the filtered list |
 | `EditorRegressionTests` | Creating a preview link never hides another tab's change, a changed schedule counts as an unsaved change |
 | `ScheduleTimeTests` | Schedule times convert through the browser time zone across daylight saving, a wall-clock time that does not exist is refused |
+| `ApiV1EndpointTests` | /api/v1 list pagination and published-only content, detail `404` for drafts, protected and private items, keyword fallback without a model key, parameter validation and per-IP rate limiting |
+| `McpEndpointTests` | The MCP endpoint (Api host) exposes exactly three read-only tools, drafts stay invisible, a missing key degrades at the tool level without a 5xx, per-IP rate limiting |
 
 The browser tests drive real Edge or Chrome through Playwright; the persistence test performs an
 actual `pg_dump` / `pg_restore` cycle.
@@ -233,6 +255,10 @@ actual `pg_dump` / `pg_restore` cycle.
   Treat the file as a secret and keep it out of version control and shared drives. An import
   replaces every piece of text data on the site in one transaction; image files are restored
   separately.
+- The read-only API has no write endpoints and no authentication; image URLs returned to app
+  clients still point at the website's `/media`, and the Api host does not handle uploads.
+- The Api host and the website are two processes that are started and configured for HTTPS
+  separately; for a single-instance deployment, different ports on the same machine are recommended.
 - No comments, plugins or menu editor; multi-user, multi-site and theming stay out of scope.
 
 ## License

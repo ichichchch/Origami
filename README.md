@@ -15,7 +15,7 @@
 | 分类与标签 | 平面结构、多对多指派、描述文字、删除只移除关联 |
 | 媒体 | 图片上传、媒体库、Markdown 插入、alt 文字、引用保护删除、响应式缩图与 srcset |
 | 公开网站 | 文章列表与分页、文章与页面详情、相邻与相关文章、按月归档、混合搜索、基本导航、移动版式 |
-| 开放性 | RSS 2.0 订阅、sitemap.xml、robots.txt、文章级 Open Graph 与 canonical meta、旧网址 301 转址、JSON 数据汇出与汇入、`/health` 数据库健康检查 |
+| 开放性 | RSS 2.0 订阅、sitemap.xml、robots.txt、文章级 Open Graph 与 canonical meta、旧网址 301 转址、JSON 数据汇出与汇入、`/health` 数据库健康检查、唯读 JSON API `/api/v1` 与 MCP 端点（独立 Api 主机） |
 | 编辑安全网 | 既有草稿每 60 秒自动保存、修订历史（每篇 20 笔）、30 天回收桶与还原、草稿分享预览连结 |
 | 可见性 | 私密内容仅管理员可读、密码保护内容需解锁后才显示，两者都不进入搜索与 AI 检索 |
 | 站点设置 | 网站名称与说明、每页文章数、订阅条数、固定首页、网站图标、JSON 资料汇出与汇入 |
@@ -30,7 +30,7 @@
 | PostgreSQL | 15 以上 | 开发、测试与正式环境皆使用 PostgreSQL |
 | 浏览器 | Edge 或 Chrome | 仅供端到端测试使用 |
 
-依赖包版本固定于 `src/Origami.Web/Origami.Web.csproj`：
+领域依赖包版本固定于 `src/Origami.Core/Origami.Core.csproj`：
 
 - `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3
 - `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 10.0.13
@@ -59,24 +59,33 @@ dotnet run --project src/Origami.Web -- admin-init
 
 # 3. 启动网站
 dotnet run --project src/Origami.Web
+
+# 4. 启动唯读 API 主机（可选：供原生／移动客户端与 MCP 调用）
+dotnet run --project src/Origami.Api
 ```
 
 `admin-reset` 可在忘记密码时由服务器端重置；重置会轮换安全戳记，使现有登录立即失效。
 公开网站入口为 `/`，后台为 `/admin/posts`。
+Api 主机与网站共用同一数据库与迁移（迁移仅由 Web 的 `migrate` 命令执行）；媒体图片仍由网站的 `/media` 提供。
 
 ## 4. 项目结构
 
 ```text
-src/Origami.Web/
+src/Origami.Core/              # 共用领域层（两个主机共同引用）
+  Data/            # DbContext、设计期工厂、migrations
+  Models/          # Content、Category、Tag、MediaAsset、SiteSettings、AdminUser
+  Services/        # 内容、分类标签、媒体、Markdown、站点设置、授权、混合搜索
+  Intelligence/    # AiGateway、Embedding、SemanticSearch、Agents（MCP 工具、站内助理）
+src/Origami.Web/              # 网站主机
   Components/
     Pages/          # 公开网站（Static SSR）：首页、文章与页面详情、404、错误页
     Admin/          # 管理后台（Interactive Server）：内容、分类标签、媒体、设置
     Account/        # 登录、登出、身份重新验证
     Layout/         # 前后台版式、断线重连提示
-  Data/             # DbContext、Identity 注册、migrations
-  Models/           # Content、Category、Tag、MediaAsset、SiteSettings、AdminUser
-  Services/         # 内容、分类标签、媒体、Markdown、站点设置、授权、管理命令
+  Services/         # 主机层服务：登录限流、两步验证、管理员初始化、robots/sitemap/feed
   wwwroot/          # 应用内置 CSS；持久化上传不存于此
+src/Origami.Api/              # 机器接口主机：唯读 JSON /api/v1 与 MCP /mcp
+mobile/                       # 行动端阅读客户端（Avalonia 12，独立 solution），见 mobile/README.md
 tests/Origami.Tests/
 ```
 
@@ -129,6 +138,15 @@ tests/Origami.Tests/
 | `/feed`、`/sitemap.xml`、`/robots.txt`、`/health`、`/favicon.ico` | RSS 2.0 订阅、站点地图、爬虫规则、数据库健康检查与网站图标；仅反映已发布状态 |
 | `/preview/{token}` | 草稿分享预览（noindex；撤销或发布后失效，已发布则转址公开网址） |
 | `/account/login` | 管理员登录（Static SSR，Cookie 登录） |
+
+唯读机器接口（独立的 `Origami.Api` 主机，全部匿名、按来源 IP 每分钟 30 次、响应 no-store）：
+
+| 路由 | 内容 |
+| --- | --- |
+| `/api/v1/posts` | 已发布文章列表：分页（`page`、`pageSize`）与 `category`／`tag`／`year`／`month` 筛选 |
+| `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章与独立页面详情（Markdown 原文）；草稿、受保护与私密内容一律 404 |
+| `/api/v1/search?q=` | 混合搜索，规则与 `/search` 相同；模型未设定时退回关键字 |
+| `/mcp`、`/health` | 唯读 MCP 工具（`search_posts`、`get_post`、`get_page`）与数据库健康检查 |
 
 管理后台（Interactive Server，按页面配置渲染模式）：
 
@@ -187,6 +205,8 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `LifecycleRegressionTests` | 回收桶清理不删除已还原内容、并行保存不形成页面循环、排程再发布保留首次发布时间、固定首页仍可筛选文章列表 |
 | `EditorRegressionTests` | 产生预览连结不掩盖其他分页的变更、排程时间视为未储存变更 |
 | `ScheduleTimeTests` | 排程时间按浏览器时区换算并跨日光节约时间保持墙上时间、不存在的当地时间被拒绝 |
+| `ApiV1EndpointTests` | /api/v1 列表分页与仅已发布、详情对草稿／受保护／私密内容 404、搜索无模型金钥时退回关键字、参数校验与按 IP 限流 |
+| `McpEndpointTests` | MCP 端点（Api 主机）仅暴露三个唯读工具、草稿不可见、缺模型金钥时工具层降级不返回 5xx、按 IP 限流 |
 
 ### 已知限制
 
@@ -194,4 +214,6 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 - 所有上传图片皆为公开资源，草稿中的图片也不例外；撤回或删除内容不会隐藏图片网址。
 - 数据保护密钥以 Windows DPAPI 加密，只能由同一台电脑上的同一个用户解密。
 - 资料汇出档包含受密码保护内容的密码杂凑，可离线尝试破解，请视为机密档案并不外流；汇入会以单一交易取代站內全部文字资料，图片档需另外还原。
+- 唯读 API 不含写入端点与身份验证；App 客户端取得的图片网址仍指向网站的 `/media`，Api 不代管上传。
+- Api 与网站为两个进程，需分别启动与设定 HTTPS；单实例部署下建议同机不同端口。
 - 不含评论与插件机制；多用户、多站点与主题系统不在范围内。
