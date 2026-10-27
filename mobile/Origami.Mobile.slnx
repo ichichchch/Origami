@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Project Path="Origami.Mobile.Android/Origami.Mobile.Android.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="Origami.Mobile.Desktop/Origami.Mobile.Desktop.csproj" />
+  <Project Path="Origami.Mobile.iOS/Origami.Mobile.iOS.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="Origami.Mobile/Origami.Mobile.csproj" />
+  <Project Path="Origami.Mobile.Tests/Origami.Mobile.Tests.csproj" />
+</Solution>

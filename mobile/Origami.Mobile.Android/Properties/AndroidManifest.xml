@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
+	<uses-permission android:name="android.permission.INTERNET" />
+	<!-- Development against http://10.0.2.2 requires cleartext; production APIs must use HTTPS. -->
+	<application android:label="Origami" android:icon="@drawable/Icon" android:usesCleartextTraffic="true" />
+</manifest>

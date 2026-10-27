@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:Origami.Mobile.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="800"
+             x:Class="Origami.Mobile.Views.MainView"
+             x:DataType="vm:MainViewModel">
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="12,10">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBox Grid.Column="0" Text="{Binding SearchText}" Watermark="搜尋已發布文章…" />
+                <Button Grid.Column="1" Content="搜尋" Command="{Binding SearchCommand}" Margin="8,0,0,0" />
+                <Button Grid.Column="2" Content="設定" Command="{Binding OpenSettingsCommand}" Margin="8,0,0,0" />
+            </Grid>
+            <TextBlock Text="{Binding Mode}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Message}" Foreground="Red" TextWrapping="Wrap" />
+        </StackPanel>
+        <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="4" />
+        <ScrollViewer>
+            <StackPanel Margin="12" Spacing="6">
+                <!-- Reflection bindings inside the item template: ElementName paths are resolved at runtime. -->
+                <ItemsControl ItemsSource="{Binding Items}" x:Name="PostsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    Padding="8" CornerRadius="6"
+                                    Command="{Binding DataContext.OpenItemCommand, ElementName=PostsList}"
+                                    CommandParameter="{Binding}">
+                                <StackPanel Spacing="2">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Badge}" FontWeight="SemiBold" Foreground="OrangeRed" />
+                                        <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Subtitle}" Opacity="0.7" TextWrapping="Wrap"
+                                               MaxLines="3" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="載入更多" Command="{Binding LoadMoreCommand}" IsVisible="{Binding CanLoadMore}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" />
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>
