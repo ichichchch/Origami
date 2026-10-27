@@ -16,16 +16,16 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 
 | Area | What it does |
 | --- | --- |
-| Administrator | One securely provisioned administrator, cookie sign-in, sign-out, server-side password recovery, TOTP two-factor sign-in |
-| Articles | List, create, edit, draft, publish, withdraw, sticky, scheduled publishing, excerpt, confirmed permanent delete, trash with restore |
-| Pages | Standalone pages with their own URLs, hierarchical navigation with a parent page, cycle protection, usable as the fixed home page |
+| Administrator | One securely provisioned administrator, cookie sign-in with "remember me", sign-out, server-side password recovery, TOTP two-factor sign-in |
+| Articles | List, create, edit, draft, publish, withdraw, sticky, scheduled publishing, excerpt, cover image, confirmed permanent delete, trash with restore, list bulk actions (trash/restore/delete many) |
+| Pages | Standalone URLs, hierarchical navigation with hierarchical URLs (/pages/parent/child/, flat URLs redirect 301), cycle protection, usable as the fixed home page |
 | Categories & tags | Flat structure, many-to-many assignment, descriptions, deletion never removes articles |
-| Media | Image upload, media library, insert as Markdown, alt text, reference-protected deletion, responsive variants with srcset |
-| Public site | Article list with pagination, article and page detail, neighbour and related posts, monthly archives, hybrid search, basic navigation, mobile-friendly |
-| Openness | RSS 2.0 feed, sitemap.xml, robots.txt, article-level Open Graph and canonical meta, 301 redirects for retired slugs, JSON data export and import, `/health` database liveness, read-only JSON API `/api/v1` and the MCP endpoint on a dedicated Api host |
-| Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item), trash with 30-day retention and restore, revocable draft preview links |
+| Media | Image upload, media library, insert as Markdown, alt text and caption, cover image assignment (posts and pages), reference-protected deletion, responsive variants with srcset |
+| Public site | Article list with pagination and cover thumbnails, article and page detail with cover, caption and author byline, neighbour and related posts, monthly archives, paginated hybrid search, basic navigation, mobile-friendly |
+| Openness | RSS 2.0 and Atom 1.0 feeds (filterable by category/tag, optional full text), oEmbed provider (JSON + discovery links), sitemap.xml, robots.txt, article-level Open Graph (og:image prefers the cover, falls back to the first inline image) and canonical meta, 301 redirects for retired slugs, JSON data export and import, `/health` database liveness, read-only JSON API `/api/v1` and the MCP endpoint on a dedicated Api host |
+| Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item with line-diff against the editor), trash with 30-day retention and restore, revocable draft preview links |
 | Visibility | Private content is readable by the administrator only, password-protected content needs the password, and neither enters search or AI retrieval |
-| Site settings | Site name and description, articles per page, feed items, fixed home page, site icon, JSON data export and import |
+| Site settings | Site name and description, articles per page, feed items with a full-text option, author display name, fixed home page, site icon, JSON data export and import |
 
 Content is written in **Markdown**. Raw HTML is disabled and every rendered URL is checked against
 an allow-list, so stored content cannot introduce script execution.
@@ -50,7 +50,8 @@ Connection credentials are never stored in the source tree. Supply them through 
 ```bash
 export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=origami;Username=origami;Password=<your password>"
 export Storage__RootPath="D:/origami-storage"   # optional; defaults to a folder under the user profile
-export Api__ServiceToken="<long random string>"   # optional; the Api host's BFF service credential for write endpoints
+export Api__BaseUrl="http://127.0.0.1:5100"    # where the website host (BFF) reaches the Api
+export Api__ServiceToken="<long random string>"   # BFF service credential: the key to the Api write surface; Web and Api must share the same value
 ```
 
 `Storage__RootPath` must be an absolute path outside the published application directory. It holds
@@ -81,15 +82,16 @@ existing sessions.
 ### 4. Run
 
 ```bash
-dotnet run --project src/Origami.Web
+# The Api host also serves the website's page data; it must be up before the website starts.
+ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project src/Origami.Api
 
-# optional: the read-only API host for native/mobile clients and MCP
-dotnet run --project src/Origami.Api
+# The website host is a pure BFF client: sign-in, two-factor and media files stay local,
+# every data read and write goes through the Api.
+ASPNETCORE_URLS=http://127.0.0.1:5000 dotnet run --project src/Origami.Web
 ```
 
-The public site is at `/`, the admin area at `/admin/posts`. The Api host shares the same database
-and schema (migrations are applied only through the Web host's `migrate` command); uploaded images
-are still served by the website at `/media`.
+The public site is at `/`, the admin area at `/admin/posts`. Uploaded images are still served
+by the website at `/media`; migrations and admin commands still run only through the Web host.
 
 ## Project layout
 
@@ -117,7 +119,7 @@ tests/Origami.Tests/
 | Model | Responsibility | Database constraints |
 | --- | --- | --- |
 | `AdminUser` (Identity) | Account, password hash, security stamp | `SingletonKey` unique and checked to be `1`, so exactly one administrator can exist |
-| `Content` | Articles and pages (`Kind`), title, slug, Markdown body, excerpt, status, timestamps, version | Slug unique site-wide; check constraints on status, title, slug and publish time; `Version` is the concurrency token; private and password-protected cannot be combined; a page cannot point at itself |
+| `Content` | Articles and pages (`Kind`), title, slug, Markdown body, excerpt, cover reference, status, timestamps, version | Slug unique site-wide; check constraints on status, title, slug and publish time; `Version` is the concurrency token; private and password-protected cannot be combined; a page cannot point at itself |
 | `Category` / `Tag` | Article categories and tags with descriptions | Name and slug unique within their kind |
 | `ContentCategories` / `ContentTags` | Many-to-many links | Removed together with the content |
 | `MediaAsset` | File identity, media type, size, dimensions, alt text, upload time | File name unique; image bytes live on disk |
@@ -180,7 +182,8 @@ source IP, `no-store` responses):
 | `/api/v1/posts/{slug}`, `/api/v1/pages/{slug}` | Article and page detail (raw Markdown); drafts, protected and private content always return `404` |
 | `/api/v1/search?q=` | Hybrid search with the same rules as `/search`; keyword-only when no model is configured |
 | `/mcp`, `/health` | Read-only MCP tools (`search_posts`, `get_post`, `get_page`) and database liveness |
-| `/api/v1/admin/contents…` | BFF write endpoints (admin list, edit load, create, update incl. publish/withdraw, trash, permanent delete, restore), callable only with the `Api:ServiceToken` service credential held by the website host; without a configured token they always answer 401 |
+| Public reads | `/settings`, `/navigation`, `/contents/{id}/neighbors`, `/contents/{id}/related`, `/archives`, `/categories/popular`, `/taxonomies/{kind}/{slug}`, `/redirects/{slug}`, `/preview/{token}`, `/sitemap`, `/feed`, `/media/widths` — the data source behind every website page |
+| `/api/v1/admin/…` | BFF write surface (content, taxonomies, media, settings, revisions, preview links, export/import), callable only with the `Api:ServiceToken` service credential held by the website host; without a configured token they always answer 401 |
 
 Admin area (Interactive Server, per page render mode):
 
@@ -216,6 +219,8 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 Tests run against a PostgreSQL cluster they create themselves (SCRAM authentication, random port)
 and never touch an existing database. When the server binaries are unavailable the PostgreSQL
 tests are reported as *skipped* with a diagnostic instead of silently passing on another provider.
+`RunningSite` now boots an Api host alongside the website (same database, same service token), so
+the web tests exercise the full BFF chain.
 
 | Test file | Coverage |
 | --- | --- |
@@ -236,6 +241,11 @@ tests are reported as *skipped* with a diagnostic instead of silently passing on
 | `PublishingParityTests` | Sticky ordering and page refusal, retired-slug 301 redirects that stop after withdrawal, lazy-loaded images, media alt text, health endpoint, JSON export and its authorization |
 | `ContentLifecycleTests` | Trash removal and restore, retention purge, revision cap and restore, scheduled promotion and withdrawal, preview-token lifecycle |
 | `MediaClosureTests` | Upload variants and srcset, reference-protected deletion, variant backfill |
+| `CoverImageTests` | Cover assignment and clearing, public list/detail with cover, caption limits, cover-only references block deletion, admin API round trip, front-end og:image and srcset rendering |
+| `BulkOperationsTests` | Bulk trash/restore/delete with per-item results, conflicts and missing items never break the batch, empty and oversized batches rejected, anonymous rejected, admin API endpoint validation |
+| `SyndicationEmbedTests` | Category-filtered feeds and 404s, Atom 1.0 output and filtering, subscription link on filtered lists, oEmbed for public content only, format and path validation, detail-page discovery link |
+| `PageHierarchyTests` | TextDiff line results and oversize fallback, page path resolution with flat fallback for unpublished ancestors, sitemap hierarchy paths, flat-to-hierarchy 301, wrong middle segment 404, three-segment oEmbed |
+| `PresentationPolishTests` | Remember-me persistent cookie switch, full-text feeds (content:encoded / Atom content) with author element, byline rendering, paginated search with totals, out-of-range page 404, apple-touch-icon link and 404 |
 | `HybridSearchTests` | Keyword hits (CJK and case), semantic merge without duplicates, withdrawal stops hits, public page rendering |
 | `SecurityAndProtectionTests` | RFC 6238 vectors and the TOTP flow, admin-reset disabling two-factor, the protection gate with search/MCP exclusion, daily view counts |
 | `ProtectionRegressionTests` | A malformed unlock cookie leaks no excerpt, the Static SSR unlock form works, a locked account cannot finish the second factor, private and protected text never reaches the embedding provider |
@@ -261,10 +271,13 @@ actual `pg_dump` / `pg_restore` cycle.
   Treat the file as a secret and keep it out of version control and shared drives. An import
   replaces every piece of text data on the site in one transaction; image files are restored
   separately.
-- The read-only API has no write endpoints and no authentication; image URLs returned to app
-  clients still point at the website's `/media`, and the Api host does not handle uploads.
-- The Api host and the website are two processes that are started and configured for HTTPS
-  separately; for a single-instance deployment, different ports on the same machine are recommended.
+- The public API stays anonymous and read-only; apps use the public endpoints, the write surface
+  belongs to the website host alone (BFF credential).
+- The website and the Api are two processes: the Api must be reachable before the website starts
+  (`Api:BaseUrl`) and both must share the same `Api:ServiceToken`; adjacent ports on one machine
+  are recommended for single-instance deployments.
+- Sign-in, two-factor, the site assistant, background workers (embedding, trash cleanup), database
+  migrations and admin commands still run inside the website host.
 - No comments, plugins or menu editor; multi-user, multi-site and theming stay out of scope.
 
 ## License

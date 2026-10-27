@@ -9,16 +9,16 @@
 
 | 領域 | 說明 |
 | --- | --- |
-| 管理員 | 唯一安全初始化的管理員、Cookie 登入登出、伺服器端密碼復原、TOTP 兩步驟驗證 |
-| 文章 | 列表、建立、編輯、草稿、發布、撤回、置頂、排程發布、摘要、確認後刪除與回收桶 |
-| 獨立頁面 | 獨立網址、層級式導覽（上層頁面）、循環防護、可作為固定首頁 |
+| 管理員 | 唯一安全初始化的管理員、Cookie 登入登出（含記住我）、伺服器端密碼復原、TOTP 兩步驟驗證 |
+| 文章 | 列表、建立、編輯、草稿、發布、撤回、置頂、排程發布、摘要、封面圖、確認後刪除與回收桶、清單批次操作（多選移入回收桶／還原／永久刪除） |
+| 獨立頁面 | 獨立網址、層級式導覽與層級網址（/pages/父/子/，舊平面網址自動 301）、循環防護、可作為固定首頁 |
 | 分類與標籤 | 平面結構、多對多指派、描述文字、刪除只移除關聯 |
-| 媒體 | 圖片上傳、媒體庫、Markdown 插入、alt 文字、引用保護刪除、響應式縮圖與 srcset |
-| 公開網站 | 文章列表與分頁、文章與頁面詳情、相鄰與相關文章、按月歸檔、混合搜尋、基本導覽、行動版型 |
-| 開放性 | RSS 2.0 訂閱、sitemap.xml、robots.txt、文章級 Open Graph 與 canonical meta、舊網址 301 轉址、JSON 資料匯出與匯入、`/health` 資料庫健康檢查、唯讀 JSON API `/api/v1` 與 MCP 端點（獨立 Api 主機） |
-| 編輯安全網 | 既有草稿每 60 秒自動儲存、修訂歷史（每篇 20 筆）、30 天回收桶與還原、草稿分享預覽連結 |
+| 媒體 | 圖片上傳、媒體庫、Markdown 插入、alt 與說明文字、封面圖指派（文章與頁面）、引用保護刪除、響應式縮圖與 srcset |
+| 公開網站 | 文章列表與分頁、封面縮圖、文章與頁面詳情（含封面、說明與作者列）、相鄰與相關文章、按月歸檔、混合搜尋（可分頁）、基本導覽、行動版型 |
+| 開放性 | RSS 2.0 與 Atom 1.0 訂閱（可按分類／標籤過濾、可輸出全文）、oEmbed provider（JSON＋探索連結）、sitemap.xml、robots.txt、文章級 Open Graph（og:image 以封面優先，無封面時退回本文首圖）與 canonical meta、舊網址 301 轉址、JSON 資料匯出與匯入、`/health` 資料庫健康檢查、唯讀 JSON API `/api/v1` 與 MCP 端點（獨立 Api 主機） |
+| 編輯安全網 | 既有草稿每 60 秒自動儲存、修訂歷史（每篇 20 筆、與編輯器內容的逐行差異比對）、30 天回收桶與還原、草稿分享預覽連結 |
 | 可見性 | 私密內容僅管理員可讀、密碼保護內容需解鎖後才顯示，兩者都不進入搜尋與 AI 檢索 |
-| 站點設定 | 網站名稱與說明、每頁文章數、訂閱條數、固定首頁、網站圖示、JSON 資料匯出與匯入 |
+| 站點設定 | 網站名稱與說明、每頁文章數、訂閱條數與全文選項、作者顯示名稱、固定首頁、網站圖示、JSON 資料匯出與匯入 |
 
 內容以 **Markdown** 書寫：原始 HTML 被停用，每個輸出網址都經過白名單檢查，儲存的內容無法引入腳本執行。
 
@@ -43,7 +43,8 @@
 ```bash
 export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=origami;Username=origami;Password=<密碼>"
 export Storage__RootPath="D:/origami-storage"   # 可省略，預設為使用者資料目錄下的 Origami/storage
-export Api__ServiceToken="<隨機長字串>"   # 可選；Api 主機的 BFF 服務通行證，供網站主機呼叫寫入端點
+export Api__BaseUrl="http://127.0.0.1:5100"    # 網站主機（BFF）呼叫 Api 的位址
+export Api__ServiceToken="<隨機長字串>"   # BFF 服務通行證：Api 寫入端點的鑰匙，Web 與 Api 必須設同一值
 ```
 
 `Storage__RootPath` 必須是絕對路徑，且不得位於應用發布目錄內；未設定時使用預設位置。
@@ -59,11 +60,11 @@ dotnet run --project src/Origami.Web -- migrate
 # 2. 建立唯一管理員（密碼由互動輸入，不接受命令列參數或重導向輸入）
 dotnet run --project src/Origami.Web -- admin-init
 
-# 3. 啟動網站
-dotnet run --project src/Origami.Web
+# 3. 啟動 Api 主機（網站的頁面資料也經它讀寫；必須先於網站可用）
+ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project src/Origami.Api
 
-# 4. 啟動唯讀 API 主機（可選：供原生／行動客戶端與 MCP 呼叫）
-dotnet run --project src/Origami.Api
+# 4. 啟動網站主機（BFF 純用戶端：登入、兩步驗證與媒體檔在本機，資料讀寫經 Api）
+ASPNETCORE_URLS=http://127.0.0.1:5000 dotnet run --project src/Origami.Web
 ```
 
 `admin-reset` 可在忘記密碼時由伺服器端重設；重設會輪替安全戳記，使既有登入立即失效。
@@ -96,7 +97,7 @@ tests/Origami.Tests/
 | 模型 | 職責 | 資料庫約束 |
 | --- | --- | --- |
 | `AdminUser`（Identity） | 帳號、密碼雜湊、安全戳記 | `SingletonKey` 唯一且檢查值為 1，確保只有一位管理員 |
-| `Content` | 文章與頁面（`Kind` 區分）、標題、slug、Markdown、摘要、狀態、時間、並發版本 | slug 全站唯一；狀態、標題、slug、發布時間皆有檢查約束；`Version` 為並發權杖；私密與密碼保護不可同時啟用；頁面不可指向自身 |
+| `Content` | 文章與頁面（`Kind` 區分）、標題、slug、Markdown、摘要、封面參照、狀態、時間、並發版本 | slug 全站唯一；狀態、標題、slug、發布時間皆有檢查約束；`Version` 為並發權杖；私密與密碼保護不可同時啟用；頁面不可指向自身 |
 | `Category` / `Tag` | 文章分類與標籤，含描述文字 | 名稱與 slug 各自唯一於同類 |
 | `ContentCategories` / `ContentTags` | 內容與分類標籤的多對多關聯 | 由內容刪除時自動清理 |
 | `MediaAsset` | 圖片識別、媒體類型、大小、尺寸、alt 文字、上傳時間 | 檔名唯一；圖片本體存於檔案系統 |
@@ -149,7 +150,8 @@ tests/Origami.Tests/
 | `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章與獨立頁面詳情（Markdown 原文）；草稿、受保護與私密內容一律 404 |
 | `/api/v1/search?q=` | 混合搜尋，規則與 `/search` 相同；模型未設定時退回關鍵字 |
 | `/mcp`、`/health` | 唯讀 MCP 工具（`search_posts`、`get_post`、`get_page`）與資料庫健康檢查 |
-| `/api/v1/admin/contents…` | BFF 寫入端點（管理列表、編輯載入、建立、更新含發布／撤回、回收桶、永久刪除、還原），僅供持有 `Api:ServiceToken` 服務通行證的網站主機呼叫；未設定通行證時一律 401 |
+| 公開讀取面 | `/settings`、`/navigation`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/media/widths`——網站頁面的資料來源 |
+| `/api/v1/admin/…` | BFF 寫入面（內容／分類標籤／媒體／設定／修訂／預覽連結／匯入匯出），僅供持有 `Api:ServiceToken` 的網站主機呼叫；未設通行證時一律 401 |
 
 管理後台（Interactive Server，逐頁配置渲染模式）：
 
@@ -181,6 +183,7 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 
 測試一律在測試自行建立的隔離 PostgreSQL 叢集上執行（SCRAM 驗證、隨機連接埠），
 不會連線到既有資料庫；缺少伺服器工具時會明確標記為未執行，不改用其他 provider 冒充通過。
+`RunningSite` 現在會同時啟動 Api 主機（同庫、同服務通行證）——網頁測試驗證的是完整 BFF 鏈路。
 
 | 測試檔 | 涵蓋範圍 |
 | --- | --- |
@@ -201,6 +204,11 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `PublishingParityTests` | 置頂排序與頁面停用置頂、舊 slug 301 轉址與撤回後停止、圖片 lazy loading、媒體 alt 文字、健康檢查、JSON 匯出與權限 |
 | `ContentLifecycleTests` | 回收桶下架與還原、逾期清理、修訂版本數量上限與還原、排程晉升與撤回、預覽連結生命週期 |
 | `MediaClosureTests` | 上傳縮圖變體與 srcset、引用保護刪除、變體回填 |
+| `CoverImageTests` | 封面指派與清除、公開列表與詳情帶封面、媒體說明文字（caption）上限、僅封面引用也阻擋刪除、admin API 往返、前台 og:image 與 srcset 渲染 |
+| `BulkOperationsTests` | 批次移入回收桶／還原／永久刪除逐箋回報、並發衝突與不存在項目不影響其他、空清單與超上限拒絕、匿名拒絕、admin API 端點驗證 |
+| `SyndicationEmbedTests` | 分類過濾 feed 與 404、Atom 1.0 輸出與過濾、篩選頁訂閱連結、oEmbed 僅公開內容、格式與路徑驗證、詳情頁探索連結 |
+| `PageHierarchyTests` | TextDiff 行差異與超限回退、頁面路徑解析與未發布祖先平面回退、sitemap 層級路徑、平面網址 301、錯誤中段 404、三段式 oEmbed |
+| `PresentationPolishTests` | 記住我切換持久 Cookie、Feed 全文（content:encoded／Atom content）與作者欄、byline 呈現、搜尋分頁與總數、越界頁 404、apple-touch-icon 連結與 404 |
 | `HybridSearchTests` | 關鍵字命中（CJK 與大小寫）、語意結果融合去重、撤回後不再命中、前台頁呈現 |
 | `SecurityAndProtectionTests` | RFC 6238 向量與 TOTP 流程、admin-reset 停用兩步驗證、密碼保護閘門與搜尋/MCP 排除、每日瀏覽計數 |
 | `ProtectionRegressionTests` | 畸形解鎖 Cookie 不外洩摘要、Static SSR 解鎖表單、帳號鎖定時第二階段無法登入、私密與受保護內容不進入嵌入供應商 |
@@ -218,6 +226,7 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 - 所有已上傳圖片皆為公開資源，草稿中的圖片也不例外；撤回或刪除內容不會隱藏圖片網址。
 - 資料保護金鑰以 Windows DPAPI 加密，只能由同一台電腦上的同一個使用者解密。
 - 資料匯出檔包含受密碼保護內容的密碼雜湊，可離線嘗試破解，請視為機密檔案並不外流；匯入會以單一交易取代站內全部文字資料，圖片檔需另外還原。
-- 唯讀 API 不含寫入端點與身份驗證；App 客戶端取得的圖片網址仍指向網站的 `/media`，Api 不代管上傳。
-- Api 與網站為兩個程序，需分別啟動與設定 HTTPS；單實例部署下建議同機不同連接埠。
+- 唯讀 API 不含寫入端點與身份驗證；App 端讀取走公開端點，寫入面僅供網站主機（BFF 通行證）。
+- 網站與 Api 為兩個程序：網站啟動前 Api 必須可用（`Api:BaseUrl`），雙方須設同一 `Api:ServiceToken`；單機部署建議相鄰連接埠。
+- 登入、兩步驗證、站內助理、背景工作（嵌入／回收桶清理）、資料庫遷移與管理命令仍在網站主機本地執行。
 - 不含評論與外掛機制；多使用者、多站點與主題系統不在範圍。
