@@ -1,8 +1,8 @@
 namespace Origami.Tests;
 
 /// <summary>
-/// Regressions for the content lifecycle rules: the trash purge, the page hierarchy and the
-/// publication dates. The race cases use gated interceptors to hold one side of the interleaving.
+/// 內容生命週期規則的回歸測試：回收桶清理、頁面階層與發布時間。
+/// 競態案例以閘門攔截器凍結交錯執行中的一方。
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
@@ -26,7 +26,7 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
         try
         {
             await gate.DeleteEntered.Task.WaitAsync(TimeSpan.FromSeconds(30), timeout.Token);
-            // The administrator restores the content while the purge is between listing and deleting.
+            // 管理員在清理流程列出與刪除之間還原該內容。
             var trashed = await admin.Content.GetEditAsync(post.Id!.Value, timeout.Token);
             await admin.Content.RestoreAsync(trashed.Id!.Value, trashed.Version, timeout.Token);
             gate.Release.TrySetResult();
@@ -68,13 +68,13 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
         {
             taskA = serviceA.UpdateAsync(a, timeout.Token);
             var reached = await Task.WhenAny(gate.SaveEntered.Task, taskA, Task.Delay(TimeSpan.FromSeconds(30)));
-            if (ReferenceEquals(reached, taskA)) await taskA; // surfaces the real failure
+            if (ReferenceEquals(reached, taskA)) await taskA; // 讓真正的失敗浮現
             Assert.Same(gate.SaveEntered.Task, reached);
             taskB = serviceB.UpdateAsync(b, timeout.Token);
             var second = await Task.WhenAny(gate.SecondLockEntered.Task, taskB, Task.Delay(TimeSpan.FromSeconds(30)));
             if (ReferenceEquals(second, taskB)) await taskB;
             Assert.Same(gate.SecondLockEntered.Task, second);
-            // The first save commits; the second one then reads the committed hierarchy.
+            // 第一筆儲存先送交；第二筆接著讀到已送交的階層。
             gate.ReleaseSave.TrySetResult();
             await taskA;
             await Assert.ThrowsAsync<CmsException>(() => taskB);
@@ -100,7 +100,7 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
         post.Slug = "republish-keeps-date";
         var saved = await admin.Content.SaveAsync(post);
         Assert.NotNull(saved.PublishedAt);
-        // The stored value is read back so both sides carry the database precision.
+        // 先讀回儲存值，讓兩邊都以資料庫精度比較。
         DateTimeOffset firstPublishedAt;
         await using (var db = await App.CreateContextAsync())
             firstPublishedAt = (await db.Contents.AsNoTracking().SingleAsync(x => x.Id == saved.Id)).PublishedAt!.Value;
@@ -160,7 +160,7 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
             Task.FromResult(CreateDbContext());
     }
 
-    /// <summary>Holds the purge between the expired listing and the delete.</summary>
+    /// <summary>讓清理流程停在列出逾期項目與刪除之間。</summary>
     private sealed class DeleteGate : DbCommandInterceptor
     {
         public TaskCompletionSource DeleteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -178,7 +178,7 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
         }
     }
 
-    /// <summary>Reports the hierarchy lock and holds the first save before it writes.</summary>
+    /// <summary>回報階層鎖定，並在第一次儲存寫入前擋住它。</summary>
     private sealed class HierarchyGate
     {
         private int lockCalls;

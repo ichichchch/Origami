@@ -47,7 +47,7 @@ public sealed class PostgresCollection : ICollectionFixture<IsolatedPostgres>
     public const string Name = "Owned isolated PostgreSQL";
 }
 
-/// <summary>A fresh SCRAM-only loopback cluster; never reads application connection settings.</summary>
+/// <summary>全新且僅用 SCRAM 的環回叢集；絕不讀取應用程式連線設定。</summary>
 public sealed class IsolatedPostgres : IAsyncLifetime
 {
     private const string TemplateDatabase = "origami_migrated_template";
@@ -65,7 +65,7 @@ public sealed class IsolatedPostgres : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // The custom attributes report a real xUnit skip, not a passing no-op test.
+        // 自訂 attribute 呈現的是真正的 xUnit 跳過，而非通過的空操作測試。
         if (binaries is null) return;
         Directory.CreateDirectory(root);
         ownsDirectory = true;
@@ -88,15 +88,15 @@ public sealed class IsolatedPostgres : IAsyncLifetime
                 File.Delete(passwordFile);
             }
 
-            // Reserve an OS-selected unused port until immediately before pg_ctl starts.
-            // A competing bind is a startup failure, never a reason to try an existing server.
+            // 保留一個由作業系統配置的未用埠，直到 pg_ctl 啟動前一刻釋放。
+            // 埠被搶佔屬於啟動失敗，絕不成為改試既有伺服器的理由。
             var reservation = new TcpListener(IPAddress.Loopback, 0);
             reservation.Start();
             port = ((IPEndPoint)reservation.LocalEndpoint).Port;
             reservation.Stop();
             if (port == 5432) throw new InvalidOperationException("Refusing reserved PostgreSQL port 5432.");
-            // Configure only our generated cluster. A config file avoids Windows/POSIX
-            // differences in pg_ctl's shell parsing of an empty socket-directory argument.
+            // 只設定自行產生的叢集。改寫設定檔可避免 pg_ctl 對空 socket 目錄
+            // 引數的 shell 解析在 Windows／POSIX 之間的差異。
             await File.AppendAllTextAsync(Path.Combine(DataDirectory, "postgresql.conf"),
                 $"\nlisten_addresses = '127.0.0.1'\nport = {port}\nunix_socket_directories = ''\npassword_encryption = 'scram-sha-256'\n");
             await RunAsync(binaries.PgCtl, "-D", DataDirectory, "-w", "-t", "60", "-l", LogFile, "start");
@@ -112,7 +112,7 @@ public sealed class IsolatedPostgres : IAsyncLifetime
         catch (Exception error)
         {
             var diagnostic = Sanitize(error.Message);
-            // The cluster may still be running and holding the log; reading it must never mask the original error.
+            // 叢集可能仍在執行並佔住日誌檔；讀取日誌絕不能掩蓋原始錯誤。
             try
             {
                 if (File.Exists(LogFile))
@@ -120,10 +120,10 @@ public sealed class IsolatedPostgres : IAsyncLifetime
                     using (var reader = new StreamReader(stream))
                         diagnostic += Environment.NewLine + Sanitize(await reader.ReadToEndAsync());
             }
-            catch (IOException) { /* The original error is the useful diagnostic. */ }
+            catch (IOException) { /* 原始錯誤才是有用的診斷資訊。 */ }
             try { await DisposeAsync(); }
             catch (Exception cleanupError) { diagnostic += Environment.NewLine + Sanitize(cleanupError.Message); }
-            // Do not attach an inner exception that could expose a connection string.
+            // 不附加可能洩漏連線字串的內部例外。
             throw new InvalidOperationException("Isolated PostgreSQL setup failed: " + diagnostic);
         }
     }
@@ -137,7 +137,7 @@ public sealed class IsolatedPostgres : IAsyncLifetime
         return ConnectionString(name);
     }
 
-    /// <summary>Creates a database with no schema, for verifying the migrate command.</summary>
+    /// <summary>建立一個不含任何結構的資料庫，用於驗證遷移命令。</summary>
     public async Task<string> CreateEmptyDatabaseAsync()
     {
         if (!started) throw new InvalidOperationException(PostgresBinaries.MissingDiagnostic);
@@ -147,7 +147,7 @@ public sealed class IsolatedPostgres : IAsyncLifetime
         return ConnectionString(name);
     }
 
-    /// <summary>The administrative connection string of this owned cluster.</summary>
+    /// <summary>此自持叢集的管理連線字串。</summary>
     public string ConnectionStringForAdmin => ConnectionString("postgres");
 
     public async Task DropDatabaseAsync(string connectionString)
@@ -169,7 +169,7 @@ public sealed class IsolatedPostgres : IAsyncLifetime
 
     private async Task ExecuteAdminAsync(string sql)
     {
-        // Identifiers above are fixture-generated lowercase ASCII, never user input.
+        // 上方的識別字都是 fixture 產生的小寫 ASCII，絕非使用者輸入。
         await using var connection = new NpgsqlConnection(ConnectionString("postgres"));
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
@@ -207,8 +207,8 @@ public sealed class IsolatedPostgres : IAsyncLifetime
         process.BeginErrorReadLine();
         try
         {
-            // Wait for pg_ctl itself, not EOF on pipes inherited by the long-lived
-            // Windows postgres process. pg_ctl -w remains the readiness authority.
+            // 等待 pg_ctl 本身結束，而不是等常駐 Windows postgres 處理程序
+            // 繼承的管線出現 EOF；pg_ctl -w 仍是就緒與否的權威判準。
             await exited.Task.WaitAsync(TimeSpan.FromSeconds(90));
         }
         catch (TimeoutException)
@@ -233,8 +233,8 @@ public sealed class IsolatedPostgres : IAsyncLifetime
         if (!ownsDirectory) return;
         if (binaries is not null && (started || File.Exists(Path.Combine(DataDirectory, "postmaster.pid"))))
         {
-            // Explicit -D targets only this fixture, never a service or another cluster.
-            // If stopping fails, leave the directory intact rather than delete a live cluster.
+            // 明確的 -D 只指向此 fixture，絕不指向系統服務或其他叢集。
+            // 若停止失敗，寧可保留完整目錄，也不刪除執行中的叢集。
             await RunAsync(binaries.PgCtl, "-D", DataDirectory, "-w", "-t", "60", "-m", "fast", "stop");
             started = false;
         }

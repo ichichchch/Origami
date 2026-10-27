@@ -10,7 +10,7 @@ public sealed class EmbeddingLifecycleTests(IsolatedPostgres postgres) : Service
         var saved = await actor.Content.SaveAsync(Published("長文", string.Join("\n\n", Enumerable.Range(0, 8).Select(i => "段落" + i + new string('字', 400)))));
         Assert.True(await HasJobAsync(saved.Id!.Value));
         await App.Worker.ProcessPendingAsync();
-        Assert.Equal(3, await EmbeddingCountAsync(saved.Id!.Value)); // 8 paragraphs × ~400 chars pack into 3 chunks
+        Assert.Equal(3, await EmbeddingCountAsync(saved.Id!.Value)); // 8 個段落×各約 400 字打包成 3 個分塊
         Assert.False(await HasJobAsync(saved.Id!.Value));
     }
 
@@ -26,7 +26,7 @@ public sealed class EmbeddingLifecycleTests(IsolatedPostgres postgres) : Service
         edit.Status = ContentStatus.Draft;
         await actor.Content.SaveAsync(edit);
 
-        // Synchronous, in-transaction removal: no worker pass needed before the content is invisible.
+        // 同步且在交易內移除：不必等背景工作跑過一輪，內容即已不可見。
         Assert.Equal(0, await EmbeddingCountAsync(saved.Id!.Value));
         Assert.False(await HasJobAsync(saved.Id!.Value));
     }
@@ -62,7 +62,7 @@ public sealed class EmbeddingLifecycleTests(IsolatedPostgres postgres) : Service
             Assert.True(job.NextAttemptAt > DateTimeOffset.UtcNow);
         }
         App.Embeddings.FailNext = false;
-        // The backoff delay has not elapsed yet, so the worker correctly skips the not-due job.
+        // 退避延遲尚未到期，因此背景工作正確略過未到期的任務。
         Assert.Equal(0, await App.Worker.ProcessPendingAsync());
         await using (var db = await App.CreateContextAsync())
         {

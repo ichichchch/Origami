@@ -26,19 +26,19 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddLogging();
         services.AddDbContextFactory<CmsDbContext>(options => options.UseNpgsql(connectionString, o => o.UseVector()));
         services.AddCmsIdentity();
-        // Password-reset tokens stay within this test application, without reading/writing host keys.
+        // 密碼重設 token 只留在本測試應用程式內，不讀寫主機金鑰。
         services.AddDataProtection().UseEphemeralDataProtectionProvider();
         services.AddScoped<MutableAuthenticationStateProvider>();
         services.Replace(ServiceDescriptor.Scoped<AuthenticationStateProvider>(provider =>
             provider.GetRequiredService<MutableAuthenticationStateProvider>()));
         services.AddSingleton(TimeProvider.System);
-        // A singleton fake keeps per-test configuration visible to the worker's own scopes.
+        // 以單例假物件讓各測試的組態變更，對背景工作自建的 scope 也可見。
         services.AddSingleton<FakeEmbeddingGateway>();
         services.AddSingleton<IEmbeddingGateway>(provider => provider.GetRequiredService<FakeEmbeddingGateway>());
         services.AddScoped<SemanticSearchService>();
         services.AddSingleton<MarkdownService>();
         services.AddScoped<PublicSearchService>();
-        // Deliberately not bound to host configuration or inherited AI credentials.
+        // 刻意不綁定主機組態，也不繼承 AI 認證資訊。
         services.AddOptions<AiOptions>();
         services.AddScoped<AiStatusService>();
         services.AddScoped<AdminAccess>();
@@ -48,7 +48,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<SettingsService>();
-        // The assistant runs against the shared scripted client; no provider or key is involved.
+        // 助理對共用的腳本化用戶端運作；完全不涉及供應商或金鑰。
         services.AddSingleton<FakeChatClient>();
         services.AddSingleton<IAssistantChatClientFactory>(provider =>
             new StubAssistantChatClientFactory(provider.GetRequiredService<FakeChatClient>()));
@@ -117,7 +117,7 @@ public abstract class ServiceTestBase(IsolatedPostgres postgres) : IAsyncLifetim
 
     public async Task InitializeAsync()
     {
-        // Missing binaries are reported by the test attributes before any test executes.
+        // 缺少二進位檔時，會在任何測試執行前由測試屬性回報。
         if (PostgresBinaries.Find() is null) return;
         App = await CmsTestApplication.CreateAsync(postgres);
         try

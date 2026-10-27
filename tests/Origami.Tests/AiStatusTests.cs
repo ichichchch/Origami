@@ -53,7 +53,7 @@ public sealed class AiStatusTests(IsolatedPostgres postgres) : ServiceTestBase(p
         var complete = await service.GetAsync();
         Assert.True(complete.EmbeddingConfigured);
         Assert.True(complete.AssistantConfigured);
-        // The configured loopback port deliberately has no server. Completeness is not connectivity.
+        // 指定的 loopback 連接刻意沒有伺服器在聽；配置完整不代表連線正常。
         Assert.Equal(0, App.Embeddings.EmbeddedTexts);
         Assert.Empty(App.Chat.Calls);
         var serialized = JsonSerializer.Serialize(complete);
@@ -189,7 +189,7 @@ public sealed class AiStatusTests(IsolatedPostgres postgres) : ServiceTestBase(p
             await Expect(question).ToBeDisabledAsync();
             await Expect(page.GetByRole(AriaRole.Button, new() { Name = "送出問題", Exact = true })).ToBeDisabledAsync();
         }
-        // Seed a ready article atomically, without due jobs for the site's background worker.
+        // 以單一交易植入一篇就緒文章，且不留下供網站背景工作執行的到期工作。
         await using (var db = await App.CreateContextAsync())
         {
             var article = Article("new-ready-article");
@@ -211,14 +211,14 @@ public sealed class AiStatusTests(IsolatedPostgres postgres) : ServiceTestBase(p
         {
             var directory = Path.Combine(RunningSite.FindSolutionRoot(), ".artifacts", "screenshots");
             Directory.CreateDirectory(directory);
-            // Full-page captures otherwise include off-viewport fixed links at the previous scroll offset.
+            // 不先捲回頂端的話，全頁截圖會把上一個捲動位置、視窗外的固定連結一併拍進去。
             await page.EvaluateAsync("window.scrollTo({ top: 0, behavior: 'instant' })");
             Assert.True(await page.Locator(".skip-link").EvaluateAsync<bool>("element => element.getBoundingClientRect().bottom < 0"));
             await page.ScreenshotAsync(new() { Path = Path.Combine(directory, "ai-status-mobile.png"), FullPage = true });
         }
         if (configured)
         {
-            // Exercise the real Chat Completions client and UI without sending anything to a vendor.
+            // 實際演練真實的 Chat Completions 用戶端與 UI，但不送任何資料給供應商。
             var before = await SnapshotAsync();
             provider.AssistantReply = "**已找到文章**，請閱讀 [測試文章](/posts/new-ready-article)。<script>alert(1)</script>";
             var send = page.GetByRole(AriaRole.Button, new() { Name = "送出問題", Exact = true });

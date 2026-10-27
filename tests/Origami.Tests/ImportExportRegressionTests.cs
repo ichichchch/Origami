@@ -1,7 +1,7 @@
 namespace Origami.Tests;
 
 /// <summary>
-/// Regressions for the data import, the site icon and the media reference protection.
+/// 資料匯入、網站圖示與媒體引用保護的回歸測試。
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class ImportExportRegressionTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
@@ -31,7 +31,7 @@ public sealed class ImportExportRegressionTests(IsolatedPostgres postgres) : Ser
         var refused = await Assert.ThrowsAsync<CmsException>(() => importer.ApplyAsync(input, confirmed: true));
         Assert.Contains("媒體檔名", refused.Message, StringComparison.Ordinal);
 
-        // The refused import changes nothing at all.
+        // 被拒絕的匯入不得改動任何資料。
         await using var db = await App.CreateContextAsync();
         Assert.True(await db.Contents.AnyAsync(x => x.Slug == "匯入前文章" || x.Title == "匯入前文章"));
     }

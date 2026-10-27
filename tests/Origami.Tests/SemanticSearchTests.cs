@@ -6,22 +6,22 @@ public sealed class SemanticSearchTests(IsolatedPostgres postgres) : ServiceTest
     [PostgresFact]
     public async Task Search_hits_published_posts_only_and_ranks_by_similarity()
     {
-        // Orthogonal basis vectors make similarity exact: cat texts are e0, dog texts are e1.
+        // 正交基底向量使相似度精確：貓文案為 e0，狗文案為 e1。
         App.Embeddings.VectorFor = text => FakeEmbeddingGateway.Basis(text.Contains("狗") ? 1 : 0);
         using var actor = await App.AdministratorAsync();
         await actor.Content.SaveAsync(Published("貓的生活", "# 貓\n\n貓貓喜歡睡覺。"));
         await actor.Content.SaveAsync(Published("狗的日子", "# 狗\n\n狗狗喜歡散步。"));
-        await actor.Content.SaveAsync(NewContent("貓的草稿")); // draft: queued for nothing, never embedded
+        await actor.Content.SaveAsync(NewContent("貓的草稿")); // 草稿：不排任何工作，永不嵌入
         await App.Worker.ProcessPendingAsync();
 
         var hits = await actor.Semantic.SearchAsync("我要找貓");
         Assert.NotEmpty(hits);
-        // Top-k search may include weak matches; the exact match must rank first with a high score.
+        // 前 k 筆搜尋可能包含弱匹配；精確匹配必須以高分排名第一。
         Assert.Equal("貓的生活", hits[0].Title);
         Assert.True(hits[0].Score > 0.9, $"預期高分，實際 {hits[0].Score}");
         Assert.All(hits, hit => Assert.Contains(hit.Title, new[] { "貓的生活", "狗的日子" }));
 
-        // A stale vector for a draft must never leak: the SQL publish filter is the last line of defense.
+        // 草稿的殘留向量絕不能外洩：SQL 的發布過濾是最後一道防線。
         var draft = await FindContentIdAsync("貓的草稿");
         await using (var db = await App.CreateContextAsync())
         {
@@ -47,7 +47,7 @@ public sealed class SemanticSearchTests(IsolatedPostgres postgres) : ServiceTest
         string? sent = null;
         App.Embeddings.VectorFor = text => { sent = text; return FakeEmbeddingGateway.Basis(0); };
         var hits = await actor.Semantic.SearchAsync(boundary, 999);
-        Assert.Empty(hits); // clamped, not thrown; an empty corpus returns nothing
+        Assert.Empty(hits); // 前 k 筆數值被夾至上限而非拋例外；空語料庫回傳空結果
         Assert.Equal(boundary, sent);
         Assert.Equal(1, App.Embeddings.EmbeddedTexts);
         await actor.Semantic.SearchAsync("  主題  ");

@@ -110,7 +110,7 @@ public sealed class StoragePathsTests
     }
 }
 
-// Both test classes own their entire temporary tree; no application configuration is read.
+// 兩個測試類別各自持有完整的暫存目錄樹；不讀取任何應用程式組態。
 internal sealed class TemporaryMediaStorage : IDisposable
 {
     public string DirectoryPath { get; } = Path.Combine(Path.GetTempPath(), "Origami.MediaTests-" + Guid.NewGuid().ToString("N"));

@@ -3,13 +3,13 @@ namespace Origami.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
-    /// <summary>A fixed clock lets the RFC 6238 vectors and service flows be deterministic.</summary>
+    /// <summary>固定時鐘讓 RFC 6238 測試向量與服務流程都能具確定性。</summary>
     private sealed class FrozenTime(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private static string Rfc6238Code(byte[] key, long unixSeconds) // independent mini-implementation for the tests
+    private static string Rfc6238Code(byte[] key, long unixSeconds) // 測試專用的獨立迷你實作
     {
         var step = unixSeconds / 30;
         Span<byte> message = stackalloc byte[8];
@@ -38,7 +38,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
     {
         const string secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"; // ASCII "12345678901234567890"
         var key = Base32Decode(secret);
-        // RFC 6238 appendix B, SHA-1: t=59s → 287082; drift window also accepts t=29s and t=89s.
+        // RFC 6238 appendix B、SHA-1：t=59s → 287082；時鐘漂移視窗也接受 t=29s 與 t=89s。
         var clock = new FrozenTime(DateTimeOffset.UnixEpoch.AddSeconds(59));
         Assert.Equal("287082", Rfc6238Code(key, 59));
         Assert.True(Totp.Verify(secret, "287082", clock));
@@ -57,10 +57,10 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
     public async Task Two_factor_flow_enables_disables_and_admin_reset_recovers()
     {
         var clock = new FrozenTime(DateTimeOffset.UtcNow);
-        // Reset first: rotating the stamp would invalidate an already-issued test principal.
+        // 先重設密碼：輪替安全戳記會使已發出的測試主體失效。
         var password = IsolatedPostgres.NewPassword();
         await App.Provisioner.ResetPasswordAsync(password);
-        // Enabling, disabling and resets all rotate the security stamp; each step needs a fresh principal.
+        // 啟用、停用與重設都會輪替安全戳記；每一步都要重新取得主體。
         async Task<(TestActor Actor, TwoFactorService Service)> FreshAsync()
         {
             var actor = await App.AdministratorAsync();
@@ -92,7 +92,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         (admin, twoFactor) = await FreshAsync();
         Assert.False((await twoFactor.GetStatusAsync()).Enabled);
 
-        // A lost authenticator is recovered server-side: admin-reset also disables two-factor.
+        // 遺失驗證器時由伺服器端救援：管理員重設也會一併停用兩步驗證。
         var (rotatedSecret, _) = await twoFactor.BeginSetupAsync();
         await twoFactor.EnableAsync(Rfc6238Code(Base32Decode(rotatedSecret), clock.GetUtcNow().ToUnixTimeSeconds()));
         await App.Provisioner.ResetPasswordAsync(IsolatedPostgres.NewPassword());
@@ -135,7 +135,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         var search = await admin.Services.GetRequiredService<PublicSearchService>().SearchAsync("這段文字絕不能");
         Assert.DoesNotContain(search.Hits, x => x.Slug == "secret-publish");
 
-        // Service-level unlock: correct password yields a token; changing the password voids it.
+        // 服務層解鎖：正確密碼換得 token；變更密碼會使舊 token 失效。
         var token = await admin.Content.VerifyProtectionAsync(saved.Id!.Value, "content-pass-1");
         Assert.NotNull(token);
         Assert.Null(await admin.Content.VerifyProtectionAsync(saved.Id.Value, "wrong"));
@@ -146,12 +146,12 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         Assert.False(await admin.Content.IsUnlockedAsync(saved.Id.Value, token), "old cookies die with the old password");
         Assert.True(await admin.Content.IsUnlockedAsync(saved.Id.Value, await admin.Content.VerifyProtectionAsync(saved.Id.Value, "content-pass-2")));
 
-        // MCP never becomes a side door into gated bodies.
+        // MCP 絕不能成為窺探受保護本文的側門。
         var tools = admin.Services.GetRequiredService<McpReadTools>();
         var mcp = await tools.GetPostAsync("secret-publish");
         Assert.False(mcp.Found);
 
-        // First-time enable without a password is refused; a short password is refused.
+        // 首次啟用保護時未設密碼會被拒絕；密碼過短同樣被拒絕。
         var other = NewContent("另一篇", status: ContentStatus.Published);
         other.Slug = "protect-rules";
         other.IsProtected = true;
@@ -166,7 +166,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
     [PostgresFact]
     public async Task Private_content_is_visible_only_to_the_administrator()
     {
-        // A known password lets the test sign in over HTTP after the reset rotates the stamp.
+        // 重設會輪替安全戳記，先備妥已知密碼讓測試之後仍能經 HTTP 登入。
         var password = IsolatedPostgres.NewPassword();
         await App.Provisioner.ResetPasswordAsync(password);
         using var admin = await App.AdministratorAsync();
@@ -176,14 +176,14 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         post.IsPrivate = true;
         var saved = await admin.Content.SaveAsync(post);
 
-        // Private text never reaches the embedding index, exactly like password-protected text.
+        // 私密文字和受密碼保護文字一樣，絕不進入嵌入索引。
         await App.Worker.ProcessPendingAsync();
         await using (var db = await App.CreateContextAsync())
         {
             Assert.False(await db.ContentEmbeddings.AnyAsync(x => x.ContentId == saved.Id), "private content never enters the index");
         }
 
-        // Private and password protection are mutually exclusive.
+        // 私密與密碼保護互斥，不得同時設定。
         var conflict = NewContent("矛盾設定", status: ContentStatus.Published);
         conflict.IsProtected = true;
         conflict.NewProtectPassword = "long-enough-pass";
@@ -193,7 +193,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         await using var site = new RunningSite(App.ConnectionString);
         await site.StartAsync();
         using var client = site.CreateClient();
-        // Anonymous visitors get the same 404 as missing content.
+        // 匿名訪客會得到與內容不存在相同的 404。
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/posts/private-post")).StatusCode);
         var home = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
         Assert.DoesNotContain("private-post", home);
@@ -205,7 +205,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         var tools = admin.Services.GetRequiredService<McpReadTools>();
         Assert.False((await tools.GetPostAsync("private-post")).Found, "MCP must not reach private bodies");
 
-        // The signed-in administrator reads the same URL with a visible private marker.
+        // 已登入的管理員能讀取同一網址，並看到顯示出來的私密標記。
         var cookies = new CookieContainer();
         using (var signedIn = site.CreateClient(cookies: cookies))
         {
@@ -219,7 +219,7 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
             Assert.Contains("noindex", html);
         }
 
-        // Switching back to public restores the URL, the listing and the embedding pipeline.
+        // 切回公開後，網址、列表與嵌入管道都會恢復。
         var edit = await admin.Content.GetEditAsync(saved.Id!.Value);
         edit.IsPrivate = false;
         await admin.Content.UpdateAsync(edit);

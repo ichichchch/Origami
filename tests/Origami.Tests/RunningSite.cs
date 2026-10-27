@@ -1,6 +1,6 @@
 namespace Origami.Tests;
 
-// A real HTTPS Kestrel process, with a test-only certificate and no machine trust-store changes.
+// 真實的 HTTPS Kestrel 處理程序，使用僅供測試的憑證，且不變更機器的信任存放區。
 internal sealed class RunningSite : IAsyncDisposable
 {
     private readonly string connectionString;
@@ -64,7 +64,7 @@ internal sealed class RunningSite : IAsyncDisposable
         start.ArgumentList.Add(assembly);
         ConfigureAiEnvironment(start.Environment, configurationOverrides);
         SetEnvironment(start.Environment, "ASPNETCORE_URLS", HttpAddress is null ? Address.ToString() : $"{Address};{HttpAddress}");
-        // DOTNET_ENVIRONMENT takes precedence over ASPNETCORE_ENVIRONMENT in WebApplication.
+        // 在 WebApplication 中，DOTNET_ENVIRONMENT 的優先順序高於 ASPNETCORE_ENVIRONMENT。
         SetEnvironment(start.Environment, "DOTNET_ENVIRONMENT", environment);
         SetEnvironment(start.Environment, "ConnectionStrings__CMS", connectionString);
         SetEnvironment(start.Environment, "Storage__RootPath", StorageRoot);
@@ -78,11 +78,11 @@ internal sealed class RunningSite : IAsyncDisposable
             var line = e.Data;
             if (line?.StartsWith("warn: ", StringComparison.Ordinal) == true)
             {
-                // Keep only the category/event ID, never message bodies, credentials or connection strings.
+                // 只保留分類／事件 ID，絕不保留訊息本文、認證資訊或連線字串。
                 var end = line.IndexOf(']');
                 if (end >= 0) warningCategories.Enqueue(line[..(end + 1)]);
             }
-            // The first listening message is too early when both HTTP and HTTPS are enabled.
+            // 同時啟用 HTTP 與 HTTPS 時，第一條監聽訊息出現得太早，不能當成就緒。
             if (line?.Contains("Application started.", StringComparison.Ordinal) == true) ready.TrySetResult();
         }
         process = new Process { StartInfo = start, EnableRaisingEvents = true };
@@ -98,8 +98,8 @@ internal sealed class RunningSite : IAsyncDisposable
     internal static void ConfigureAiEnvironment(IDictionary<string, string?> environment,
         IReadOnlyDictionary<string, string?>? overrides = null)
     {
-        // Remove every spelling before adding defaults: Linux can inherit differently-cased
-        // duplicate keys which ASP.NET configuration subsequently treats as the same key.
+        // 先移除各種拼法再套預設值：Linux 可能繼承只有大小寫不同的重複索引鍵，
+        // ASP.NET 組態之後會把它們視為同一個索引鍵。
         foreach (var key in environment.Keys.Where(key =>
             ConfigurationKey(key).StartsWith("Ai:", StringComparison.OrdinalIgnoreCase)).ToArray())
             environment.Remove(key);
@@ -146,7 +146,7 @@ internal sealed class RunningSite : IAsyncDisposable
     {
         if (process is null) return;
         if (!process.HasExited) process.Kill(entireProcessTree: true);
-        // Drain redirected output even if the process already exited, before inspecting warnings.
+        // 即使處理程序已退出，仍先排空重導的輸出，再檢查警告。
         await process.WaitForExitAsync();
         process.Dispose();
         process = null;

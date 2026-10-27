@@ -47,7 +47,7 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Contains(" 480w", html);
         Assert.Contains(" 960w", html);
         Assert.DoesNotContain(" 1600w", html);
-        // A narrow image has no variants; its tag stays plain instead of offering broken candidates.
+        // 窄圖沒有變體；標籤維持單純，不提供壞掉的候選。
         var narrowHtml = markdown.Render("![窄圖](/media/" + narrow.FileName + ")", catalog);
         Assert.DoesNotContain("srcset=", narrowHtml, StringComparison.OrdinalIgnoreCase);
     }
@@ -73,12 +73,12 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         var refused = await Assert.ThrowsAsync<CmsException>(() => service.DeleteAsync(uploaded.Id, true));
         Assert.Contains("引用圖片的文章", refused.Message, StringComparison.Ordinal);
 
-        // Trashed content still owns its reference until purged.
+        // 進回收桶的內容在清除前仍持有引用。
         var trashed = await admin.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Draft);
         var item = trashed.Items.Single();
         await admin.Content.TrashAsync(item.Id, item.Version, true);
         Assert.Equal(1, await service.CountReferencesAsync(uploaded.Id));
-        // Trashing rotated the version; permanent deletion carries the fresh one.
+        // 進回收桶已輪替版本；永久刪除要帶新的版本。
         var trashedItem = (await admin.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Trashed)).Items.Single();
         await admin.Content.DeleteAsync(trashedItem.Id, trashedItem.Version, true);
         Assert.Equal(0, await service.CountReferencesAsync(uploaded.Id));
@@ -134,11 +134,11 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.True(File.Exists(file.Path), "the icon points at the stored media file");
         Assert.EndsWith(icon.FileName, file.Path, StringComparison.Ordinal);
 
-        // The current site icon cannot be deleted while the setting points at it.
+        // 設定仍指向目前的網站圖示時，該檔案不得刪除。
         var refused = await Assert.ThrowsAsync<CmsException>(() => service.DeleteAsync(icon.Id, true));
         Assert.Contains("網站圖示", refused.Message, StringComparison.Ordinal);
 
-        // Clearing the setting releases the file, and an unset icon answers 404 over HTTP.
+        // 清除設定即釋放檔案；未設定圖示時 HTTP 回 404。
         var cleared = await admin.Settings.GetAsync();
         cleared.SiteIconMediaId = null;
         await admin.Settings.SaveAsync(cleared);

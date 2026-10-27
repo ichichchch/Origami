@@ -1,6 +1,6 @@
 namespace Origami.Tests;
 
-/// <summary>Drives /mcp over real HTTPS with the minimal JSON-RPC handshake the Streamable HTTP transport requires.</summary>
+/// <summary>以真實 HTTPS 驅動 /mcp，並完成 Streamable HTTP 傳輸所需的最小 JSON-RPC 握手。</summary>
 [Collection(PostgresCollection.Name)]
 public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
@@ -21,7 +21,7 @@ public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBas
 
         var tools = await CallAsync(client, session, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
         var names = tools["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.GetValue<string>()).Order().ToArray();
-        // The read surface is exactly these three; a write tool appearing here is a security regression.
+        // 唯讀工具就只有這三個；一旦出現寫入工具即屬安全回歸。
         Assert.Equal(["get_page", "get_post", "search_posts"], names);
 
         var fetched = await CallAsync(client, session,
@@ -46,7 +46,7 @@ public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBas
         using var response = await SendAsync(client, session.Id, session.Protocol, """
             {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_posts","arguments":{"query":"任何字"}}}
             """);
-        // A missing provider key is a tool-level result, never a 5xx or a stack trace.
+        // 缺少供應商金鑰屬工具層級結果，絕不能回 5xx 或洩出堆疊內容。
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await ParseAsync(response);
         Assert.True(body["result"]?["isError"]?.GetValue<bool>() == true || body["error"] is not null);
@@ -112,7 +112,7 @@ public sealed class McpEndpointTests(IsolatedPostgres postgres) : ServiceTestBas
         request.Headers.Accept.ParseAdd("text/event-stream");
         if (session is not null) request.Headers.TryAddWithoutValidation("Mcp-Session-Id", session);
         if (protocol is not null) request.Headers.TryAddWithoutValidation("Mcp-Protocol-Version", protocol);
-        // Responses are buffered, so reading after the request is disposed is safe.
+        // 回應已被緩衝，因此在請求物件釋放後讀取仍安全。
         return await client.SendAsync(request);
     }
 

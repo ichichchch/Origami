@@ -29,12 +29,12 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         var counts = await admin.Content.CountAdminAsync(ContentKind.Post);
         Assert.Equal((0, 1), (counts.Drafts, counts.Trashed));
         Assert.Equal(0, counts.Published);
-        // The default admin list hides the trash; the trash filter shows it.
+        // 預設管理列表隱藏回收桶內容；用回收桶篩選才看得到。
         Assert.Empty((await admin.Content.ListAdminAsync(ContentKind.Post)).Items);
         var trashedList = await admin.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Trashed);
         Assert.Equal("trash-post", trashedList.Items.Single().Slug);
 
-        // Trashed content refuses direct edits until it is restored.
+        // 回收桶內容在還原前拒絕直接編輯。
         var edit = await admin.Content.GetEditAsync(saved.Id.Value);
         var refused = await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(edit));
         Assert.Contains("還原", refused.Message, StringComparison.Ordinal);
@@ -67,7 +67,7 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         await using var after = await App.CreateContextAsync();
         Assert.False(await after.Contents.AnyAsync(x => x.Id == oldSaved.Id));
         Assert.True(await after.Contents.AnyAsync(x => x.Id == freshSaved.Id));
-        // Revisions die with their content.
+        // 修訂版本隨內容一併銷毀。
         Assert.False(await after.ContentRevisions.AnyAsync(x => x.ContentId == oldSaved.Id));
         Assert.Equal(0, await Worker.PurgeAsync());
     }
@@ -86,13 +86,13 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         }
         var revisions = await admin.Content.ListRevisionsAsync(currentId);
         Assert.Equal(Limits.RevisionKeep, revisions.Count);
-        // The newest revision holds the state right before the last save.
+        // 最新一筆修訂版本保存最後一次儲存前的狀態。
         var newest = await admin.Content.GetRevisionAsync(revisions[0].Id);
         Assert.NotNull(newest);
         Assert.Equal("第 " + (Limits.RevisionKeep + 3) + " 版內容", newest!.Markdown);
         var current = await admin.Content.GetEditAsync(currentId);
         Assert.Equal("第 " + (Limits.RevisionKeep + 4) + " 版內容", current.Markdown);
-        // Revisions disappear with the content.
+        // 修訂版本隨內容一併消失。
         await admin.Content.DeleteAsync(currentId, current.Version, true);
         Assert.Empty(await admin.Content.ListRevisionsAsync(currentId));
     }
@@ -101,7 +101,7 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
     public async Task Scheduled_drafts_publish_when_due_and_only_when_due()
     {
         using var admin = await App.AdministratorAsync();
-        // A schedule must sit far enough in the future.
+        // 排程時間必須設定在夠遠的未來。
         var tooSoon = NewContent("太近的排程");
         tooSoon.PublishAt = DateTimeOffset.UtcNow.AddMinutes(Limits.ScheduleLeadMinutes - 1);
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.SaveAsync(tooSoon));
@@ -120,7 +120,7 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/posts/scheduled-post")).StatusCode);
         Assert.Equal(0, await Worker.PromoteAsync());
 
-        // Force the stored schedule into the past; the worker publishes at the scheduled moment.
+        // 把已儲存的排程硬改到過去；背景工作會在排程時刻發布。
         await using (var db = await App.CreateContextAsync())
         {
             var entity = await db.Contents.SingleAsync(x => x.Id == saved.Id);
@@ -133,11 +133,11 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Null(promoted.PublishAt);
         Assert.NotNull(promoted.PublishedAt);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/posts/scheduled-post")).StatusCode);
-        // Promotion queues embedding like a manual publish.
+        // 排程轉為發布時，與手動發布一樣會排入嵌入工作。
         await using var check = await App.CreateContextAsync();
         Assert.True(await check.EmbeddingJobs.AnyAsync(x => x.ContentId == saved.Id));
 
-        // Withdrawing clears any schedule.
+        // 撤回會一併清除排程。
         var withdrawn = await admin.Content.GetEditAsync(saved.Id.Value);
         withdrawn.Status = ContentStatus.Draft;
         await admin.Content.UpdateAsync(withdrawn);
@@ -164,7 +164,7 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Contains("Disallow: /preview", await (await client.GetAsync("/robots.txt")).Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/preview/" + Guid.NewGuid())).StatusCode);
 
-        // Publishing retires the token to a permanent redirect at the public URL.
+        // 發布後 token 退役，改為永久轉址到公開網址。
         var publish = await admin.Content.GetEditAsync(saved.Id.Value);
         publish.Status = ContentStatus.Published;
         await admin.Content.UpdateAsync(publish);
@@ -172,7 +172,7 @@ public sealed class ContentLifecycleTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Equal(HttpStatusCode.MovedPermanently, moved.StatusCode);
         Assert.Equal("/posts/preview-draft", moved.Headers.Location!.ToString());
 
-        // Cycling replaces the token: the old one is dead, the new one still resolves.
+        // 換發會替換 token：舊 token 立即失效，新 token 仍可使用。
         var second = await admin.Content.CyclePreviewTokenAsync(saved.Id.Value);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/preview/" + token)).StatusCode);
         using var movedAgain = await client.GetAsync("/preview/" + second);

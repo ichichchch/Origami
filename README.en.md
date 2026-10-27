@@ -50,10 +50,14 @@ Connection credentials are never stored in the source tree. Supply them through 
 ```bash
 export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=origami;Username=origami;Password=<your password>"
 export Storage__RootPath="D:/origami-storage"   # optional; defaults to a folder under the user profile
+export Api__ServiceToken="<long random string>"   # optional; the Api host's BFF service credential for write endpoints
 ```
 
 `Storage__RootPath` must be an absolute path outside the published application directory. It holds
-uploaded images and the Data Protection key ring.
+uploaded images and the Data Protection key ring. When `Api:ServiceToken` is not set the write
+endpoints stay closed. The token is equivalent to write permission: provide it only through secure
+external configuration to the website host, and never expose the write endpoints directly to the
+internet.
 
 ### 2. Apply the schema
 
@@ -176,6 +180,7 @@ source IP, `no-store` responses):
 | `/api/v1/posts/{slug}`, `/api/v1/pages/{slug}` | Article and page detail (raw Markdown); drafts, protected and private content always return `404` |
 | `/api/v1/search?q=` | Hybrid search with the same rules as `/search`; keyword-only when no model is configured |
 | `/mcp`, `/health` | Read-only MCP tools (`search_posts`, `get_post`, `get_page`) and database liveness |
+| `/api/v1/admin/contents…` | BFF write endpoints (admin list, edit load, create, update incl. publish/withdraw, trash, permanent delete, restore), callable only with the `Api:ServiceToken` service credential held by the website host; without a configured token they always answer 401 |
 
 Admin area (Interactive Server, per page render mode):
 
@@ -240,6 +245,7 @@ tests are reported as *skipped* with a diagnostic instead of silently passing on
 | `ScheduleTimeTests` | Schedule times convert through the browser time zone across daylight saving, a wall-clock time that does not exist is refused |
 | `ApiV1EndpointTests` | /api/v1 list pagination and published-only content, detail `404` for drafts, protected and private items, keyword fallback without a model key, parameter validation and per-IP rate limiting |
 | `McpEndpointTests` | The MCP endpoint (Api host) exposes exactly three read-only tools, drafts stay invisible, a missing key degrades at the tool level without a 5xx, per-IP rate limiting |
+| `ApiV1AdminEndpointTests` | Write endpoints reject missing or wrong service tokens with 401, the create→publish→withdraw→trash→restore round trip, stale versions are rejected without silent overwrites, admin traffic has its own rate budget |
 
 The browser tests drive real Edge or Chrome through Playwright; the persistence test performs an
 actual `pg_dump` / `pg_restore` cycle.

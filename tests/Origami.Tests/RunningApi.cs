@@ -1,15 +1,19 @@
 namespace Origami.Tests;
 
-// A real HTTPS Kestrel process for the machine-facing Api host, mirroring RunningSite's isolation:
-// a test-only certificate, its own port, and no machine trust-store changes.
+// 機器介面 Api 主機的真實 HTTPS Kestrel 處理程序，隔離方式比照 RunningSite：
+// 僅供測試的憑證、專屬連接埠，且不變更機器的信任存放區。
 internal sealed class RunningApi : IAsyncDisposable
 {
     private readonly string connectionString;
     private readonly string root;
     private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly X509Certificate2 certificate;
+    private readonly ConcurrentQueue<string> consoleErrors = new();
     private Process? process;
     public Uri Address { get; private set; } = null!;
+
+    /// <summary>截斷後的伺服器端失敗輸出行，讓 500 錯誤的根因在測試輸出中看得到。</summary>
+    public IReadOnlyList<string> ConsoleErrors => [.. consoleErrors];
 
     public RunningApi(string connectionString)
     {
@@ -26,7 +30,7 @@ internal sealed class RunningApi : IAsyncDisposable
         File.WriteAllBytes(Path.Combine(root, "test.pfx"), certificate.Export(X509ContentType.Pfx, certificatePassword));
     }
 
-    public async Task StartAsync(string environment = "Development")
+    public async Task StartAsync(string environment = "Development", string? serviceToken = null)
     {
         if (process is not null) throw new InvalidOperationException("The test API server is already running.");
         using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -47,17 +51,35 @@ internal sealed class RunningApi : IAsyncDisposable
         start.ArgumentList.Add(assembly);
         RunningSite.ConfigureAiEnvironment(start.Environment);
         start.Environment["ASPNETCORE_URLS"] = Address.ToString();
-        // DOTNET_ENVIRONMENT takes precedence over ASPNETCORE_ENVIRONMENT in WebApplication.
+        // 在 WebApplication 中，DOTNET_ENVIRONMENT 的優先順序高於 ASPNETCORE_ENVIRONMENT。
         start.Environment["DOTNET_ENVIRONMENT"] = environment;
         start.Environment["ConnectionStrings__CMS"] = connectionString;
+        if (serviceToken is not null) start.Environment["Api__ServiceToken"] = serviceToken;
+        // 媒體端點被測試時，Api 主機會寫入上傳的圖片。
+        start.Environment["Storage__RootPath"] = Path.Combine(root, "storage");
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = Path.Combine(root, "test.pfx");
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Password"] = certificatePassword;
         start.Environment["Logging__LogLevel__Default"] = "Warning";
         start.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var errorLinesRemaining = 0;
+        string Truncate(string line) => line.Length > 200 ? line[..200] : line;
         void Capture(object sender, DataReceivedEventArgs e)
         {
-            if (e.Data?.Contains("Application started.", StringComparison.Ordinal) == true) ready.TrySetResult();
+            var line = e.Data;
+            if (line is null) return;
+            // 徹底截斷：錯誤內容可帶例外訊息，但絕不包含整份堆疊或認證資訊。
+            if (line.StartsWith("fail: ", StringComparison.Ordinal))
+            {
+                consoleErrors.Enqueue(Truncate(line));
+                errorLinesRemaining = 6;
+            }
+            else if (errorLinesRemaining > 0 && line.Trim().Length > 0)
+            {
+                consoleErrors.Enqueue(Truncate(line));
+                errorLinesRemaining--;
+            }
+            if (line.Contains("Application started.", StringComparison.Ordinal) == true) ready.TrySetResult();
         }
         process = new Process { StartInfo = start, EnableRaisingEvents = true };
         process.OutputDataReceived += Capture;

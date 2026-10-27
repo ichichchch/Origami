@@ -1,7 +1,7 @@
 namespace Origami.Tests;
 
 /// <summary>
-/// Regressions for the visibility rules around protected, private and two-factor content.
+/// 受保護、私密與兩步驟驗證內容之可見性規則的回歸測試。
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class ProtectionRegressionTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
@@ -57,7 +57,7 @@ public sealed class ProtectionRegressionTests(IsolatedPostgres postgres) : Servi
         Assert.Contains(cookies, x => x.StartsWith("origami.unlock.", StringComparison.Ordinal));
         Assert.Contains("SECRET_BODY_VALUE", html);
 
-        // The issued cookie really opens the page on the next request.
+        // 發出的 cookie 要能在下一個請求真正開啟頁面。
         var cookie = Assert.Single(cookies, x => x.StartsWith("origami.unlock.", StringComparison.Ordinal));
         var value = cookie[(cookie.IndexOf('=') + 1)..cookie.IndexOf(';')];
         using var request = new HttpRequestMessage(HttpMethod.Get, "/posts/unlock-form");
@@ -87,7 +87,7 @@ public sealed class ProtectionRegressionTests(IsolatedPostgres postgres) : Servi
         var codeFields = FormFields(await firstFactor.Content.ReadAsStringAsync(), "form");
         Assert.Equal("account-code", codeFields.GetValueOrDefault("_handler"));
 
-        // The account is locked out before the code is submitted.
+        // 在提交驗證碼之前，先把帳號鎖定。
         await using (var db = await App.CreateContextAsync())
         {
             await db.Users.ExecuteUpdateAsync(s => s.SetProperty(x => x.LockoutEnabled, true)
@@ -128,7 +128,7 @@ public sealed class ProtectionRegressionTests(IsolatedPostgres postgres) : Servi
         gated.NewProtectPassword = "content-pass-1";
         var protectedPost = await admin.Content.SaveAsync(gated);
 
-        // A leftover outbox row must never carry gated text to the provider.
+        // 殘留的外送匣（outbox）資料列絕不能把受保護或私密的文字送往嵌入供應商。
         await using (var db = await App.CreateContextAsync())
         {
             db.EmbeddingJobs.Add(new EmbeddingJob { ContentId = privatePost.Id!.Value, EnqueuedAt = DateTimeOffset.UtcNow, NextAttemptAt = DateTimeOffset.UtcNow });

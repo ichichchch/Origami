@@ -1,8 +1,8 @@
 namespace Origami.Tests;
 
 /// <summary>
-/// Browser regressions for the content editor: a share link must not take over the concurrency
-/// version of another tab, and a changed schedule counts as an unsaved change.
+/// 內容編輯器的瀏覽器回歸測試：分享連結不得接管另一個分頁的並發版本，
+/// 且排程變更也算未儲存的變更。
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class EditorRegressionTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
@@ -34,13 +34,13 @@ public sealed class EditorRegressionTests(IsolatedPostgres postgres) : ServiceTe
         await Expect(first.Locator("#content-title")).ToHaveValueAsync("原始標題");
         await Expect(second.Locator("#content-title")).ToHaveValueAsync("原始標題");
 
-        // The first tab publishes a newer title.
+        // 第一個分頁先寫入較新的標題。
         await first.Locator("#content-title").FillAsync("較新的標題");
         await first.GetByRole(AriaRole.Button, new() { Name = "儲存草稿", Exact = true }).ClickAsync();
         await Expect(first.Locator(".notice-success")).ToContainTextAsync("已儲存為草稿");
 
-        // The second tab creates a share link and then saves: it must report the conflict
-        // instead of overwriting the newer title of the first tab.
+        // 第二個分頁先產生分享連結再儲存：必須回報衝突，
+        // 而不是覆寫第一個分頁的較新標題。
         await second.GetByRole(AriaRole.Button, new() { Name = "產生預覽連結", Exact = true }).ClickAsync();
         await Expect(second.Locator(".notice-success")).ToContainTextAsync("預覽連結");
         await second.GetByRole(AriaRole.Button, new() { Name = "儲存草稿", Exact = true }).ClickAsync();
@@ -75,7 +75,7 @@ public sealed class EditorRegressionTests(IsolatedPostgres postgres) : ServiceTe
         await Expect(page.Locator(".save-indicator")).ToContainTextAsync("已載入儲存版本");
         await Expect(page.Locator("#content-schedule")).Not.ToHaveValueAsync("");
 
-        // Clearing the schedule is an edit: the editor says so before anything is stored.
+        // 清空排程也算編輯：編輯器在任何資料寫入前就會如此反映。
         await page.Locator("#content-schedule").FillAsync("");
         await Expect(page.Locator(".save-indicator.unsaved")).ToContainTextAsync("有未儲存的變更");
         await page.GetByRole(AriaRole.Button, new() { Name = "儲存草稿", Exact = true }).ClickAsync();

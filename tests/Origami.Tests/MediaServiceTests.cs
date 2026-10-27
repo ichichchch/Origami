@@ -21,7 +21,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
         using var stream = new MemoryStream(original);
         var before = DateTimeOffset.UtcNow;
         var item = await service.UploadAsync(stream, name);
-        Assert.True(stream.CanRead); // Ownership of the caller's stream is not transferred.
+        Assert.True(stream.CanRead); // 呼叫端串流的擁有權不會被轉移。
         Assert.NotEqual(Guid.Empty, item.Id);
         Assert.Equal(item.Id.ToString("N") + extension, item.FileName);
         Assert.Equal(name, item.OriginalName);
@@ -378,7 +378,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Equal(duringRead ? 1 : 0, stream.ReadCalls);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ListAsync(ct: cancellation.Token));
         await AssertUnchangedAsync(storage, before);
-        // A failed operation must release the decode slot and leave the service usable.
+        // 失敗的操作必須釋放解碼槽，讓服務保持可用。
         await SeedAsync(service);
         Assert.Equal(2, (await service.ListAsync()).Total);
     }
@@ -397,14 +397,14 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
         var reachedDatabaseWrite = false;
         var factory = new CallbackContextFactory(Factory, db =>
         {
-            // Only the media write uses this factory; AdminAccess still uses the App factory.
+            // 只有媒體寫入使用這個 factory；AdminAccess 仍使用 App 的 factory。
             Assert.Equal(before.Images.Length + 1, Directory.GetFiles(storage.Images).Length);
             Assert.Empty(Directory.GetFiles(storage.Staging));
             reachedDatabaseWrite = true;
             if (cancel) cancellation.Cancel();
             else
             {
-                // Exercise a real PostgreSQL primary-key violation, not an in-memory provider.
+                // 以真實的 PostgreSQL 主鍵衝突演練，而不是用記憶體內 provider。
                 db.MediaAssets.Add(new MediaAsset
                 {
                     Id = existing.Id, FileName = existing.FileName, OriginalName = existing.OriginalName,
@@ -487,7 +487,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Equal(before.Assets, after.Assets);
     }
 
-    // PostgreSQL timestamps have microsecond precision; TimeProvider.System may provide 100 ns ticks.
+    // PostgreSQL 時間戳記精度為微秒；TimeProvider.System 可能提供 100 ns 的 tick。
     private static MediaItem DatabasePrecision(MediaItem item) => item with
     {
         UploadedAt = new DateTimeOffset(item.UploadedAt.Ticks - item.UploadedAt.Ticks % 10, TimeSpan.Zero)
@@ -528,7 +528,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
 
     private static byte[] AnimatedWebp()
     {
-        // Skia encodes the two still frames; the small RIFF envelope supplies animation metadata.
+        // Skia 編碼兩張靜態影格；小小的 RIFF 外殼補上動畫中繼資料。
         using var chunks = new MemoryStream();
         using (var writer = new BinaryWriter(chunks, Encoding.ASCII, leaveOpen: true))
         {
@@ -541,7 +541,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
                 Assert.Equal("WEBP", Encoding.ASCII.GetString(still, 8, 4));
                 Assert.Equal("VP8 ", Encoding.ASCII.GetString(still, 12, 4));
                 using var payload = new MemoryStream();
-                // x/y = 0, width/height minus one, 100 ms duration, no blending.
+                // x/y = 0、寬高各減一、100 ms 時長、不混合。
                 payload.Write(new byte[] { 0, 0, 0, 0, 0, 0, 63, 0, 0, 47, 0, 0, 100, 0, 0, 2 });
                 payload.Write(still.AsSpan(12));
                 WriteChunk(writer, "ANMF", payload.ToArray());

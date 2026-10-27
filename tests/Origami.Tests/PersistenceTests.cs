@@ -10,8 +10,8 @@ public sealed class PersistenceTests : ServiceTestBase
     [WindowsPersistenceFact]
     public async Task Restart_and_database_filesystem_restore_preserve_content_images_and_Windows_DPAPI_cookies_on_same_user_and_machine()
     {
-        // ProtectKeysWithDpapi binds the key ring to this Windows user and machine.
-        // A plaintext key ring on another platform is not acceptance of this recovery path.
+        // ProtectKeysWithDpapi 會把金鑰環綁定到目前的 Windows 使用者與機器。
+        // 其他平台上的明文金鑰環不算此還原路徑的驗收。
         var binaries = PostgresBinaries.Find()!;
         var binaryDirectory = Path.GetDirectoryName(binaries.PgCtl)!;
         var sourceConnection = new NpgsqlConnectionStringBuilder(App.ConnectionString);
@@ -35,7 +35,7 @@ public sealed class PersistenceTests : ServiceTestBase
             post = await actor.Content.SaveAsync(post);
         }
 
-        // MediaService re-encodes uploads; the published file, not the input PNG, is the baseline.
+        // MediaService 會重新編碼上傳圖片；基準是發布後的檔案，而非輸入的 PNG。
         var imageBytes = await File.ReadAllBytesAsync(Path.Combine(storage.Images, media.FileName));
         Assert.NotEmpty(imageBytes);
         Assert.Equal(media.Size, imageBytes.LongLength);
@@ -71,8 +71,8 @@ public sealed class PersistenceTests : ServiceTestBase
 
         await source.StopAsync();
         await source.StartAsync();
-        // StartAsync selects a new HTTPS port. Cookies are host-scoped, and this client
-        // receives only a copy of the original authentication cookie, without logging in.
+        // StartAsync 會改用新的 HTTPS 埠。Cookie 以主機為範圍，而這個客戶端
+        // 只拿到原始驗證 cookie 的副本，並未重新登入。
         using (var restarted = source.CreateClient(cookies: CopyAuthenticationCookie(originalCookies, source.Address)))
         {
             await AssertAuthenticatedAsync(restarted, post.Title, media);
@@ -82,8 +82,8 @@ public sealed class PersistenceTests : ServiceTestBase
         Assert.Equal(databaseBefore, await ReadDatabaseAsync(App.ConnectionString, contentId, media.Id));
         Assert.Equal(originalKeys, ReadDpapiKeyFingerprints(storage.Keys));
 
-        // Quiesce the only site before both database and filesystem backups. Never dump
-        // a live writer and then assume a later image/key copy is a consistent snapshot.
+        // 在資料庫與檔案系統備份前，先讓唯一的網站實例靜止。絕不傾印仍在
+        // 寫入的實例，再假設稍後複製的圖片／金鑰是一致的快照。
         await source.StopAsync();
         var backupRoot = Directory.CreateTempSubdirectory("Origami.PersistenceBackup-").FullName;
         try
@@ -96,8 +96,8 @@ public sealed class PersistenceTests : ServiceTestBase
             CopyDirectory(storage.Keys, Path.Combine(backupRoot, "keys"));
             Assert.Equal(originalKeys, ReadDpapiKeyFingerprints(Path.Combine(backupRoot, "keys")));
 
-            // Only this fixture can create/drop the target. It begins with an empty
-            // migrated schema, so pg_restore --clean --if-exists is intentional here.
+            // 只有此 fixture 能建立／刪除目標資料庫。目標起初只有套用遷移後的
+            // 空結構，因此在這裡刻意使用 pg_restore --clean --if-exists。
             var targetConnectionString = await postgres.CreateDatabaseAsync();
             try
             {
@@ -129,8 +129,8 @@ public sealed class PersistenceTests : ServiceTestBase
                 Assert.Equal(imageBytes, await File.ReadAllBytesAsync(Path.Combine(restoredStorage.Images, media.FileName)));
 
                 await restored.StartAsync();
-                // Also prove that the copied, DPAPI-encrypted keys are actually usable,
-                // not merely present: the original source cookie must decrypt here.
+                // 還要證明複製過去的 DPAPI 加密金鑰確實可用，而不只是存在：
+                // 原始來源發出的 cookie 必須能在這裡解密。
                 using (var previousSession = restored.CreateClient(cookies: CopyAuthenticationCookie(originalCookies, restored.Address)))
                     await AssertAuthenticatedAsync(previousSession, post.Title, media);
                 using (var client = restored.CreateClient())
@@ -150,13 +150,13 @@ public sealed class PersistenceTests : ServiceTestBase
             }
             finally
             {
-                // RunningSite is disposed before this block, closing all target connections.
+                // RunningSite 在此區塊之前已釋放，目標連線皆已關閉。
                 await postgres.DropDatabaseAsync(targetConnectionString);
             }
         }
         finally
         {
-            // The source database/site belong to ServiceTestBase/RunningSite, not this cleanup.
+            // 來源資料庫／網站屬於 ServiceTestBase／RunningSite，不由此清理負責。
             Directory.Delete(backupRoot, recursive: true);
         }
     }
@@ -191,8 +191,8 @@ public sealed class PersistenceTests : ServiceTestBase
         Assert.Equal(post.Title, article.QuerySelector("h1")?.TextContent);
         Assert.Equal("Original content", article.QuerySelector("strong")?.TextContent);
         Assert.Equal(media.Url, article.QuerySelector("img")?.GetAttribute("src"));
-        // Compare the complete rendered article bytes, excluding per-request framework
-        // state/antiforgery tokens elsewhere in the document. Raw Markdown is compared in PostgreSQL too.
+        // 比較整篇渲染後的文章位元組，排除文件中每次請求都不同的框架
+        // 狀態／防偽 token；原始 Markdown 也已在 PostgreSQL 端比對。
         return Encoding.UTF8.GetBytes(article.OuterHtml);
     }
 
@@ -224,7 +224,7 @@ public sealed class PersistenceTests : ServiceTestBase
     {
         public string EnvironmentName { get; set; } = Environments.Development;
         public string ApplicationName { get; set; } = "Origami.Tests";
-        // No directory is created here; this existing test-output root is outside RunningSite's temp storage.
+        // 這裡不建立任何目錄；這個既有的測試輸出根目錄位於 RunningSite 暫存儲存之外。
         public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
@@ -274,7 +274,7 @@ public sealed class PersistenceTests : ServiceTestBase
                 "Persisted Windows Data Protection keys must be encrypted with DPAPI.");
             Assert.False(document.Descendants().Any(x => x.Name.LocalName == "masterKey"),
                 "A plaintext master key is not Windows DPAPI persistence acceptance.");
-            // Compare fingerprints rather than printing key-file contents on assertion failure.
+            // 比較指紋，而不是在斷言失敗時印出金鑰檔內容。
             return (Path.GetFileName(file), Convert.ToHexString(SHA256.HashData(bytes)));
         }).ToArray();
     }
@@ -317,7 +317,7 @@ public sealed class PersistenceTests : ServiceTestBase
             start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         if (!process.Start()) throw new InvalidOperationException("Could not start the PostgreSQL backup/restore tool.");
-        // Drain both pipes without ever logging tool output, connection strings or credentials.
+        // 持續排空兩條輸出管線，絕不把工具輸出、連線字串或認證資訊寫進記錄。
         var output = process.StandardOutput.BaseStream.CopyToAsync(Stream.Null);
         var error = process.StandardError.BaseStream.CopyToAsync(Stream.Null);
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));

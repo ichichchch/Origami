@@ -28,7 +28,7 @@ public sealed class ProtectedServiceTests(IsolatedPostgres postgres) : ServiceTe
             var user = await revoker.Users.Users.SingleAsync();
             Assert.True((await revoker.Users.UpdateSecurityStampAsync(user)).Succeeded);
         }
-        // No periodic revalidation, sleep, or replacement of the old provider is involved.
+        // 過程不涉及定期重新驗證、等待或替換舊的驗證狀態提供者。
         await AssertProtectedCallsRejected(oldActor, post, category);
         using var fresh = await App.AdministratorAsync();
         Assert.Equal(post.Id, (await fresh.Content.GetEditAsync(post.Id!.Value)).Id);

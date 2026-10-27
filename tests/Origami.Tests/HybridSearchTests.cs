@@ -21,14 +21,14 @@ public sealed class HybridSearchTests(IsolatedPostgres postgres) : ServiceTestBa
         await admin.Content.SaveAsync(hidden);
 
         var search = admin.Services.GetRequiredService<PublicSearchService>();
-        // No embeddings exist yet: the keyword leg must carry the result on its own.
+        // 尚未產生任何嵌入向量：關鍵字比對這一路必須獨力給出結果。
         var result = await search.SearchAsync("ERR-4181");
         var hit = Assert.Single(result.Hits);
         Assert.Equal("exact-term", hit.Slug);
         Assert.Contains("ERR-4181", hit.Snippet, StringComparison.Ordinal);
         Assert.Contains("關鍵字", hit.Source, StringComparison.Ordinal);
 
-        // Title matches are case-insensitive for ASCII.
+        // 標題比對對 ASCII 字母不分大小寫。
         var titled = NewContent("WordPress 遷移心得", status: ContentStatus.Published);
         titled.Slug = "wp-migration";
         await admin.Content.SaveAsync(titled);
@@ -59,7 +59,7 @@ public sealed class HybridSearchTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Contains("semantic-only", slugs);
         Assert.Equal("關鍵字＋語意", result.Hits[0].Source);
         Assert.Contains("語意", result.Hits.Single(x => x.Slug == "semantic-only").Source, StringComparison.Ordinal);
-        // Withdrawal removes the keyword hit on the next search, matching the 404 rule.
+        // 撤回後的下一次搜尋即不再出現關鍵字命中，與 404 規則一致。
         var withdraw = await admin.Content.GetEditAsync((await admin.Content.ListAdminAsync(ContentKind.Post, status: ContentStatus.Published)).Items.Single(x => x.Slug == "both-legs").Id);
         withdraw.Status = ContentStatus.Draft;
         await admin.Content.UpdateAsync(withdraw);

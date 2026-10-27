@@ -64,7 +64,7 @@ public sealed class MarkdownSecurityTests
     [Fact]
     public void The_editor_preview_uses_the_same_sanitizing_renderer_as_the_public_page()
     {
-        // The preview shows unpublished text, so it must apply exactly the same rules.
+        // 預覽會顯示未發布文字，因此必須套用完全相同的規則。
         var preview = markdown.Render("<script>alert(1)</script> [link](javascript:alert(2)) <img src=x onerror=alert(3)>");
         var document = new HtmlParser().ParseDocument(preview);
         Assert.Empty(document.QuerySelectorAll("script, img[onerror]"));

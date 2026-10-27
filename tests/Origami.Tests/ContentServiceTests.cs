@@ -7,21 +7,21 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
     public async Task The_server_decides_the_content_kind_for_new_and_existing_content()
     {
         using var admin = await App.AdministratorAsync();
-        // Creating states the kind explicitly; the service validates and applies it.
+        // 建立時必須明確宣告內容類型；由服務驗證並套用。
         var page = await admin.Content.CreateAsync(ContentKind.Page, NewContent("About"));
         Assert.Equal(ContentKind.Page, page.Kind);
-        // An update keeps the stored kind even if the submitted model disagrees.
+        // 更新仍保留儲存的內容類型，即使送出的模型與之不符。
         var edit = await admin.Content.GetEditAsync(page.Id!.Value);
         edit.Kind = ContentKind.Post;
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(edit));
         Assert.Equal(ContentKind.Page, (await admin.Content.GetEditAsync(page.Id!.Value)).Kind);
-        // An update cannot smuggle a different kind through the create path either.
+        // 經建立路徑產生的內容，同樣無法藉更新夾帶不同的類型。
         var post = await admin.Content.CreateAsync(ContentKind.Post, NewContent("Journey"));
         var postEdit = await admin.Content.GetEditAsync(post.Id!.Value);
         postEdit.Kind = ContentKind.Page;
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(postEdit));
         Assert.Equal(ContentKind.Post, (await admin.Content.GetEditAsync(post.Id!.Value)).Kind);
-        // Creating with a kind outside the defined set is refused.
+        // 以定義集合之外的內容類型建立會被拒絕。
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.CreateAsync((ContentKind)99, NewContent("Invalid")));
         await using var db = await App.CreateContextAsync();
         Assert.Equal(2, await db.Contents.CountAsync());
@@ -39,7 +39,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         Assert.Equal(parent.Id, (await admin.Content.GetEditAsync(child.Id!.Value)).ParentId);
         Assert.Equal(child.Id, (await admin.Content.GetEditAsync(grandchild.Id!.Value)).ParentId);
 
-        // A page can never become its own ancestor or parent itself.
+        // 頁面絕不能成為自己的祖先，也不能把自己設為上層。
         var cycle = await admin.Content.GetEditAsync(parent.Id!.Value);
         cycle.ParentId = grandchild.Id;
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(cycle));
@@ -47,7 +47,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         self.ParentId = child.Id;
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(self));
 
-        // Posts never take a parent; an unknown parent is refused.
+        // 文章不得有上層頁面；未知的上層一律拒絕。
         var post = NewContent("文章不可有上層", status: ContentStatus.Published);
         post.ParentId = parent.Id;
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.SaveAsync(post));
@@ -55,11 +55,11 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         orphan.ParentId = Guid.NewGuid();
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.CreateAsync(ContentKind.Page, orphan));
 
-        // The admin list names the parent page.
+        // 管理列表會標出上層頁面名稱。
         var listed = (await admin.Content.ListAdminAsync(ContentKind.Page)).Items.Single(x => x.Slug == "child-page");
         Assert.Equal("頂層頁面", listed.ParentTitle);
 
-        // Public navigation nests children and keeps private pages out of the tree.
+        // 公開導覽會巢狀呈現子頁面，並把私密頁面排除在樹狀結構之外。
         var secret = PageInput("私密子頁", "secret-child", parent.Id);
         secret.IsPrivate = true;
         await admin.Content.CreateAsync(ContentKind.Page, secret);
@@ -70,7 +70,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         Assert.Contains("└ 子頁面", html);
         Assert.Contains("└ 孫頁面", html);
         Assert.DoesNotContain("私密子頁", html);
-        // Trashing the parent promotes its published child to the top level instead of hiding it.
+        // 上層移入回收桶時，其已發布的子頁面會升至頂層，而不是跟著隱藏。
         await admin.Content.TrashAsync(parent.Id.Value, parent.Version, confirmed: true);
         var afterTrash = WebUtility.HtmlDecode(await (await client.GetAsync("/")).Content.ReadAsStringAsync());
         Assert.DoesNotContain("└ 子頁面", afterTrash);
@@ -83,7 +83,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
     {
         using var admin = await App.AdministratorAsync();
         var first = await admin.Content.CreateAsync(ContentKind.Post, NewContent("Only once"));
-        // A double submit carries the same slug, so the database refuses the second row.
+        // 重複提交會帶著相同 slug，因此資料庫拒絕寫入第二列。
         var duplicate = await Assert.ThrowsAsync<CmsException>(
             () => admin.Content.CreateAsync(ContentKind.Post, NewContent("Only once")));
         Assert.Contains("代稱", duplicate.Message, StringComparison.Ordinal);
@@ -120,7 +120,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
         ContentEdit winner;
         try
         {
-            // Both saves must already be past the version check before either write commits.
+            // 任一寫入提交之前，兩次儲存都必須已越過版本檢查。
             await Task.WhenAll(gateA.Ready.Task, gateB.Ready.Task).WaitAsync(TimeSpan.FromSeconds(15), timeout.Token);
             gateA.Release.TrySetResult();
             winner = await saveA;
@@ -150,7 +150,7 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
     private static async Task ObserveAsync(Task task)
     {
         try { await task; }
-        catch { /* cleanup-only observation; the original failure already failed the test */ }
+        catch { /* 僅為清理而觀察；原始失敗已讓測試失敗 */ }
     }
 
     [PostgresTheory]

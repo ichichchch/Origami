@@ -22,7 +22,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         Assert.True(listed.Items[0].IsSticky);
         Assert.Equal(["list-post-3", "list-post-1"], listed.Items.Skip(1).Select(x => x.Slug));
 
-        // Pages never join the article list, so the flag is refused for them.
+        // 頁面永遠不進文章列表，因此置頂旗標對頁面一律拒絕。
         var page = await admin.Content.CreateAsync(ContentKind.Page, NewContent("關於", ContentKind.Page, ContentStatus.Published));
         var pageEdit = await admin.Content.GetEditAsync(page.Id!.Value);
         pageEdit.IsSticky = true;
@@ -46,7 +46,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         var rename = await admin.Content.GetEditAsync(saved.Id!.Value);
         rename.Slug = "new-address";
         await admin.Content.UpdateAsync(rename);
-        // Renaming a draft-only slug never creates a public URL worth redirecting.
+        // 草稿時期的 slug 改名從未產生公開網址，自然沒有值得轉址的對象。
         var draft = NewContent("草稿改名");
         draft.Slug = "draft-before";
         var draftSaved = await admin.Content.SaveAsync(draft);
@@ -63,7 +63,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/posts/new-address")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/posts/draft-before")).StatusCode);
 
-        // Withdrawal removes the redirect target; the retired slug stops resolving.
+        // 撤回會移除轉址目標；除役的 slug 從此不再解析。
         var withdraw = await admin.Content.GetEditAsync(saved.Id!.Value);
         withdraw.Status = ContentStatus.Draft;
         await admin.Content.UpdateAsync(withdraw);
@@ -174,7 +174,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         Assert.Equal("Test body", (string?)exported["markdown"]);
         Assert.Equal("exported", exported["categories"]!.AsArray().Single().ToString());
         Assert.Equal("封面圖", (string?)document["media"]!.AsArray().Single()!["altText"]);
-        // Account rows never travel with an export.
+        // 帳號資料列絕不隨匯出檔案外流。
         Assert.Null(document["users"]);
         Assert.Null(document["admins"]);
 
@@ -207,7 +207,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         settings.HomePageContentId = parent.Id;
         await admin.Settings.SaveAsync(settings);
 
-        // A stray post created after the export must disappear with the restore-style import.
+        // 匯出後才建立的多餘文章，必須隨還原式匯入一併消失。
         var buffer = new MemoryStream();
         await admin.Services.GetRequiredService<ExportService>().WriteAsync(buffer);
         await admin.Content.SaveAsync(Post("不該存在的文章", "stray-post"));
@@ -248,7 +248,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
             var restored = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1);
             Assert.Equal(3, restored.PostsPerPage);
             Assert.Equal(importedParent.Id, restored.HomePageContentId);
-            // Only published public content re-enters the embedding pipeline (post + both public pages).
+            // 只有已發布的公開內容會重新進入嵌入管道（文章＋兩個公開頁面）。
             var queued = await db.EmbeddingJobs.CountAsync();
             Assert.Equal(3, queued);
             var queuedIds = await db.EmbeddingJobs.Select(x => x.ContentId).ToListAsync();

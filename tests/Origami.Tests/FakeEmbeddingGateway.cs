@@ -1,6 +1,6 @@
 namespace Origami.Tests;
 
-/// <summary>Deterministic embedding stand-in: maps texts to orthogonal basis vectors so similarity is exact.</summary>
+/// <summary>決定論的嵌入替身：把文字映射到正交基底向量，使相似度計算精確。</summary>
 public sealed class FakeEmbeddingGateway : IEmbeddingGateway
 {
     public bool FailNext { get; set; }

@@ -126,7 +126,7 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         secret.IsPrivate = true;
         var secretSaved = await admin.Content.CreateAsync(ContentKind.Page, secret);
 
-        // A private page may not become the home page; the reading sizes are bounded by the limits.
+        // 私密頁面不得設為首頁；閱讀相關數量也受上限約束。
         var settings = await admin.Settings.GetAsync();
         settings.HomePageContentId = secretSaved.Id;
         await Assert.ThrowsAsync<CmsException>(() => admin.Settings.SaveAsync(settings));
@@ -134,7 +134,7 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         settings.HomePageContentId = home.Id;
         settings.PostsPerPage = 2;
         settings.FeedItems = 1;
-        settings.PostsPerPage = 51; // one above the ceiling
+        settings.PostsPerPage = 51; // 比上限多 1
         await Assert.ThrowsAsync<CmsException>(() => admin.Settings.SaveAsync(settings));
         settings = await admin.Settings.GetAsync();
         settings.HomePageContentId = home.Id;
@@ -161,7 +161,7 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         var feed = await (await client.GetAsync("/feed")).Content.ReadAsStringAsync();
         Assert.Equal(1, feed.Split("<item>").Length - 1);
 
-        // Withdrawing the static home page falls back to the list at "/" and /posts points there.
+        // 撤回靜態首頁後，"/" 退回文章列表，/posts 也提供該列表。
         var withdrawn = await admin.Content.GetEditAsync(home.Id!.Value);
         withdrawn.Status = ContentStatus.Draft;
         await admin.Content.UpdateAsync(withdrawn);
@@ -170,7 +170,7 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         Assert.Contains("篇文章", fallback);
         Assert.DoesNotContain("歡迎來到本站", fallback);
         var redirect = await client.GetAsync("/posts");
-        // The setting still names a page, so /posts keeps serving the list alongside the fallback home.
+        // 設定仍指向某頁面，因此 /posts 繼續提供列表，與後備首頁並存。
         Assert.Equal(HttpStatusCode.OK, redirect.StatusCode);
         var cleared = await admin.Settings.GetAsync();
         cleared.HomePageContentId = null;
@@ -200,7 +200,7 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         secret.IsPrivate = true;
         await admin.Content.SaveAsync(secret);
 
-        // Anchor every post to the 15th so each lands in a distinct, predictable month.
+        // 把每篇文章錨定在 15 日，使其各自落在不同且可預期的月份。
         var now = DateTimeOffset.UtcNow;
         var anchor = new DateTimeOffset(now.Year, now.Month, 15, 0, 0, 0, TimeSpan.Zero);
         DateTimeOffset middlePublished;
@@ -221,20 +221,20 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         await using var site = new RunningSite(App.ConnectionString);
         await site.StartAsync();
         using var client = site.CreateClient();
-        // The middle post links to both neighbours on the public timeline.
+        // 中間那篇文章會在公開時間軸上連向前後兩篇。
         var middle = WebUtility.HtmlDecode(await (await client.GetAsync("/posts/bee-middle")).Content.ReadAsStringAsync());
         Assert.Contains("/posts/bee-early", middle);
         Assert.Contains("/posts/bee-late", middle);
         Assert.Contains("上一篇", middle);
         Assert.Contains("下一篇 →", middle);
-        // The newest post has no "next"; its related section names another published post.
+        // 最新一篇沒有「下一篇」；其相關文章區段會列出另一篇已發布文章。
         var latest = WebUtility.HtmlDecode(await (await client.GetAsync("/posts/bee-late")).Content.ReadAsStringAsync());
         Assert.DoesNotContain("下一篇 →", latest);
         var relatedIndex = latest.IndexOf("相關文章", StringComparison.Ordinal);
         Assert.True(relatedIndex >= 0, "related posts section is present");
         Assert.Contains("養蜂", latest[relatedIndex..]);
 
-        // The archive overview lists months; month pages only list that month's public posts.
+        // 歸檔總覽列出各月份；月份頁面只列出該月的公開文章。
         var archives = WebUtility.HtmlDecode(await (await client.GetAsync("/archives")).Content.ReadAsStringAsync());
         Assert.Contains("文章歸檔", archives);
         Assert.Contains($"{middlePublished.Year} 年 {middlePublished.Month} 月", archives);

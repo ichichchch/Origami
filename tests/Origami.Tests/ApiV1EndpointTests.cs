@@ -1,6 +1,6 @@
 namespace Origami.Tests;
 
-/// <summary>Drives the read-only JSON API v1 over real HTTPS against the isolated Api host.</summary>
+/// <summary>以真實 HTTPS 對隔離的 Api 主機驅動唯讀 JSON API v1。</summary>
 [Collection(PostgresCollection.Name)]
 public sealed class ApiV1EndpointTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
@@ -11,7 +11,7 @@ public sealed class ApiV1EndpointTests(IsolatedPostgres postgres) : ServiceTestB
         for (var i = 1; i <= 3; i++)
             await actor.Content.SaveAsync(new ContentEdit { Title = $"列表文章{i}", Kind = ContentKind.Post, Status = ContentStatus.Published, Markdown = $"內容{i}" });
         await actor.Content.SaveAsync(new ContentEdit { Title = "列表草稿", Kind = ContentKind.Post, Status = ContentStatus.Draft, Markdown = "草稿" });
-        // Pages never appear in the posts list, mirroring the website.
+        // 頁面絕不出現在文章列表，與網站行為一致。
         await actor.Content.SaveAsync(new ContentEdit { Title = "列表頁面", Kind = ContentKind.Page, Status = ContentStatus.Published, Markdown = "頁面" });
 
         await using var api = new RunningApi(App.ConnectionString);
@@ -63,7 +63,7 @@ public sealed class ApiV1EndpointTests(IsolatedPostgres postgres) : ServiceTestB
         using var response = await client.GetAsync("/api/v1/search?q=" + Uri.EscapeDataString("獨特關鍵字XYZ"));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
-        // AI endpoints stay disabled in isolated tests: keyword matching still serves, semantics degrade.
+        // 隔離測試中 AI 端點保持停用：關鍵字比對仍可服務，語意則降級。
         Assert.False((bool)body["semanticAvailable"]!);
         var hits = body["hits"]!.AsArray();
         Assert.Contains(hits, hit => hit!["title"]!.GetValue<string>() == "搜尋文章");

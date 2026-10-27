@@ -43,10 +43,12 @@
 ```bash
 export ConnectionStrings__Cms="Host=127.0.0.1;Port=5432;Database=origami;Username=origami;Password=<密碼>"
 export Storage__RootPath="D:/origami-storage"   # 可省略，預設為使用者資料目錄下的 Origami/storage
+export Api__ServiceToken="<隨機長字串>"   # 可選；Api 主機的 BFF 服務通行證，供網站主機呼叫寫入端點
 ```
 
 `Storage__RootPath` 必須是絕對路徑，且不得位於應用發布目錄內；未設定時使用預設位置。
 資料保護金鑰以 Windows DPAPI 加密存放在 `Storage__RootPath/keys`。
+`Api:ServiceToken` 未設定時 Api 的寫入端點保持關閉；該通行證等價於寫入權限，只應透過安全的外部設定提供給網站主機，且 Api 的寫入端點不應直接暴露於網際網路。
 
 ## 3. 執行步驟
 
@@ -147,6 +149,7 @@ tests/Origami.Tests/
 | `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章與獨立頁面詳情（Markdown 原文）；草稿、受保護與私密內容一律 404 |
 | `/api/v1/search?q=` | 混合搜尋，規則與 `/search` 相同；模型未設定時退回關鍵字 |
 | `/mcp`、`/health` | 唯讀 MCP 工具（`search_posts`、`get_post`、`get_page`）與資料庫健康檢查 |
+| `/api/v1/admin/contents…` | BFF 寫入端點（管理列表、編輯載入、建立、更新含發布／撤回、回收桶、永久刪除、還原），僅供持有 `Api:ServiceToken` 服務通行證的網站主機呼叫；未設定通行證時一律 401 |
 
 管理後台（Interactive Server，逐頁配置渲染模式）：
 
@@ -207,6 +210,7 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `ScheduleTimeTests` | 排程時間按瀏覽器時區換算並跨日光節約時間保持牆上時間、不存在的當地時間被拒絕 |
 | `ApiV1EndpointTests` | /api/v1 列表分頁與僅已發布、詳情對草稿／受保護／私密內容 404、搜尋無模型金鑰時退回關鍵字、參數校驗與按 IP 限流 |
 | `McpEndpointTests` | MCP 端點（Api 主機）僅暴露三個唯讀工具、草稿不可見、缺模型金鑰時工具層降級不回 5xx、按 IP 限流 |
+| `ApiV1AdminEndpointTests` | 寫入端點無通行證或錯誤通行證一律 401、建立→發布→撤回→回收桶→還原閉環、過期版本被拒絕不靜默覆寫、管理流量獨立限流配額 |
 
 ### 已知限制
 

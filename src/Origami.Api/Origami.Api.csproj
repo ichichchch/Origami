@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- MCP moves from the website host to this machine-facing host; JSON v1 shares its budget. -->
+    <!-- MCP 從網站主機遷至這個機器介面主機；JSON v1 與其共用速率限制預算。 -->
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
   </ItemGroup>
 

@@ -1,7 +1,11 @@
 global using System.Net;
 global using System.Security.Claims;
+global using System.Security.Cryptography;
+global using System.Text;
+global using System.Text.Encodings.Web;
 global using System.Text.Json.Serialization;
 global using System.Threading.RateLimiting;
+global using Microsoft.AspNetCore.Authentication;
 global using Microsoft.AspNetCore.Components.Authorization;
 global using Microsoft.AspNetCore.Diagnostics;
 global using Microsoft.AspNetCore.Identity;

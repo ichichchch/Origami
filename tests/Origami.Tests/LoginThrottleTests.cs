@@ -135,7 +135,7 @@ public sealed class LoginThrottleTests
 
     private static void AssertStorage(LoginThrottle throttle, int expectedSources, int expectedAttempts)
     {
-        // Inspect only while acquisitions are stopped, without adding test-only production APIs.
+        // 僅在取用動作全部停止時檢查，不為了測試而在正式程式碼新增專用 API。
         var attempts = Assert.IsType<Dictionary<string, Queue<DateTimeOffset>>>(typeof(LoginThrottle)
             .GetField("attempts", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(throttle));
         var expirations = Assert.IsType<PriorityQueue<string, DateTimeOffset>>(typeof(LoginThrottle)

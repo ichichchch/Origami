@@ -77,7 +77,7 @@ public sealed class SiteAssistantTests(IsolatedPostgres postgres) : ServiceTestB
         Assert.Equal(2, App.Chat.Calls.Count);
         var result = App.Chat.Calls[1].Messages.SelectMany(m => m.Contents)
             .OfType<FunctionResultContent>().Single(r => r.CallId == "call-1");
-        // The framework JSON-encodes the tool result with non-ASCII escaping, so assert structurally.
+        // 框架會以非 ASCII 轉義對工具結果做 JSON 編碼，因此改用結構化斷言。
         var payload = result.Result as string ?? JsonSerializer.Serialize(result.Result);
         var found = System.Text.Json.Nodes.JsonNode.Parse(payload)?.AsArray()
             .Any(hit => hit?["title"]?.GetValue<string>()?.Contains("部署指南") == true) == true;

@@ -14,7 +14,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         Assert.Equal("手寫摘要，前後空白會被修剪。", saved.Excerpt);
         Assert.Equal("手寫摘要，前後空白會被修剪。", (await admin.Content.GetEditAsync(saved.Id!.Value)).Excerpt);
 
-        // The limit is enforced by the same validation path as every other bounded field.
+        // 長度上限與其他設有上限的欄位走同一條驗證路徑。
         var edit = await admin.Content.GetEditAsync(saved.Id!.Value);
         edit.Excerpt = new string('摘', Limits.Excerpt + 1);
         await Assert.ThrowsAsync<CmsException>(() => admin.Content.UpdateAsync(edit));
@@ -24,7 +24,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         Assert.True(manual.ExcerptIsManual);
         Assert.Equal("手寫摘要，前後空白會被修剪。", manual.Excerpt);
 
-        // Content without a manual excerpt keeps the Markdown-prefix fallback, stripped at render time.
+        // 沒有手寫摘要的內容沿用 Markdown 開頭的後備摘要，渲染時才剝除標記。
         var fallback = NewContent("Fallback post", status: ContentStatus.Published);
         fallback.Slug = "fallback-post";
         fallback.Markdown = "這是 **粗體** 開頭。";
@@ -82,7 +82,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         Assert.Contains("手寫摘要，用於 feed。", rss);
         Assert.DoesNotContain("draft-post", rss);
 
-        // Withdrawing removes the entry from every machine surface on the next request.
+        // 撤回後，下一次請求起每個機器端介面都不再有該項目。
         var withdraw = await admin.Content.GetEditAsync(post.Id!.Value);
         withdraw.Status = ContentStatus.Draft;
         await admin.Content.UpdateAsync(withdraw);
@@ -107,7 +107,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         await site.StartAsync();
         using var client = site.CreateClient();
 
-        // Blazor encodes non-ASCII head attributes as numeric entities; decode before asserting.
+        // Blazor 會把 head 屬性中的非 ASCII 字元編成數值實體；斷言前先解碼。
         var html = WebUtility.HtmlDecode(await (await client.GetAsync("/posts/meta-post")).Content.ReadAsStringAsync());
         Assert.Contains("<meta name=\"description\" content=\"社群分享用的摘要。\" />", html);
         Assert.Contains("<meta property=\"og:title\" content=\"Meta 標題\" />", html);
@@ -124,7 +124,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         Assert.Contains("rel=\"canonical\"", home);
         Assert.Contains("type=\"application/rss+xml\"", home);
 
-        // Drafts stay 404 and never leak meta tags.
+        // 草稿維持 404，絕不洩漏 meta 標籤。
         var missing = await client.GetAsync("/posts/secret-post");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
         Assert.DoesNotContain("og:", await missing.Content.ReadAsStringAsync());
@@ -145,7 +145,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         using var client = site.CreateClient();
         var rss = await (await client.GetAsync("/feed")).Content.ReadAsStringAsync();
         Assert.Equal(Limits.FeedItems, rss.Split("<item>").Length - 1);
-        // The newest published post leads the channel.
+        // 最新的已發布文章排在頻道開頭。
         Assert.Contains("Feed 文章 " + (Limits.FeedItems + 3), rss);
     }
 }

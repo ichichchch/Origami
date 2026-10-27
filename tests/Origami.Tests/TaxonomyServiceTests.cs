@@ -144,7 +144,7 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         var travel = (await admin.Taxonomy.ListAsync(TaxonomyKind.Category)).Items.Single();
         Assert.Equal("路上的觀察與故事。", travel.Description);
 
-        // The description surfaces on the public filtered listing once the category has published posts.
+        // 分類底下一旦有已發布文章，說明文字就會出現在公開的篩選列表。
         Assert.Null(await admin.Content.GetPublicTaxonomyAsync(TaxonomyKind.Category, "旅行"));
         var post = NewContent("東京散步地圖", status: ContentStatus.Published);
         post.CategoryIds = [travel.Id];
@@ -153,14 +153,14 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         Assert.NotNull(publicView);
         Assert.Equal("路上的觀察與故事。", publicView!.Description);
 
-        // Admin search matches titles and slugs literally, including escaped LIKE wildcards.
+        // 後台搜尋對標題與 slug 逐字比對，包含已逸出的 LIKE 萬用字元。
         await admin.Content.SaveAsync(NewContent("完全不同的主題", status: ContentStatus.Published));
         var byTitle = await admin.Content.ListAdminAsync(ContentKind.Post, search: "東京");
         Assert.Single(byTitle.Items);
         Assert.Equal("東京散步地圖", byTitle.Items.Single().Title);
         var all = await admin.Content.ListAdminAsync(ContentKind.Post, search: "");
         var byWildcard = await admin.Content.ListAdminAsync(ContentKind.Post, search: "%");
-        // The wildcard is escaped, so it matches literally and never widens the result set.
+        // 萬用字元已逸出，只會逐字比對，絕不會擴大結果集。
         Assert.Equal(0, byWildcard.Total);
         Assert.True(all.Total > 0);
         Assert.Empty((await admin.Content.ListAdminAsync(ContentKind.Post, search: "不存在的主題")).Items);

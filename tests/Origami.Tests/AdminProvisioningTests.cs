@@ -115,7 +115,7 @@ public sealed class AdminProvisioningTests(IsolatedPostgres postgres) : ServiceT
     [PostgresFact]
     public async Task Minimum_compliant_password_is_accepted()
     {
-        // Exactly eight characters covering all four required classes.
+        // 恰好八個字元，涵蓋全部四種必要字元類別。
         const string password = "Aa1!wxyz";
         await App.Provisioner.InitializeAsync("test-admin", password, CancellationToken.None);
         using var actor = App.Anonymous();

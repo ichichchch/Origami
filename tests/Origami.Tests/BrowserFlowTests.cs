@@ -35,7 +35,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
 
         try
         {
-            // Use normal HTTPS form login; document load is not a circuit-ready signal.
+            // 使用一般 HTTPS 表單登入；文件載入完成不代表互動電路已就緒。
             await page.GotoAsync("/account/login");
             await page.Locator("#username").FillAsync("test-admin");
             await page.Locator("#password").FillAsync(password);
@@ -51,8 +51,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
             foreach (var url in assetUrls)
                 Assert.Contains(resourceResponses, response => response.Url == url && response.Status is >= 200 and < 300);
 
-            // A prerendered button can accept a click before its handler attaches.
-            // Retry only this read-only probe; the server must return the seeded body.
+            // 預渲染的按鈕可能在事件處理器掛上之前就接受點擊。
+            // 僅對這個唯讀探針重試；伺服器必須回傳預先種入的本文。
             for (var attempt = 0; ; attempt++)
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
@@ -63,7 +63,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
                 }
                 catch (PlaywrightException) when (attempt < 4)
                 {
-                    // The final failed assertion propagates with the diagnostics below.
+                    // 最後一次失敗的斷言會連同下方診斷資訊一起往上拋。
                 }
             }
             await Expect(page.Locator("#content-title")).ToHaveValueAsync(seeded.Title);
@@ -148,8 +148,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var publishButton = page.GetByRole(AriaRole.Button, new() { Name = "儲存並發布", Exact = true });
         Assert.Equal(1, await publishButton.CountAsync());
-        // Taxonomy selectors finish loading over the circuit (WebSocket), after HTTP NetworkIdle;
-        // wait for the button to become enabled instead of asserting its immediate state.
+        // 分類標籤選擇器經互動電路（WebSocket）載入完成，晚於 HTTP NetworkIdle；
+        // 因此等待按鈕變為可用，而不是立即斷言其狀態。
         await Expect(publishButton).ToBeEnabledAsync(new() { Timeout = 15_000 });
         await publishButton.ClickAsync();
         try
@@ -179,7 +179,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await page.Locator("#content-title").FillAsync("關於這裡");
         await page.Locator("#content-slug").FillAsync("about");
         await page.Locator("#content-markdown").FillAsync("這是我的寫作空間。");
-        // Pages never join the article taxonomy flow; the password-protection checkbox is not a taxonomy.
+        // 頁面從不參與文章的分類標籤流程；密碼保護核取方塊也不屬於分類標籤。
         Assert.Equal(0, await page.Locator(".taxonomy-panel").CountAsync());
         await page.GetByRole(AriaRole.Button, new() { Name = "儲存並發布", Exact = true }).ClickAsync();
         await page.WaitForURLAsync("**/admin/content/*");
@@ -246,7 +246,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(markdown).ToHaveValueAsync("");
         await page.Locator("#content-title").FillAsync(title);
         await markdown.FillAsync(body);
-        // Leave the slug empty, and create all related data through the editor's controls.
+        // slug 保持空白，所有關聯資料都透過編輯器的控制項建立。
         var category = page.Locator(".taxonomy-selector[aria-label='分類']");
         var tag = page.Locator(".taxonomy-selector[aria-label='標籤']");
         await category.GetByLabel("新增分類名稱", new() { Exact = true }).FillAsync("編輯器分類");
@@ -260,7 +260,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(tag.GetByRole(AriaRole.Checkbox, new() { Name = "編輯器標籤", Exact = true })).ToBeCheckedAsync();
         await Expect(markdown).ToHaveValueAsync(body);
 
-        // A normalized duplicate must not clear either the name, selection or body.
+        // 正規化後重複的名稱不得清空輸入內容、選取狀態或本文。
         await category.GetByLabel("新增分類名稱", new() { Exact = true }).FillAsync(" 編輯器分類 ");
         await category.GetByRole(AriaRole.Button, new() { Name = "建立並選取分類", Exact = true }).ClickAsync();
         await Expect(category.GetByRole(AriaRole.Alert)).ToContainTextAsync("已存在");
@@ -277,7 +277,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         var picker = page.Locator(".media-picker");
         var upload = picker.Locator("#picker-upload");
         await Expect(picker).ToContainTextAsync("所有圖片皆公開");
-        // The inputs must stay inside the original EditForm, without a nested form.
+        // 這些輸入必須留在原本的 EditForm 內，不得形成巢狀表單。
         await Expect(page.Locator("form:has(#content-title) #picker-upload")).ToHaveCountAsync(1);
         await Expect(page.Locator("form:has(#content-title) #new-taxonomy-Category")).ToHaveCountAsync(1);
         await Expect(page.Locator("fieldset.editor-grid form")).ToHaveCountAsync(0);
@@ -289,15 +289,15 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(publish).ToBeEnabledAsync();
 
         const string bodyDuringUpload = body + "\n\n上傳期間繼續寫作。";
-        // Hold only this test database's media insert, making the busy-state assertion
-        // deterministic without sleeps, browser mocks or bypassing the upload UI.
+        // 只擋住此測試資料庫的媒體插入，讓忙碌狀態的斷言具確定性，
+        // 無需固定等待、瀏覽器模擬或繞過上傳 UI。
         await using (var connection = new NpgsqlConnection(App.ConnectionString))
         {
             await connection.OpenAsync();
             await using var transaction = await connection.BeginTransactionAsync();
             await using var hold = new NpgsqlCommand("LOCK TABLE \"MediaAssets\" IN SHARE MODE", connection, transaction);
             await hold.ExecuteNonQueryAsync();
-            // Reuse the failed filename to prove the file control can retry it.
+            // 重用剛失敗的檔名，證明檔案控制項可以重試同一檔案。
             await upload.SetInputFilesAsync(new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = ImageBytes() });
             await Expect(picker.GetByText("正在上傳：inline.png", new() { Exact = true })).ToBeVisibleAsync();
             await Expect(draft).ToBeDisabledAsync();
@@ -386,8 +386,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(first.Locator(".notice-success")).ToContainTextAsync("內容已建立為草稿");
         var second = await context.NewPageAsync();
         await VisitAsync(second, first.Url);
-        // The interactive circuit of the second tab must be live and hold the version it
-        // loaded. The preview button only answers to the server, so it proves both.
+        // 第二個分頁的互動電路必須存活，並保有所載入的版本；
+        // 預覽按鈕只由伺服器回應，因此能同時證明這兩點。
         await second.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
         await Expect(second.Locator(".editor-preview")).ToBeVisibleAsync();
         await Expect(second.Locator("#content-title")).ToHaveValueAsync("Long body");
@@ -455,7 +455,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
             Assert.Equal("Saved before disconnect", (await actor.Content.ListAdminAsync(ContentKind.Post)).Items.Single().Title);
         page.Dialog += async (_, dialog) => await dialog.AcceptAsync();
         await site.StartAsync(reuseAddress: true);
-        // Restarting cannot recover the old circuit, so reload only the persisted version.
+        // 重啟後無法恢復原有互動電路，重新載入只能取得已持久化的版本。
         await page.Locator("#components-reload-button").ClickAsync();
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
@@ -488,7 +488,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await using var context = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString(), ViewportSize = new() { Width = 390, Height = 844 } });
         var page = await context.NewPageAsync();
         await VisitAsync(page, "/");
-        // The public home is static SSR; the rendered values prove the server data arrived.
+        // 公開首頁採 Static SSR；渲染出的值可證明伺服器資料已送達。
         await Expect(page.Locator(".site-nav a").Nth(1)).ToHaveTextAsync(longTitle);
         await Expect(page.Locator(".site-footer span")).ToContainTextAsync(longSiteName);
         var diagnostics = await page.EvaluateAsync<string>("() => {" +

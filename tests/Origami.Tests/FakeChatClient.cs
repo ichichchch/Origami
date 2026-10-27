@@ -1,6 +1,6 @@
 namespace Origami.Tests;
 
-/// <summary>Scripted IChatClient: returns queued responses and records every model call for assertions.</summary>
+/// <summary>腳本化的 IChatClient：回傳排入佇列的回應，並記錄每次模型呼叫供斷言使用。</summary>
 public sealed class FakeChatClient : IChatClient
 {
     public sealed record Call(IReadOnlyList<ChatMessage> Messages, ChatOptions? Options);
@@ -27,7 +27,7 @@ public sealed class FakeChatClient : IChatClient
     public void Dispose() { }
 }
 
-/// <summary>Hands the shared scripted client to SiteAssistant without provider configuration.</summary>
+/// <summary>在不設定供應商的情況下，把共用的腳本化用戶端交給 SiteAssistant。</summary>
 public sealed class StubAssistantChatClientFactory(FakeChatClient client) : IAssistantChatClientFactory
 {
     public IChatClient Create() => client;

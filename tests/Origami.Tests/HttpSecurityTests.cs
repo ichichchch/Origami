@@ -102,7 +102,7 @@ public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBa
         }
         Assert.NotNull(throttled);
         Assert.Contains("嘗試次數過多", WebUtility.HtmlDecode(await throttled!.Content.ReadAsStringAsync()));
-        // Exhausting a source also refuses a correct password from that source.
+        // 同一來源額度用盡後，連正確密碼也一併拒絕。
         Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(client, password)).StatusCode);
     }
 

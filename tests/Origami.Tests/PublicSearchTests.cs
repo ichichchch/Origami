@@ -49,7 +49,7 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
         await page.WaitForURLAsync("**/posts/writing-ideas");
         await Expect(page.Locator("h1")).ToHaveTextAsync(post.Title);
         await page.GetByRole(AriaRole.Link, new() { Name = "搜尋文章", Exact = true }).ClickAsync();
-        // An unbroken query must wrap in the result heading rather than widen the mobile page.
+        // 無斷點的查詢字串必須在結果標題內換行，而不是撐寬手機版頁面。
         await query.FillAsync(new string('W', Limits.SearchQueryMax));
         await submit.ClickAsync();
         await Expect(page.Locator(".search-results li")).ToHaveCountAsync(1);
@@ -57,7 +57,7 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
         provider.Fail = true;
         await query.FillAsync("供應商失敗後仍可修改問題");
         await submit.ClickAsync();
-        // A provider failure degrades to keyword-only results; the query and page stay usable.
+        // 供應商失敗時降級為純關鍵字結果；查詢框與頁面保持可用。
         await Expect(page.Locator(".field-help").Filter(new() { HasText = "語意搜尋暫時無法使用" })).ToBeVisibleAsync();
         await Expect(query).ToHaveValueAsync("供應商失敗後仍可修改問題");
         await Expect(page.GetByRole(AriaRole.Alert)).ToHaveCountAsync(0);
@@ -142,7 +142,7 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
             Assert.Contains(snippet, document.QuerySelector(".search-results")!.TextContent);
             Assert.Empty(document.QuerySelectorAll(".search-page img, .search-page script"));
             Assert.DoesNotContain("SECRET", html);
-            // Published pages remain legitimate navigation links, but are not article search results.
+            // 已發布頁面仍是正當的導覽連結，但不會成為文章搜尋結果。
             Assert.DoesNotContain("EXCLUDED PAGE", document.QuerySelector(".search-results")!.TextContent);
             Assert.Empty(document.QuerySelectorAll(".search-results a[href^='/pages/']"));
             Assert.Contains(HtmlEncoder.Default.Encode(snippet), html);
@@ -161,9 +161,9 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
     [PostgresFact]
     public async Task Missing_configuration_and_provider_failures_degrade_to_keyword_only_without_leaking_details()
     {
-        // Without any embedding configuration the keyword leg still answers; nothing else is exposed.
+        // 完全沒有嵌入組態時，關鍵字這一路仍可回應；其他資訊一概不暴露。
         await using var site = new RunningSite(App.ConnectionString);
-        await site.StartAsync(); // Inherited credentials are explicitly cleared by RunningSite.
+        await site.StartAsync(); // 繼承的認證資訊已由 RunningSite 明確清除。
         using (var client = site.CreateClient())
         using (var response = await client.GetAsync("/search?q=hello"))
         {
@@ -203,11 +203,11 @@ public sealed class PublicSearchTests(IsolatedPostgres postgres) : ServiceTestBa
             using var response = await client.GetAsync("/SeArCh?q=%20");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
-        // A spoofed X-Forwarded-For must not buy a fresh budget: the 31st search from the same source is rejected.
+        // 偽造的 X-Forwarded-For 不得換到新配額：同一來源的第 31 次搜尋會被拒絕。
         using var search = await client.GetAsync("/search?q=%20");
         Assert.Equal(HttpStatusCode.TooManyRequests, search.StatusCode);
         Assert.Equal("Too many requests.", await search.Content.ReadAsStringAsync());
-        // The MCP endpoint now lives on the Origami.Api host; the website no longer treats /mcp as machine traffic.
+        // MCP 端點已移至 Origami.Api 主機；網站不再把 /mcp 視為機器流量。
         using var mcp = await PingAsync(client);
         Assert.NotEqual(HttpStatusCode.TooManyRequests, mcp.StatusCode);
         using var home = await client.GetAsync("/");
@@ -231,7 +231,7 @@ public sealed class SearchTestEnvironmentTests
     [Fact]
     public void Ai_credentials_and_aliases_are_cleared_before_case_insensitive_overrides()
     {
-        // A case-sensitive dictionary also reproduces Linux's duplicate environment-key behavior on Windows.
+        // 大小寫相符的字典也能在 Windows 重現 Linux 的重複環境變數鍵行為。
         var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["AI__EMBEDDING__APIKEY"] = "inherited-secret",
@@ -260,7 +260,7 @@ public sealed class SearchTestEnvironmentTests
     }
 }
 
-/// <summary>Real loopback HTTP, deterministic vectors, no vendor SDK/server or external credentials.</summary>
+/// <summary>真實的 loopback HTTP、決定性的向量，不含供應商 SDK／伺服器或外部認證資訊。</summary>
 internal sealed class LoopbackEmbeddingProvider(WebApplication app) : IAsyncDisposable
 {
     internal const string TestKey = "isolated-fake-key-not-a-credential";
@@ -309,7 +309,7 @@ internal sealed class LoopbackEmbeddingProvider(WebApplication app) : IAsyncDisp
         {
             if (provider.AssistantReply is null)
             {
-                // A deterministic non-retryable provider failure for the browser's recovery flow.
+                // 供瀏覽器復原流程使用的確定性、不可重試的供應商失敗。
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 await context.Response.WriteAsJsonAsync(new { error = new { message = "PRIVATE PROVIDER ERROR " + TestKey, type = "invalid_request_error" } });
                 return;

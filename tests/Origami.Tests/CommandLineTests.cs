@@ -1,8 +1,8 @@
 namespace Origami.Tests;
 
 /// <summary>
-/// Verifies the server-side commands. The schema is applied to a genuinely empty database and
-/// the refusal paths are checked without ever exposing credentials.
+/// 驗證伺服器端命令。結構描述套用到真正空白的資料庫，
+/// 並在不洩漏任何認證資訊的情況下檢查各拒絕路徑。
 /// </summary>
 [Collection(PostgresCollection.Name)]
 public sealed class CommandLineTests(IsolatedPostgres postgres)
@@ -20,7 +20,7 @@ public sealed class CommandLineTests(IsolatedPostgres postgres)
             Assert.NotEmpty(applied);
             Assert.False(await db.Users.AnyAsync(), "a migrated database must not contain an administrator.");
             Assert.Equal(1, await db.Settings.CountAsync());
-            // A second run must not fail and must not drop the stored data.
+            // 第二次執行不得失敗，也不得丟失已儲存的資料。
             await using (var seed = new CmsDbContext(new DbContextOptionsBuilder<CmsDbContext>().UseNpgsql(empty.ConnectionString, o => o.UseVector()).Options))
             {
                 var settings = await seed.Settings.SingleAsync();
@@ -55,7 +55,7 @@ public sealed class CommandLineTests(IsolatedPostgres postgres)
                 Assert.DoesNotContain(secret, redirected.Output, StringComparison.Ordinal);
                 Assert.Contains("互動終端機", redirected.Output, StringComparison.Ordinal);
             }
-            // A refused command must not create an administrator.
+            // 被拒絕的命令不得建立出管理員。
             Assert.True((await RunWebCommandAsync("migrate", empty.ConnectionString, empty.StorageRoot)).ExitCode == 0);
             await using var db = new CmsDbContext(new DbContextOptionsBuilder<CmsDbContext>().UseNpgsql(empty.ConnectionString, o => o.UseVector()).Options);
             Assert.False(await db.Users.AnyAsync());
@@ -112,8 +112,8 @@ public sealed class CommandLineTests(IsolatedPostgres postgres)
 
     internal static string WebApplicationPath()
     {
-        // The test assembly lives beside the project it references, so the configuration
-        // follows the current build instead of a hard-coded folder.
+        // 測試組件與其參考的專案相鄰輸出，因此組態跟隨目前的建置結果，
+        // 而不是寫死的資料夾。
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
             if (File.Exists(Path.Combine(directory.FullName, "Origami.slnx")))
