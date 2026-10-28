@@ -110,7 +110,7 @@ public sealed class AiStatusTests(IsolatedPostgres postgres) : ServiceTestBase(p
         var monitor = new ThrowingOptionsMonitor();
         using var anonymous = App.Anonymous();
         var service = new AiStatusService(anonymous.Services.GetRequiredService<AdminAccess>(),
-            App.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(), monitor);
+            App.ContextFactory, monitor);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetAsync());
         Assert.Equal(0, monitor.Reads);
         using var stale = await App.AdministratorAsync();
@@ -129,7 +129,7 @@ public sealed class AiStatusTests(IsolatedPostgres postgres) : ServiceTestBase(p
     {
         using var admin = await App.AdministratorAsync();
         var service = new AiStatusService(admin.Services.GetRequiredService<AdminAccess>(),
-            App.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(), new ThrowingOptionsMonitor());
+            App.ContextFactory, new ThrowingOptionsMonitor());
         var error = await Assert.ThrowsAsync<CmsException>(() => service.GetAsync());
         Assert.Equal("目前無法讀取 AI 狀態，請稍後重試。", error.Message);
         Assert.Null(error.InnerException);

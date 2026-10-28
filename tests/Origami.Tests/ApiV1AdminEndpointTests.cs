@@ -6,11 +6,9 @@ public sealed class ApiV1AdminEndpointTests(IsolatedPostgres postgres) : Service
 {
     private const string Token = "isolated-test-service-token-0123456789abcdef";
 
-    private static HttpClient CreateAdminClient(RunningApi api)
+    private async Task<HttpClient> CreateAdminClientAsync(RunningApi api, string stamp)
     {
-        var client = api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        return client;
+        return api.CreateBffClient(Token, await App.AdminUserIdAsync(), stamp);
     }
 
     [PostgresFact]
@@ -38,6 +36,22 @@ public sealed class ApiV1AdminEndpointTests(IsolatedPostgres postgres) : Service
             using var list = await client.GetAsync("/api/v1/admin/contents?kind=Post");
             Assert.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
         }
+
+        // 通行證正確、但工作階段戳記缺失或已輪替（登出／密碼重設後的舊電路）：
+        // 管理寫入仍必須被拒——這是 BFF 架構下立即撤銷互動電路寫入權的防線。
+        using var noStamp = api.CreateClient();
+        noStamp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        noStamp.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var staleStamp = api.CreateBffClient(Token, await App.AdminUserIdAsync(), "rotated-away-stamp");
+        using var noUser = api.CreateClient();
+        noUser.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        noUser.DefaultRequestHeaders.Add(AccessClaims.StampHeader, await App.AdminSecurityStampAsync());
+        foreach (var client in new[] { noStamp, staleStamp, noUser })
+        {
+            using var post = await client.PostAsJsonAsync("/api/v1/admin/contents",
+                new { title = "不該建立", kind = "Post", markdown = "x", status = "Draft" });
+            Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
+        }
     }
 
     [PostgresFact]
@@ -46,7 +60,7 @@ public sealed class ApiV1AdminEndpointTests(IsolatedPostgres postgres) : Service
         using var actor = await App.AdministratorAsync();
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
         using var publicClient = api.CreateClient();
 
         using var created = await admin.PostAsJsonAsync("/api/v1/admin/contents",
@@ -89,7 +103,7 @@ public sealed class ApiV1AdminEndpointTests(IsolatedPostgres postgres) : Service
         using var actor = await App.AdministratorAsync();
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
 
         using var created = await admin.PostAsJsonAsync("/api/v1/admin/contents",
             new { title = "衝突文章", kind = "Post", markdown = "第一版", status = "Draft" });
@@ -119,7 +133,7 @@ public sealed class ApiV1AdminEndpointTests(IsolatedPostgres postgres) : Service
         using var actor = await App.AdministratorAsync();
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
         for (var i = 0; i < 40; i++)
         {
             using var response = await admin.GetAsync("/api/v1/admin/contents?kind=Post");

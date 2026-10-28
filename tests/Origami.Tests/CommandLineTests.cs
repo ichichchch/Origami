@@ -112,6 +112,10 @@ public sealed class CommandLineTests(IsolatedPostgres postgres)
 
     internal static string WebApplicationPath()
     {
+        // 優先使用與測試組件同目錄的主機輸出：隔離輸出目錄建置時，以
+        // 上層資料夾名稱推斷組態會失效，而測試輸出內的複本即為本次組建。
+        var adjacent = Path.Combine(AppContext.BaseDirectory, "Origami.Web.dll");
+        if (File.Exists(adjacent)) return adjacent;
         // 測試組件與其參考的專案相鄰輸出，因此組態跟隨目前的建置結果，
         // 而不是寫死的資料夾。
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;

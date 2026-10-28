@@ -25,7 +25,7 @@ public sealed class PersistenceTests : ServiceTestBase
         ContentEdit post;
         using (var actor = await App.AdministratorAsync())
         {
-            var service = new MediaService(App.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            var service = new MediaService(actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
                 actor.Services.GetRequiredService<AdminAccess>(), storage, TimeProvider.System,
                 NullLogger<MediaService>.Instance);
             using var image = new MemoryStream(CreateImage());

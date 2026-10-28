@@ -173,7 +173,7 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         Assert.True((bool?)exported["isSticky"]);
         Assert.Equal("匯出摘要。", (string?)exported["excerpt"]);
         Assert.Equal("Test body", (string?)exported["markdown"]);
-        Assert.Equal("exported", exported["categories"]!.AsArray().Single().ToString());
+        Assert.Equal("exported", exported["categories"]!.AsArray().Single()!.ToString());
         Assert.Equal("封面圖", (string?)document["media"]!.AsArray().Single()!["altText"]);
         // 帳號資料列絕不隨匯出檔案外流。
         Assert.Null(document["users"]);

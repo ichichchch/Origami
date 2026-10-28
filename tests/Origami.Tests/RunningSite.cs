@@ -70,8 +70,10 @@ internal sealed class RunningSite : IAsyncDisposable
             UseShellExecute = false, CreateNoWindow = true
         };
         // 頁面資料一律經 Api 主機（BFF）：先以同一資料庫與服務通行證啟動它，再讓網站指向。
+        // Ai 覆寫與儲存根也一併共用：嵌入／搜尋在 Api 執行，媒體由 Api 寫入、網站提供服務。
         api = new RunningApi(connectionString);
-        await api.StartAsync(serviceToken: apiToken, listenOnHttp: true);
+        await api.StartAsync(environment: environment, serviceToken: apiToken, listenOnHttp: true,
+            configurationOverrides: configurationOverrides, storageRoot: StorageRoot);
         start.ArgumentList.Add(assembly);
         ConfigureAiEnvironment(start.Environment, configurationOverrides);
         SetEnvironment(start.Environment, "Api__BaseUrl", api.Address.ToString());
@@ -126,7 +128,7 @@ internal sealed class RunningSite : IAsyncDisposable
             foreach (var pair in overrides) SetEnvironment(environment, pair.Key, pair.Value);
     }
 
-    private static void SetEnvironment(IDictionary<string, string?> environment, string key, string? value)
+    internal static void SetEnvironment(IDictionary<string, string?> environment, string key, string? value)
     {
         foreach (var inherited in environment.Keys.Where(candidate =>
             string.Equals(ConfigurationKey(candidate), ConfigurationKey(key), StringComparison.OrdinalIgnoreCase)).ToArray())

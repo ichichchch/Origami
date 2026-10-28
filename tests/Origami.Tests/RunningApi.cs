@@ -30,7 +30,8 @@ internal sealed class RunningApi : IAsyncDisposable
         File.WriteAllBytes(Path.Combine(root, "test.pfx"), certificate.Export(X509ContentType.Pfx, certificatePassword));
     }
 
-    public async Task StartAsync(string environment = "Development", string? serviceToken = null, bool listenOnHttp = false)
+    public async Task StartAsync(string environment = "Development", string? serviceToken = null, bool listenOnHttp = false,
+        IReadOnlyDictionary<string, string?>? configurationOverrides = null, string? storageRoot = null)
     {
         if (process is not null) throw new InvalidOperationException("The test API server is already running.");
         using var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -56,14 +57,18 @@ internal sealed class RunningApi : IAsyncDisposable
             UseShellExecute = false, CreateNoWindow = true
         };
         start.ArgumentList.Add(assembly);
-        RunningSite.ConfigureAiEnvironment(start.Environment);
+        // Ai 覆寫（如測試的 loopback 嵌入供應商）必須與網站主機一致：BFF 之後嵌入與
+        // 搜尋都在 Api 主機執行，漏轉發會使語意部分靜默降級為純關鍵字。
+        RunningSite.ConfigureAiEnvironment(start.Environment, configurationOverrides);
         start.Environment["ASPNETCORE_URLS"] = Address.ToString();
         // 在 WebApplication 中，DOTNET_ENVIRONMENT 的優先順序高於 ASPNETCORE_ENVIRONMENT。
         start.Environment["DOTNET_ENVIRONMENT"] = environment;
         start.Environment["ConnectionStrings__CMS"] = connectionString;
-        if (serviceToken is not null) start.Environment["Api__ServiceToken"] = serviceToken;
-        // 媒體端點被測試時，Api 主機會寫入上傳的圖片。
-        start.Environment["Storage__RootPath"] = Path.Combine(root, "storage");
+        // 空值也明確覆寫，避免繼承開發機的 BFF 通行證。
+        RunningSite.SetEnvironment(start.Environment, "Api__ServiceToken", serviceToken ?? "");
+        // 媒體端點被測試時，Api 主機會寫入上傳的圖片；與網站主機共用同一個儲存根，
+        // 網站的 /media 才看得到 Api 寫入的檔案（正式環境兩主機本就指向同一路徑）。
+        start.Environment["Storage__RootPath"] = storageRoot ?? Path.Combine(root, "storage");
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = Path.Combine(root, "test.pfx");
         start.Environment["ASPNETCORE_Kestrel__Certificates__Default__Password"] = certificatePassword;
         if (listenOnHttp)
@@ -104,13 +109,31 @@ internal sealed class RunningApi : IAsyncDisposable
         await ready.Task.WaitAsync(TimeSpan.FromSeconds(45));
     }
 
-    public HttpClient CreateClient()
+    public HttpClient CreateClient(Guid? siteId = null)
     {
         var handler = new HttpClientHandler
         {
             ServerCertificateCustomValidationCallback = (_, received, _, _) => received?.Thumbprint == certificate.Thumbprint
         };
-        return new HttpClient(handler) { BaseAddress = Address };
+        var client = new HttpClient(handler) { BaseAddress = Address };
+        if (siteId is { } id) client.DefaultRequestHeaders.Add(AccessClaims.SiteHeader, id.ToString("D"));
+        return client;
+    }
+
+    public HttpClient CreateBffClient(string serviceToken, string userId, string stamp, Guid? siteId = null)
+    {
+        var client = CreateClient(siteId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
+        client.DefaultRequestHeaders.Add(AccessClaims.UserHeader, userId);
+        client.DefaultRequestHeaders.Add(AccessClaims.StampHeader, stamp);
+        return client;
+    }
+
+    public HttpClient CreateCredentialClient(string token, Guid siteId)
+    {
+        var client = CreateClient(siteId);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     public async Task StopAsync()

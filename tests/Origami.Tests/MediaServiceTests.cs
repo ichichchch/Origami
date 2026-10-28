@@ -423,7 +423,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
         await AssertUnchangedAsync(storage, before);
     }
 
-    private IDbContextFactory<CmsDbContext> Factory => App.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>();
+    private IDbContextFactory<CmsDbContext> Factory => App.ContextFactory;
 
     private MediaService CreateService(TestActor actor, StoragePaths storage, IDbContextFactory<CmsDbContext>? factory = null) =>
         new(factory ?? Factory, actor.Services.GetRequiredService<AdminAccess>(), storage,

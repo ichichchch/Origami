@@ -3,6 +3,114 @@ namespace Origami.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
+    private const string Token = "isolated-test-service-token-0123456789abcdef";
+
+    [PostgresTheory]
+    [InlineData(TaxonomyKind.Category)]
+    [InlineData(TaxonomyKind.Tag)]
+    public async Task Merge_moves_relations_removes_source_and_never_duplicates(TaxonomyKind kind)
+    {
+        using var admin = await App.AdministratorAsync();
+        var source = await admin.Taxonomy.SaveAsync(kind, new() { Name = "舊項目" });
+        var target = await admin.Taxonomy.SaveAsync(kind, new() { Name = "新項目" });
+        var only = NewContent("僅帶來源");
+        only.CategoryIds = [source.Id!.Value];
+        only.TagIds = [];
+        var both = NewContent("兩者皆帶");
+        both.CategoryIds = [source.Id!.Value, target.Id!.Value];
+        both.TagIds = [];
+        if (kind == TaxonomyKind.Tag)
+        {
+            only.CategoryIds = [];
+            only.TagIds = [source.Id!.Value];
+            both.CategoryIds = [];
+            both.TagIds = [source.Id!.Value, target.Id!.Value];
+        }
+        await admin.Content.SaveAsync(only);
+        await admin.Content.SaveAsync(both);
+
+        var moved = await admin.Taxonomy.MergeAsync(kind, source.Id!.Value, target.Id!.Value, source.Version);
+
+        // 僅「僅帶來源」是新移轉；「兩者皆帶」原本就屬於目標，只移除來源關聯、不計入。
+        Assert.Equal(1, moved);
+        await using var db = await App.CreateContextAsync();
+        Assert.False(await db.Categories.AnyAsync(x => x.Id == source.Id) || await db.Tags.AnyAsync(x => x.Id == source.Id));
+        foreach (var title in new[] { "僅帶來源", "兩者皆帶" })
+        {
+            var content = await db.Contents.AsNoTracking().AsSplitQuery()
+                .Include(x => x.Categories).Include(x => x.Tags)
+                .SingleAsync(x => x.Title == title);
+            if (kind == TaxonomyKind.Category)
+            {
+                Assert.Equal(target.Id, content.Categories.Single().Id);
+                Assert.Empty(content.Tags);
+            }
+            else
+            {
+                Assert.Empty(content.Categories);
+                Assert.Equal(target.Id, content.Tags.Single().Id);
+            }
+        }
+        // 目標的並發版本在合併後仍可用（合併不覆寫目標內容）。
+        var renamed = await admin.Taxonomy.SaveAsync(kind, new TaxonomyEdit { Id = target.Id, Name = "合併後改名", Slug = target.Slug, Version = target.Version });
+        Assert.Equal("合併後改名", renamed.Name);
+    }
+
+    [PostgresFact]
+    public async Task Merge_rejects_self_missing_target_conflict_and_requires_admin()
+    {
+        using var admin = await App.AdministratorAsync();
+        var source = await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "來源" });
+        var target = await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "目標" });
+        var sourceId = source.Id!.Value;
+        var targetId = target.Id!.Value;
+
+        await Assert.ThrowsAsync<CmsException>(() =>
+            admin.Taxonomy.MergeAsync(TaxonomyKind.Category, sourceId, sourceId, source.Version));
+        await Assert.ThrowsAsync<CmsException>(() =>
+            admin.Taxonomy.MergeAsync(TaxonomyKind.Category, sourceId, Guid.NewGuid(), source.Version));
+        await Assert.ThrowsAsync<CmsException>(() =>
+            admin.Taxonomy.MergeAsync(TaxonomyKind.Category, sourceId, targetId, Guid.NewGuid()));
+        // 不同類不可互相合併：分類來源指向標籤目標視為不存在的目標。
+        var tag = await admin.Taxonomy.SaveAsync(TaxonomyKind.Tag, new() { Name = "標籤" });
+        await Assert.ThrowsAsync<CmsException>(() =>
+            admin.Taxonomy.MergeAsync(TaxonomyKind.Category, sourceId, tag.Id!.Value, source.Version));
+
+        using var anonymous = App.Anonymous();
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            anonymous.Taxonomy.MergeAsync(TaxonomyKind.Category, sourceId, targetId, source.Version));
+    }
+
+    [PostgresFact]
+    public async Task Merge_endpoint_executes_over_bff()
+    {
+        using var actor = await App.AdministratorAsync();
+        var source = await actor.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "API 來源" });
+        var target = await actor.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "API 目標" });
+        await using var api = new RunningApi(App.ConnectionString);
+        await api.StartAsync(serviceToken: Token);
+        using var client = api.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+        // BFF 合約：管理端點要求服務通行證＋有效的管理員工作階段戳記。
+        client.DefaultRequestHeaders.Add(AdminSession.StampHeader, await App.AdminSecurityStampAsync());
+        client.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+
+        using var self = await client.PostAsJsonAsync($"/api/v1/admin/taxonomies/{source.Id}/merge?kind=Category",
+            new { targetId = source.Id, version = source.Version });
+        Assert.Equal(HttpStatusCode.BadRequest, self.StatusCode);
+
+        using var ok = await client.PostAsJsonAsync($"/api/v1/admin/taxonomies/{source.Id}/merge?kind=Category",
+            new { targetId = target.Id, version = source.Version });
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        var body = JsonNode.Parse(await ok.Content.ReadAsStringAsync())!;
+        Assert.Equal(0, (int)body["moved"]!);
+
+        using var listed = await client.GetAsync("/api/v1/admin/taxonomies?kind=Category");
+        var list = JsonNode.Parse(await listed.Content.ReadAsStringAsync())!;
+        Assert.Single((JsonArray)list["items"]!);
+        Assert.Equal("API 目標", (string)list["items"]![0]!["name"]!);
+    }
+
     [PostgresTheory]
     [InlineData(TaxonomyKind.Category)]
     [InlineData(TaxonomyKind.Tag)]

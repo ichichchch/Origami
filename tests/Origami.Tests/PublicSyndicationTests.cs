@@ -77,7 +77,9 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         Assert.True(feed.IsSuccessStatusCode);
         Assert.Equal("application/rss+xml", feed.Content.Headers.ContentType!.MediaType);
         var rss = await feed.Content.ReadAsStringAsync();
-        Assert.Contains("<rss version=\"2.0\">", rss);
+        // feed 全文功能在 rss 根元素宣告 content 模組命名空間（xmlns:content="…"），
+        // 斷言只比對根元素與版本，不要求 version 屬性後面緊接 ">"。
+        Assert.Contains("<rss version=\"2.0\"", rss);
         Assert.Contains("<title>Feed &amp; &lt;b&gt;標題&lt;/b&gt;</title>", rss);
         Assert.Contains("手寫摘要，用於 feed。", rss);
         Assert.DoesNotContain("draft-post", rss);

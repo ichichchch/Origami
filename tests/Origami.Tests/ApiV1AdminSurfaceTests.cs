@@ -6,11 +6,9 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
 {
     private const string Token = "isolated-test-service-token-0123456789abcdef";
 
-    private static HttpClient CreateAdminClient(RunningApi api)
+    private async Task<HttpClient> CreateAdminClientAsync(RunningApi api, string stamp)
     {
-        var client = api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        return client;
+        return api.CreateBffClient(Token, await App.AdminUserIdAsync(), stamp);
     }
 
     private async Task<RunningApi> StartApiAsync()
@@ -25,7 +23,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
     {
         using var actor = await App.AdministratorAsync();
         await using var api = await StartApiAsync();
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
 
         using var created = await admin.PostAsJsonAsync("/api/v1/admin/taxonomies?kind=category", new { name = "分類甲" });
         Assert.True(created.StatusCode == HttpStatusCode.OK, "建立分類失敗：" + await created.Content.ReadAsStringAsync());
@@ -43,7 +41,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
         // 重新取得輪替後的 version，再刪除。
         using var renamedBody = await admin.GetAsync("/api/v1/admin/taxonomies?kind=category");
         var fresh = JsonNode.Parse(await renamedBody.Content.ReadAsStringAsync())!["items"]!.AsArray()
-            .Single(item => item!["name"]!.GetValue<string>() == "分類乙");
+            .Single(item => item!["name"]!.GetValue<string>() == "分類乙")!;
         using var realDelete = await admin.DeleteAsync($"/api/v1/admin/taxonomies/{(Guid)fresh["id"]!}?kind=category&version={fresh["version"]!}");
         Assert.Equal(HttpStatusCode.NoContent, realDelete.StatusCode);
 
@@ -56,7 +54,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
     {
         using var actor = await App.AdministratorAsync();
         await using var api = await StartApiAsync();
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
 
         using var form = new MultipartFormDataContent();
         using var image = new ByteArrayContent(PngBytes());
@@ -101,7 +99,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
     {
         using var actor = await App.AdministratorAsync();
         await using var api = await StartApiAsync();
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
 
         using var before = await admin.GetAsync("/api/v1/admin/settings");
         Assert.Equal(HttpStatusCode.OK, before.StatusCode);
@@ -120,7 +118,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
     {
         using var actor = await App.AdministratorAsync();
         await using var api = await StartApiAsync();
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
 
         using var created = await admin.PostAsJsonAsync("/api/v1/admin/contents",
             new { title = "修訂文章", slug = "修訂文章", kind = "Post", markdown = "第一版", status = "Published" });
@@ -153,7 +151,7 @@ public sealed class ApiV1AdminSurfaceTests(IsolatedPostgres postgres) : ServiceT
     {
         using var actor = await App.AdministratorAsync();
         await using var api = await StartApiAsync();
-        using var admin = CreateAdminClient(api);
+        using var admin = await CreateAdminClientAsync(api, await App.AdminSecurityStampAsync());
 
         using var created = await admin.PostAsJsonAsync("/api/v1/admin/contents",
             new { title = "匯出文章", slug = "匯出文章", kind = "Post", markdown = "匯出內容", status = "Published" });

@@ -147,9 +147,9 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.Equal(HttpStatusCode.NotFound, (await publicClient.GetAsync("/posts/first-journey")).StatusCode);
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         var publishButton = page.GetByRole(AriaRole.Button, new() { Name = "儲存並發布", Exact = true });
-        Assert.Equal(1, await publishButton.CountAsync());
         // 分類標籤選擇器經互動電路（WebSocket）載入完成，晚於 HTTP NetworkIdle；
-        // 因此等待按鈕變為可用，而不是立即斷言其狀態。
+        // 因此等待按鈕出現並變為可用，而不是立即斷言其數量或狀態。
+        await publishButton.WaitForAsync(new() { Timeout = 15_000 });
         await Expect(publishButton).ToBeEnabledAsync(new() { Timeout = 15_000 });
         await publishButton.ClickAsync();
         try

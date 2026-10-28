@@ -119,14 +119,14 @@ internal sealed class TemporaryMediaStorage : IDisposable
 
     public TemporaryMediaStorage() => Directory.CreateDirectory(ApplicationRoot);
 
-    public StoragePaths Create() => CreateWithRoot(Root);
+    public StoragePaths Create(SiteContext? siteContext = null) => CreateWithRoot(Root, siteContext);
 
-    public StoragePaths CreateWithRoot(string? root)
+    public StoragePaths CreateWithRoot(string? root, SiteContext? siteContext = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Storage:RootPath"] = root })
             .Build();
-        return new StoragePaths(configuration, new TestHostEnvironment { ContentRootPath = ApplicationRoot });
+        return new StoragePaths(configuration, new TestHostEnvironment { ContentRootPath = ApplicationRoot }, siteContext);
     }
 
     public void Dispose() => Directory.Delete(DirectoryPath, recursive: true);

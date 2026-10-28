@@ -55,6 +55,86 @@ public sealed class DatabaseIntegrationTests(IsolatedPostgres postgres) : Servic
     }
 
     [PostgresFact]
+    public async Task Upgrading_a_single_site_database_moves_existing_data_into_the_default_site()
+    {
+        // 舊版單站資料庫：先停在站點隔離遷移之前，寫入既有資料後再升級到最新。
+        var connection = await Postgres.CreateEmptyDatabaseAsync();
+        try
+        {
+            var options = new DbContextOptionsBuilder<CmsDbContext>()
+                .UseNpgsql(connection, o => o.UseVector()).Options;
+            const string previous = "20261027084811_AddSettingsPresentationOptions";
+            await using (var db = new CmsDbContext(options))
+            {
+                await db.Database.MigrateAsync(previous);
+                Assert.DoesNotContain(await db.Database.GetAppliedMigrationsAsync(),
+                    migration => migration.EndsWith("AddSiteIsolationAndApiCredentials", StringComparison.Ordinal));
+            }
+            var contentId = Guid.NewGuid();
+            var categoryId = Guid.NewGuid();
+            var tagId = Guid.NewGuid();
+            var mediaId = Guid.NewGuid();
+            var version = Guid.NewGuid();
+            await using (var raw = new NpgsqlConnection(connection))
+            {
+                await raw.OpenAsync();
+                await using var command = new NpgsqlCommand("""
+                    UPDATE "Settings" SET "Name" = '舊站名稱';
+                    INSERT INTO "Contents" ("Id","Title","Slug","Markdown","Excerpt","Kind","Status","IsSticky","IsPrivate","IsProtected","CreatedAt","UpdatedAt","PublishedAt","Version")
+                        VALUES (@content, '舊文章標題', 'legacy-post', '# 舊文章', '', @kind, @status, false, false, false, @now, @now, @now, @version);
+                    INSERT INTO "Categories" ("Id","Name","Slug","Description","Version") VALUES (@category, '舊分類', 'legacy-category', '', @version);
+                    INSERT INTO "Tags" ("Id","Name","Slug","Description","Version") VALUES (@tag, '舊標籤', 'legacy-tag', '', @version);
+                    INSERT INTO "ContentCategories" ("CategoriesId","ContentsId") VALUES (@category, @content);
+                    INSERT INTO "ContentTags" ("ContentsId","TagsId") VALUES (@content, @tag);
+                    INSERT INTO "MediaAssets" ("Id","FileName","OriginalName","ContentType","Size","Height","Width","AltText","Caption","UploadedAt")
+                        VALUES (@media, 'legacy.png', 'legacy.png', 'image/png', 4, 1, 1, '', '', @now);
+                    """, raw);
+                command.Parameters.AddWithValue("content", contentId);
+                command.Parameters.AddWithValue("category", categoryId);
+                command.Parameters.AddWithValue("tag", tagId);
+                command.Parameters.AddWithValue("media", mediaId);
+                command.Parameters.AddWithValue("kind", (int)ContentKind.Post);
+                command.Parameters.AddWithValue("status", (int)ContentStatus.Published);
+                command.Parameters.AddWithValue("version", version);
+                command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
+                await command.ExecuteNonQueryAsync();
+            }
+
+            await using (var db = new CmsDbContext(options))
+                await db.Database.MigrateAsync();
+
+            // 全部既有資料歸入預設站點；網址與內容保持原樣，未登錄主機的預設站保持可用。
+            await using var check = new CmsDbContext(options);
+            var site = await check.Sites.AsNoTracking().IgnoreQueryFilters().SingleAsync();
+            Assert.Equal(SiteDefaults.DefaultSiteId, site.Id);
+            Assert.Null(site.HostName);
+            Assert.True(site.IsActive);
+            var content = await check.Contents.AsNoTracking().SingleAsync();
+            Assert.Equal(SiteDefaults.DefaultSiteId, content.SiteId);
+            Assert.Equal("舊文章標題", content.Title);
+            Assert.Equal("legacy-post", content.Slug);
+            Assert.Equal(ContentStatus.Published, content.Status);
+            Assert.Equal(SiteDefaults.DefaultSiteId, (await check.Categories.AsNoTracking().SingleAsync()).SiteId);
+            Assert.Equal(SiteDefaults.DefaultSiteId, (await check.Tags.AsNoTracking().SingleAsync()).SiteId);
+            Assert.Equal(SiteDefaults.DefaultSiteId, (await check.MediaAssets.AsNoTracking().SingleAsync()).SiteId);
+            var settings = await check.Settings.AsNoTracking().SingleAsync();
+            Assert.Equal(SiteDefaults.DefaultSiteId, settings.SiteId);
+            Assert.Equal("舊站名稱", settings.Name);
+            await using (var raw = new NpgsqlConnection(connection))
+            {
+                await raw.OpenAsync();
+                await using var joins = new NpgsqlCommand(
+                    "SELECT (SELECT COUNT(*) FROM \"ContentCategories\" WHERE \"SiteId\" = @site AND \"ContentsId\" = @content) + " +
+                    "(SELECT COUNT(*) FROM \"ContentTags\" WHERE \"SiteId\" = @site AND \"ContentsId\" = @content)", raw);
+                joins.Parameters.AddWithValue("site", SiteDefaults.DefaultSiteId);
+                joins.Parameters.AddWithValue("content", contentId);
+                Assert.Equal(2L, await joins.ExecuteScalarAsync());
+            }
+        }
+        finally { await Postgres.DropDatabaseAsync(connection); }
+    }
+
+    [PostgresFact]
     public async Task An_incorrect_random_password_cannot_connect_to_the_owned_cluster()
     {
         var invalid = new NpgsqlConnectionStringBuilder(App.ConnectionString) { Password = IsolatedPostgres.NewPassword() };
@@ -66,7 +146,7 @@ public sealed class DatabaseIntegrationTests(IsolatedPostgres postgres) : Servic
     [PostgresTheory]
     [InlineData(1, PostgresErrorCodes.UniqueViolation)]
     [InlineData(2, PostgresErrorCodes.CheckViolation)]
-    public async Task Administrator_singleton_is_enforced_by_database_constraints(int singletonKey, string sqlState)
+    public async Task Bootstrap_singleton_is_enforced_by_database_constraints(int singletonKey, string sqlState)
     {
         await using (var first = await App.CreateContextAsync())
         {
@@ -81,6 +161,24 @@ public sealed class DatabaseIntegrationTests(IsolatedPostgres postgres) : Servic
         }
         await using var verify = await App.CreateContextAsync();
         Assert.Single(await verify.Users.ToListAsync());
+    }
+
+    [PostgresFact]
+    public async Task Multiple_ordinary_users_with_null_singleton_keys_can_coexist_with_the_bootstrap()
+    {
+        await using (var db = await App.CreateContextAsync())
+        {
+            db.Users.AddRange(
+                new AdminUser { UserName = "bootstrap", NormalizedUserName = "BOOTSTRAP", SingletonKey = 1 },
+                new AdminUser { UserName = "reader", NormalizedUserName = "READER", SingletonKey = null },
+                new AdminUser { UserName = "editor", NormalizedUserName = "EDITOR", SingletonKey = null });
+            await db.SaveChangesAsync();
+        }
+        await using var verify = await App.CreateContextAsync();
+        Assert.Equal(3, await verify.Users.CountAsync());
+        Assert.Equal("bootstrap", (await verify.Users.SingleAsync(user => user.SingletonKey == 1)).UserName);
+        Assert.Equal(new[] { "editor", "reader" }, await verify.Users.Where(user => user.SingletonKey == null)
+            .OrderBy(user => user.UserName).Select(user => user.UserName).ToArrayAsync());
     }
 
     [PostgresTheory]
@@ -138,10 +236,10 @@ public sealed class DatabaseIntegrationTests(IsolatedPostgres postgres) : Servic
     {
         await using var db = await App.CreateContextAsync();
         var categoryError = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync(
-            $"INSERT INTO \"ContentCategories\" (\"CategoriesId\", \"ContentsId\") VALUES ({Guid.NewGuid()}, {Guid.NewGuid()})"));
+            $"INSERT INTO \"ContentCategories\" (\"SiteId\", \"CategoriesId\", \"ContentsId\") VALUES ({SiteDefaults.DefaultSiteId}, {Guid.NewGuid()}, {Guid.NewGuid()})"));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, categoryError.SqlState);
         var tagError = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync(
-            $"INSERT INTO \"ContentTags\" (\"TagsId\", \"ContentsId\") VALUES ({Guid.NewGuid()}, {Guid.NewGuid()})"));
+            $"INSERT INTO \"ContentTags\" (\"SiteId\", \"TagsId\", \"ContentsId\") VALUES ({SiteDefaults.DefaultSiteId}, {Guid.NewGuid()}, {Guid.NewGuid()})"));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, tagError.SqlState);
     }
 }
