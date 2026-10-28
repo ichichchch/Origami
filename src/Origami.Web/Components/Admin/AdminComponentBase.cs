@@ -3,12 +3,22 @@ namespace Origami.Web.Components.Admin;
 public abstract partial class AdminComponentBase : ComponentBase, IDisposable
 {
     [Inject] protected ILogger<AdminComponentBase> Logger { get; set; } = default!;
+    [Inject] protected OrigamiClient AccessApi { get; set; } = default!;
     protected CancellationTokenSource Lifetime { get; } = new();
     protected bool Busy { get; private set; }
     protected bool LoginRequired { get; private set; }
     protected string? Error { get; set; }
     protected string? Notice { get; set; }
+    protected SiteAccessInfo? Access { get; private set; }
+    protected bool CanEdit => Access?.CanEdit == true;
+    protected bool CanAdminister => Access?.CanAdminister == true;
+    protected bool IsNetworkAdmin => Access?.IsNetworkAdmin == true;
+    protected virtual bool UsesSiteAccess => true;
+    protected virtual bool RequiresMembership => true;
+    // 唯讀限制不可放進 Blocked：Reader 仍須能載入、搜尋及分頁。
     protected bool Blocked => Busy || LoginRequired || !RendererInfo.IsInteractive;
+    protected bool EditBlocked => Blocked || !CanEdit;
+    protected bool AdministrationBlocked => Blocked || !CanAdminister;
 
     protected void RequireLogin()
     {
@@ -26,11 +36,17 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
         Notice = null;
         try
         {
+            if (UsesSiteAccess)
+            {
+                Access = await AccessApi.GetAccessAsync(Lifetime.Token);
+                if (RequiresMembership && !Access.CanRead) throw new AccessDeniedException();
+            }
             await action(Lifetime.Token);
             Notice = success;
             return true;
         }
         catch (UnauthorizedAccessException) { RequireLogin(); }
+        catch (AccessDeniedException ex) { Access = null; Error = ex.Message; }
         catch (CmsException ex) { Error = ex.Message; }
         catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { /* 元件在操作進行中被處置；使用者輸入刻意保持原狀。 */ }
         catch (Exception ex)
@@ -41,6 +57,13 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
         finally { Busy = false; }
         return false;
     }
+
+    protected Task<bool> RunEditAsync(Func<CancellationToken, Task> action, string? success = null) =>
+        RunAsync(async ct =>
+        {
+            if (!CanEdit) throw new AccessDeniedException("你只有本站唯讀權限，無法建立、修改或發布內容。");
+            await action(ct);
+        }, success);
 
     private static partial class Log
     {

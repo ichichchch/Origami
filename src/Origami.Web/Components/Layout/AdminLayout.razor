@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject OrigamiClient AccessApi
 
 <a class="skip-link" href="#main-content">跳至主要內容</a>
 @* 各頁面的互動島嶼無法攔截 Static SSR 連結的增強導覽。
@@ -13,6 +15,20 @@
             <NavLink href="/admin/taxonomies">分類與標籤<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/media">媒體庫<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/settings">網站設定<span aria-hidden="true">↗</span></NavLink>
+            @* 連結顯示只是導覽體驗；各頁與 API 仍逐一重驗角色。 *@
+            @if (_access?.CanAdminister == true)
+            {
+                <NavLink href="/admin/members">站點成員</NavLink>
+            }
+            @if (_access?.CanRead == true)
+            {
+                <NavLink href="/admin/sites">站點 / 切換站點</NavLink>
+                <NavLink href="/admin/credentials">我的 API 憑證</NavLink>
+            }
+            @if (_access?.IsNetworkAdmin == true)
+            {
+                <NavLink href="/admin/users">使用者（全站管理）</NavLink>
+            }
             <NavLink href="/admin/security">安全設定<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/assistant">AI 助理<span aria-hidden="true">↗</span></NavLink>
         </nav>
@@ -25,7 +41,7 @@
         </div>
     </aside>
     <div class="admin-workspace">
-        <header class="admin-topbar"><span>你的文字，值得被看見。</span><span class="workspace-label">網站後台</span></header>
+        <header class="admin-topbar"><span>@(new Uri(Navigation.Uri).Authority)</span><span class="workspace-label">網站後台 · 權限依站點而定</span></header>
         <main id="main-content" class="admin-main" tabindex="-1">@Body</main>
         <footer class="admin-footer">專注內容，從這裡開始。</footer>
     </div>
@@ -35,3 +51,14 @@
     <a href="" class="reload">重新載入</a>
     <button type="button" class="dismiss" aria-label="關閉錯誤提示">×</button>
 </div>
+
+@code {
+    private SiteAccessInfo? _access;
+
+    // 僅供導覽顯示；取得失敗（未登入或服務暫停）時隱藏角色相關連結，不阻擋頁面本身。
+    protected override async Task OnInitializedAsync()
+    {
+        try { _access = await AccessApi.GetAccessAsync(); }
+        catch { _access = null; }
+    }
+}

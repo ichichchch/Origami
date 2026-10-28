@@ -53,10 +53,9 @@
     }
     <details class="setup-help">
         <summary>第一次使用，或忘記密碼？</summary>
-        <p>本網站僅開放一位管理員，不提供公開註冊。請在伺服器的專案目錄執行：</p>
-        <p><code>dotnet run --project src/Origami.Web -- admin-init</code></p>
-        <p>已有帳號要重設密碼，改用 <code>admin-reset</code>。密碼由終端機互動輸入，請勿放入命令列或分享給他人。</p>
-        <p>遺失動態驗證器時，<code>admin-reset</code> 會一併停用兩步驟驗證。</p>
+        <p>本網站不提供公開註冊。一般帳號與站點成員資格請聯絡管理者；各網域需分別登入，不提供跨域單一登入。</p>
+        <p>只有首次全站管理者初始化使用伺服器命令：<code>dotnet run --project src/Origami.Web -- admin-init</code>。</p>
+        <p><code>admin-reset</code> 只恢復全站管理者密碼並停用其兩步驟驗證，不會修改其他使用者。密碼仍由終端機互動輸入，不可放入命令列。</p>
     </details>
 </section>
 
@@ -138,9 +137,9 @@
         }
 
         Input.Password = string.Empty;
-        if (user is null || !passwordCheck.Succeeded)
+        if (user is null || user.IsDisabled || !passwordCheck.Succeeded)
         {
-            // 不揭露帳號是否存在、已鎖定或因其他原因被擋。
+            // 不揭露帳號是否存在、已停用、已鎖定或因其他原因被擋。
             errorMessage = LoginFailure;
             return;
         }
@@ -190,7 +189,7 @@
         var user = await userManager.FindByIdAsync(pending.UserId);
         var submittedCode = CodeForm.Code;
         CodeForm.Code = string.Empty;
-        if (user is null || !user.TwoFactorEnabled || user.TwoFactorSecret == ""
+        if (user is null || user.IsDisabled || !user.TwoFactorEnabled || user.TwoFactorSecret == ""
             || !string.Equals(user.SecurityStamp, pending.SecurityStamp, StringComparison.Ordinal))
         {
             // 不揭露是哪個因子失敗；待驗證 cookie 隨該次嘗試期間一同失效。

@@ -2,13 +2,26 @@ namespace Origami.Core.Services;
 
 public sealed class StoragePaths
 {
+    private readonly SiteContext? siteContext;
+
     public string Root { get; }
-    public string Images { get; }
-    public string Staging { get; }
+    // scope 可能先建立、稍後才解析站點；不可在建構時快取站點路徑。
+    public string SiteRoot
+    {
+        get
+        {
+            var siteId = siteContext?.SiteId ?? SiteDefaults.DefaultSiteId;
+            if (siteId == Guid.Empty) throw new InvalidOperationException("尚未解析目前站點，無法存取儲存目錄。");
+            return siteId == SiteDefaults.DefaultSiteId ? Root : Path.Combine(Root, "sites", siteId.ToString("N"));
+        }
+    }
+    public string Images => EnsureDirectory(Path.Combine(SiteRoot, "images"));
+    public string Staging => EnsureDirectory(Path.Combine(SiteRoot, "staging"));
     public string Keys { get; }
 
-    public StoragePaths(IConfiguration configuration, IHostEnvironment environment)
+    public StoragePaths(IConfiguration configuration, IHostEnvironment environment, SiteContext? siteContext = null)
     {
+        this.siteContext = siteContext;
         var configured = configuration["Storage:RootPath"];
         // 明確設定必須是絕對路徑。未設定時，預設值會讓上傳與
         // 金鑰位於應用目錄之外。
@@ -20,12 +33,17 @@ public sealed class StoragePaths
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if ((Root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar).StartsWith(applicationRoot, comparison))
             throw new InvalidOperationException("持久化儲存不可位於應用發布目錄內。");
-        Images = Path.Combine(Root, "images");
-        Staging = Path.Combine(Root, "staging");
         Keys = Path.Combine(Root, "keys");
-        Directory.CreateDirectory(Images);
-        Directory.CreateDirectory(Staging);
+        // 保留舊建構行為；屬性取用時也確保稍後切換的站點目錄存在。
+        _ = Images;
+        _ = Staging;
         Directory.CreateDirectory(Keys);
+    }
+
+    private static string EnsureDirectory(string path)
+    {
+        Directory.CreateDirectory(path);
+        return path;
     }
 
     private static string DefaultRoot()

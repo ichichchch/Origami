@@ -10,9 +10,13 @@
 <div class="page-heading"><div><p class="eyebrow">用圖片說故事</p><h1>媒體庫</h1><p>上傳圖片，隨時在文章或頁面中使用。</p></div></div>
 <p class="notice privacy-notice"><strong>圖片一律公開。</strong>所有上傳圖片（包含草稿中的圖片）都可透過網址存取。撤回或刪除內容不會隱藏圖片，請勿上傳私人資料。</p>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access?.CanRead == true && !CanEdit)
+{
+    <p class="notice">本站唯讀成員可瀏覽圖片，但不能上傳、修改或刪除。</p>
+}
 <section class="panel upload-panel">
     <div><h2>上傳新圖片</h2><p>選取後即上傳。每次一張，單張上限 @(Limits.UploadBytes / 1024 / 1024) MB。</p><p class="field-help">支援 JPEG、PNG、WebP（不含動畫）；實際格式與圖片大小由伺服器驗證。不接受 SVG。</p></div>
-    <div class="upload-control"><label for="media-upload" class="sr-only">選取要上傳的圖片</label><InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp" disabled="@Blocked" />@if (_uploadName is not null) { <p role="status">正在上傳：@_uploadName</p> }</div>
+    <div class="upload-control"><label for="media-upload" class="sr-only">選取要上傳的圖片</label><InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp" disabled="@EditBlocked" />@if (_uploadName is not null) { <p role="status">正在上傳：@_uploadName</p> }</div>
 </section>
 @if (_uploaded is not null)
 {
@@ -38,8 +42,8 @@
             <p id="media-delete-description">沒有任何內容引用這張圖片。刪除後圖片網址立即失效，無法復原（含縮圖變體）。</p>
         }
         <div class="button-row">
-            <button class="button button-danger" disabled="@(Blocked || _pendingReferences.Count > 0)" @onclick="DeleteAsync">確認刪除圖片</button>
-            <button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">取消</button>
+            <button class="button button-danger" disabled="@(EditBlocked || _pendingReferences.Count > 0)" @onclick="DeleteAsync">確認刪除圖片</button>
+            <button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingDelete = null">取消</button>
         </div>
     </section>
 }
@@ -68,9 +72,9 @@
 @if (item.ReferenceCount > 0)
 {
     <p class="field-help">被 @item.ReferenceCount 篇內容引用</p>
-}<label for="@("media-alt-" + item.Id)">替代文字（alt）</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@Blocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">最多 @Limits.AltText 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。</p>
-<label for="@("media-caption-" + item.Id)">說明文字（caption）</label><input id="@("media-caption-" + item.Id)" value="@CaptionValue(item)" maxlength="@Limits.Caption" @oninput="@(e => _captionEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@Blocked" aria-describedby="@("media-caption-help-" + item.Id)" /><p id="@("media-caption-help-" + item.Id)" class="field-help">最多 @Limits.Caption 字；圖片作為封面時顯示於圖片下方。</p><button type="button" class="button button-secondary button-small" disabled="@(Blocked || (!_altEdits.ContainsKey(item.Id) && !_captionEdits.ContainsKey(item.Id)))" @onclick="() => SaveMeta(item.Id)">儲存圖片資訊</button>
-<button type="button" class="text-danger" disabled="@Blocked" @onclick="() => RequestDelete(item)">刪除圖片<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
+}<label for="@("media-alt-" + item.Id)">替代文字（alt）</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">最多 @Limits.AltText 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。</p>
+<label for="@("media-caption-" + item.Id)">說明文字（caption）</label><input id="@("media-caption-" + item.Id)" value="@CaptionValue(item)" maxlength="@Limits.Caption" @oninput="@(e => _captionEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-caption-help-" + item.Id)" /><p id="@("media-caption-help-" + item.Id)" class="field-help">最多 @Limits.Caption 字；圖片作為封面時顯示於圖片下方。</p><button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || (!_altEdits.ContainsKey(item.Id) && !_captionEdits.ContainsKey(item.Id)))" @onclick="() => SaveMeta(item.Id)">儲存圖片資訊</button>
+<button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => RequestDelete(item)">刪除圖片<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
             }
             </div>
         }
@@ -121,7 +125,7 @@
     private async Task DeleteAsync()
     {
         if (_pendingDelete is not { } item || Blocked) return;
-        var deleted = await RunAsync(async ct =>
+        var deleted = await RunEditAsync(async ct =>
         {
             await Api.DeleteMediaAsync(item.Id, ct);
             _pendingDelete = null;
@@ -131,7 +135,7 @@
     }
     private string AltValue(MediaItem item) => _altEdits.TryGetValue(item.Id, out var value) ? value : item.AltText;
     private string CaptionValue(MediaItem item) => _captionEdits.TryGetValue(item.Id, out var value) ? value : item.Caption;
-    private Task SaveMeta(Guid id) => RunAsync(async ct =>
+    private Task SaveMeta(Guid id) => RunEditAsync(async ct =>
     {
         // 未動過的欄位沿用已儲存值；只有編輯中的欄位會覆寫。
         var stored = _result?.Items.FirstOrDefault(x => x.Id == id);
@@ -151,8 +155,8 @@
     }
     private async Task Upload(InputFileChangeEventArgs args)
     {
-        if (Blocked) return;
-        await RunAsync(async ct =>
+        if (EditBlocked) return;
+        await RunEditAsync(async ct =>
         {
             var file = args.File;
             if (file.Size > Limits.UploadBytes) throw new CmsException($"圖片超過 {Limits.UploadBytes / 1024 / 1024} MB 上限，請選擇較小的檔案。");

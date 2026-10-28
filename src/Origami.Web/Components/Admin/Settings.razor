@@ -9,6 +9,10 @@
 <UnsavedGuard Dirty="Dirty" Busy="Busy" />
 <div class="page-heading"><div><p class="eyebrow">讓網站成為你的樣子</p><h1>網站設定</h1><p>簡單的介紹，是讀者認識你的第一步。</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access is not null && !CanAdminister)
+{
+    <p class="notice">網站設定及資料匯入匯出僅限本站管理員，你的登入仍有效。</p>
+}
 @if (_confirmReload)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="settings-reload-title"><h2 id="settings-reload-title">捨棄輸入並重新載入？</h2><p>請先複製要保留的文字。重新載入會取代目前未儲存的輸入。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _confirmReload = false">繼續編輯</button></div></section>
@@ -18,7 +22,7 @@
     <section class="panel settings-panel settings-width">
         <div class="panel-intro"><h2>基本資訊</h2><p>儲存後會立即用於公開網站的名稱與說明。</p></div>
         <EditForm Model="_model" OnSubmit="Save" FormName="site-settings">
-            <fieldset disabled="@Blocked">
+            <fieldset disabled="@AdministrationBlocked">
                 <div class="field"><label for="site-name">網站名稱 <span class="required">必填</span></label><input id="site-name" @bind="_model.Name" @bind:event="oninput" maxlength="@Limits.SiteName" required aria-describedby="site-name-help" /><span id="site-name-help" class="field-help">最多 @Limits.SiteName 字，顯示於網站頁首。</span></div>
                 <div class="field"><label for="site-description">網站說明</label><textarea id="site-description" @bind="_model.Description" @bind:event="oninput" maxlength="@Limits.Description" rows="4" aria-describedby="site-description-help"></textarea><span id="site-description-help" class="field-help">用一小段文字介紹網站，最多 @Limits.Description 字。不支援 HTML。</span></div>
                 <div class="panel-intro reading-intro"><h2>閱讀設定</h2><p>控制首頁與文章列表的呈現方式。</p></div>
@@ -56,14 +60,17 @@
         </EditForm>
     </section>
 }
-@if (_model is not null)
+@if (_model is not null && CanAdminister)
 {
     <section class="panel settings-panel settings-width">
         <div class="panel-intro"><h2>資料匯出</h2><p>將站點設定、分類標籤、內容全文（含草稿）與媒體中繼資料匯出為 JSON 檔。圖片檔案與帳號資料不包含在內。</p><p class="field-help">匯出檔包含受密碼保護內容的密碼雜湊，可離線破解，請視為機密檔案並妥善保管。</p></div>
-        <a class="button button-secondary" href="/admin/export" download data-enhance-nav="false">下載資料匯出（JSON）</a>
+        <div class="button-row">
+            <a class="button button-secondary" href="/admin/export" download data-enhance-nav="false">下載資料匯出（JSON）</a>
+            <a class="button button-secondary" href="/admin/export-archive" download data-enhance-nav="false">下載完整備份（ZIP，含圖片）</a>
+        </div>
     </section>
     <section class="panel settings-panel settings-width">
-        <div class="panel-intro"><h2>資料匯入</h2><p>以匯出檔<strong>取代</strong>站內全部文字資料（設定、分類標籤、內容、媒體中繼資料）。圖片檔案不會隨匯入變動，搬遷網站時請同時還原儲存目錄。</p></div>
+        <div class="panel-intro"><h2>資料匯入</h2><p>以匯出檔<strong>取代</strong>站內全部文字資料（設定、分類標籤、內容、媒體中繼資料）。上傳 JSON 時圖片檔案不會變動；上傳完整備份（ZIP）時會一併還原圖片並清理清單外的舊圖檔。</p></div>
         @if (_importPreview is not null)
         {
             <div class="notice" role="status">
@@ -74,7 +81,7 @@
         {
             <section class="notice notice-danger" role="alertdialog" aria-labelledby="import-confirm-title">
                 <h2 id="import-confirm-title">確認匯入並取代現有資料？</h2>
-                <p>現有設定、分類標籤、內容與媒體中繼資料會被<strong>永久取代</strong>；已發表的公開文章會重新排入 AI 索引。此動作無法復原，建議先下載最新的資料匯出。</p>
+                <p>現有設定、分類標籤、內容與媒體中繼資料會被<strong>永久取代</strong>；已發表的公開文章會重新排入 AI 索引。此動作無法復原，建議先下載最新的完整備份（ZIP）。</p>
                 <div class="button-row">
                     <button type="button" class="button button-danger" disabled="@Blocked" @onclick="ApplyImport">確認匯入</button>
                     <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelImport">取消</button>
@@ -83,8 +90,8 @@
         }
         else
         {
-            <label class="button button-secondary" for="import-file">選擇匯出檔（JSON）</label>
-            <InputFile id="import-file" OnChange="ChooseImport" accept=".json,application/json" class="import-file-input" />
+            <label class="button button-secondary" for="import-file">選擇匯出檔（JSON 或 ZIP）</label>
+            <InputFile id="import-file" OnChange="ChooseImport" accept=".json,application/json,.zip,application/zip" class="import-file-input" />
             @if (_importError is not null)
             {
                 <p class="notice notice-error" role="alert">@_importError</p>
@@ -108,6 +115,7 @@
     protected override Task OnInitializedAsync() => Load();
     private Task Load() => RunAsync(async ct =>
     {
+        if (!CanAdminister) throw new AccessDeniedException("網站設定僅限本站管理員；你的登入仍有效。");
         _model = await Api.GetSettingsAsync(ct) ?? new SiteSettings();
         _homeOptions = (await Api.PageOptionsAsync(ct) ?? [])
             .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).ToList();
@@ -135,10 +143,10 @@
         _importError = null;
         _importPreview = null;
         _importFile = null;
-        if (Blocked) return;
+        if (AdministrationBlocked) return;
         try
         {
-            await using (var stream = args.File.OpenReadStream(Limits.ImportMaxBytes))
+            await using (var stream = args.File.OpenReadStream(Limits.ArchiveMaxBytes))
             using (var buffer = new MemoryStream())
             {
                 await stream.CopyToAsync(buffer);
@@ -146,12 +154,15 @@
             }
             _importPreview = await Api.AnalyzeImportAsync(_importFile);
         }
+        catch (UnauthorizedAccessException) { _importFile = null; RequireLogin(); }
+        catch (AccessDeniedException error) { _importFile = null; _importError = error.Message; }
         catch (CmsException error) { _importError = error.Message; }
         catch (IOException) { _importError = "匯入檔超過大小上限。"; }
     }
 
     private Task ApplyImport() => RunAsync(async ct =>
     {
+        if (!CanAdminister) throw new AccessDeniedException("資料匯入僅限本站管理員。");
         if (_importFile is null) return;
         await Api.ApplyImportAsync(_importFile, ct);
         _importFile = null;
@@ -173,6 +184,7 @@
     private async Task Reload() { _confirmReload = false; await Load(); }
     private Task Save() => RunAsync(async ct =>
     {
+        if (!CanAdminister) throw new AccessDeniedException("網站設定僅限本站管理員。");
         if (_model is null) return;
         ContentRules.Validate(_model);
         var input = new SiteSettings

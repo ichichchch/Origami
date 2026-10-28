@@ -1,6 +1,7 @@
 global using System.ComponentModel;
 global using System.ComponentModel.DataAnnotations;
 global using System.Data.Common;
+global using System.IO.Compression;
 global using System.Net;
 global using System.Net.Http;
 global using System.Net.Http.Json;
@@ -32,6 +33,8 @@ global using Microsoft.AspNetCore.StaticFiles;
 global using Microsoft.EntityFrameworkCore;
 global using Microsoft.EntityFrameworkCore.Design;
 global using Microsoft.EntityFrameworkCore.Infrastructure;
+global using Microsoft.EntityFrameworkCore.Metadata;
+global using Microsoft.EntityFrameworkCore.Metadata.Builders;
 global using Microsoft.EntityFrameworkCore.Migrations;
 global using Microsoft.EntityFrameworkCore.Storage;
 global using Microsoft.EntityFrameworkCore.Storage.ValueConversion;

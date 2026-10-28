@@ -98,15 +98,8 @@ public static class ApiEndpoints
             var count = Math.Clamp(configured.FeedItems ?? Limits.FeedItems, 1, Limits.MaxFeedItems);
             string? category = http.Request.Query["category"].Count > 0 ? http.Request.Query["category"].ToString() : null;
             string? tag = http.Request.Query["tag"].Count > 0 ? http.Request.Query["tag"].ToString() : null;
-            var page = await content.ListPublishedAsync(1, count, ct, category, tag);
-            var items = new List<ApiFeedItem>();
-            foreach (var summary in page.Items)
-            {
-                var detail = await content.GetPublishedAsync(ContentKind.Post, summary.Slug, ct);
-                items.Add(new(summary.Id, summary.Title, summary.Slug, summary.PublishedAt,
-                    summary.Excerpt, detail?.Markdown ?? "", summary.ExcerptIsManual));
-            }
-            return Results.Ok(items);
+            // 不複用 BFF 完整呈現方法，避免保護文章的正文經匿名 JSON feed 外洩。
+            return Results.Ok(await content.FeedAsync(count, category, tag, ct));
         });
     }
 
@@ -115,9 +108,6 @@ public static class ApiEndpoints
 
     /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>
     public sealed record ApiPreview(PublicContent? Content, string? PublishedKind, string? PublishedSlug);
-
-    public sealed record ApiFeedItem(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
-        string Excerpt, string Markdown, bool ExcerptIsManual);
 
     /// <summary>受密碼保護與私密內容對機器用戶端不可見，與 MCP 工具的行為一致。</summary>
     private static IResult PublishedOrNotFound(PublicContent? found) =>

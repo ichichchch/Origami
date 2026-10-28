@@ -122,6 +122,7 @@
         string reply;
         try { reply = await SiteAssistantService.AskAsync(_turns, question, ct); }
         catch (UnauthorizedAccessException) { throw; }
+        catch (AccessDeniedException) { throw; }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception)
         {

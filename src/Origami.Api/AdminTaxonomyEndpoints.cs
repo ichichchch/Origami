@@ -35,6 +35,14 @@ public static class AdminTaxonomyEndpoints
             await taxonomy.DeleteAsync(kind!.Value, id, version, ct);
             return Results.NoContent();
         });
+
+        // 合併：來源的關聯全部改指到目標後刪除來源；version 為來源的並發版本。
+        group.MapPost("/{id}/merge", async (Guid id, TaxonomyMergeInput input, HttpContext http, TaxonomyService taxonomy, CancellationToken ct) =>
+        {
+            if (!TryKind(http, out var kind, out var kindError)) return kindError;
+            var moved = await taxonomy.MergeAsync(kind!.Value, id, input.TargetId, input.Version, ct);
+            return Results.Ok(new { moved });
+        });
     }
 
     private static bool TryKind(HttpContext http, out TaxonomyKind? kind, out IResult? error)
@@ -50,4 +58,6 @@ public static class AdminTaxonomyEndpoints
         kind = parsed;
         return true;
     }
+
+    public sealed record TaxonomyMergeInput(Guid TargetId, Guid Version);
 }

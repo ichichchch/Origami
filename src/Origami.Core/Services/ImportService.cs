@@ -1,33 +1,186 @@
 namespace Origami.Core.Services;
 
-public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
+public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, StoragePaths storage)
 {
     public sealed record ImportPreview(string SiteName, int Categories, int Tags, int Posts, int Pages, int Media);
 
-    /// <summary>統計匯入將還原的內容，不動任何資料。</summary>
+    /// <summary>統計匯入將還原的內容，不動任何資料。接受 JSON 或「JSON＋媒體」的 ZIP。</summary>
     public async Task<ImportPreview> AnalyzeAsync(Stream input, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
-        using var document = await ParseAsync(input, ct);
-        return PreviewOf(document);
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        using var payload = await BufferAsync(input, ct);
+        using var parsed = await ParseContainerAsync(payload, ct);
+        return PreviewOf(parsed.Document);
     }
 
     /// <summary>
     /// 還原式匯入：在單一交易內以匯出檔取代現行設定、分類標籤、內容與媒體
-    /// 中繼資料。圖片二進位資料與帳號一律不在此檔案內；
-    /// 作業人員須依文件說明一併還原儲存目錄。
+    /// 中繼資料。帳號一律不在此檔案內。JSON 模式不改動圖片檔案；
+    /// ZIP 模式（完整備份）另在交易成功後還原圖片並清理清單外的孤兒檔。
     /// </summary>
     public async Task<ImportPreview> ApplyAsync(Stream input, bool confirmed, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
         if (!confirmed) throw new CmsException("請先確認匯入將取代站內全部文字資料。");
-        using var document = await ParseAsync(input, ct);
+        using var payload = await BufferAsync(input, ct);
+        using var parsed = await ParseContainerAsync(payload, ct);
+        if (parsed.Archive is not null) ValidateArchiveFiles(parsed.Archive, parsed.Document);
+        var preview = await ApplyCoreAsync(parsed.Document, ct);
+        if (parsed.Archive is not null) await RestoreArchiveFilesAsync(parsed.Archive, parsed.Document, ct);
+        return preview;
+    }
+
+    private static async Task<MemoryStream> BufferAsync(Stream input, CancellationToken ct)
+    {
+        var buffer = new MemoryStream();
+        await input.CopyToAsync(buffer, ct);
+        if (buffer.Length is 0 or > Limits.ArchiveMaxBytes)
+            throw new CmsException($"匯入檔大小須為 1 位元組至 {Limits.ArchiveMaxBytes} 位元組。");
+        return buffer;
+    }
+
+    /// <summary>逐區塊複製並累計解壓後位元組數，超過封裝上限立即中止；ZipArchive 條目宣稱的大小不可信。</summary>
+    private static async Task<long> CopyBoundedAsync(Stream source, Stream target, long totalBytes, CancellationToken ct)
+    {
+        var buffer = new byte[81920];
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer.AsMemory(), ct);
+            if (read == 0) return totalBytes;
+            totalBytes += read;
+            if (totalBytes > Limits.ArchiveMaxBytes)
+                throw new CmsException($"封裝解壓後總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB 上限，請確認檔案由本站匯出且未遭竄改。");
+            await target.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+    }
+
+    private sealed class ParsedImport(JsonDocument document, ZipArchive? archive) : IDisposable
+    {
+        public JsonDocument Document = document;
+        public ZipArchive? Archive = archive;
+        public void Dispose()
+        {
+            Document.Dispose();
+            Archive?.Dispose();
+        }
+    }
+
+    /// <summary>依魔數分辨容器：PK 開頭為 ZIP（內含 origami-export.json），其餘視為 JSON。</summary>
+    private static async Task<ParsedImport> ParseContainerAsync(MemoryStream payload, CancellationToken ct)
+    {
+        var bytes = payload.GetBuffer();
+        if (payload.Length >= 2 && bytes[0] == (byte)'P' && bytes[1] == (byte)'K')
+        {
+            payload.Position = 0;
+            var archive = new ZipArchive(payload, ZipArchiveMode.Read, leaveOpen: true);
+            var entry = archive.GetEntry("origami-export.json")
+                ?? throw new CmsException("ZIP 內缺少 origami-export.json，請使用本站產生的完整備份（ZIP）或 JSON 匯出檔。");
+            await using var json = entry.Open();
+            // 高壓縮比的偽造條目可能在解壓時爆炸；JSON 條目解壓後同受封裝上限約束。
+            using var expanded = new MemoryStream();
+            await CopyBoundedAsync(json, expanded, 0, ct);
+            expanded.Position = 0;
+            return new(await ParseJsonAsync(expanded, ct), archive);
+        }
+        payload.Position = 0;
+        return new(await ParseJsonAsync(payload, ct), null);
+    }
+
+    /// <summary>清單內的每個媒體都必須在 ZIP 有對應檔案；缺檔在動資料庫之前整體拒絕。</summary>
+    private static void ValidateArchiveFiles(ZipArchive archive, JsonDocument document)
+    {
+        List<string> missing = [];
+        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
+        {
+            var fileName = node.GetString("fileName");
+            if (fileName is null || !ContentRules.IsSafeMediaFileName(fileName)) continue;
+            if (archive.GetEntry("media/" + fileName) is null) missing.Add(fileName);
+        }
+        if (missing.Count > 0)
+        {
+            var sample = string.Join("、", missing.Take(3));
+            var more = missing.Count > 3 ? $" 等共 {missing.Count} 個" : "";
+            throw new CmsException($"ZIP 缺少媒體檔案，無法完整還原：{sample}{more}。");
+        }
+    }
+
+    /// <summary>交易成功後把 ZIP 內的圖片還原到儲存目錄，並清理清單外的孤兒檔。</summary>
+    private async Task RestoreArchiveFilesAsync(ZipArchive archive, JsonDocument document, CancellationToken ct)
+    {
+        var expected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
+        {
+            var fileName = node.GetString("fileName");
+            if (fileName is null || !ContentRules.IsSafeMediaFileName(fileName)) continue;
+            expected.Add(fileName);
+            foreach (var width in Limits.ImageVariantWidths)
+                expected.Add(MediaService.VariantName(fileName, width));
+        }
+        // 固定本次作業的當站目錄；解壓與孤兒清理都不列舉全域 Root 或其他站點。
+        var images = storage.Images;
+        var stagingRoot = Path.Combine(storage.Staging, "import-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(stagingRoot);
+            var staged = new List<(string Temp, string Final)>();
+            // 解壓後的累計位元組數；條目標頭宣稱的大小不可信，以實際讀取為準。
+            long totalBytes = 0;
+            foreach (var entry in archive.Entries)
+            {
+                if (!entry.FullName.StartsWith("media/", StringComparison.Ordinal)) continue;
+                var name = entry.FullName["media/".Length..];
+                // 清單與變體以外的項目一律不落地，檔名也必須仍是安全的圖片名。
+                if (!expected.Contains(name) || !ContentRules.IsSafeMediaFileName(name)) continue;
+                var temp = Path.Combine(stagingRoot, name);
+                await using (var source = entry.Open())
+                await using (var target = File.Create(temp))
+                    totalBytes = await CopyBoundedAsync(source, target, totalBytes, ct);
+                staged.Add((temp, Path.Combine(images, name)));
+            }
+            // 解壓全部成功後才覆寫正式檔案；單檔失敗會回報但資料庫還原不受影響。
+            var failed = new List<string>();
+            foreach (var (temp, final) in staged)
+            {
+                try { File.Move(temp, final, overwrite: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed.Add(Path.GetFileName(final)); }
+            }
+            if (failed.Count > 0)
+                throw new CmsException($"資料已還原，但以下圖片檔案寫入失敗，請檢查儲存目錄權限後重試：{string.Join("、", failed.Take(5))}。");
+        }
+        finally
+        {
+            try { Directory.Delete(stagingRoot, recursive: true); } catch (IOException) { /* 暫存清理盡力而為。 */ }
+        }
+        // 取代式還原：僅清理當站圖片目錄內、不在清單（含變體）內的舊圖檔，不遞迴。
+        foreach (var path in Directory.EnumerateFiles(images))
+        {
+            var name = Path.GetFileName(path);
+            if (!expected.Contains(name) && ContentRules.IsSafeMediaFileName(name))
+            {
+                try { File.Delete(path); } catch (IOException) { /* 清理盡力而為。 */ }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 還原式匯入的核心：在單一交易內以匯出資料取代現行設定、分類標籤、
+    /// 內容與媒體中繼資料；已發布內容重新進入嵌入管道。
+    /// </summary>
+    private async Task<ImportPreview> ApplyCoreAsync(JsonDocument document, CancellationToken ct)
+    {
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var now = clock.GetUtcNow();
 
-        // 取代就是取代：關聯表、嵌入、工作、修訂版本、瀏覽與轉址
-        // 都隨內容資料列串聯刪除，一次批次刪除即可清空。
+        // 複合 Restrict FK 不可由資料庫清空 SiteId；先解除當站設定、階層與封面引用。
+        // ExecuteUpdate／ExecuteDelete 均保留 query filters，不得清除其他站點的資料。
+        await db.Settings.ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.HomePageContentId, (Guid?)null)
+            .SetProperty(x => x.SiteIconMediaId, (Guid?)null), ct);
+        await db.Contents.ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.ParentId, (Guid?)null)
+            .SetProperty(x => x.CoverMediaId, (Guid?)null), ct);
+        // 關聯表、嵌入、工作、修訂版本、瀏覽與轉址隨當站內容串聯刪除。
         await db.Contents.ExecuteDeleteAsync(ct);
         await db.Categories.ExecuteDeleteAsync(ct);
         await db.Tags.ExecuteDeleteAsync(ct);
@@ -40,6 +193,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             var category = new Category
             {
                 Id = Guid.NewGuid(),
+                SiteId = db.CurrentSiteId,
                 Name = Bounded(node, "name", Limits.TaxonomyName, "分類名稱"),
                 Slug = Bounded(node, "slug", Limits.Slug, "分類代稱"),
                 Description = Bounded(node, "description", Limits.TaxonomyDescription, "分類描述", optional: true),
@@ -54,6 +208,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             var tag = new Tag
             {
                 Id = Guid.NewGuid(),
+                SiteId = db.CurrentSiteId,
                 Name = Bounded(node, "name", Limits.TaxonomyName, "標籤名稱"),
                 Slug = Bounded(node, "slug", Limits.Slug, "標籤代稱"),
                 Description = Bounded(node, "description", Limits.TaxonomyDescription, "標籤描述", optional: true),
@@ -72,6 +227,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (!mediaByFileName.TryAdd(fileName, new MediaAsset
             {
                 Id = Guid.NewGuid(),
+                SiteId = db.CurrentSiteId,
                 FileName = fileName,
                 OriginalName = Bounded(node, "originalName", 200, "媒體原始名稱"),
                 ContentType = Bounded(node, "contentType", 40, "媒體類型"),
@@ -100,6 +256,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             var content = new Content
             {
                 Id = Guid.NewGuid(),
+                SiteId = db.CurrentSiteId,
                 Kind = kind,
                 Title = Bounded(node, "title", Limits.Title, "內容標題"),
                 Slug = Bounded(node, "slug", Limits.Slug, "內容代稱"),
@@ -168,16 +325,16 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         settings.SiteIconMediaId = siteIconId;
         settings.Version = Guid.NewGuid();
 
-        // 已發布的公開內容與全新發布一樣，重新進入嵌入管道。
+        // 已發布的公開內容與全新發布一樣，重新進入嵌入管道；站點僅由伺服器指定。
         foreach (var content in contentsBySlug.Values.Where(x => x.Status == ContentStatus.Published && !x.IsProtected && !x.IsPrivate))
-            db.EmbeddingJobs.Add(new EmbeddingJob { ContentId = content.Id, EnqueuedAt = now, NextAttemptAt = now });
+            db.EmbeddingJobs.Add(new EmbeddingJob { SiteId = db.CurrentSiteId, ContentId = content.Id, EnqueuedAt = now, NextAttemptAt = now });
 
         await ContentRules.SaveAsync(db, ct);
         await transaction.CommitAsync(ct);
         return PreviewOf(document);
     }
 
-    private static async Task<JsonDocument> ParseAsync(Stream input, CancellationToken ct)
+    private static async Task<JsonDocument> ParseJsonAsync(Stream input, CancellationToken ct)
     {
         JsonDocument document;
         try { document = await JsonDocument.ParseAsync(input, cancellationToken: ct); }

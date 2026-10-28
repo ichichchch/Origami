@@ -270,6 +270,11 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .reading-intro { margin-top: 1.5rem; }
 .content-search { display: flex; align-items: center; gap: .6rem; max-width: 380px; margin: 0 0 1rem; }
 .content-search input { flex: 1; }
+.quick-edit-row td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.quick-edit-form { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .4rem 0; }
+.quick-edit-form input, .quick-edit-form select { flex: 1 1 160px; margin: 0; }
+.quick-edit-form .field-help { flex-basis: 100%; margin: 0; }
+.excerpt-actions { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .8rem; margin-top: .3rem; }
 .import-file-input { width: 0; height: 0; opacity: 0; overflow: hidden; position: absolute; }
 .archive-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .1rem; }
 .archive-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .8rem .2rem; border-bottom: 1px solid var(--border); }

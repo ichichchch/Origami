@@ -1,0 +1,96 @@
+@page "/admin/members"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>站點成員 · 內容管理</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">本站權限</p><h1>站點成員</h1><p>站點管理員可加入既有帳號並指派角色。移除本站成員不會刪除全站帳號。</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+<button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入成員</button>
+@if (CanAdminister)
+{
+    <section class="panel settings-panel settings-width">
+        <h2>@(_edit.Version is null ? "加入既有帳號" : "修改成員角色")</h2>
+        <EditForm Model="_edit" OnSubmit="Save" FormName="member-edit">
+            <fieldset disabled="@AdministrationBlocked">
+                <div class="field"><label for="member-name">使用者名稱</label><input id="member-name" @bind="_edit.UserName" maxlength="256" readonly="@(_edit.Version is not null)" autocomplete="off" required /></div>
+                <div class="field"><label for="member-role">本站角色</label><InputSelect id="member-role" @bind-Value="_edit.Role">
+                    <option value="Reader">唯讀成員</option><option value="Editor">編輯者</option><option value="Administrator">站點管理員</option>
+                </InputSelect></div>
+                <p class="field-help">唯讀成員只能讀取；編輯者可管理內容及發布；站點管理員另可管理設定及成員。全站管理者權限不受本站角色降級影響。</p>
+                <button class="button" type="submit">儲存成員</button>
+                <button class="button button-secondary" type="button" @onclick="() => _edit = new()">取消 / 新增</button>
+            </fieldset>
+        </EditForm>
+    </section>
+    @if (_members is not null)
+    {
+        <section class="panel"><div class="table-scroll"><table><caption>本站成員</caption>
+            <thead><tr><th>帳號</th><th>角色</th><th>帳號狀態</th><th>操作</th></tr></thead><tbody>
+            @foreach (var member in _members)
+            {
+                <tr @key="member.UserId"><td>@member.UserName</td><td>@RoleLabel(member.Role)</td><td>@(member.IsDisabled ? "已停用" : "啟用")</td>
+                    <td><div class="table-actions"><button disabled="@AdministrationBlocked" @onclick="() => EditMember(member)">修改角色</button><button class="text-danger" disabled="@(AdministrationBlocked || IsLastAdministrator(member))" @onclick="() => _pending = member">移除</button></div></td></tr>
+            }
+            </tbody></table></div><p class="field-help">不能移除或降級最後一位啟用中站點管理員。版本衝突時請重新載入並確認後再送出。</p></section>
+    }
+    @if (_pending is { } pending)
+    {
+        <section class="notice notice-danger" role="alertdialog" aria-labelledby="member-remove-title">
+            <h2 id="member-remove-title">移除本站成員「@pending.UserName」？</h2>
+            <p>此使用者會立即失去本站成員權限，其他站點不受影響。</p>
+            <button class="button button-danger" disabled="@AdministrationBlocked" @onclick="Remove">確認移除</button>
+            <button class="button button-secondary" disabled="@Blocked" @onclick="() => _pending = null">取消</button>
+        </section>
+    }
+}
+
+@code {
+    private List<MemberSummary>? _members;
+    private MemberEditInput _edit = new();
+    private MemberSummary? _pending;
+    protected override Task OnInitializedAsync() => Load();
+    private void RequireAdministrator()
+    {
+        if (!CanAdminister) throw new AccessDeniedException("成員管理僅限本站管理員；你的登入仍有效。");
+    }
+    private Task Load() => RunAsync(async ct =>
+    {
+        RequireAdministrator();
+        _members = await Api.ListMembersAsync(ct);
+        _edit = new();
+        _pending = null;
+    });
+    private static string RoleLabel(SiteRole role) => role switch
+    {
+        SiteRole.Reader => "唯讀成員", SiteRole.Editor => "編輯者", SiteRole.Administrator => "站點管理員", _ => "未知角色"
+    };
+    private bool IsLastAdministrator(MemberSummary member) =>
+        !member.IsDisabled && member.Role == SiteRole.Administrator &&
+        _members?.Count(x => !x.IsDisabled && x.Role == SiteRole.Administrator) == 1;
+    private void EditMember(MemberSummary member)
+    {
+        if (AdministrationBlocked) return;
+        _edit = new() { UserName = member.UserName, Role = member.Role, Version = member.Version };
+    }
+    private Task Save() => RunAsync(async ct =>
+    {
+        RequireAdministrator();
+        var original = _members?.FirstOrDefault(x => x.Version == _edit.Version && x.UserName == _edit.UserName);
+        if (original is not null && IsLastAdministrator(original) && _edit.Role != SiteRole.Administrator)
+            throw new CmsException("不能降級最後一位啟用中站點管理員，請先指派另一位管理員。");
+        await Api.SetMemberAsync(_edit, ct);
+        _edit = new();
+        _members = await Api.ListMembersAsync(ct);
+    }, "成員角色已更新。");
+    private Task Remove() => RunAsync(async ct =>
+    {
+        RequireAdministrator();
+        if (_pending is not { } member) return;
+        await Api.RemoveMemberAsync(member.UserId, member.Version, ct);
+        _pending = null;
+        _members = await Api.ListMembersAsync(ct);
+    }, "已移除本站成員。");
+}

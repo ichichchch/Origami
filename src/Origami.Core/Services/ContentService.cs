@@ -7,7 +7,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null, string? search = null)
     {
 
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
 
         var offset = ContentRules.Offset(page, pageSize);
         if (!Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
@@ -36,7 +36,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     public async Task<ContentCounts> CountAdminAsync(ContentKind kind, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         if (!Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var counts = await db.Contents.AsNoTracking().Where(x => x.Kind == kind)
@@ -48,7 +48,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     public async Task<ContentEdit> GetEditAsync(Guid id, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
@@ -210,6 +210,53 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return input;
     }
 
+    /// <summary>
+    /// 列表快速編輯：只更新標題、網址代稱與草稿／發布狀態，其餘欄位
+    /// 一律不動。規則與完整儲存一致：slug 變更時退役舊網址為永久轉址、
+    /// 發布放棄排程、狀態變更同步嵌入生命週期，並留下修訂版本。
+    /// </summary>
+    public async Task<QuickEditResult> QuickEditAsync(Guid id, string? title, string? slug, ContentStatus status,
+        Guid version, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        if (status is not (ContentStatus.Draft or ContentStatus.Published))
+            throw new CmsException("快速編輯僅接受草稿或已發布狀態；回收桶請使用還原流程。");
+        var cleanTitle = (title ?? "").Trim();
+        if (cleanTitle.Length is 0 or > Limits.Title) throw new CmsException($"標題須為 1–{Limits.Title} 字。");
+        var normalized = ContentRules.NormalizeSlug(slug);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var now = clock.GetUtcNow();
+        var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
+        if (entity.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯。");
+        if (entity.Version != version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
+        db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+        var oldSlug = entity.Slug;
+        var revision = new ContentRevision { ContentId = entity.Id, Title = entity.Title, Markdown = entity.Markdown, Excerpt = entity.Excerpt, CreatedAt = now };
+        entity.Title = cleanTitle;
+        entity.Slug = normalized;
+        entity.Status = status;
+        if (status == ContentStatus.Published)
+        {
+            entity.PublishedAt ??= now;
+            entity.PublishAt = null;
+        }
+        entity.UpdatedAt = now;
+        entity.Version = Guid.NewGuid();
+        if (entity.PublishedAt is not null && oldSlug != normalized)
+        {
+            var existing = await db.SlugRedirects.SingleOrDefaultAsync(x => x.OldSlug == oldSlug, ct);
+            if (existing is null) db.SlugRedirects.Add(new ContentSlugRedirect { OldSlug = oldSlug, ContentId = entity.Id, CreatedAt = now });
+            else existing.ContentId = entity.Id;
+        }
+        db.ContentRevisions.Add(revision);
+        await TrimRevisionsAsync(db, entity.Id, ct);
+        await SyncEmbeddingAsync(db, entity, now, ct);
+        await ContentRules.SaveAsync(db, ct);
+        return new(entity.Id, entity.Title, entity.Slug, entity.Status, entity.Version);
+    }
+
+    public sealed record QuickEditResult(Guid Id, string Title, string Slug, ContentStatus Status, Guid Version);
+
     /// <summary>每份內容僅保留最新的修訂版本；在儲存交易內執行。</summary>
     private static async Task TrimRevisionsAsync(CmsDbContext db, Guid contentId, CancellationToken ct)
     {
@@ -253,13 +300,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     private static async Task LockPageRowsAsync(CmsDbContext db, CancellationToken ct)
     {
         await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""SELECT "Id" FROM "Contents" WHERE "Kind" = {(int)ContentKind.Page} ORDER BY "Id" FOR UPDATE""", ct);
+            $"""SELECT "Id" FROM "Contents" WHERE "SiteId" = {db.CurrentSiteId} AND "Kind" = {(int)ContentKind.Page} ORDER BY "Id" FOR UPDATE""", ct);
     }
 
     /// <summary>編輯器上層選擇器的頁面候選；回收桶內容不可選。</summary>
     public async Task<List<PageOption>> PageOptionsAsync(CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Page && x.Status != ContentStatus.Trashed)
             .OrderBy(x => x.Title).ThenBy(x => x.Id)
@@ -330,11 +377,41 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await admin.RequireAsync(ct);
         if (!confirmed) throw new CmsException("請先確認永久刪除。");
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
-        db.Entry(entity).Property(x => x.Version).OriginalValue = version;
-        db.Remove(entity);
-        await ContentRules.SaveAsync(db, ct);
+        await DeleteCoreAsync(id, version, ct);
+    }
+
+    /// <summary>永久刪除的核心流程；授權由呼叫端（單筆端點或批次）先行完成。</summary>
+    private async Task DeleteCoreAsync(Guid id, Guid version, CancellationToken ct)
+    {
+        await SiteAdministrationService.WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            // 與頁面階層儲存維持相同鎖序；先鎖定，再處理 Restrict 外鍵。
+            await LockPageRowsAsync(db, ct);
+            var entity = await db.Contents.FromSqlInterpolated($"""
+                SELECT * FROM "Contents" WHERE "SiteId" = {db.CurrentSiteId} AND "Id" = {id} FOR UPDATE
+                """).SingleOrDefaultAsync(ct) ?? throw new CmsException("內容不存在。");
+            if (entity.Version != version)
+                throw new CmsException("資料已被另一個分頁更新或刪除，請重新載入後再編輯。");
+            db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+            await ClearContentReferencesAsync(db, [id], clock.GetUtcNow(), ct);
+            db.Remove(entity);
+            await ContentRules.SaveAsync(db, ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        });
+    }
+
+    private static async Task ClearContentReferencesAsync(CmsDbContext db, Guid[] ids, DateTimeOffset now, CancellationToken ct)
+    {
+        // 全域站點 filter 仍套用於 ExecuteUpdate；任何後續失敗都由外層交易回滾。
+        await db.Contents.Where(x => x.ParentId != null && ids.Contains(x.ParentId.Value))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.ParentId, (Guid?)null)
+                .SetProperty(x => x.UpdatedAt, now).SetProperty(x => x.Version, Guid.NewGuid()), ct);
+        await db.Settings.Where(x => x.HomePageContentId != null && ids.Contains(x.HomePageContentId.Value))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.HomePageContentId, (Guid?)null)
+                .SetProperty(x => x.Version, Guid.NewGuid()), ct);
     }
 
     /// <summary>把內容移入回收桶：公開路由與搜尋即停止提供，但不銷毀任何資料。</summary>
@@ -342,6 +419,12 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await admin.RequireAsync(ct);
         if (!confirmed) throw new CmsException("請先確認移入回收桶。");
+        await TrashCoreAsync(id, version, ct);
+    }
+
+    /// <summary>移入回收桶的核心流程；授權由呼叫端（單筆端點或批次）先行完成。</summary>
+    private async Task TrashCoreAsync(Guid id, Guid version, CancellationToken ct)
+    {
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
         if (entity.Status == ContentStatus.Trashed) throw new CmsException("內容已在回收桶中。");
@@ -361,6 +444,12 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     public async Task RestoreAsync(Guid id, Guid version, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
+        await RestoreCoreAsync(id, version, ct);
+    }
+
+    /// <summary>還原的核心流程；授權由呼叫端（單筆端點或批次）先行完成。</summary>
+    private async Task RestoreCoreAsync(Guid id, Guid version, CancellationToken ct)
+    {
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
         if (entity.Status != ContentStatus.Trashed) throw new CmsException("只有回收桶內容可以還原。");
@@ -374,11 +463,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>
-    /// 內容清單的批次操作：逐筆執行既有單筆流程（含各自的並發版本檢查與人工確認契約），
-    /// 逐筆回報結果；單筆失敗不中斷其餘項目。
+    /// 內容清單的批次操作：整批以同一資料庫狀態驗證一次授權，再逐筆執行
+    /// 既有單筆核心流程（含各自的並發版本檢查與人工確認契約），逐筆回報結果；
+    /// 單筆失敗不中斷其餘項目。
     /// </summary>
     public async Task<List<BulkItemResult>> BulkAsync(BulkAction action, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default)
     {
+        // 批次視為單一管理操作：開始前完整重驗一次，不逐筆重複同樣的驗證查詢；
+        // 逐筆核心流程仍受站點過濾與並發版本約束保護。
         await admin.RequireAsync(ct);
         if (items.Count == 0) throw new CmsException("請先選擇要操作的內容。");
         if (items.Count > Limits.BulkMaxItems) throw new CmsException($"單次批次操作最多 {Limits.BulkMaxItems} 筆。");
@@ -391,13 +483,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 switch (action)
                 {
                     case BulkAction.Trash:
-                        await TrashAsync(id, version, confirmed: true, ct);
+                        await TrashCoreAsync(id, version, ct);
                         break;
                     case BulkAction.Restore:
-                        await RestoreAsync(id, version, ct);
+                        await RestoreCoreAsync(id, version, ct);
                         break;
                     case BulkAction.Delete:
-                        await DeleteAsync(id, version, confirmed: true, ct);
+                        await DeleteCoreAsync(id, version, ct);
                         break;
                 }
                 results.Add(new BulkItemResult(id, true, ""));
@@ -438,21 +530,35 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     /// <summary>系統操作：永久刪除超過保留期限的回收桶內容。</summary>
     public async Task<int> PurgeExpiredTrashAsync(CancellationToken ct = default)
     {
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var cutoff = clock.GetUtcNow().AddDays(-Limits.TrashRetentionDays);
-        var expired = await db.Contents.Where(x => x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
-            .Select(x => x.Id).ToListAsync(ct);
-        if (expired.Count == 0) return 0;
-        // 刪除時重複回收桶條件：列出到刪除之間被還原的內容
-        // 已回到草稿狀態，必須在清理中存活。
-        return await db.Contents.Where(x => expired.Contains(x.Id)
-                && x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
-            .ExecuteDeleteAsync(ct);
+        return await SiteAdministrationService.WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var now = clock.GetUtcNow();
+            var cutoff = now.AddDays(-Limits.TrashRetentionDays);
+            var candidates = await db.Contents.Where(x => x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff)
+                .Select(x => x.Id).ToArrayAsync(ct);
+            if (candidates.Length == 0) return 0;
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await LockPageRowsAsync(db, ct);
+            // 等候列鎖之後重新判斷狀態；已還原的內容及其子頁關聯都必須保留。
+            var expired = await db.Contents.FromSqlInterpolated($"""
+                SELECT * FROM "Contents"
+                WHERE "SiteId" = {db.CurrentSiteId} AND "Id" = ANY ({candidates})
+                  AND "Status" = {(int)ContentStatus.Trashed} AND "DeletedAt" < {cutoff}
+                ORDER BY "Id" FOR UPDATE
+                """).AsNoTracking().Select(x => x.Id).ToArrayAsync(ct);
+            if (expired.Length == 0) return 0;
+            await ClearContentReferencesAsync(db, expired, now, ct);
+            var count = await db.Contents.Where(x => expired.Contains(x.Id)
+                    && x.Status == ContentStatus.Trashed && x.DeletedAt < cutoff).ExecuteDeleteAsync(ct);
+            await transaction.CommitAsync(ct);
+            return count;
+        });
     }
 
     public async Task<List<RevisionItem>> ListRevisionsAsync(Guid contentId, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.ContentRevisions.AsNoTracking().Where(x => x.ContentId == contentId)
             .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id).Take(Limits.RevisionKeep)
@@ -461,7 +567,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     public async Task<RevisionDetail?> GetRevisionAsync(Guid revisionId, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.ContentRevisions.AsNoTracking().Where(x => x.Id == revisionId)
             .Select(x => new RevisionDetail(x.Id, x.ContentId, x.Title, x.Markdown, x.Excerpt, x.CreatedAt)).SingleOrDefaultAsync(ct);
@@ -546,6 +652,26 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
     }
+
+    /// <summary>訂閱資料只投影當站可公開正文；篩選、排序及筆數上限在同一查詢完成。</summary>
+    public async Task<List<FeedEntry>> FeedAsync(int count, string? category = null, string? tag = null, CancellationToken ct = default)
+    {
+        if (count is < 1 or > Limits.MaxFeedItems) throw new CmsException("訂閱筆數超出範圍。");
+        if (category is not null) category = ContentRules.NormalizeSlug(category);
+        if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post &&
+            x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected);
+        if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
+        if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
+        return await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
+            .Take(count).Select(x => new FeedEntry(x.Id, x.Title, x.Slug, x.PublishedAt,
+                x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
+                x.Markdown, x.Excerpt != "")).ToListAsync(ct);
+    }
+
+    public sealed record FeedEntry(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
+        string Excerpt, string Markdown, bool ExcerptIsManual);
 
     public async Task<List<PublicTaxonomy>> PopularCategoriesAsync(CancellationToken ct = default)
     {
@@ -663,8 +789,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             await using var db = await factory.CreateDbContextAsync(ct);
             var date = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
             await db.Database.ExecuteSqlAsync($"""
-                INSERT INTO "ContentViews" ("ContentId", "Date", "Count") VALUES ({contentId}, {date}, 1)
+                INSERT INTO "ContentViews" ("SiteId", "ContentId", "Date", "Count")
+                SELECT "SiteId", "Id", {date}, 1 FROM "Contents"
+                WHERE "SiteId" = {db.CurrentSiteId} AND "Id" = {contentId} AND "Status" = {(int)ContentStatus.Published}
                 ON CONFLICT ("ContentId", "Date") DO UPDATE SET "Count" = "ContentViews"."Count" + 1
+                WHERE "ContentViews"."SiteId" = {db.CurrentSiteId}
                 """, ct);
         }
         catch (Exception error) when (error is not OperationCanceledException)

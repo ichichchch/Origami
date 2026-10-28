@@ -17,7 +17,7 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
         // 發布過濾條件是 SQL 的一部分，絕不是事後的記憶體過濾。
         var rows = await (from e in db.ContentEmbeddings.AsNoTracking()
                           join c in db.Contents.AsNoTracking() on e.ContentId equals c.Id
-                          where c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate
+                          where c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && !c.IsProtected
                           orderby e.Embedding.CosineDistance(queryVector)
                           select new { c.Id, c.Kind, c.Title, c.Slug, e.ChunkText, Distance = e.Embedding.CosineDistance(queryVector) })
             .Take(limit * 3).ToListAsync(ct);
@@ -38,7 +38,9 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
     {
         limit = Math.Clamp(limit, 1, Limits.SearchMaxResults);
         await using var db = await factory.CreateDbContextAsync(ct);
-        var chunks = await db.ContentEmbeddings.AsNoTracking().Where(x => x.ContentId == contentId)
+        // 即使背景工作留下舊向量，非公開內容也不能成為匿名推薦的查詢來源。
+        var chunks = await db.ContentEmbeddings.AsNoTracking().Where(x => x.ContentId == contentId &&
+                db.Contents.Any(c => c.Id == x.ContentId && c.Status == ContentStatus.Published && !c.IsPrivate && !c.IsProtected))
             .Select(x => x.Embedding).ToListAsync(ct);
         if (chunks.Count == 0) return [];
         var dimensions = Limits.EmbeddingDimensions;

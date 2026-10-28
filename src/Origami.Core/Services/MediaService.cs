@@ -7,7 +7,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
 
     public async Task<PagedResult<MediaItem>> ListAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, string? search = null)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         var offset = ContentRules.Offset(page, pageSize);
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.MediaAssets.AsNoTracking();
@@ -49,7 +49,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     /// <summary>Markdown 內嵌此圖片的內容，不限狀態——草稿或回收桶內容仍持有引用。</summary>
     public async Task<List<MediaReference>> ListReferencesAsync(Guid mediaId, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         var fileName = await db.MediaAssets.Where(x => x.Id == mediaId).Select(x => x.FileName).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
@@ -58,7 +58,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
 
     public async Task<int> CountReferencesAsync(Guid mediaId, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         var fileName = await db.MediaAssets.Where(x => x.Id == mediaId).Select(x => x.FileName).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
@@ -72,7 +72,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     /// </summary>
     public async Task<Dictionary<Guid, int>> ReferenceCountsAsync(IReadOnlyCollection<Guid> mediaIds, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
         if (mediaIds.Count == 0) return [];
         await using var db = await factory.CreateDbContextAsync(ct);
         var names = await db.MediaAssets.AsNoTracking().Where(x => mediaIds.Contains(x.Id))
@@ -303,7 +303,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
                 await using var db = await factory.CreateDbContextAsync(ct);
                 var asset = new MediaAsset
                 {
-                    Id = id, FileName = fileName, OriginalName = originalName, ContentType = contentType,
+                    Id = id, SiteId = db.CurrentSiteId, FileName = fileName, OriginalName = originalName, ContentType = contentType,
                     Size = encoded.Size, Width = info.Width, Height = info.Height, UploadedAt = clock.GetUtcNow()
                 };
                 db.MediaAssets.Add(asset);

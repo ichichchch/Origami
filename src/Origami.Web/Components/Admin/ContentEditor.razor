@@ -10,10 +10,10 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JavaScript
 
-<PageTitle>@(_model?.Id is null ? "新增內容" : "編輯內容") · 內容管理</PageTitle>
+<PageTitle>@(!CanEdit ? "檢視內容" : _model?.Id is null ? "新增內容" : "編輯內容") · 內容管理</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="@(Busy || ChildBusy)" />
 <div class="page-heading">
-    <div><a class="back-link" href="@ListPath">← 返回@(KindLabel)列表</a><h1>@(_model?.Id is null ? "新增" : "編輯")@(KindLabel)</h1><p>專注寫作，準備好再與世界分享。</p></div>
+    <div><a class="back-link" href="@ListPath">← 返回@(KindLabel)列表</a><h1>@(!CanEdit ? "檢視" : _model?.Id is null ? "新增" : "編輯")@(KindLabel)</h1><p>專注寫作，準備好再與世界分享。</p></div>
     <span class="save-indicator @(Dirty ? "unsaved" : "")" role="status">@SaveStatusText</span>
     @if (_autosaveAt is { } at)
     {
@@ -32,7 +32,18 @@
         <div class="button-row"><button class="button button-danger" disabled="@SaveBlocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _reloadRequested = false">繼續編輯</button></div>
     </section>
 }
-@if (_model is not null)
+@if (_model is not null && !CanEdit)
+{
+    <p class="notice">你目前只有本站唯讀權限，可以檢視內容，但不能建立、修改或發布。</p>
+    <section class="panel settings-panel">
+        <h2>@_model.Title</h2>
+        <p>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/@_model.Slug · @_model.Status</p>
+        <div class="prose">@((MarkupString)MarkdownRenderer.Render(_model.Markdown ?? ""))</div>
+        <details><summary>Markdown 原文（唯讀，可複製）</summary><pre>@_model.Markdown</pre></details>
+        <button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入內容</button>
+    </section>
+}
+else if (_model is not null)
 {
     <EditForm Model="_model" OnSubmit="SaveCurrent" FormName="content-editor">
         <fieldset disabled="@Blocked" class="editor-grid">
@@ -40,7 +51,7 @@
                 <section class="panel editor-fields">
                     <div class="field"><label for="content-title">標題 <span class="required">必填</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="給這個想法一個標題" /><span class="field-help">最多 @Limits.Title 字。</span></div>
                     <div class="field"><label for="content-slug">網址代稱</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="首次儲存可留空，自標題產生" /></div><span id="slug-help" class="field-help">代稱須全站唯一；修改後舊網址不會自動轉址。</span></div>
-                    <div class="field"><label for="content-excerpt">摘要</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="用一兩句話介紹這篇內容；留空則自動使用開頭文字"></textarea><span id="excerpt-help" class="field-help">純文字，最多 @Limits.Excerpt 字；顯示於文章列表、搜尋結果與社群分享描述。</span></div>
+                    <div class="field"><label for="content-excerpt">摘要</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="用一兩句話介紹這篇內容；留空則自動使用開頭文字"></textarea><div class="excerpt-actions"><button type="button" class="text-button" disabled="@Blocked" @onclick="ExcerptFromSelection">以本文選取文字填入</button><span class="field-help">純文字，最多 @Limits.Excerpt 字；顯示於文章列表、搜尋結果與社群分享描述。</span></div></div>
                     <div class="field">
                         <label id="content-cover-label">封面圖片（選填）</label>
                         <div class="cover-control">
@@ -269,7 +280,7 @@
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
     // 不要把 ChildBusy 串入外層 fieldset 或子元件的 Disabled 參數：
     // 每個子元件都必須能完成自己的操作與回呼，不能被父層連帶停用。
-    private bool SaveBlocked => Blocked || ChildBusy;
+    private bool SaveBlocked => EditBlocked || ChildBusy;
     private string KindLabel => _model?.Kind == ContentKind.Page ? "頁面" : "文章";
     private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
     private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
@@ -427,7 +438,8 @@
             // 衝突或驗證失敗必須停止此循環；細節由手動流程顯示。
             _autosaveStopped = true;
         }
-        catch (UnauthorizedAccessException) { _autosaveStopped = true; }
+        catch (UnauthorizedAccessException) { _autosaveStopped = true; RequireLogin(); }
+        catch (AccessDeniedException ex) { _autosaveStopped = true; Error = ex.Message; }
         catch (OperationCanceledException) { /* circuit 正在關閉；下次再由手動流程接手。 */ }
     }
     // datetime-local 選擇器產生的是牆上時間值，由瀏覽器自身的時區換算成
@@ -485,20 +497,21 @@
         _diffTooLarge = false;
         _preview = false;
     }
-    private Task CyclePreview() => RunAsync(async ct =>
+    private Task CyclePreview() => RunEditAsync(async ct =>
     {
         var token = await Api.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
         // 分享連結不算內容編輯：編輯器保有自己的文字與版本，因此
         // 他處同時的儲存仍會以明顯衝突收場，而不是遭到靜默覆寫。
         _model.PreviewToken = token;
     }, "預覽連結已產生；舊連結（若有）已失效。");
-    private Task RevokePreview() => RunAsync(async ct =>
+    private Task RevokePreview() => RunEditAsync(async ct =>
     {
         await Api.RevokePreviewTokenAsync(_model!.Id!.Value, ct);
         _model.PreviewToken = null;
     }, "預覽連結已撤銷。");
     private Task Load() => RunAsync(async ct =>
     {
+        if (Id is null && !CanEdit) throw new AccessDeniedException("唯讀成員不能新增內容，請返回列表檢視既有內容。");
         var loaded = Id is { } id
             ? await Api.GetEditAsync(id, ct) ?? throw new CmsException("內容不存在，請重新載入列表。")
             : new ContentEdit { Kind = InferNewKind() };
@@ -597,7 +610,7 @@
         catch (CmsException error) { Error = error.Message; return; }
         var isNew = input.Id is null;
         var wasPublished = _model.Status == ContentStatus.Published;
-        var success = await RunAsync(async ct =>
+        var success = await RunEditAsync(async ct =>
         {
             ContentRules.Validate(input);
             // 內容類型由伺服器決定；提交的類型只在建立時使用。
@@ -633,6 +646,42 @@
         _model.Markdown = (_model.Markdown ?? "").TrimEnd() + "\n\n" + item.Markdown + "\n\n";
         _preview = false;
         _mediaOpen = false;
+    }
+    /// <summary>
+    /// 以本文目前的選取範圍作為手寫摘要（WP「more 切點」的在地化形式）：
+    /// 選取文字先轉為純文字，超過上限時截斷。沒有選取時提示而非猜測。
+    /// </summary>
+    private async Task ExcerptFromSelection()
+    {
+        if (_model is null || Blocked) return;
+        string? selected;
+        try
+        {
+            selected = await JavaScript.InvokeAsync<string?>("eval",
+                "(()=>{const el=document.getElementById('content-markdown');return el?el.value.slice(el.selectionStart,el.selectionEnd):'';})()");
+        }
+        catch (JSException)
+        {
+            Error = "無法讀取本文選取範圍，請手動把摘要複製到欄位中。";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(selected))
+        {
+            Notice = null;
+            Error = "請先在本文中選取要作為摘要的文字，再按「以本文選取文字填入」。";
+            return;
+        }
+        var text = MarkdownRenderer.PlainText(selected);
+        if (text.Length > Limits.Excerpt)
+        {
+            // 代理配對邊界向內退一字，避免切出無效的字元。
+            var cut = char.IsHighSurrogate(text[Limits.Excerpt - 1]) ? Limits.Excerpt - 1 : Limits.Excerpt;
+            text = text[..cut].TrimEnd();
+            Notice = $"選取文字已轉為純文字並截斷為 {text.Length} 字。";
+        }
+        else Notice = null;
+        _model.Excerpt = text;
+        Error = null;
     }
     private void SelectionChanged() => StateHasChanged();
 }

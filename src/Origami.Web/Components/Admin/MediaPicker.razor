@@ -17,10 +17,18 @@
         <p class="field-help">最近上傳；點選圖片才會插入本文。</p>
         <div class="media-grid picker-grid"><button type="button" class="media-choice" disabled="@(Disabled || Blocked)" @onclick="() => Choose(_uploaded)"><img src="@_uploaded.Url" alt="" /><span>@_uploaded.OriginalName</span><small>插入至本文末尾</small></button></div>
     }
+    <div class="content-search">
+        <label class="sr-only" for="picker-search">搜尋媒體庫</label>
+        <input id="picker-search" type="search" placeholder="搜尋檔名、替代文字或說明…" maxlength="200" value="@_search" @onchange="SearchChanged" disabled="@(Disabled || Blocked)" />
+        @if (_search.Length > 0)
+        {
+            <button type="button" class="text-button" disabled="@(Disabled || Blocked)" @onclick="ClearSearch">清除</button>
+        }
+    </div>
     <button type="button" class="text-button" disabled="@(Disabled || Blocked)" @onclick="Refresh">刷新媒體列表</button>
     @if (_result is not null)
     {
-        @if (_result.Items.Count == 0 && _uploaded is null) { <p class="empty-state">尚無圖片。可直接在此上傳，無須離開編輯器。</p> }
+        @if (_result.Items.Count == 0 && _uploaded is null) { <p class="empty-state">@(_search.Length > 0 ? "沒有符合的圖片；可改用其他關鍵字，或直接上傳。" : "尚無圖片。可直接在此上傳，無須離開編輯器。")</p> }
         <div class="media-grid picker-grid">
             @foreach (var item in _result.Items.Where(item => item.Id != _uploaded?.Id))
             {
@@ -38,12 +46,27 @@
     [Parameter] public EventCallback<bool> BusyChanged { get; set; }
     [Parameter] public EventCallback OnUnauthorized { get; set; }
     private int _page = 1;
+    private string _search = "";
     private int _uploadInputVersion;
     private string? _uploadName;
     private MediaItem? _uploaded;
     private PagedResult<MediaItem>? _result;
     protected override Task OnInitializedAsync() => Load();
-    private Task<bool> Load() => RunOperationAsync(async ct => { _result = await Api.ListMediaAsync(_page, ct: ct); });
+    private Task<bool> Load() => RunOperationAsync(async ct => { _result = await Api.ListMediaAsync(_page, ct: ct, search: string.IsNullOrWhiteSpace(_search) ? null : _search.Trim()); });
+    private async Task SearchChanged(ChangeEventArgs args)
+    {
+        if (Disabled || Blocked) return;
+        _search = args.Value?.ToString() ?? "";
+        _page = 1;
+        await Load();
+    }
+    private async Task ClearSearch()
+    {
+        if (Disabled || Blocked) return;
+        _search = "";
+        _page = 1;
+        await Load();
+    }
     private async Task Refresh()
     {
         if (Disabled || Blocked) return;

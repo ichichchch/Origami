@@ -14,6 +14,12 @@ public static class Limits
     public const int Caption = 300;
     public const int TaxonomyName = 80;
     public const int SiteName = 100;
+    public const int SiteSlug = 80;
+    public const int HostName = 253;
+    public const int CredentialName = 100;
+    public const int SitePageSize = 50;
+    public const int ApiCredentialMax = 20;
+    public const int ApiCredentialDays = 365;
     public const int Description = 500;
     public const int PageSize = 10;
     public const int MaxPageSize = 50;
@@ -22,7 +28,10 @@ public static class Limits
     public const int MaxTaxonomiesPerKind = 30;
     public const int AuthorName = 80;
     public const long UploadBytes = 5 * 1024 * 1024;
-    public const long ImportMaxBytes = 50 * 1024 * 1024;
+    /// <summary>匯出／匯入封裝（JSON 或 ZIP）的大小上限。</summary>
+    public const long ArchiveMaxBytes = 256 * 1024 * 1024;
+    /// <summary>主機級請求主體上限，保護匿名 /mcp 等端點；完整備份匯入端點另逐請求放寬到 <see cref="ArchiveMaxBytes"/>。</summary>
+    public const long HostRequestMaxBytes = 50 * 1024 * 1024;
     public const long ImagePixels = 20_000_000;
     public const int ImageDimension = 10_000;
     public const int EmbeddingDimensions = 1536;
@@ -47,8 +56,9 @@ public static class Limits
 
 public sealed class AdminUser : IdentityUser
 {
-    // 唯一且受檢查約束的常數，防止並發建立第二位管理員。
-    public int SingletonKey { get; set; } = 1;
+    // 只有 CLI 初始化的唯一全站管理者為 1；其他帳號一律由站點成員資格授權。
+    public int? SingletonKey { get; set; }
+    public bool IsDisabled { get; set; }
     /// <summary>Base32 編碼的 TOTP 共用密鑰；兩步驗證設定開始前為空。</summary>
     public string TwoFactorSecret { get; set; } = "";
     // 兩步驗證的啟用重用繼承自 IdentityUser.TwoFactorEnabled 的欄位。
@@ -57,6 +67,7 @@ public sealed class AdminUser : IdentityUser
 public sealed class Content
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public ContentKind Kind { get; set; }
     public string Title { get; set; } = "";
     public string Slug { get; set; } = "";
@@ -96,6 +107,7 @@ public sealed class Content
 public sealed class ContentRevision
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public Guid ContentId { get; set; }
     public string Title { get; set; } = "";
     public string Markdown { get; set; } = "";
@@ -107,6 +119,7 @@ public sealed class ContentRevision
 /// <summary>單一內容單日的瀏覽次數；為唯一的分析數據。</summary>
 public sealed class ContentView
 {
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public Guid ContentId { get; set; }
     public DateOnly Date { get; set; }
     public int Count { get; set; }
@@ -116,6 +129,7 @@ public sealed class ContentView
 public sealed class Category
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Description { get; set; } = "";
@@ -126,6 +140,7 @@ public sealed class Category
 public sealed class Tag
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Description { get; set; } = "";
@@ -136,6 +151,7 @@ public sealed class Tag
 public sealed class MediaAsset
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public string FileName { get; set; } = "";
     public string OriginalName { get; set; } = "";
     public string ContentType { get; set; } = "";
@@ -152,6 +168,7 @@ public sealed class MediaAsset
 public sealed class ContentSlugRedirect
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public string OldSlug { get; set; } = "";
     public Guid ContentId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
@@ -161,6 +178,7 @@ public sealed class ContentSlugRedirect
 /// <summary>已發布內容文字的單一切塊及其嵌入向量。</summary>
 public sealed class ContentEmbedding
 {
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public Guid ContentId { get; set; }
     public int ChunkIndex { get; set; }
     public string ChunkText { get; set; } = "";
@@ -171,6 +189,7 @@ public sealed class ContentEmbedding
 public sealed class EmbeddingJob
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public Guid ContentId { get; set; }
     public DateTimeOffset EnqueuedAt { get; set; }
     public int Attempts { get; set; }
@@ -179,6 +198,7 @@ public sealed class EmbeddingJob
 
 public sealed class SiteSettings
 {
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     public int Id { get; set; } = 1;
     [Required, StringLength(Limits.SiteName)] public string Name { get; set; } = "Origami";
     [StringLength(Limits.Description)] public string Description { get; set; } = "用文字，分享你的世界。";

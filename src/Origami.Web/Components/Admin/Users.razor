@@ -1,0 +1,103 @@
+@page "/admin/users"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>使用者 · 內容管理</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">全站帳號管理</p><h1>使用者</h1><p>僅全站管理者可建立或停用帳號。不提供公開註冊；建立後需在各站分別加入成員。</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+<button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入使用者</button>
+@if (IsNetworkAdmin)
+{
+    <section class="panel settings-panel settings-width">
+        <h2>建立使用者</h2>
+        <EditForm Model="_create" OnSubmit="Create" FormName="user-create">
+            <fieldset disabled="@Blocked">
+                <div class="field"><label for="new-user-name">使用者名稱</label><input id="new-user-name" @bind="_create.UserName" maxlength="256" autocomplete="off" required /></div>
+                <div class="field"><label for="new-user-password">初始密碼</label><input id="new-user-password" type="password" @bind="_create.Password" maxlength="1024" minlength="8" autocomplete="new-password" required /></div>
+                <p class="field-help">8–1024 字，含大小寫英文字母、數字、符號及至少四種不同字元。送出後不論成功或失敗都會清除帳密輸入，請使用安全管道交付。</p>
+                <button class="button" type="submit">建立使用者</button>
+            </fieldset>
+        </EditForm>
+    </section>
+    <section class="panel settings-panel">
+        <div class="field"><label for="user-search">搜尋帳號</label><input id="user-search" type="search" @bind="_search" maxlength="256" disabled="@Blocked" /></div>
+        <button class="button button-secondary" disabled="@Blocked" @onclick="Search">搜尋</button>
+        @if (_result is not null)
+        {
+            <div class="table-scroll"><table><caption>使用者列表（@_result.Total 筆）</caption>
+                <thead><tr><th>帳號</th><th>狀態</th><th>操作</th></tr></thead><tbody>
+                @foreach (var user in _result.Items)
+                {
+                    <tr @key="user.Id"><td>@user.UserName @if (user.IsNetworkAdmin) { <span>（全站管理者）</span> }</td><td>@(user.IsDisabled ? "停用" : "啟用")</td>
+                        <td><button disabled="@(Blocked || user.IsNetworkAdmin)" @onclick="() => _pending = user">@(user.IsDisabled ? "重新啟用" : "停用帳號")</button></td></tr>
+                }
+                </tbody></table></div>
+            <nav class="pagination" aria-label="使用者分頁"><button disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></nav>
+        }
+    </section>
+    @if (_pending is { } pending)
+    {
+        <section class="notice notice-danger" role="alertdialog" aria-labelledby="user-state-title">
+            <h2 id="user-state-title">@(pending.IsDisabled ? "重新啟用" : "停用")「@pending.UserName」？</h2>
+            <p>變更會撤銷該帳號既有登入與 API 憑證。不可停用全站管理者或任一站點最後一位啟用中管理員。</p>
+            <button class="button button-danger" disabled="@Blocked" @onclick="ChangeState">確認變更</button>
+            <button class="button button-secondary" disabled="@Blocked" @onclick="() => _pending = null">取消</button>
+        </section>
+    }
+}
+
+@code {
+    protected override bool RequiresMembership => false;
+    private UserCreateInput _create = new();
+    private PagedResult<UserSummary>? _result;
+    private UserSummary? _pending;
+    private string _search = "";
+    private int _page = 1;
+    protected override Task OnInitializedAsync() => Load();
+    private void RequireNetwork()
+    {
+        if (!IsNetworkAdmin) throw new AccessDeniedException("使用者管理僅限全站管理者；你的登入仍有效。");
+    }
+    private Task<bool> Load() => RunAsync(async ct => { RequireNetwork(); _result = await Api.ListUsersAsync(_page, _search, ct); });
+    private async Task Search() { if (Blocked) return; _page = 1; await Load(); }
+    private async Task Move(int delta)
+    {
+        if (Blocked) return;
+        var previous = _page;
+        _page += delta;
+        if (!await Load()) _page = previous;
+    }
+    private async Task Create()
+    {
+        if (Blocked) return;
+        var input = _create;
+        _create = new();
+        try
+        {
+            await RunAsync(async ct =>
+            {
+                RequireNetwork();
+                await Api.CreateUserAsync(input, ct);
+                _result = await Api.ListUsersAsync(_page, _search, ct);
+            }, "帳號已建立；請前往目標站點的成員管理指派角色。");
+        }
+        finally { input.Password = ""; input.UserName = ""; }
+    }
+    private Task ChangeState() => RunAsync(async ct =>
+    {
+        RequireNetwork();
+        if (_pending is not { } user) return;
+        await Api.SetUserDisabledAsync(user.Id, !user.IsDisabled, ct);
+        _pending = null;
+        _result = await Api.ListUsersAsync(_page, _search, ct);
+    }, "帳號狀態已更新，舊登入與 API 憑證已失效。");
+    protected override void Dispose(bool disposing)
+    {
+        _create.Password = "";
+        _create.UserName = "";
+        base.Dispose(disposing);
+    }
+}

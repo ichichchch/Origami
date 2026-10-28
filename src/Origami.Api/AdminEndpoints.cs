@@ -1,11 +1,9 @@
-using Microsoft.AspNetCore.Mvc;
-
 namespace Origami.Api;
 
 /// <summary>
-/// /api/v1/admin 下的 BFF 寫入介面，以共用服務 token 授權。網站主機
-/// 代表管理員呼叫這些端點前，會自行完成 cookie＋兩步驗證檢查；
-/// 服務中的 confirmed 旗標即由這項呼叫方契約滿足。
+/// /api/v1/admin 的內容管理介面，接受 BFF 或綁定站點的外部憑證；
+/// 每次操作由 Core 重驗使用者與實際權限。網站呈現／解鎖入口只接受 BFF，
+/// 刪除等操作的人工確認仍由呼叫方取得。
 /// </summary>
 public static class AdminEndpoints
 {
@@ -67,6 +65,14 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
+        // 列表快速編輯：只改標題、代稱與草稿／發布狀態；並發版本檢查與完整儲存相同。
+        group.MapPut("/contents/{id}/quick", async (Guid id, QuickEditInput input, ContentService content, CancellationToken ct) =>
+        {
+            if (input.Status is not (ContentStatus.Draft or ContentStatus.Published))
+                return Results.BadRequest(new { message = "快速編輯僅接受草稿或已發布狀態。" });
+            return Results.Ok(await content.QuickEditAsync(id, input.Title, input.Slug, input.Status, input.Version, ct));
+        });
+
         // 清單批次操作：逐筆攜帶並發版本，逐筆回報結果；確認契約與單筆端點相同（由 BFF 呼叫方滿足）。
         group.MapPost("/contents/bulk", async (BulkContentInput input, ContentService content, CancellationToken ct) =>
         {
@@ -115,7 +121,7 @@ public static class AdminEndpoints
             return await content.GetPublishedAsync(parsed, slug, ct) is { } detail
                 ? Results.Ok(detail)
                 : Results.NotFound();
-        });
+        }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
         // 層級頁面網址的解析：多段路徑一次驗證父鏈，回傳內容與完整路徑段供轉址判斷。
         group.MapGet("/contents/published-page/{**path}", async (string path, ContentService content, CancellationToken ct) =>
@@ -123,25 +129,28 @@ public static class AdminEndpoints
             var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var resolved = await content.ResolvePublishedPagePathAsync(segments, ct);
             return resolved is null ? Results.NotFound() : Results.Ok(resolved);
-        });
+        }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
         // 解鎖 token 以自訂標頭遞送，避免查詢字串形式的憑證進入 URL 型日誌。
         group.MapGet("/contents/{id}/unlock-state", async (Guid id,
             [FromHeader(Name = "X-Unlock-Token")] string? token, ContentService content, CancellationToken ct) =>
-            Results.Ok(new { unlocked = await content.IsUnlockedAsync(id, token, ct) }));
+            Results.Ok(new { unlocked = await content.IsUnlockedAsync(id, token, ct) }))
+            .RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
         group.MapPost("/contents/{id}/unlock", async (Guid id, ProtectionUnlockInput input, ContentService content, CancellationToken ct) =>
-            Results.Ok(new { token = await content.VerifyProtectionAsync(id, input.Password, ct) }));
+            Results.Ok(new { token = await content.VerifyProtectionAsync(id, input.Password, ct) }))
+            .RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
         // 瀏覽計數屬網站渲染的一部分；失敗不影響頁面。
         group.MapPost("/contents/{id}/view", async (Guid id, ContentService content, CancellationToken ct) =>
         {
             await content.RecordViewAsync(id, ct);
             return Results.NoContent();
-        });
+        }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
     }
 
     public sealed record ProtectionUnlockInput(string? Password);
+    public sealed record QuickEditInput(string? Title, string? Slug, ContentStatus Status, Guid Version);
     public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items);
     public sealed record BulkContentItem(Guid Id, Guid Version);
 

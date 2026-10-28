@@ -7,7 +7,7 @@
 
 <PageTitle>安全設定 · 內容管理</PageTitle>
 <UnsavedGuard Busy="Busy" />
-<div class="page-heading"><div><p class="eyebrow">帳號的第三道鎖</p><h1>安全設定</h1><p>為唯一的管理員帳號加上兩步驟驗證（TOTP）。</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">帳號的第三道鎖</p><h1>安全設定</h1><p>為你目前登入的帳號加上兩步驟驗證（TOTP），不影響其他使用者。</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 @if (_status is not null)
 {
@@ -52,7 +52,7 @@
                         <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="BeginSetup">重新產生金鑰</button>
                     </div>
                 </EditForm>
-                <p class="field-help">啟用後既有登入會被登出；若遺失驗證器，需在伺服器執行 admin-reset 重設密碼並停用兩步驟驗證。</p>
+                <p class="field-help">啟用後既有登入會失效。請妥善保管驗證器；admin-reset 只恢復全站管理者，不能恢復一般帳號。</p>
             }
         }
         else
@@ -74,6 +74,8 @@
 }
 
 @code {
+    // 個人安全設定只需全域有效登入，不要求本站成員資格。
+    protected override bool UsesSiteAccess => false;
     private TwoFactorStatus? _status;
     private (string Secret, string Uri)? _setup;
     private CodeInput _confirm = new();
@@ -107,10 +109,24 @@
         _confirm.Code = "";
         _status = await TwoFactor.GetStatusAsync(ct);
     }, "兩步驟驗證已啟用，下次登入即需輸入動態驗證碼。");
-    private Task Disable() => RunAsync(async ct =>
+    private async Task Disable()
     {
-        await TwoFactor.DisableAsync(_disable.Password, _disable.Code, ct);
+        if (Blocked) return;
+        try
+        {
+            await RunAsync(async ct =>
+            {
+                await TwoFactor.DisableAsync(_disable.Password, _disable.Code, ct);
+                _status = await TwoFactor.GetStatusAsync(ct);
+            }, "兩步驟驗證已停用。");
+        }
+        finally { _disable = new(); }
+    }
+    protected override void Dispose(bool disposing)
+    {
+        _setup = null;
         _disable = new();
-        _status = await TwoFactor.GetStatusAsync(ct);
-    }, "兩步驟驗證已停用。");
+        _confirm.Code = "";
+        base.Dispose(disposing);
+    }
 }

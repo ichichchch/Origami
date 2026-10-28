@@ -10,7 +10,7 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
 
     public async Task<SiteSettings> SaveAsync(SiteSettings input, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
         ContentRules.Validate(input);
         if (input.Id != 1) throw new CmsException("站點設定識別無效。");
         if (input.PostsPerPage is { } posts && (posts < 1 || posts > Limits.MaxPageSize))

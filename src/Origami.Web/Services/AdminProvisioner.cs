@@ -50,7 +50,7 @@ public sealed class AdminProvisioner(IServiceScopeFactory scopeFactory)
         {
             await using var scope = scopeFactory.CreateAsyncScope();
             var manager = scope.ServiceProvider.GetRequiredService<UserManager<AdminUser>>();
-            var user = await manager.Users.SingleOrDefaultAsync(cancellationToken);
+            var user = await manager.Users.SingleOrDefaultAsync(x => x.SingletonKey == 1, cancellationToken);
             if (user is null)
             {
                 throw new AdminProvisioningException("尚未存在管理員。請先執行 admin-init。");

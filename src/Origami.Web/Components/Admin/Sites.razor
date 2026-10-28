@@ -1,0 +1,117 @@
+@page "/admin/sites"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>站點 · 內容管理</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">多站點工作空間</p><h1>站點</h1><p>只列出你可存取的站點。建立、修改網域與啟停僅限全站管理者。</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+<p class="notice">網域登錄不會自動配置 DNS、TLS 或反向代理。下列 HTTPS 連結不代表已部署可用；切站會整頁導覽，各網域需分別登入。</p>
+<p class="field-help">目前網址：@CurrentAuthority</p>
+<button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入站點</button>
+@if (_sites is not null)
+{
+    <section class="panel"><div class="table-scroll"><table>
+        <caption>可存取的站點</caption>
+        <thead><tr><th>名稱 / 代稱</th><th>登錄主機</th><th>狀態</th><th>操作</th></tr></thead>
+        <tbody>
+        @foreach (var site in _sites)
+        {
+            <tr @key="site.Id">
+                <td>@site.Name <small>@site.Slug</small>@if (site.Id == Access?.SiteId) { <span>（本站）</span> }</td>
+                <td>@(site.HostName ?? "尚未設定（舊站相容模式）")</td>
+                <td>@(site.IsActive ? "啟用" : "停用")</td>
+                <td><div class="table-actions">
+                    @if (site.IsActive && SiteUrl(site) is { } url)
+                    {
+                        <a href="@url" data-enhance-nav="false">開啟此站（HTTPS）</a>
+                    }
+                    @if (IsNetworkAdmin)
+                    {
+                        <button disabled="@Blocked" @onclick="() => EditSite(site)">編輯</button>
+                    }
+                </div></td>
+            </tr>
+        }
+        </tbody>
+    </table></div></section>
+}
+@if (IsNetworkAdmin)
+{
+    <section class="panel settings-panel settings-width">
+        <h2>建立站點</h2>
+        <EditForm Model="_create" OnSubmit="Create" FormName="site-create">
+            <fieldset disabled="@Blocked">
+                <div class="field"><label for="new-site-name">名稱</label><input id="new-site-name" @bind="_create.Name" maxlength="@Limits.SiteName" required /></div>
+                <div class="field"><label for="new-site-slug">固定代稱</label><input id="new-site-slug" @bind="_create.Slug" maxlength="@Limits.SiteSlug" required /><span class="field-help">英數字或連字號，建立後不可修改。</span></div>
+                <div class="field"><label for="new-site-host">完整主機名稱</label><input id="new-site-host" @bind="_create.HostName" maxlength="@Limits.HostName" placeholder="news.example.com" required /><span class="field-help">不含 https://、路徑或通訊埠，不接受萬用字元。</span></div>
+                <button class="button" type="submit">建立站點</button>
+            </fieldset>
+        </EditForm>
+    </section>
+    @if (_editing is { } editing)
+    {
+        <section class="panel settings-panel settings-width">
+            <h2>編輯站點：@editing.Name</h2>
+            <EditForm Model="_update" OnSubmit="Update" FormName="site-update">
+                <fieldset disabled="@Blocked">
+                    <div class="field"><label for="edit-site-name">名稱</label><input id="edit-site-name" @bind="_update.Name" maxlength="@Limits.SiteName" required /></div>
+                    <div class="field"><label for="edit-site-host">完整主機名稱</label><input id="edit-site-host" @bind="_update.HostName" maxlength="@Limits.HostName" required="@(editing.Id != SiteDefaults.DefaultSiteId)" /></div>
+                    <div class="field"><label><input type="checkbox" @bind="_update.IsActive" disabled="@(editing.Id == SiteDefaults.DefaultSiteId)" /> 啟用站點</label></div>
+                    <p class="field-help">預設站點不可停用。修改本站主機或停用本站後，原網址可能無法繼續使用，請預先確認新主機配置。</p>
+                    <button class="button" type="submit">儲存站點</button>
+                    <button class="button button-secondary" type="button" @onclick="() => _editing = null">取消</button>
+                </fieldset>
+            </EditForm>
+        </section>
+    }
+}
+
+@code {
+    protected override bool RequiresMembership => false;
+    private List<SiteSummary>? _sites;
+    private SiteCreateInput _create = new();
+    private SiteUpdateInput _update = new();
+    private SiteSummary? _editing;
+    private string CurrentAuthority => new Uri(Navigation.Uri).Authority;
+    protected override Task OnInitializedAsync() => Load();
+    private Task Load() => RunAsync(async ct => { _sites = await Api.ListSitesAsync(ct); });
+
+    private static string? SiteUrl(SiteSummary site)
+    {
+        if (string.IsNullOrWhiteSpace(site.HostName)) return null;
+        // 僅從 API 登錄主機建立 URL，另外驗證格式，避免成為任意導覽入口。
+        try
+        {
+            var host = SiteAdministrationService.NormalizeHost(site.HostName);
+            return new UriBuilder(Uri.UriSchemeHttps, host) { Path = "/admin/posts" }.Uri.AbsoluteUri;
+        }
+        catch (CmsException) { return null; }
+    }
+    private void EditSite(SiteSummary site)
+    {
+        if (Blocked || !IsNetworkAdmin) return;
+        _editing = site;
+        _update = new() { Name = site.Name, HostName = site.HostName, IsActive = site.IsActive, Version = site.Version };
+    }
+    private Task Create() => RunAsync(async ct =>
+    {
+        if (!IsNetworkAdmin) throw new AccessDeniedException("建立站點僅限全站管理者。");
+        await Api.CreateSiteAsync(_create, ct);
+        _create = new();
+        _sites = await Api.ListSitesAsync(ct);
+    }, "站點已建立；DNS、TLS 與代理仍須由管理者另外配置。");
+    private Task Update() => RunAsync(async ct =>
+    {
+        if (!IsNetworkAdmin) throw new AccessDeniedException("修改站點僅限全站管理者。");
+        if (_editing is not { } site) return;
+        if (site.Id == SiteDefaults.DefaultSiteId && string.IsNullOrWhiteSpace(_update.HostName)) _update.HostName = null;
+        var updated = await Api.UpdateSiteAsync(site.Id, _update, ct);
+        // 不重新解析或變更本電路的 SiteContext；新的主機只透過整頁導覽切換。
+        _sites = _sites?.Select(x => x.Id == updated.Id ? updated : x).ToList();
+        _editing = null;
+    }, "站點已更新；目前電路仍綁定原站點。請從登錄主機整頁開啟。");
+}

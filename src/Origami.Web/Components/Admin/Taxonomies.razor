@@ -13,6 +13,10 @@
     <button class="tab-button @(_kind == TaxonomyKind.Tag ? "active" : "")" aria-pressed="@(_kind == TaxonomyKind.Tag)" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Tag)">標籤</button>
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access?.CanRead == true && !CanEdit)
+{
+    <p class="notice">本站唯讀成員可檢視分類與標籤，但不能新增、修改、合併或刪除。</p>
+}
 @if (Error is not null && !LoginRequired)
 {
     <button class="button button-secondary" disabled="@Blocked" @onclick="() => RequestChange(ResetAndLoad)">重新載入列表並結束編輯</button>
@@ -25,11 +29,37 @@
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-delete-title"><h2 id="taxonomy-delete-title">永久刪除@(Label)「@_delete.Name」？</h2><p>只移除文章關聯，不會刪除文章。此項目的未儲存輸入也會捨棄。這個動作無法復原。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Delete">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _delete = null">取消</button></div></section>
 }
+@if (_merge is not null)
+{
+    <section class="notice" role="alertdialog" aria-labelledby="taxonomy-merge-title" aria-describedby="taxonomy-merge-description">
+        <h2 id="taxonomy-merge-title">合併@(Label)「@_merge.Name」到另一個@(Label)？</h2>
+        <p id="taxonomy-merge-description">使用此@(Label)的文章會全部改指到目標，然後刪除「@_merge.Name」。目標的名稱與內容不變，文章不會被刪除。這個動作無法復原。</p>
+        <div class="field">
+            <label for="merge-target">合併目標 <span class="required">必選</span></label>
+            <select id="merge-target" value="@_mergeTargetId" @onchange="MergeTargetChanged" disabled="@Blocked">
+                <option value="">請選擇目標@(Label)…</option>
+                @foreach (var candidate in _mergeCandidates)
+                {
+                    <option value="@candidate.Id">@candidate.Name（@candidate.Slug）</option>
+                }
+            </select>
+            @if (_mergeCandidates.Count == 0)
+            {
+                <span class="field-help">沒有其他@(Label)可作為目標；請先建立一個。</span>
+            }
+            @if (_mergeCandidates.Count >= Limits.MaxPageSize)
+            {
+                <span class="field-help">候選清單僅列出前 @Limits.MaxPageSize 個@(Label)。</span>
+            }
+        </div>
+        <div class="button-row"><button class="button" disabled="@(Blocked || string.IsNullOrEmpty(_mergeTargetId))" @onclick="Merge">確認合併</button><button class="button button-secondary" disabled="@Blocked" @onclick="CancelMerge">取消</button></div>
+    </section>
+}
 <div class="management-grid">
     <section class="panel settings-panel">
         <h2>@(_edit.Id is null ? "新增" : "編輯")@(Label)</h2>
         <EditForm Model="_edit" OnSubmit="Save" FormName="taxonomy-editor">
-            <fieldset disabled="@Blocked">
+            <fieldset disabled="@EditBlocked">
                 <div class="field"><label for="taxonomy-name">名稱 <span class="required">必填</span></label><input id="taxonomy-name" @bind="_edit.Name" @bind:event="oninput" required maxlength="@Limits.TaxonomyName" /><span class="field-help">最多 @Limits.TaxonomyName 字。</span></div>
                 <div class="field"><label for="taxonomy-slug">網址代稱</label><input id="taxonomy-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_edit.Id is not null)" /><span class="field-help">首次儲存可留空，由名稱產生。</span></div>
                 <div class="field"><label for="taxonomy-description">描述</label><textarea id="taxonomy-description" @bind="_edit.Description" @bind:event="oninput" rows="3" maxlength="@Limits.TaxonomyDescription" aria-describedby="taxonomy-description-help"></textarea><span id="taxonomy-description-help" class="field-help">顯示於前台分類或標籤篩選頁的說明文字，最多 @Limits.TaxonomyDescription 字。</span></div>
@@ -48,7 +78,7 @@
                 <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col">名稱 / 代稱</th><th scope="col">操作</th></tr></thead><tbody>
                 @foreach (var item in _result.Items)
                 {
-                    <tr @key="item.Id"><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug</span></td><td><div class="table-actions"><button class="text-button" disabled="@Blocked" @onclick="() => Edit(item)">編輯<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@Blocked" @onclick="() => _delete = item">刪除<span class="sr-only"> @item.Name</span></button></div></td></tr>
+                    <tr @key="item.Id"><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">編輯<span class="sr-only"> @item.Name</span></button><button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">合併<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">刪除<span class="sr-only"> @item.Name</span></button></div></td></tr>
                 }
                 </tbody></table></div>
             }
@@ -65,6 +95,9 @@
     private string _baseline = "";
     private PagedResult<TaxonomyItem>? _result;
     private TaxonomyItem? _delete;
+    private TaxonomyItem? _merge;
+    private List<TaxonomyItem> _mergeCandidates = [];
+    private string _mergeTargetId = "";
     private Func<Task>? _pendingChange;
     private bool Dirty => Snapshot() != _baseline;
     private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(_edit);
@@ -104,7 +137,7 @@
         _delete = null;
         if (!await Load()) _page = previousPage;
     }
-    private Task Save() => RunAsync(async ct =>
+    private Task Save() => RunEditAsync(async ct =>
     {
         ContentRules.Validate(_edit);
         var input = new TaxonomyEdit { Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Version = _edit.Version };
@@ -115,7 +148,7 @@
     private async Task Delete()
     {
         if (_delete is not { } item) return;
-        await RunAsync(async ct =>
+        await RunEditAsync(async ct =>
         {
             await Api.DeleteTaxonomyAsync(_kind, item.Id, item.Version, ct);
             if (_edit.Id == item.Id) await NewEdit();
@@ -124,5 +157,41 @@
             if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
         }, "已永久刪除" + Label + "，文章未被刪除。");
         _delete = null;
+    }
+    private async Task BeginMerge(TaxonomyItem item)
+    {
+        if (Blocked) return;
+        _merge = item;
+        _mergeTargetId = "";
+        _delete = null;
+        await RunAsync(async ct =>
+        {
+            // 目標候選獨立載入，不受目前分頁影響；上限保護與列表一致。
+            var candidates = await Api.ListTaxonomiesAsync(_kind, 1, Limits.MaxPageSize, ct);
+            _mergeCandidates = candidates?.Items.Where(x => x.Id != item.Id).ToList() ?? [];
+        });
+    }
+    private void CancelMerge()
+    {
+        _merge = null;
+        _mergeCandidates = [];
+        _mergeTargetId = "";
+    }
+    private void MergeTargetChanged(ChangeEventArgs args) => _mergeTargetId = args.Value?.ToString() ?? "";
+    private async Task Merge()
+    {
+        if (Blocked || _merge is not { } source || !Guid.TryParse(_mergeTargetId, out var targetId)) return;
+        var moved = 0;
+        // 移轉數只有呼叫後才得知；RunAsync 會在結尾把 Notice 覆寫成 success 參數，
+        // 因此動態訊息須等成功後再設定。
+        var ok = await RunEditAsync(async ct =>
+        {
+            moved = await Api.MergeTaxonomyAsync(_kind, source.Id, targetId, source.Version, ct);
+            if (_edit.Id == source.Id) await NewEdit();
+            CancelMerge();
+            _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
+            if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
+        });
+        if (ok) Notice = $"已合併{Label}，移轉 {moved} 篇文章的關聯。";
     }
 }

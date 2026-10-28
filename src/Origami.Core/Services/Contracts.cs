@@ -186,7 +186,9 @@ public static partial class ContentRules
             {
                 // 關聯表主鍵衝突代表兩個重疊的儲存都通過了版本檢查。
                 "PK_ContentCategories" or "PK_ContentTags" => "資料已被另一個分頁更新，請重新載入後再編輯。",
-                "IX_Contents_Slug" or "IX_Categories_Slug" or "IX_Tags_Slug" => "網址代稱已存在，請使用其他代稱。",
+                "IX_Contents_Slug" or "IX_Categories_Slug" or "IX_Tags_Slug" or
+                "IX_Contents_SiteId_Slug" or "IX_Categories_SiteId_Slug" or "IX_Tags_SiteId_Slug"
+                    => "網址代稱已存在，請使用其他代稱。",
                 _ => "資料已存在或已被另一個分頁變更，請重新載入後再試。"
             });
         }

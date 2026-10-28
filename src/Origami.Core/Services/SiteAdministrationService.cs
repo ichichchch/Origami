@@ -1,0 +1,339 @@
+namespace Origami.Core.Services;
+
+public sealed class SiteAdministrationService(
+    IDbContextFactory<CmsDbContext> factory,
+    AdminAccess admin,
+    UserManager<AdminUser> userManager,
+    TimeProvider timeProvider)
+{
+    private const int MaximumSites = 200;
+    private const int MaximumMembers = 200;
+    private const int MaximumUserName = 256;
+
+    public async Task<SiteSummary?> ResolveHostAsync(string host, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        string normalized;
+        try { normalized = NormalizeHost(host); }
+        catch (CmsException) { return null; }
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var match = await db.Sites.AsNoTracking().Where(x => x.HostName == normalized)
+            .Select(x => new SiteSummary(x.Id, x.Name, x.Slug, x.HostName, x.IsActive, x.Version))
+            .SingleOrDefaultAsync(ct);
+        // 已登錄但停用的網域不得退回預設站點；未登錄網域也不得退回，
+        // 否則任何指向伺服器的網域都會服務預設站內容。僅本機開發
+        // （localhost／127.0.0.1）在預設站尚未登錄網域時以預設站服務。
+        if (match is not null) return match.IsActive ? match : null;
+        if (normalized is not ("localhost" or "127.0.0.1")) return null;
+        return await db.Sites.AsNoTracking()
+            .Where(x => x.Id == SiteDefaults.DefaultSiteId && x.HostName == null && x.IsActive)
+            .Select(x => new SiteSummary(x.Id, x.Name, x.Slug, x.HostName, x.IsActive, x.Version))
+            .SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>只接受完整主機名稱；不接受 URL、通訊埠、萬用字元或代理標頭。</summary>
+    public static string NormalizeHost(string host)
+    {
+        if (string.IsNullOrEmpty(host) || host.Length > 1024 || host.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)) ||
+            host.IndexOfAny(['/', '\\', '@', '*', '?', '#', '%']) >= 0)
+            throw new CmsException("請輸入不含協定、路徑與通訊埠的完整主機名稱。");
+
+        // 第一批採 DNS 網域／子網域；IPv4／localhost 供本機開發，IPv6 literal 不列入網域登錄。
+        if (host.Contains(':') || host.Contains('[') || host.Contains(']'))
+            throw new CmsException("主機名稱不得包含通訊埠或 IPv6 位址，請使用網域名稱。");
+        if (host.EndsWith('.')) host = host[..^1];
+        string result;
+        try { result = new IdnMapping { UseStd3AsciiRules = true }.GetAscii(host).ToLowerInvariant(); }
+        catch (ArgumentException) { throw new CmsException("主機名稱格式無效。"); }
+        if (result.Length is 0 or > Limits.HostName ||
+            Uri.CheckHostName(result) is not (UriHostNameType.Dns or UriHostNameType.IPv4) ||
+            result.Split('.').Any(label => !IsDnsLabel(label)))
+            throw new CmsException("主機名稱格式無效。");
+        return result;
+    }
+
+    public Task<SiteAccessInfo> GetAccessAsync(CancellationToken ct = default) => admin.GetCurrentAccessAsync(ct);
+
+    public async Task<IReadOnlyList<SiteSummary>> ListSitesAsync(CancellationToken ct = default)
+    {
+        var session = await admin.GetValidatedUserAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var query = db.Sites.AsNoTracking();
+        if (session.CredentialScope is not null)
+        {
+            // PAT 只代表綁定站點，不因擁有者的全站權限暴露其他站點。
+            query = query.Where(x => x.Id == session.SiteId && x.IsActive);
+        }
+        else if (session.User.SingletonKey != 1)
+        {
+            query = query.Where(x => x.IsActive && db.SiteMemberships.IgnoreQueryFilters()
+                .Any(m => m.SiteId == x.Id && m.UserId == session.User.Id &&
+                    (m.Role == SiteRole.Reader || m.Role == SiteRole.Editor || m.Role == SiteRole.Administrator)));
+        }
+        var sites = await query.OrderBy(x => x.Name).ThenBy(x => x.Id).Take(MaximumSites + 1)
+            .Select(x => new SiteSummary(x.Id, x.Name, x.Slug, x.HostName, x.IsActive, x.Version)).ToListAsync(ct);
+        if (sites.Count > MaximumSites) throw new CmsException("站點超過 200 筆，無法完整列出。");
+        return sites;
+    }
+
+    public async Task<SiteSummary> CreateSiteAsync(SiteCreateInput input, CancellationToken ct = default)
+    {
+        var creator = await admin.RequireNetworkAdminAsync(ct);
+        ArgumentNullException.ThrowIfNull(input);
+        var name = ValidateName(input.Name, Limits.SiteName, "站點名稱");
+        var slug = (input.Slug ?? "").Trim().ToLowerInvariant();
+        if (!IsDnsLabel(slug) || slug.Length > Limits.SiteSlug)
+            throw new CmsException("站點代稱須為 1–63 個 ASCII 英數字或連字號，開頭與結尾須為英數字。");
+        var host = NormalizeHost(input.HostName);
+        var site = new CmsSite { Name = name, Slug = slug, HostName = host, CreatedAt = timeProvider.GetUtcNow() };
+        return await WriteSafelyAsync(async () =>
+        {
+            await using var template = await factory.CreateDbContextAsync(ct);
+            // 複用工廠的完整 provider／攔截器設定，只給新 context 專屬的租戶範圍。
+            // 不切換請求的 SiteContext，也不略過 SaveChanges 的站點 guard。
+            var options = (DbContextOptions<CmsDbContext>)template.GetService<IDbContextOptions>();
+            await using var db = new CmsDbContext(options, new SiteContext { SiteId = site.Id });
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await LockSiteAsync(db, SiteDefaults.DefaultSiteId, ct);
+            await admin.RequireNetworkAdminAsync(ct);
+            if (await db.Sites.CountAsync(ct) >= MaximumSites)
+                throw new CmsException("最多只能建立 200 個站點。");
+            db.Sites.Add(site);
+            db.Settings.Add(new SiteSettings { SiteId = site.Id, Id = 1, Name = name });
+            db.SiteMemberships.Add(new SiteMembership
+            {
+                SiteId = site.Id, UserId = creator.Id, Role = SiteRole.Administrator
+            });
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Summary(site);
+        });
+    }
+
+    public async Task<SiteSummary> UpdateSiteAsync(Guid id, SiteUpdateInput input, CancellationToken ct = default)
+    {
+        await admin.RequireNetworkAdminAsync(ct);
+        ArgumentNullException.ThrowIfNull(input);
+        var name = ValidateName(input.Name, Limits.SiteName, "站點名稱");
+        if (id == SiteDefaults.DefaultSiteId && !input.IsActive)
+            throw new CmsException("預設站點不可停用。");
+        var host = input.HostName is null && id == SiteDefaults.DefaultSiteId ? null : NormalizeHost(input.HostName!);
+        return await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var site = await LockSiteAsync(db, id, ct);
+            await admin.RequireNetworkAdminAsync(ct);
+            if (site.Version != input.Version) throw VersionConflict();
+            site.Name = name;
+            site.HostName = host;
+            site.IsActive = input.IsActive;
+            site.Version = Guid.NewGuid();
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return Summary(site);
+        });
+    }
+
+    public async Task<PagedResult<UserSummary>> ListUsersAsync(int page = 1, string? search = null, CancellationToken ct = default)
+    {
+        await admin.RequireNetworkAdminAsync(ct);
+        var offset = ContentRules.Offset(page, Limits.SitePageSize);
+        if (search?.Length > MaximumUserName) throw new CmsException("搜尋文字不可超過 256 字。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var query = db.Users.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
+            query = query.Where(x => x.UserName != null && EF.Functions.ILike(x.UserName, pattern));
+        }
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.NormalizedUserName).ThenBy(x => x.Id).Skip(offset).Take(Limits.SitePageSize)
+            .Select(x => new UserSummary(x.Id, x.UserName ?? "", x.IsDisabled, x.SingletonKey == 1)).ToListAsync(ct);
+        return new(items, total, page, Limits.SitePageSize);
+    }
+
+    public async Task<UserSummary> CreateUserAsync(UserCreateInput input, CancellationToken ct = default)
+    {
+        await admin.RequireNetworkAdminAsync(ct);
+        ArgumentNullException.ThrowIfNull(input);
+        var name = ValidateName(input.UserName, MaximumUserName, "使用者名稱");
+        var password = input.Password;
+        // 防止主機誤用 Identity 預設較弱政策；實際建立仍通過既有 UserManager 的所有驗證器。
+        if (string.IsNullOrEmpty(password) || password.Length is < 8 or > 1024 ||
+            password.Distinct().Count() < 4 || !password.Any(char.IsAsciiDigit) ||
+            !password.Any(char.IsAsciiLetterLower) || !password.Any(char.IsAsciiLetterUpper) ||
+            !password.Any(c => !char.IsAsciiLetterOrDigit(c)))
+            throw new CmsException("密碼須為 8–1024 字，包含大小寫英文字母、數字、符號與至少 4 種不同字元。");
+        return await WriteSafelyAsync(async () =>
+        {
+            ct.ThrowIfCancellationRequested();
+            var user = new AdminUser { UserName = name, SingletonKey = null, IsDisabled = false };
+            var result = await userManager.CreateAsync(user, password);
+            if (!result.Succeeded)
+            {
+                if (result.Errors.Any(x => x.Code == "DuplicateUserName"))
+                    throw new CmsException("使用者名稱已存在。");
+                throw new CmsException("無法建立帳號，請檢查使用者名稱及密碼規則。");
+            }
+            return new UserSummary(user.Id, user.UserName ?? "", user.IsDisabled, false);
+        });
+    }
+
+    public async Task SetUserDisabledAsync(string id, bool disabled, CancellationToken ct = default)
+    {
+        var actor = await admin.RequireNetworkAdminAsync(ct);
+        ValidateUserId(id);
+        await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            // 與成員操作同樣先鎖站點；停用會改變所有站點的有效管理員計數。
+            // 固定排序且有上限，避免不同站點交錯鎖定造成死結。
+            var sites = await db.Sites.FromSqlRaw("SELECT * FROM \"Sites\" ORDER BY \"Id\" LIMIT 201 FOR UPDATE")
+                .AsNoTracking().ToListAsync(ct);
+            if (sites.Count > MaximumSites) throw new CmsException("站點超過 200 筆，請先處理站點上限。");
+            var user = await db.Users.FromSqlInterpolated($"SELECT * FROM \"AspNetUsers\" WHERE \"Id\" = {id} FOR UPDATE")
+                .SingleOrDefaultAsync(ct) ?? throw new CmsException("使用者不存在。");
+            await admin.RequireNetworkAdminAsync(ct);
+            if (disabled && (user.SingletonKey == 1 || user.Id == actor.Id))
+                throw new CmsException("不可停用全站管理者或自己的帳號。");
+            if (user.IsDisabled == disabled) return true;
+            if (disabled)
+            {
+                var removesLastAdmin = await db.SiteMemberships.IgnoreQueryFilters().AsNoTracking()
+                    .AnyAsync(m => m.UserId == id && m.Role == SiteRole.Administrator &&
+                        !db.SiteMemberships.IgnoreQueryFilters().Any(other => other.SiteId == m.SiteId &&
+                            other.UserId != id && other.Role == SiteRole.Administrator && !other.User.IsDisabled), ct);
+                if (removesLastAdmin) throw new CmsException("不可停用任一站點的最後一位啟用中管理員。");
+            }
+            user.IsDisabled = disabled;
+            // 單次寫入同時變更狀態與安全戳記，Cookie 與所有 PAT 立即失效。
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        });
+    }
+
+    public async Task<IReadOnlyList<MemberSummary>> ListMembersAsync(CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var members = await db.SiteMemberships.AsNoTracking().OrderBy(x => x.User.NormalizedUserName).ThenBy(x => x.UserId)
+            .Take(MaximumMembers + 1)
+            .Select(x => new MemberSummary(x.UserId, x.User.UserName ?? "", x.Role, x.Version, x.User.IsDisabled)).ToListAsync(ct);
+        if (members.Count > MaximumMembers) throw new CmsException("站點成員超過 200 筆，無法完整列出。");
+        return members;
+    }
+
+    public async Task SetMemberAsync(MemberEditInput input, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        ArgumentNullException.ThrowIfNull(input);
+        if (!Enum.IsDefined(input.Role)) throw new CmsException("站點角色無效。");
+        var name = ValidateName(input.UserName, MaximumUserName, "使用者名稱");
+        var normalized = userManager.NormalizeName(name);
+        await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await LockSiteAsync(db, db.CurrentSiteId, ct);
+            // 等候列鎖後重驗，避免已遭降權者利用先前通過的驗證變更成員。
+            await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+            var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.NormalizedUserName == normalized, ct)
+                ?? throw new CmsException("使用者不存在，請先由全站管理者建立帳號。");
+            // 停用帳號無法登入也不該佔用成員名額或管理員計數；先恢復啟用再調整成員。
+            if (user.IsDisabled) throw new CmsException("使用者已停用，請先恢復啟用再設定站點成員。");
+            var member = await db.SiteMemberships.SingleOrDefaultAsync(x => x.UserId == user.Id, ct);
+            if (input.Version is null)
+            {
+                if (member is not null) throw VersionConflict();
+                if (await db.SiteMemberships.CountAsync(ct) >= MaximumMembers)
+                    throw new CmsException("每個站點最多只能有 200 位成員。");
+                db.SiteMemberships.Add(new SiteMembership { SiteId = db.CurrentSiteId, UserId = user.Id, Role = input.Role });
+            }
+            else
+            {
+                if (member is null || member.Version != input.Version.Value) throw VersionConflict();
+                if (member.Role == SiteRole.Administrator && input.Role != SiteRole.Administrator && !user.IsDisabled)
+                    await EnsureAnotherAdministratorAsync(db, user.Id, ct);
+                member.Role = input.Role;
+                member.Version = Guid.NewGuid();
+            }
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        });
+    }
+
+    public async Task RemoveMemberAsync(string userId, Guid version, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        ValidateUserId(userId);
+        await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await LockSiteAsync(db, db.CurrentSiteId, ct);
+            await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+            var member = await db.SiteMemberships.Include(x => x.User).SingleOrDefaultAsync(x => x.UserId == userId, ct);
+            if (member is null || member.Version != version) throw VersionConflict();
+            if (member.Role == SiteRole.Administrator && !member.User.IsDisabled)
+                await EnsureAnotherAdministratorAsync(db, userId, ct);
+            db.SiteMemberships.Remove(member);
+            // 憑證每次使用都重驗成員資格；移除成員即停止其本站存取。
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        });
+    }
+
+    private static async Task EnsureAnotherAdministratorAsync(CmsDbContext db, string userId, CancellationToken ct)
+    {
+        if (!await db.SiteMemberships.AsNoTracking().AnyAsync(x => x.UserId != userId &&
+            x.Role == SiteRole.Administrator && !x.User.IsDisabled, ct))
+            throw new CmsException("不可移除或降低最後一位啟用中站點管理員的權限。");
+    }
+
+    internal static async Task<CmsSite> LockSiteAsync(CmsDbContext db, Guid siteId, CancellationToken ct) =>
+        await db.Sites.FromSqlInterpolated($"SELECT * FROM \"Sites\" WHERE \"Id\" = {siteId} FOR UPDATE")
+            .SingleOrDefaultAsync(ct) ?? throw new CmsException("站點不存在。");
+
+    private static SiteSummary Summary(CmsSite site) =>
+        new(site.Id, site.Name, site.Slug, site.HostName, site.IsActive, site.Version);
+
+    private static bool IsDnsLabel(string value) => value.Length is >= 1 and <= 63 &&
+        char.IsAsciiLetterOrDigit(value[0]) && char.IsAsciiLetterOrDigit(value[^1]) &&
+        value.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
+
+    private static string ValidateName(string? value, int maximum, string label)
+    {
+        var result = value?.Trim() ?? "";
+        if (result.Length == 0 || result.Length > maximum || result.Any(char.IsControl))
+            throw new CmsException($"{label}須為 1–{maximum} 字，且不得含控制字元。");
+        return result;
+    }
+
+    private static void ValidateUserId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 450 || value.Any(char.IsControl))
+            throw new CmsException("使用者識別無效。");
+    }
+
+    private static CmsException VersionConflict() => new("資料已被更新或刪除，請重新載入後再操作。");
+
+    // 交易提交也納入錯誤轉譯；不把 PostgreSQL 訊息、SQL 或 Identity 內部錯誤傳給呼叫端。
+    internal static async Task<T> WriteSafelyAsync<T>(Func<Task<T>> operation)
+    {
+        try { return await operation(); }
+        catch (DbUpdateConcurrencyException) { throw VersionConflict(); }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        { throw new CmsException("名稱、主機或資料已存在，請重新載入並使用不同的值。"); }
+        catch (DbUpdateException) { throw new CmsException("無法儲存資料，請確認輸入並重新載入後再試。"); }
+        catch (PostgresException ex) when (ex.SqlState is PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected)
+        { throw VersionConflict(); }
+        catch (DbException) { throw new CmsException("資料庫暫時無法完成操作，請稍後再試。"); }
+    }
+}

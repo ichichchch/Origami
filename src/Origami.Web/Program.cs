@@ -11,7 +11,7 @@ string connection;
 try
 {
     connection = builder.Configuration.GetConnectionString("CMS")
-        ?? throw new InvalidOperationException("缺少 ConnectionStrings CMS 設定。");
+        ?? throw new InvalidOperationException("缺少 ConnectionStrings__CMS 設定。");
 }
 catch (InvalidOperationException error)
 {
@@ -19,7 +19,19 @@ catch (InvalidOperationException error)
     await Console.Error.WriteLineAsync(error.Message + " 請透過安全的外部設定提供，勿將連線密碼寫入原始碼。");
     return 1;
 }
-builder.Services.AddDbContextFactory<CmsDbContext>(options => options.UseNpgsql(connection, o => o.UseVector()));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<SiteResolveThrottle>();
+builder.Services.AddSingleton<ContentUnlockThrottle>();
+builder.Services.AddScoped<SiteContext>(provider =>
+{
+    var site = new SiteContext();
+    if (provider.GetRequiredService<IHttpContextAccessor>().HttpContext?.Items[SiteResolver.ResolvedSiteKey] is SiteSummary resolved)
+        site.SiteId = resolved.Id;
+    return site;
+});
+builder.Services.AddDbContextFactory<CmsDbContext>(options => options.UseNpgsql(connection, o => o.UseVector()), ServiceLifetime.Scoped);
+builder.Services.AddScoped<CircuitHandler, SiteCircuitHandler>();
 // 編輯器 200,000 字的值經 JSON 轉義後可能膨脹六倍。
 // 傳輸大小保持受限，同時仍允許服務層獨立驗證本文上限。
 builder.Services.AddRazorComponents().AddInteractiveServerComponents()
@@ -42,12 +54,19 @@ builder.Services.AddScoped<McpReadTools>();
 builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFactory>();
 builder.Services.AddScoped<SiteAssistant>();
 builder.Services.AddScoped<AiStatusService>();
-// 匯入匯出自 API-first 起經 OrigamiClient 走 Api 主機；本機不再註冊 Export／Import 服務。
+// 匯入匯出自 API-first 起經 OrigamiClient 走 Api 主機；本機不註冊 Import 服務
+// （Export 服務僅供背景備份複用，AdminAccess 由 AddCmsIdentity 註冊）。
 builder.Services.AddScoped<TwoFactorService>();
 builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
 builder.Services.AddHostedService<EmbeddingJobWorker>();
 builder.Services.AddHostedService<ContentLifecycleWorker>();
 builder.Services.AddHostedService<MediaVariantBackfillService>();
+// 每日自動備份屬背景工作：與嵌入工作同樣留在網站主機，直接複用 Core
+// 匯出服務讀取資料庫與媒體檔案；預設關閉，由 Backup 組態開啟。
+builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<BackupService>();
+builder.Services.AddOptions<BackupOptions>().BindConfiguration("Backup");
+builder.Services.AddHostedService<BackupWorker>();
 // 匿名公開搜尋對每個來源 IP 維持一份供應商成本預算；MCP 端點
 // 現位於 Origami.Api 主機，並在該主機自帶速率限制器。
 builder.Services.AddRateLimiter(options =>
@@ -66,18 +85,28 @@ builder.Services.AddRateLimiter(options =>
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) })
             : RateLimitPartition.GetNoLimiter("other"));
 });
-var storage = new StoragePaths(builder.Configuration, builder.Environment);
-builder.Services.AddSingleton(storage);
-// BFF 資料通道：頁面讀寫經 Origami.Api；通行證由安全外部設定提供，瀏覽器不持有。
-builder.Services.AddHttpClient<OrigamiClient>(client =>
+builder.Services.AddScoped<StoragePaths>();
+// BFF 資料通道：服務憑證不進瀏覽器；解析主機的 client 獨立於租戶資料通道。
+builder.Services.AddScoped<AdminSession>();
+void ConfigureApiClient(HttpClient client)
 {
     client.BaseAddress = new Uri(builder.Configuration["Api:BaseUrl"] ?? "http://127.0.0.1:5100");
     var serviceToken = builder.Configuration["Api:ServiceToken"];
     if (!string.IsNullOrWhiteSpace(serviceToken))
-        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", serviceToken);
-});
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
+}
+builder.Services.AddHttpClient<OrigamiClient>(ConfigureApiClient)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddHttpClient<SiteResolver>(client =>
+    {
+        ConfigureApiClient(client);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+// 金鑰目錄維持全域，application name 保持舊值以相容既有 Cookie。
+var keyStorage = new StoragePaths(builder.Configuration, builder.Environment);
 var protection = builder.Services.AddDataProtection().SetApplicationName("Origami.SingleSite")
-    .PersistKeysToFileSystem(new DirectoryInfo(storage.Keys));
+    .PersistKeysToFileSystem(new DirectoryInfo(keyStorage.Keys));
 if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
 
 var app = builder.Build();
@@ -86,6 +115,7 @@ if (isCommand) return await RunCommandAsync(args, app);
 // 公開錯誤絕不回傳例外細節，本機開發環境也不例外。
 app.UseExceptionHandler("/Error", createScopeForErrors: true);
 if (!app.Environment.IsDevelopment()) app.UseHsts();
+// 轉址先於站點解析：未登錄主機的 HTTP 請求不必先付出解析成本，直接導向 HTTPS。
 app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
@@ -95,14 +125,41 @@ app.Use(async (context, next) =>
     context.Response.Headers.Pragma = "no-cache";
     await next(context);
 });
-var contentTypes = new FileExtensionContentTypeProvider(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+// 包含 /_blazor 的握手與 WebSocket；在認證、媒體與任何租戶服務之前解析。
+// 每請求都會執行，因此 SiteResolver 內建短快取與每來源冷解析預算（見 SiteResolver.cs）。
+app.Use(async (context, next) =>
 {
-    [".png"] = "image/png", [".jpg"] = "image/jpeg", [".webp"] = "image/webp"
-});
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(storage.Images), RequestPath = "/media",
-    ContentTypeProvider = contentTypes, ServeUnknownFileTypes = false
+    SiteSummary? site;
+    try
+    {
+        site = await context.RequestServices.GetRequiredService<SiteResolver>()
+            .ResolveAsync(context.Request.Host.Host, context.Connection.RemoteIpAddress?.ToString(), context.RequestAborted);
+    }
+    catch (SiteResolutionException)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsync("站點服務暫時無法使用，請稍後重試。", context.RequestAborted);
+        return;
+    }
+    if (site is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsync("站點不存在或已停用。", context.RequestAborted);
+        return;
+    }
+    context.Items[SiteResolver.ResolvedSiteKey] = site;
+    context.RequestServices.GetRequiredService<SiteContext>().SiteId = site.Id;
+    try { await next(context); }
+    catch (AccessDeniedException) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsync("你已登入，但沒有此站點的操作權限。請聯絡站點管理員。", context.RequestAborted);
+    }
+    catch (UnauthorizedAccessException) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        await context.Response.WriteAsync("登入或網站服務憑證已失效，請重新登入；若持續失敗請聯絡管理者。", context.RequestAborted);
+    }
 });
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAuthentication();
@@ -112,6 +169,19 @@ app.UseRateLimiter();
 app.MapStaticAssets();
 app.MapCmsIdentity();
 app.MapPublicEndpoints();
+// 媒體仍公開，但只服務已核定站點的圖片目錄，絕不映射全域目錄。
+app.MapGet("/media/{filename}", (string filename, StoragePaths paths) =>
+{
+    if (!ContentRules.IsSafeMediaFileName(filename) || filename.Contains("..", StringComparison.Ordinal) ||
+        filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        return Results.NotFound();
+    var contentType = Path.GetExtension(filename).ToLowerInvariant() switch
+    {
+        ".png" => "image/png", ".jpg" => "image/jpeg", ".webp" => "image/webp", _ => null
+    };
+    var path = Path.Combine(paths.Images, filename);
+    return contentType is not null && File.Exists(path) ? Results.File(path, contentType) : Results.NotFound();
+});
 // 瀏覽器依慣例請求這個網址；直接提供已設定的媒體資產，不經媒體庫查詢介面。
 app.MapGet("/favicon.ico", async (MediaService media, CancellationToken ct) =>
 {
@@ -128,6 +198,9 @@ app.MapHealthChecks("/health");
 // 匯出資料同樣經 Api（BFF 通道）；Api 端緩衝後一次輸出，失敗不會以 200 狀態串流出被截斷的檔案。
 app.MapGet("/admin/export", async (OrigamiClient api, CancellationToken ct) =>
     Results.File(await api.ExportAsync(ct), "application/json", "origami-export.json"))
+    .RequireAuthorization();
+app.MapGet("/admin/export-archive", async (OrigamiClient api, CancellationToken ct) =>
+    Results.File(await api.ExportArchiveAsync(ct), "application/zip", "origami-export.zip"))
     .RequireAuthorization();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 await app.RunAsync();

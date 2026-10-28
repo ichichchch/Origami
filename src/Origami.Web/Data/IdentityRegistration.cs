@@ -52,7 +52,11 @@ public static class IdentityRegistration
             options.Cookie.Path = "/";
             options.Cookie.IsEssential = true;
             options.LoginPath = "/account/login";
-            options.AccessDeniedPath = "/account/login";
+            options.Events.OnRedirectToAccessDenied = context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return context.Response.WriteAsync("你已登入，但沒有此站點的操作權限。", context.HttpContext.RequestAborted);
+            };
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
             options.SlidingExpiration = true;
             options.Events.OnValidatePrincipal = async context =>
@@ -117,7 +121,7 @@ public static class IdentityRegistration
 
             // 這些管理員物件屬於 HTTP 請求範圍，絕不屬於互動電路。
             var user = await userManager.GetUserAsync(context.User);
-            if (user is null || user.SingletonKey != 1)
+            if (user is null || user.IsDisabled)
             {
                 return Results.Unauthorized();
             }
