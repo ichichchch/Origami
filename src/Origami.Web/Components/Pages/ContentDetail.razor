@@ -4,6 +4,7 @@
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
 @inject AdminAccess Admin
+@inject ContentUnlockThrottle UnlockThrottle
 @inject ILogger<ContentDetail> Logger
 
 <PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
@@ -304,6 +305,13 @@ else
     private async Task UnlockAsync()
     {
         if (_content is null || HttpContext is null || HttpContext.Response.HasStarted) return;
+        // 解鎖端點走 BFF 免限流通道；線上猜測的上限由本機的每「內容＋來源 IP」預算補上。
+        if (!UnlockThrottle.TryAcquire(_content.Id, HttpContext.Connection.RemoteIpAddress?.ToString()))
+        {
+            Unlock.Password = "";
+            _unlockError = "嘗試次數過多，請稍後再試。";
+            return;
+        }
         try
         {
             var token = await Api.UnlockAsync(_content.Id, Unlock.Password, HttpContext.RequestAborted);

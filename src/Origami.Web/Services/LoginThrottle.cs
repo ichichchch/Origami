@@ -1,11 +1,16 @@
 namespace Origami.Web.Services;
 
 /// <summary>依連線來源限制所有憑證嘗試次數，不論登入結果為何。</summary>
-public sealed class LoginThrottle(TimeProvider clock)
+public sealed class LoginThrottle(TimeProvider clock,
+    int? maxAttempts = null, int? maxSources = null, TimeSpan? window = null)
 {
     public const int MaxAttempts = 20;
     public const int MaxSources = 512;
     public static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
+
+    private readonly int attemptLimit = maxAttempts ?? MaxAttempts;
+    private readonly int sourceLimit = maxSources ?? MaxSources;
+    private readonly TimeSpan windowDuration = window ?? Window;
 
     private readonly object gate = new();
     private readonly Dictionary<string, Queue<DateTimeOffset>> attempts = new(StringComparer.Ordinal);
@@ -23,12 +28,12 @@ public sealed class LoginThrottle(TimeProvider clock)
             if (!attempts.TryGetValue(source, out var queue))
             {
                 // 容量滿時保守拒絕新來源，直到有記錄到期；活躍記錄絕不逐出。
-                if (attempts.Count >= MaxSources) return false;
-                queue = new Queue<DateTimeOffset>(MaxAttempts);
+                if (attempts.Count >= sourceLimit) return false;
+                queue = new Queue<DateTimeOffset>(attemptLimit);
                 attempts.Add(source, queue);
-                expirations.Enqueue(source, now + Window);
+                expirations.Enqueue(source, now + windowDuration);
             }
-            if (queue.Count >= MaxAttempts) return false;
+            if (queue.Count >= attemptLimit) return false;
             queue.Enqueue(now);
             return true;
         }
@@ -40,10 +45,26 @@ public sealed class LoginThrottle(TimeProvider clock)
         {
             expirations.Dequeue();
             var queue = attempts[source];
-            while (queue.TryPeek(out var attemptedAt) && attemptedAt + Window <= now)
+            while (queue.TryPeek(out var attemptedAt) && attemptedAt + windowDuration <= now)
                 queue.Dequeue();
             if (queue.Count == 0) attempts.Remove(source);
-            else expirations.Enqueue(source, queue.Peek() + Window);
+            else expirations.Enqueue(source, queue.Peek() + windowDuration);
         }
     }
+}
+
+/// <summary>
+/// 內容保護密碼的解鎖嘗試預算；與登入限流分開計數，避免解鎖流量排擠登入來源。
+/// Api 端解鎖走 BFF 免限流通道，線上猜測的失敗上限由網站主機這層補上。
+/// </summary>
+public sealed class ContentUnlockThrottle(TimeProvider clock)
+{
+    public const int MaxAttempts = 10;
+    public static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
+
+    private readonly LoginThrottle budget = new(clock, MaxAttempts, maxSources: 4096, Window);
+
+    /// <summary>以「內容識別＋來源 IP」為鍵消耗一個解鎖許可。</summary>
+    public bool TryAcquire(Guid contentId, string? remoteIp) =>
+        budget.TryAcquire(contentId.ToString("N") + ":" + (remoteIp ?? "unknown"));
 }

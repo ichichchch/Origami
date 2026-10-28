@@ -133,6 +133,35 @@ public sealed class LoginThrottleTests
         AssertStorage(throttle, 2, LoginThrottle.MaxAttempts + 1);
     }
 
+    [Fact]
+    public void Content_unlock_budgets_are_per_content_and_source_with_an_independent_pool()
+    {
+        var clock = new ManualTimeProvider();
+        var throttle = new ContentUnlockThrottle(clock);
+        var content = Guid.NewGuid();
+        for (var attempt = 0; attempt < ContentUnlockThrottle.MaxAttempts; attempt++)
+            Assert.True(throttle.TryAcquire(content, "198.51.100.7"));
+        Assert.False(throttle.TryAcquire(content, "198.51.100.7"));
+        // 不同內容或不同來源互不影響；到期後恢復。
+        Assert.True(throttle.TryAcquire(Guid.NewGuid(), "198.51.100.7"));
+        Assert.True(throttle.TryAcquire(content, "198.51.100.8"));
+        clock.Advance(ContentUnlockThrottle.Window);
+        Assert.True(throttle.TryAcquire(content, "198.51.100.7"));
+    }
+
+    [Fact]
+    public void Site_resolve_budget_limits_cold_lookups_per_source_for_one_minute()
+    {
+        var clock = new ManualTimeProvider();
+        var throttle = new SiteResolveThrottle(clock);
+        for (var attempt = 0; attempt < SiteResolveThrottle.MaxAttempts; attempt++)
+            Assert.True(throttle.TryAcquire("198.51.100.9"));
+        Assert.False(throttle.TryAcquire("198.51.100.9"));
+        Assert.True(throttle.TryAcquire("198.51.100.10"));
+        clock.Advance(SiteResolveThrottle.Window);
+        Assert.True(throttle.TryAcquire("198.51.100.9"));
+    }
+
     private static void AssertStorage(LoginThrottle throttle, int expectedSources, int expectedAttempts)
     {
         // 僅在取用動作全部停止時檢查，不為了測試而在正式程式碼新增專用 API。
