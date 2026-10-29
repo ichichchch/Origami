@@ -854,6 +854,11 @@ namespace Origami.Core.Data.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1359,10 +1364,18 @@ namespace Origami.Core.Data.Migrations
                     b.Property<bool>("CustomNavigationEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("DateFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("EmailNotificationsEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<int?>("FeedItems")
                         .HasColumnType("integer");
@@ -1394,8 +1407,16 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("PermalinkScheme")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int?>("PostsPerPage")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("PrivacyPageContentId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("ReadingWidth")
                         .HasColumnType("integer");
@@ -1429,6 +1450,16 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("TimeFormat")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
@@ -1448,6 +1479,8 @@ namespace Origami.Core.Data.Migrations
                     b.HasIndex("SiteId", "HomePageContentId");
 
                     b.HasIndex("SiteId", "LogoMediaId");
+
+                    b.HasIndex("SiteId", "PrivacyPageContentId");
 
                     b.HasIndex("SiteId", "SiteIconMediaId");
 
@@ -1474,11 +1507,14 @@ namespace Origami.Core.Data.Migrations
                             CommentCloseDays = 0,
                             CommentsEnabled = false,
                             CustomNavigationEnabled = false,
+                            DateFormat = "yyyy.MM.dd",
                             Description = "用文字，分享你的世界。",
+                            EmailNotificationsEnabled = false,
                             FooterText = "",
                             MaintenanceMessage = "",
                             MaintenanceMode = false,
                             Name = "Origami",
+                            PermalinkScheme = "post-name",
                             ReadingWidth = 68,
                             ShowByline = true,
                             ShowCover = true,
@@ -1486,6 +1522,8 @@ namespace Origami.Core.Data.Migrations
                             SocialMastodonUrl = "",
                             SocialXUrl = "",
                             ThemePreset = "reading",
+                            TimeFormat = "HH:mm",
+                            TimeZoneId = "UTC",
                             Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84"),
                             WebhookSecret = "",
                             WebhookUrl = ""
@@ -1527,6 +1565,68 @@ namespace Origami.Core.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Tags");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.WebhookDeliveryRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Event")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("LastError")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("LastStatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<string>("Signature")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "CreatedAt", "Id");
+
+                    b.HasIndex("SiteId", "Status", "NextAttemptAt");
+
+                    b.ToTable("WebhookDeliveries");
                 });
 
             modelBuilder.Entity("ContentCategories", b =>
@@ -2029,6 +2129,12 @@ namespace Origami.Core.Data.Migrations
                         .HasPrincipalKey("SiteId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Origami.Core.Models.Content", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId", "PrivacyPageContentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Origami.Core.Models.MediaAsset", null)
                         .WithMany()
                         .HasForeignKey("SiteId", "SiteIconMediaId")
@@ -2037,6 +2143,15 @@ namespace Origami.Core.Data.Migrations
                 });
 
             modelBuilder.Entity("Origami.Core.Models.Tag", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.WebhookDeliveryRecord", b =>
                 {
                     b.HasOne("Origami.Core.Models.CmsSite", null)
                         .WithMany()

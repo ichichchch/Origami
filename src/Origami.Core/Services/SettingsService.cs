@@ -34,6 +34,18 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             throw new CmsException("Webhook 網址必須是公開 https 絕對網址（不允許本機或內網位址）。");
         if (input.CommentCloseDays is < 0 or > 3650)
             throw new CmsException("自動關閉評論天數須為 0–3650 天（0 表示不自動關閉）。");
+        var permalinkScheme = string.IsNullOrWhiteSpace(input.PermalinkScheme) ? PermalinkRules.PostName : input.PermalinkScheme.Trim().ToLowerInvariant();
+        if (!PermalinkRules.IsValidScheme(permalinkScheme))
+            throw new CmsException("永久連結結構方案無效。");
+        var timeZoneId = string.IsNullOrWhiteSpace(input.TimeZoneId) ? "UTC" : input.TimeZoneId.Trim();
+        if (!PermalinkRules.IsValidTimeZone(timeZoneId))
+            throw new CmsException("時區識別無效，請選擇有效的系統時區或 UTC。");
+        var dateFormat = string.IsNullOrWhiteSpace(input.DateFormat) ? "yyyy.MM.dd" : input.DateFormat.Trim();
+        if (!PermalinkRules.IsValidDateFormat(dateFormat))
+            throw new CmsException("日期格式無效。");
+        var timeFormat = string.IsNullOrWhiteSpace(input.TimeFormat) ? "HH:mm" : input.TimeFormat.Trim();
+        if (!PermalinkRules.IsValidTimeFormat(timeFormat))
+            throw new CmsException("時間格式無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
         if (input.HomePageContentId is { } homeId)
         {
@@ -41,6 +53,13 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
                 .Select(x => new { x.Kind, x.Status, x.IsPrivate, x.IsProtected }).SingleOrDefaultAsync(ct);
             if (home is null || home.Kind != ContentKind.Page || home.Status != ContentStatus.Published || home.IsPrivate || home.IsProtected)
                 throw new CmsException("首頁固定頁面必須是已發布、未受保護且非私密的獨立頁面。");
+        }
+        if (input.PrivacyPageContentId is { } privacyId)
+        {
+            var privacy = await db.Contents.AsNoTracking().Where(x => x.Id == privacyId)
+                .Select(x => new { x.Kind, x.Status, x.IsPrivate, x.IsProtected }).SingleOrDefaultAsync(ct);
+            if (privacy is null || privacy.Kind != ContentKind.Page || privacy.Status != ContentStatus.Published || privacy.IsPrivate || privacy.IsProtected)
+                throw new CmsException("隱私權政策頁面必須是已發布、未受保護且非私密的獨立頁面。");
         }
         if (input.SiteIconMediaId is { } iconId && !await db.MediaAssets.AsNoTracking().AnyAsync(x => x.Id == iconId, ct))
             throw new CmsException("網站圖示不存在，請重新選擇。");
@@ -55,6 +74,12 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.FeedShowFullText = input.FeedShowFullText;
         entity.AuthorDisplayName = (input.AuthorDisplayName ?? "").Trim();
         entity.HomePageContentId = input.HomePageContentId;
+        entity.PrivacyPageContentId = input.PrivacyPageContentId;
+        entity.EmailNotificationsEnabled = input.EmailNotificationsEnabled;
+        entity.PermalinkScheme = permalinkScheme;
+        entity.TimeZoneId = timeZoneId;
+        entity.DateFormat = dateFormat;
+        entity.TimeFormat = timeFormat;
         entity.SiteIconMediaId = input.SiteIconMediaId;
         entity.LogoMediaId = input.LogoMediaId;
         entity.CustomNavigationEnabled = input.CustomNavigationEnabled;
@@ -89,6 +114,10 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         });
         await ContentRules.SaveAsync(db, ct);
         input.ColorScheme = entity.ColorScheme;
+        input.PermalinkScheme = entity.PermalinkScheme;
+        input.TimeZoneId = entity.TimeZoneId;
+        input.DateFormat = entity.DateFormat;
+        input.TimeFormat = entity.TimeFormat;
         input.Version = entity.Version;
         return input;
     }

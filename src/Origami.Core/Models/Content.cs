@@ -42,6 +42,15 @@ public static partial class Limits
     public const int CustomFieldOptions = 500;
     public const int WebhookUrl = 500;
     public const int WebhookSecret = 128;
+    public const int WebhookPayloadMax = 65_536;
+    public const int WebhookErrorMax = 500;
+    public const int WebhookMaxAttempts = 5;
+    public const int RevisionSnapshotMax = 65_536;
+    public const int PermalinkScheme = 32;
+    public const int TimeZoneId = 64;
+    public const int DateFormat = 32;
+    public const int TimeFormat = 32;
+    public const int WxrAttachmentMaxCount = 20;
     public const int AuditAction = 64;
     public const int AuditDetail = 500;
     public const int RecoveryCodesCount = 8;
@@ -181,7 +190,7 @@ public sealed class Content
     public ICollection<ContentFieldValue> FieldValues { get; set; } = new List<ContentFieldValue>();
 }
 
-/// <summary>內容儲存前的快照；還原時載回編輯器。</summary>
+/// <summary>內容儲存前的完整快照；還原時載回編輯器（含代稱、分類標籤、自訂詞彙與欄位、SEO、封面、作者等）。</summary>
 public sealed class ContentRevision
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -190,6 +199,8 @@ public sealed class ContentRevision
     public string Title { get; set; } = "";
     public string Markdown { get; set; } = "";
     public string Excerpt { get; set; } = "";
+    /// <summary>序列化後的結構化欄位快照（JSON：Slug、SEO、封面、作者、分類標籤、自訂詞彙與自訂欄位等）。</summary>
+    [StringLength(Limits.RevisionSnapshotMax)] public string SnapshotJson { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; }
     public Content Content { get; set; } = null!;
 }
@@ -340,7 +351,46 @@ public sealed class SiteSettings
     [StringLength(Limits.WebhookUrl)] public string WebhookUrl { get; set; } = "";
     /// <summary>出站 Webhook HMAC-SHA256 簽章密鑰。</summary>
     [StringLength(Limits.WebhookSecret)] public string WebhookSecret { get; set; } = "";
+    /// <summary>指定為站點隱私權政策頁的已發布獨立頁面；設定後顯示於頁尾連結。</summary>
+    public Guid? PrivacyPageContentId { get; set; }
+    /// <summary>是否啟用評論與審稿流程的電子郵件通知（需同時設定 SMTP）。</summary>
+    public bool EmailNotificationsEnabled { get; set; }
+    /// <summary>文章永久連結結構方案：post-name（/posts/{slug}）、day-and-name、month-and-name、numeric。</summary>
+    [StringLength(Limits.PermalinkScheme)] public string PermalinkScheme { get; set; } = "post-name";
+    /// <summary>站點預設顯示時區（IANA 或 Windows 時區 ID，預設 UTC）。</summary>
+    [StringLength(Limits.TimeZoneId)] public string TimeZoneId { get; set; } = "UTC";
+    /// <summary>站點預設日期顯示格式（受控白名單）。</summary>
+    [StringLength(Limits.DateFormat)] public string DateFormat { get; set; } = "yyyy.MM.dd";
+    /// <summary>站點預設時間顯示格式（受控白名單）。</summary>
+    [StringLength(Limits.TimeFormat)] public string TimeFormat { get; set; } = "HH:mm";
     public Guid Version { get; set; }
+}
+
+/// <summary>出站 Webhook 投遞狀態。</summary>
+public enum WebhookDeliveryStatus
+{
+    Pending = 0,
+    Succeeded = 1,
+    RetryScheduled = 2,
+    Failed = 3
+}
+
+/// <summary>持久化的出站 Webhook 投遞紀錄，支援指數退避重試與後台手動重送。</summary>
+public sealed class WebhookDeliveryRecord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
+    [Required, StringLength(64)] public string Event { get; set; } = "";
+    [Required, StringLength(Limits.WebhookUrl)] public string TargetUrl { get; set; } = "";
+    [Required, StringLength(Limits.WebhookPayloadMax)] public string PayloadJson { get; set; } = "";
+    [StringLength(160)] public string Signature { get; set; } = "";
+    public WebhookDeliveryStatus Status { get; set; } = WebhookDeliveryStatus.Pending;
+    public int Attempts { get; set; }
+    public int? LastStatusCode { get; set; }
+    [StringLength(Limits.WebhookErrorMax)] public string LastError { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset? NextAttemptAt { get; set; }
+    public DateTimeOffset? DeliveredAt { get; set; }
 }
 
 /// <summary>管理操作審計日誌：記錄站點重要變更與安全事件。</summary>

@@ -36,6 +36,10 @@ public sealed partial class ContentLifecycleWorker(
     public Task<int> PromoteAsync(CancellationToken ct = default) => SiteWorkRunner.RunAsync(services, "排程發布",
         (siteServices, _, token) => siteServices.GetRequiredService<ContentService>().PromoteDueAsync(token), logger, ct);
 
+    /// <summary>逐站重試到期的出站 Webhook；供測試與單次執行使用。</summary>
+    public Task<int> RetryWebhooksAsync(CancellationToken ct = default) => SiteWorkRunner.RunAsync(services, "Webhook 重試",
+        (siteServices, _, token) => siteServices.GetRequiredService<WebhookService>().ProcessPendingRetriesAsync(token), logger, ct);
+
     /// <summary>逐站清理逾期回收桶；供測試與單次執行使用。</summary>
     public Task<int> PurgeAsync(CancellationToken ct = default) => SiteWorkRunner.RunAsync(services, "回收桶清理",
         (siteServices, _, token) => siteServices.GetRequiredService<ContentService>().PurgeExpiredTrashAsync(token), logger, ct);
@@ -43,6 +47,10 @@ public sealed partial class ContentLifecycleWorker(
     private async Task RunPassAsync(CancellationToken ct)
     {
         try { await PromoteAsync(ct); }
+        catch (Exception error) when (error is not OperationCanceledException || !ct.IsCancellationRequested)
+        { Log.PromoteFailed(logger, error.GetType().Name); }
+
+        try { await RetryWebhooksAsync(ct); }
         catch (Exception error) when (error is not OperationCanceledException || !ct.IsCancellationRequested)
         { Log.PromoteFailed(logger, error.GetType().Name); }
     }

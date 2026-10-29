@@ -176,6 +176,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         // ExecuteUpdate／ExecuteDelete 均保留 query filters，不得清除其他站點的資料。
         await db.Settings.ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.HomePageContentId, (Guid?)null)
+            .SetProperty(x => x.PrivacyPageContentId, (Guid?)null)
             .SetProperty(x => x.SiteIconMediaId, (Guid?)null)
             .SetProperty(x => x.LogoMediaId, (Guid?)null), ct);
         await db.Contents.ExecuteUpdateAsync(setters => setters
@@ -487,6 +488,17 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             ? Math.Clamp(feedItems.GetInt32(), 1, Limits.MaxFeedItems) : null;
         settings.HomePageContentId = site.GetString("homePageSlug") is { } homeSlug && contentsBySlug.GetValueOrDefault(homeSlug) is { Kind: ContentKind.Page, Status: ContentStatus.Published, IsProtected: false, IsPrivate: false } home
             ? home.Id : null;
+        settings.PrivacyPageContentId = site.GetString("privacyPageSlug") is { } privacySlug && contentsBySlug.GetValueOrDefault(privacySlug) is { Kind: ContentKind.Page, Status: ContentStatus.Published, IsProtected: false, IsPrivate: false } privacy
+            ? privacy.Id : null;
+        settings.EmailNotificationsEnabled = site.TryGetProperty("emailNotificationsEnabled", out var emailNotif) && emailNotif.ValueKind == JsonValueKind.True;
+        var permalink = Bounded(site, "permalinkScheme", Limits.PermalinkScheme, "永久連結結構", optional: true);
+        settings.PermalinkScheme = PermalinkRules.IsValidScheme(permalink) ? permalink : PermalinkRules.PostName;
+        var tz = Bounded(site, "timeZoneId", Limits.TimeZoneId, "時區", optional: true);
+        settings.TimeZoneId = PermalinkRules.IsValidTimeZone(tz) ? tz : "UTC";
+        var df = Bounded(site, "dateFormat", Limits.DateFormat, "日期格式", optional: true);
+        settings.DateFormat = PermalinkRules.IsValidDateFormat(df) ? df : "yyyy.MM.dd";
+        var tf = Bounded(site, "timeFormat", Limits.TimeFormat, "時間格式", optional: true);
+        settings.TimeFormat = PermalinkRules.IsValidTimeFormat(tf) ? tf : "HH:mm";
         // 匯入的媒體資料列會取得新識別碼，因此圖示改從檔名解析。
         Guid? siteIconId = null;
         if (site.GetString("siteIconFileName") is { } iconFile && mediaByFileName.TryGetValue(iconFile, out var icon))

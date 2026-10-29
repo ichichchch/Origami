@@ -462,6 +462,164 @@ public sealed class SiteAdministrationService(
         });
     }
 
+    /// <summary>匯出目前登入者的完整個人資料（GDPR／個資匯出），不含密碼雜湊或 TOTP 密鑰。</summary>
+    public async Task<PersonalDataExport> ExportMyPersonalDataAsync(CancellationToken ct = default)
+    {
+        var user = await admin.RequireNonCredentialUserAsync(ct);
+        return await BuildPersonalDataExportAsync(user.Id, ct);
+    }
+
+    /// <summary>抹除目前登入者的個人資料並將其已發表內容匿名化。</summary>
+    public async Task<PersonalDataEraseResult> EraseMyPersonalDataAsync(CancellationToken ct = default)
+    {
+        var user = await admin.RequireNonCredentialUserAsync(ct);
+        return await EraseUserPersonalDataAsync(user.Id, ct);
+    }
+
+    /// <summary>全站管理者匯出指定帳號的個人資料。</summary>
+    public async Task<PersonalDataExport> ExportUserPersonalDataAsync(string userId, CancellationToken ct = default)
+    {
+        await admin.RequireNetworkAdminAsync(ct);
+        ValidateUserId(userId);
+        return await BuildPersonalDataExportAsync(userId, ct);
+    }
+
+    private async Task<PersonalDataExport> BuildPersonalDataExportAsync(string userId, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == userId, ct)
+            ?? throw new CmsException("使用者不存在。");
+        var memberships = await db.SiteMemberships.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.UserId == user.Id)
+            .OrderBy(x => x.Site.Name)
+            .Select(x => new PersonalSiteMembershipItem(
+                x.SiteId, x.Site.Name, x.Site.Slug, x.Role.ToString(), x.DisplayName))
+            .ToListAsync(ct);
+        var contents = await db.Contents.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.AuthorId == user.Id)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(200)
+            .Select(x => new PersonalContentItem(
+                x.SiteId, x.Id, x.Kind.ToString(), x.Title, x.Slug, x.Status.ToString(), x.CreatedAt, x.PublishedAt))
+            .ToListAsync(ct);
+        var audits = await db.AuditLogs.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.UserId == user.Id)
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(100)
+            .Select(x => new PersonalAuditItem(x.SiteId, x.Action, x.Target, x.CreatedAt))
+            .ToListAsync(ct);
+        return new PersonalDataExport(
+            user.Id,
+            user.UserName ?? "",
+            user.Email ?? "",
+            user.Bio,
+            user.WebsiteUrl,
+            user.AvatarUrl,
+            user.TwoFactorEnabled,
+            timeProvider.GetUtcNow(),
+            memberships,
+            contents,
+            audits);
+    }
+
+    /// <summary>
+    /// 個人資料抹除與匿名化工作流程：清空帳號個資（信箱、簡介、網站、頭像、2FA）、撤銷所有 API 憑證、
+    /// 將該帳號在各站撰寫的內容改為匿名（AuthorId=null, AuthorName="", AuthorSlug=""）、移除成員資格並停用帳號。
+    /// 若為任一站點最後一位啟用中管理員或全站管理者，將拒絕操作以保護站點可管理性。
+    /// </summary>
+    public async Task<PersonalDataEraseResult> EraseUserPersonalDataAsync(string userId, CancellationToken ct = default)
+    {
+        var actor = await admin.RequireNonCredentialUserAsync(ct);
+        ValidateUserId(userId);
+        // 允許本人自助申請抹除，或由全站管理者對指定帳號執行。
+        if (actor.Id != userId)
+            await admin.RequireNetworkAdminAsync(ct);
+
+        return await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var sites = await db.Sites.FromSqlRaw("SELECT * FROM \"Sites\" ORDER BY \"Id\" LIMIT 201 FOR UPDATE")
+                .AsNoTracking().ToListAsync(ct);
+            if (sites.Count > MaximumSites) throw new CmsException("站點超過 200 筆，請先處理站點上限。");
+            var user = await db.Users.FromSqlInterpolated($"SELECT * FROM \"AspNetUsers\" WHERE \"Id\" = {userId} FOR UPDATE")
+                .SingleOrDefaultAsync(ct) ?? throw new CmsException("使用者不存在。");
+            if (user.SingletonKey == 1)
+                throw new CmsException("不可抹除全站管理者的個人資料。");
+            if (!user.IsDisabled)
+            {
+                var removesLastAdmin = await db.SiteMemberships.IgnoreQueryFilters().AsNoTracking()
+                    .AnyAsync(m => m.UserId == userId && m.Role == SiteRole.Administrator &&
+                        !db.SiteMemberships.IgnoreQueryFilters().Any(other => other.SiteId == m.SiteId &&
+                            other.UserId != userId && other.Role == SiteRole.Administrator && !other.User.IsDisabled), ct);
+                if (removesLastAdmin)
+                    throw new CmsException("不可抹除任一站點的最後一位啟用中管理員；請先指派其他站點管理員。");
+            }
+
+            var displayNames = await db.SiteMemberships.IgnoreQueryFilters().AsNoTracking()
+                .Where(x => x.UserId == userId && x.DisplayName != "")
+                .Select(x => x.DisplayName)
+                .Distinct()
+                .ToListAsync(ct);
+            if (!string.IsNullOrWhiteSpace(user.UserName))
+                displayNames.Add(user.UserName);
+
+            var anonymizedContents = await db.Contents.IgnoreQueryFilters()
+                .Where(x => x.AuthorId == userId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.AuthorId, (string?)null)
+                    .SetProperty(x => x.AuthorName, "")
+                    .SetProperty(x => x.AuthorSlug, ""), ct);
+
+            var anonymizedComments = 0;
+            if (displayNames.Count > 0)
+            {
+                anonymizedComments = await db.Comments.IgnoreQueryFilters()
+                    .Where(x => displayNames.Contains(x.AuthorName))
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.AuthorName, "匿名讀者")
+                        .SetProperty(x => x.Url, ""), ct);
+            }
+
+            var revokedCredentials = await db.ApiCredentials.IgnoreQueryFilters()
+                .Where(x => x.UserId == userId)
+                .ExecuteDeleteAsync(ct);
+
+            var removedMemberships = await db.SiteMemberships.IgnoreQueryFilters()
+                .Where(x => x.UserId == userId)
+                .ExecuteDeleteAsync(ct);
+
+            var anonToken = "erased-" + user.Id[..Math.Min(12, user.Id.Length)];
+            user.UserName = anonToken;
+            user.NormalizedUserName = anonToken.ToUpperInvariant();
+            user.Email = "";
+            user.NormalizedEmail = null;
+            user.Bio = "";
+            user.WebsiteUrl = "";
+            user.AvatarUrl = "";
+            user.TwoFactorEnabled = false;
+            user.TwoFactorSecret = "";
+            user.RecoveryCodeHashes = "";
+            user.IsDisabled = true;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+
+            db.AuditLogs.Add(new AuditLog
+            {
+                SiteId = db.CurrentSiteId,
+                UserId = actor.Id,
+                UserName = actor.UserName ?? "",
+                Action = "user.personal_data_erased",
+                Target = user.Id,
+                CreatedAt = timeProvider.GetUtcNow()
+            });
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return new PersonalDataEraseResult(user.Id, anonymizedContents, anonymizedComments, removedMemberships, revokedCredentials);
+        });
+    }
+
     private static SiteSummary Summary(CmsSite site) =>
         new(site.Id, site.Name, site.Slug, site.HostName, site.IsActive, site.Version);
 

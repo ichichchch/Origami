@@ -41,6 +41,18 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         if (settings?.FeedItems is { } feedItems) writer.WriteNumber("feedItems", feedItems);
         if (settings?.HomePageContentId is { } homeId && slugById.TryGetValue(homeId, out var homeSlug))
             writer.WriteString("homePageSlug", homeSlug);
+        if (settings?.PrivacyPageContentId is { } privacyId && slugById.TryGetValue(privacyId, out var privacySlug))
+            writer.WriteString("privacyPageSlug", privacySlug);
+        if (settings?.EmailNotificationsEnabled == true)
+            writer.WriteBoolean("emailNotificationsEnabled", true);
+        if (!string.IsNullOrEmpty(settings?.PermalinkScheme) && settings.PermalinkScheme != PermalinkRules.PostName)
+            writer.WriteString("permalinkScheme", settings.PermalinkScheme);
+        if (!string.IsNullOrEmpty(settings?.TimeZoneId) && settings.TimeZoneId != "UTC")
+            writer.WriteString("timeZoneId", settings.TimeZoneId);
+        if (!string.IsNullOrEmpty(settings?.DateFormat) && settings.DateFormat != "yyyy.MM.dd")
+            writer.WriteString("dateFormat", settings.DateFormat);
+        if (!string.IsNullOrEmpty(settings?.TimeFormat) && settings.TimeFormat != "HH:mm")
+            writer.WriteString("timeFormat", settings.TimeFormat);
         if (settings?.SiteIconMediaId is { } iconId)
         {
             var iconFile = await db.MediaAssets.AsNoTracking().Where(x => x.Id == iconId)

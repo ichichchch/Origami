@@ -1,10 +1,11 @@
 namespace Origami.Core.Services;
 
-public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null)
+public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null)
 {
     // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
-    public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, ContentStatus? status = null, string? search = null)
+    public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default,
+        ContentStatus? status = null, string? search = null, string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null)
     {
 
         await admin.RequireRoleAsync(SiteRole.Reader, ct);
@@ -22,6 +23,22 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
             query = query.Where(x => EF.Functions.ILike(x.Title, pattern) || EF.Functions.ILike(x.Slug, pattern));
         }
+        if (!string.IsNullOrWhiteSpace(authorId))
+            query = query.Where(x => x.AuthorId == authorId.Trim());
+        if (categoryId is { } catId && catId != Guid.Empty)
+            query = query.Where(x => x.Categories.Any(c => c.Id == catId));
+        if (tagId is { } tId && tId != Guid.Empty)
+            query = query.Where(x => x.Tags.Any(t => t.Id == tId));
+        if (dateFrom is { } fromDate)
+        {
+            var fromUtc = new DateTimeOffset(fromDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            query = query.Where(x => (x.PublishedAt ?? x.UpdatedAt) >= fromUtc);
+        }
+        if (dateTo is { } toDate)
+        {
+            var toUtcExclusive = new DateTimeOffset(toDate.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            query = query.Where(x => (x.PublishedAt ?? x.UpdatedAt) < toUtcExclusive);
+        }
         var total = await query.CountAsync(ct);
         var ordered = kind == ContentKind.Page
             ? query.OrderBy(x => x.MenuOrder).ThenByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
@@ -34,6 +51,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 ParentId = x.ParentId, ParentTitle = x.Parent != null ? x.Parent.Title : "",
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "", CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 AuthorName = x.AuthorName, AuthorId = x.AuthorId,
+                ContentTypeSlug = x.ContentType != null ? x.ContentType.Slug : null,
                 Views = x.Views.Sum(v => (int?)v.Count) ?? 0
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
@@ -202,6 +220,29 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException("獨立頁面不可置頂，置頂僅用於文章列表。");
         if (input.IsPrivate && input.IsProtected)
             throw new CmsException("私密與密碼保護不可同時啟用，請擇一。");
+        var oldSlug = entity.Slug;
+        var previousStatus = entity.Status;
+        var wasPublished = id is not null && entity.Status == ContentStatus.Published;
+        // 保留更新前的值以建立完整修訂快照，再套用新值。
+        var prevSnapshot = id is not null ? new RevisionSnapshotPayload
+        {
+            Slug = entity.Slug,
+            MetaDescription = entity.MetaDescription,
+            NoIndex = entity.NoIndex,
+            IsSticky = entity.IsSticky,
+            AllowComments = entity.AllowComments,
+            MenuOrder = entity.MenuOrder,
+            ParentId = entity.ParentId,
+            CoverMediaId = entity.CoverMediaId,
+            AuthorId = entity.AuthorId,
+            AuthorName = entity.AuthorName,
+            CategoryIds = entity.Categories.Select(x => x.Id).OrderBy(x => x).ToList(),
+            TagIds = entity.Tags.Select(x => x.Id).OrderBy(x => x).ToList()
+        } : null;
+        var prevTitle = entity.Title;
+        var prevMarkdown = entity.Markdown;
+        var prevExcerpt = entity.Excerpt;
+
         entity.IsPrivate = input.IsPrivate;
         entity.ParentId = input.ParentId;
         // 封面必須是媒體庫中現存的圖片；一次查詢同時完成驗證與回填素材。
@@ -245,12 +286,6 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (input.Status == ContentStatus.Draft && input.PublishAt is { } schedule
             && schedule <= now.AddMinutes(Limits.ScheduleLeadMinutes))
             throw new CmsException($"排程時間至少需在 {Limits.ScheduleLeadMinutes} 分鐘之後。");
-        var oldSlug = entity.Slug;
-        var wasPublished = id is not null && entity.Status == ContentStatus.Published;
-        // 被覆寫的舊狀態成為修訂版本；與儲存共用同一個交易。
-        ContentRevision? revision = null;
-        if (id is not null)
-            revision = new ContentRevision { ContentId = entity.Id, Title = entity.Title, Markdown = entity.Markdown, Excerpt = entity.Excerpt, CreatedAt = now };
         var categoryIds = input.CategoryIds.Distinct().ToList();
         var tagIds = input.TagIds.Distinct().ToList();
         var categories = await db.Categories.Where(x => categoryIds.Contains(x.Id)).ToListAsync(ct);
@@ -302,6 +337,29 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         db.ContentCustomTerms.RemoveRange(currentTerms);
         foreach (var termId in termIds)
             db.ContentCustomTerms.Add(new ContentCustomTerm { Id = Guid.NewGuid(), ContentId = entity.Id, TermId = termId });
+        ContentRevision? revision = null;
+        if (prevSnapshot is not null)
+        {
+            prevSnapshot.CustomTermIds = currentTerms.Select(x => x.TermId).OrderBy(x => x).ToList();
+            prevSnapshot.FieldValues = currentValues.OrderBy(x => x.FieldId).Select(x => new FieldValueInput(x.FieldId, x.Value)).ToList();
+            if (prevSnapshot.CoverMediaId is { } prevCoverId)
+            {
+                var prevCover = await db.MediaAssets.AsNoTracking().Where(x => x.Id == prevCoverId)
+                    .Select(x => new { x.FileName, x.AltText, x.Caption }).SingleOrDefaultAsync(ct);
+                prevSnapshot.CoverFileName = prevCover?.FileName ?? "";
+                prevSnapshot.CoverAltText = prevCover?.AltText ?? "";
+                prevSnapshot.CoverCaption = prevCover?.Caption ?? "";
+            }
+            revision = new ContentRevision
+            {
+                ContentId = entity.Id,
+                Title = prevTitle,
+                Markdown = prevMarkdown,
+                Excerpt = prevExcerpt,
+                SnapshotJson = SerializeRevisionSnapshot(prevSnapshot),
+                CreatedAt = now
+            };
+        }
         entity.Title = input.Title.Trim();
         entity.Slug = slug;
         entity.Markdown = input.Markdown ?? "";
@@ -366,6 +424,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 publishedAt = entity.PublishedAt
             }, ct);
         }
+        await NotifyWorkflowEmailsAsync(db, entity, previousStatus, isNew: id is null, ct);
         input.Id = entity.Id;
         input.Kind = entity.Kind;
         input.Slug = entity.Slug;
@@ -404,7 +463,17 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (entity.Version != version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
         db.Entry(entity).Property(x => x.Version).OriginalValue = version;
         var oldSlug = entity.Slug;
-        var revision = new ContentRevision { ContentId = entity.Id, Title = entity.Title, Markdown = entity.Markdown, Excerpt = entity.Excerpt, CreatedAt = now };
+        var previousStatus = entity.Status;
+        var quickSnapshot = await BuildSnapshotFromDbAsync(db, entity, ct);
+        var revision = new ContentRevision
+        {
+            ContentId = entity.Id,
+            Title = entity.Title,
+            Markdown = entity.Markdown,
+            Excerpt = entity.Excerpt,
+            SnapshotJson = SerializeRevisionSnapshot(quickSnapshot),
+            CreatedAt = now
+        };
         entity.Title = cleanTitle;
         entity.Slug = normalized;
         entity.Status = status;
@@ -425,6 +494,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await TrimRevisionsAsync(db, entity.Id, ct);
         await SyncEmbeddingAsync(db, entity, now, ct);
         await ContentRules.SaveAsync(db, ct);
+        await NotifyWorkflowEmailsAsync(db, entity, previousStatus, isNew: false, ct);
         return new(entity.Id, entity.Title, entity.Slug, entity.Status, entity.Version);
     }
 
@@ -661,6 +731,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await db.Settings.Where(x => x.HomePageContentId != null && ids.Contains(x.HomePageContentId.Value))
             .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.HomePageContentId, (Guid?)null)
                 .SetProperty(x => x.Version, Guid.NewGuid()), ct);
+        await db.Settings.Where(x => x.PrivacyPageContentId != null && ids.Contains(x.PrivacyPageContentId.Value))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.PrivacyPageContentId, (Guid?)null)
+                .SetProperty(x => x.Version, Guid.NewGuid()), ct);
     }
 
     /// <summary>把內容移入回收桶：公開路由與搜尋即停止提供，但不銷毀任何資料。</summary>
@@ -716,7 +789,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     /// 既有單筆核心流程（含各自的並發版本檢查與人工確認契約），逐筆回報結果；
     /// 單筆失敗不中斷其餘項目。
     /// </summary>
-    public async Task<List<BulkItemResult>> BulkAsync(BulkAction action, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default)
+    public async Task<List<BulkItemResult>> BulkAsync(BulkAction action, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default, BulkEditOptions? options = null)
     {
         // 批次視為單一管理操作：開始前完整重驗一次，不逐筆重複同樣的驗證查詢；
         // 逐筆核心流程仍受站點過濾與並發版本約束保護。
@@ -740,6 +813,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                     case BulkAction.Delete:
                         await DeleteCoreAsync(id, version, ct);
                         break;
+                    case BulkAction.SetAuthor:
+                    case BulkAction.AddCategory:
+                    case BulkAction.AddTag:
+                    case BulkAction.EnableComments:
+                    case BulkAction.DisableComments:
+                        await BulkEditItemCoreAsync(action, id, version, options, ct);
+                        break;
                 }
                 results.Add(new BulkItemResult(id, true, ""));
             }
@@ -749,6 +829,93 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             }
         }
         return results;
+    }
+
+    private async Task BulkEditItemCoreAsync(BulkAction action, Guid id, Guid version, BulkEditOptions? options, CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contents.Include(x => x.Categories).Include(x => x.Tags).AsSplitQuery()
+            .SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
+        if (entity.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯。");
+        if (entity.Version != version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
+        db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+        var now = clock.GetUtcNow();
+
+        switch (action)
+        {
+            case BulkAction.SetAuthor:
+            {
+                var targetAuthorId = (options?.AuthorId ?? "").Trim();
+                if (targetAuthorId.Length == 0) throw new CmsException("請選擇要指派的作者。");
+                var member = await db.SiteMemberships.AsNoTracking().Include(x => x.User)
+                    .SingleOrDefaultAsync(x => x.UserId == targetAuthorId && !x.User.IsDisabled, ct);
+                string assignedName;
+                if (member is not null)
+                {
+                    assignedName = string.IsNullOrWhiteSpace(member.DisplayName) ? (member.User.UserName ?? "") : member.DisplayName;
+                    entity.AuthorId = member.UserId;
+                }
+                else
+                {
+                    var netAdmin = await db.Users.AsNoTracking()
+                        .SingleOrDefaultAsync(x => x.Id == targetAuthorId && x.SingletonKey == 1 && !x.IsDisabled, ct)
+                        ?? throw new CmsException("所選作者不是本站有效成員。");
+                    assignedName = netAdmin.UserName ?? "";
+                    entity.AuthorId = netAdmin.Id;
+                }
+                entity.AuthorName = assignedName;
+                try { entity.AuthorSlug = assignedName.Length == 0 ? "" : ContentRules.NormalizeSlug(assignedName); }
+                catch (CmsException) { entity.AuthorSlug = ""; }
+                break;
+            }
+            case BulkAction.AddCategory:
+            {
+                if (entity.Kind == ContentKind.Page) throw new CmsException("獨立頁面不可指派分類。");
+                if (options?.CategoryId is not { } catId || catId == Guid.Empty) throw new CmsException("請選擇要加入的分類。");
+                if (entity.ContentTypeId is { } ctId)
+                {
+                    var ctEntity = await db.ContentTypes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ctId, ct);
+                    if (ctEntity is { SupportsCategories: false }) throw new CmsException("此內容類型不支援分類。");
+                }
+                if (entity.Categories.All(c => c.Id != catId))
+                {
+                    if (entity.Categories.Count >= Limits.MaxTaxonomiesPerKind)
+                        throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個分類。");
+                    var category = await db.Categories.SingleOrDefaultAsync(x => x.Id == catId, ct)
+                        ?? throw new CmsException("所選分類不存在。");
+                    entity.Categories.Add(category);
+                }
+                break;
+            }
+            case BulkAction.AddTag:
+            {
+                if (entity.Kind == ContentKind.Page) throw new CmsException("獨立頁面不可指派標籤。");
+                if (options?.TagId is not { } tagId || tagId == Guid.Empty) throw new CmsException("請選擇要加入的標籤。");
+                if (entity.ContentTypeId is { } ctId)
+                {
+                    var ctEntity = await db.ContentTypes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ctId, ct);
+                    if (ctEntity is { SupportsTags: false }) throw new CmsException("此內容類型不支援標籤。");
+                }
+                if (entity.Tags.All(t => t.Id != tagId))
+                {
+                    if (entity.Tags.Count >= Limits.MaxTaxonomiesPerKind)
+                        throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個標籤。");
+                    var tag = await db.Tags.SingleOrDefaultAsync(x => x.Id == tagId, ct)
+                        ?? throw new CmsException("所選標籤不存在。");
+                    entity.Tags.Add(tag);
+                }
+                break;
+            }
+            case BulkAction.EnableComments:
+                entity.AllowComments = true;
+                break;
+            case BulkAction.DisableComments:
+                entity.AllowComments = false;
+                break;
+        }
+        entity.UpdatedAt = now;
+        entity.Version = Guid.NewGuid();
+        await ContentRules.SaveAsync(db, ct);
     }
 
     /// <summary>系統操作：發布排程時間已到的草稿。回傳發布數量。</summary>
@@ -818,8 +985,159 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await admin.RequireRoleAsync(SiteRole.Reader, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.ContentRevisions.AsNoTracking().Where(x => x.Id == revisionId)
-            .Select(x => new RevisionDetail(x.Id, x.ContentId, x.Title, x.Markdown, x.Excerpt, x.CreatedAt)).SingleOrDefaultAsync(ct);
+        var row = await db.ContentRevisions.AsNoTracking().Where(x => x.Id == revisionId)
+            .Select(x => new { x.Id, x.ContentId, x.Title, x.Markdown, x.Excerpt, x.SnapshotJson, x.CreatedAt })
+            .SingleOrDefaultAsync(ct);
+        if (row is null) return null;
+        var snap = DeserializeRevisionSnapshot(row.SnapshotJson);
+        return new RevisionDetail(row.Id, row.ContentId, row.Title, row.Markdown, row.Excerpt, row.CreatedAt)
+        {
+            Slug = snap.Slug,
+            MetaDescription = snap.MetaDescription,
+            NoIndex = snap.NoIndex,
+            IsSticky = snap.IsSticky,
+            AllowComments = snap.AllowComments,
+            MenuOrder = snap.MenuOrder,
+            ParentId = snap.ParentId,
+            CoverMediaId = snap.CoverMediaId,
+            CoverFileName = snap.CoverFileName,
+            CoverAltText = snap.CoverAltText,
+            CoverCaption = snap.CoverCaption,
+            AuthorId = snap.AuthorId,
+            AuthorName = snap.AuthorName,
+            CategoryIds = snap.CategoryIds,
+            TagIds = snap.TagIds,
+            CustomTermIds = snap.CustomTermIds,
+            FieldValues = snap.FieldValues
+        };
+    }
+
+    private sealed class RevisionSnapshotPayload
+    {
+        public string Slug { get; set; } = "";
+        public string MetaDescription { get; set; } = "";
+        public bool NoIndex { get; set; }
+        public bool IsSticky { get; set; }
+        public bool AllowComments { get; set; } = true;
+        public int MenuOrder { get; set; }
+        public Guid? ParentId { get; set; }
+        public Guid? CoverMediaId { get; set; }
+        public string CoverFileName { get; set; } = "";
+        public string CoverAltText { get; set; } = "";
+        public string CoverCaption { get; set; } = "";
+        public string? AuthorId { get; set; }
+        public string AuthorName { get; set; } = "";
+        public List<Guid> CategoryIds { get; set; } = [];
+        public List<Guid> TagIds { get; set; } = [];
+        public List<Guid> CustomTermIds { get; set; } = [];
+        public List<FieldValueInput> FieldValues { get; set; } = [];
+    }
+
+    private static string SerializeRevisionSnapshot(RevisionSnapshotPayload payload)
+    {
+        var json = JsonSerializer.Serialize(payload, JsonSerializerOptions.Web);
+        return json.Length <= Limits.RevisionSnapshotMax ? json : json[..Limits.RevisionSnapshotMax];
+    }
+
+    private static RevisionSnapshotPayload DeserializeRevisionSnapshot(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return JsonSerializer.Deserialize<RevisionSnapshotPayload>(json, JsonSerializerOptions.Web) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static async Task<RevisionSnapshotPayload> BuildSnapshotFromDbAsync(CmsDbContext db, Content entity, CancellationToken ct)
+    {
+        var categoryIds = await db.Contents.AsNoTracking().Where(x => x.Id == entity.Id)
+            .SelectMany(x => x.Categories.Select(c => c.Id)).OrderBy(x => x).ToListAsync(ct);
+        var tagIds = await db.Contents.AsNoTracking().Where(x => x.Id == entity.Id)
+            .SelectMany(x => x.Tags.Select(t => t.Id)).OrderBy(x => x).ToListAsync(ct);
+        var termIds = await db.ContentCustomTerms.AsNoTracking().Where(x => x.ContentId == entity.Id)
+            .Select(x => x.TermId).OrderBy(x => x).ToListAsync(ct);
+        var fieldValues = await db.ContentFieldValues.AsNoTracking().Where(x => x.ContentId == entity.Id)
+            .OrderBy(x => x.FieldId).Select(x => new FieldValueInput(x.FieldId, x.Value)).ToListAsync(ct);
+        string coverFile = "", coverAlt = "", coverCaption = "";
+        if (entity.CoverMediaId is { } coverId)
+        {
+            var cover = await db.MediaAssets.AsNoTracking().Where(x => x.Id == coverId)
+                .Select(x => new { x.FileName, x.AltText, x.Caption }).SingleOrDefaultAsync(ct);
+            coverFile = cover?.FileName ?? "";
+            coverAlt = cover?.AltText ?? "";
+            coverCaption = cover?.Caption ?? "";
+        }
+        return new RevisionSnapshotPayload
+        {
+            Slug = entity.Slug,
+            MetaDescription = entity.MetaDescription,
+            NoIndex = entity.NoIndex,
+            IsSticky = entity.IsSticky,
+            AllowComments = entity.AllowComments,
+            MenuOrder = entity.MenuOrder,
+            ParentId = entity.ParentId,
+            CoverMediaId = entity.CoverMediaId,
+            CoverFileName = coverFile,
+            CoverAltText = coverAlt,
+            CoverCaption = coverCaption,
+            AuthorId = entity.AuthorId,
+            AuthorName = entity.AuthorName,
+            CategoryIds = categoryIds,
+            TagIds = tagIds,
+            CustomTermIds = termIds,
+            FieldValues = fieldValues
+        };
+    }
+
+    private async Task NotifyWorkflowEmailsAsync(CmsDbContext db, Content entity, ContentStatus previousStatus, bool isNew, CancellationToken ct)
+    {
+        if (emailSender is null || !emailSender.IsConfigured) return;
+        try
+        {
+            var settings = await db.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, ct);
+            if (settings is null || !settings.EmailNotificationsEnabled) return;
+
+            // 1. 提交待審：通知本站所有有信箱的編輯者與管理員。
+            if (entity.Status == ContentStatus.Pending && (isNew || previousStatus != ContentStatus.Pending))
+            {
+                var reviewerEmails = await db.SiteMemberships.AsNoTracking()
+                    .Where(x => !x.User.IsDisabled && x.Role >= SiteRole.Editor && x.User.Email != null && x.User.Email != "")
+                    .Select(x => x.User.Email!)
+                    .Distinct()
+                    .ToListAsync(ct);
+                var netAdminEmails = await db.Users.AsNoTracking()
+                    .Where(x => x.SingletonKey == 1 && !x.IsDisabled && x.Email != null && x.Email != "")
+                    .Select(x => x.Email!)
+                    .ToListAsync(ct);
+                foreach (var to in reviewerEmails.Concat(netAdminEmails).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    await emailSender.SendAsync(to,
+                        $"[{settings.Name}] 新待審內容：{entity.Title}",
+                        $"作者「{entity.AuthorName}」提交了待審內容「{entity.Title}」（代稱：{entity.Slug}），請前往後台審核。",
+                        ct);
+                }
+            }
+            // 2. 審核結果（由 Pending 轉為 Published 或退回 Draft）：通知原作者。
+            else if (!isNew && previousStatus == ContentStatus.Pending
+                && entity.Status is ContentStatus.Published or ContentStatus.Draft
+                && !string.IsNullOrWhiteSpace(entity.AuthorId))
+            {
+                var authorEmail = await db.Users.AsNoTracking()
+                    .Where(x => x.Id == entity.AuthorId && !x.IsDisabled && x.Email != null && x.Email != "")
+                    .Select(x => x.Email)
+                    .SingleOrDefaultAsync(ct);
+                if (!string.IsNullOrWhiteSpace(authorEmail))
+                {
+                    var outcome = entity.Status == ContentStatus.Published ? "已審核通過並發布" : "已退回為草稿";
+                    await emailSender.SendAsync(authorEmail,
+                        $"[{settings.Name}] 審稿結果通知：{entity.Title}",
+                        $"你提交的內容「{entity.Title}」{outcome}。",
+                        ct);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 郵件通知採盡力而為，不影響內容儲存交易。
+        }
     }
 
     /// <summary>替換分享 token；舊連結立即失效。</summary>
@@ -875,7 +1193,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking()
             .Where(x => x.PreviewToken == token && x.Status == ContentStatus.Published)
-            .Select(x => new SlugRedirectTarget(x.Slug, x.Kind)).SingleOrDefaultAsync(ct);
+            .Select(x => new SlugRedirectTarget(x.Slug, x.Kind, x.ContentType != null ? x.ContentType.Slug : null)).SingleOrDefaultAsync(ct);
     }
 
     public async Task<PagedResult<ContentSummary>> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
@@ -914,28 +1232,75 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>訂閱資料只投影當站可公開正文；篩選、排序及筆數上限在同一查詢完成。</summary>
-    public async Task<List<FeedEntry>> FeedAsync(int count, string? category = null, string? tag = null, CancellationToken ct = default)
+    public async Task<List<FeedEntry>> FeedAsync(int count, string? category = null, string? tag = null, CancellationToken ct = default,
+        string? author = null, string? typeSlug = null, string? customTaxonomy = null, string? customTerm = null, string? search = null)
     {
         if (count is < 1 or > Limits.MaxFeedItems) throw new CmsException("訂閱筆數超出範圍。");
         if (category is not null) category = ContentRules.NormalizeSlug(category);
         if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
+        if (author is not null) author = ContentRules.NormalizeSlug(author);
         await using var db = await factory.CreateDbContextAsync(ct);
+        Guid? contentTypeId = null;
+        string? resolvedTypeSlug = null;
+        if (!string.IsNullOrWhiteSpace(typeSlug))
+        {
+            var normalizedType = ContentRules.NormalizeSlug(typeSlug);
+            var ctRow = await db.ContentTypes.AsNoTracking().Where(x => x.Slug == normalizedType && !x.IsArchived)
+                .Select(x => new { x.Id, x.Slug }).SingleOrDefaultAsync(ct);
+            if (ctRow is null) return [];
+            contentTypeId = ctRow.Id;
+            resolvedTypeSlug = ctRow.Slug;
+        }
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post &&
-            x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected && x.ContentTypeId == null);
+            x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = "%" + ContentRules.EscapeLike(search.Trim()) + "%";
+            query = db.Contents.AsNoTracking().Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected
+                && (EF.Functions.ILike(x.Title, pattern) || EF.Functions.ILike(x.Excerpt, pattern) || EF.Functions.ILike(x.Markdown, pattern)));
+        }
+        else if (contentTypeId is { } cId)
+        {
+            query = query.Where(x => x.ContentTypeId == cId);
+            if (!string.IsNullOrWhiteSpace(customTaxonomy) && !string.IsNullOrWhiteSpace(customTerm))
+            {
+                var normTax = ContentRules.NormalizeSlug(customTaxonomy);
+                var normTerm = ContentRules.NormalizeSlug(customTerm);
+                var termSubtree = await CustomTermSubtreeIdsAsync(db, cId, normTax, normTerm, ct);
+                if (termSubtree.Count == 0) return [];
+                query = query.Where(x => x.CustomTerms.Any(ctm => termSubtree.Contains(ctm.TermId)));
+            }
+        }
+        else
+        {
+            query = query.Where(x => x.ContentTypeId == null);
+        }
         if (category is not null)
         {
             var catIds = await CategorySubtreeIdsAsync(db, category, ct);
             query = query.Where(x => x.Categories.Any(c => catIds.Contains(c.Id)));
         }
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
+        if (author is not null) query = query.Where(x => x.AuthorSlug == author);
         return await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
             .Take(count).Select(x => new FeedEntry(x.Id, x.Title, x.Slug, x.PublishedAt,
                 x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
-                x.Markdown, x.Excerpt != "", x.AuthorName)).ToListAsync(ct);
+                x.Markdown, x.Excerpt != "", x.AuthorName)
+            {
+                Kind = x.Kind,
+                ContentTypeSlug = x.ContentType != null ? x.ContentType.Slug : resolvedTypeSlug
+            }).ToListAsync(ct);
     }
 
     public sealed record FeedEntry(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
-        string Excerpt, string Markdown, bool ExcerptIsManual, string AuthorName = "");
+        string Excerpt, string Markdown, bool ExcerptIsManual, string AuthorName = "")
+    {
+        public ContentKind Kind { get; init; } = ContentKind.Post;
+        public string? ContentTypeSlug { get; init; }
+        public string PublicPath => ContentTypeSlug is { Length: > 0 } tSlug
+            ? $"/{ContentTypeService.PublicPrefix}/{Uri.EscapeDataString(tSlug)}/{Uri.EscapeDataString(Slug)}"
+            : Kind == ContentKind.Page ? $"/pages/{Uri.EscapeDataString(Slug)}" : $"/posts/{Uri.EscapeDataString(Slug)}";
+    }
 
     public async Task<List<PublicTaxonomy>> PopularCategoriesAsync(CancellationToken ct = default)
     {
@@ -1011,10 +1376,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     /// <summary>
     /// 某個自訂內容類型的已發布內容清單；類型不存在或已封存時回傳 null。
-    /// 自訂類型內容不混入內建文章列表，僅在自己的公開區塊出現。
+    /// 自訂類型內容不混入內建文章列表，僅在自己的公開區塊出現；可選擇依自訂分類法與詞彙篩選。
     /// </summary>
     public async Task<PagedResult<ContentSummary>?> ListByTypeAsync(string? typeSlug, int page = 1,
-        int pageSize = Limits.PageSize, CancellationToken ct = default)
+        int pageSize = Limits.PageSize, CancellationToken ct = default, string? taxonomySlug = null, string? termSlug = null)
     {
         if (string.IsNullOrWhiteSpace(typeSlug)) return null;
         var normalized = ContentRules.NormalizeSlug(typeSlug);
@@ -1025,6 +1390,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (!type.HasValue) return null;
         var query = db.Contents.AsNoTracking().Where(x => x.ContentTypeId == type
             && x.Status == ContentStatus.Published && !x.IsPrivate);
+        if (!string.IsNullOrWhiteSpace(taxonomySlug) && !string.IsNullOrWhiteSpace(termSlug))
+        {
+            var normTax = ContentRules.NormalizeSlug(taxonomySlug);
+            var normTerm = ContentRules.NormalizeSlug(termSlug);
+            var subtree = await CustomTermSubtreeIdsAsync(db, type.Value, normTax, normTerm, ct);
+            if (subtree.Count == 0) return null;
+            query = query.Where(x => x.CustomTerms.Any(ctm => subtree.Contains(ctm.TermId)));
+        }
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize)
@@ -1037,9 +1410,69 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex,
-                ParentId = x.ParentId
+                ParentId = x.ParentId,
+                ContentTypeSlug = normalized
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
+    }
+
+    /// <summary>公開檢視自訂內容類型的自訂分類法與詞彙資訊。</summary>
+    public sealed record PublicCustomTermArchive(
+        string TypeName, string TypeSlug, string TaxonomyName, string TaxonomySlug,
+        string TermName, string TermSlug, string TermDescription);
+
+    public async Task<PublicCustomTermArchive?> GetPublicCustomTermAsync(
+        string? typeSlug, string? taxonomySlug, string? termSlug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(typeSlug) || string.IsNullOrWhiteSpace(taxonomySlug) || string.IsNullOrWhiteSpace(termSlug))
+            return null;
+        string normType, normTax, normTerm;
+        try
+        {
+            normType = ContentRules.NormalizeSlug(typeSlug);
+            normTax = ContentRules.NormalizeSlug(taxonomySlug);
+            normTerm = ContentRules.NormalizeSlug(termSlug);
+        }
+        catch (CmsException) { return null; }
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var type = await db.ContentTypes.AsNoTracking().Where(x => x.Slug == normType && !x.IsArchived)
+            .Select(x => new { x.Id, x.Name, x.Slug }).SingleOrDefaultAsync(ct);
+        if (type is null) return null;
+        var taxonomy = await db.CustomTaxonomies.AsNoTracking()
+            .Where(x => x.ContentTypeId == type.Id && x.Slug == normTax && !x.IsArchived)
+            .Select(x => new { x.Id, x.Name, x.Slug }).SingleOrDefaultAsync(ct);
+        if (taxonomy is null) return null;
+        var term = await db.CustomTaxonomyTerms.AsNoTracking()
+            .Where(x => x.TaxonomyId == taxonomy.Id && x.Slug == normTerm)
+            .Select(x => new { x.Id, x.Name, x.Slug, x.Description }).SingleOrDefaultAsync(ct);
+        if (term is null) return null;
+        return new PublicCustomTermArchive(type.Name, type.Slug, taxonomy.Name, taxonomy.Slug, term.Name, term.Slug, term.Description);
+    }
+
+    private static async Task<HashSet<Guid>> CustomTermSubtreeIdsAsync(
+        CmsDbContext db, Guid contentTypeId, string taxonomySlug, string termSlug, CancellationToken ct)
+    {
+        var taxonomy = await db.CustomTaxonomies.AsNoTracking()
+            .Where(x => x.ContentTypeId == contentTypeId && x.Slug == taxonomySlug && !x.IsArchived)
+            .Select(x => new { x.Id, x.IsHierarchical }).SingleOrDefaultAsync(ct);
+        if (taxonomy is null) return [];
+        var all = await db.CustomTaxonomyTerms.AsNoTracking()
+            .Where(x => x.TaxonomyId == taxonomy.Id)
+            .Select(x => new { x.Id, x.Slug, x.ParentId }).ToListAsync(ct);
+        var root = all.FirstOrDefault(x => x.Slug == termSlug);
+        if (root is null) return [];
+        if (!taxonomy.IsHierarchical) return [root.Id];
+        var children = all.Where(x => x.ParentId is not null).ToLookup(x => x.ParentId!.Value);
+        var result = new HashSet<Guid> { root.Id };
+        var stack = new Stack<Guid>();
+        stack.Push(root.Id);
+        while (stack.Count > 0)
+        {
+            foreach (var child in children[stack.Pop()])
+                if (result.Add(child.Id)) stack.Push(child.Id);
+        }
+        return result;
     }
 
     /// <summary>某個自訂內容類型下的已發布內容；類型、網址代稱或狀態不符時回傳 null。</summary>
@@ -1063,9 +1496,34 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 CoverCaption = x.Cover != null ? x.Cover.Caption : "",
+                ContentTypeSlug = normalizedType,
                 Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
-                    .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList() })
+                    .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList(),
+                CustomTerms = x.CustomTerms.OrderBy(t => t.Term.Taxonomy.Name).ThenBy(t => t.Term.Name)
+                    .Select(t => new PublicCustomTerm(t.Term.Taxonomy.Name, t.Term.Taxonomy.Slug, t.Term.Name, t.Term.Slug)).ToList() })
             .SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>依識別編號取得已發布文章（支援 numeric 永久連結 /archives/p/{id}）。</summary>
+    public async Task<PublicContent?> GetPublishedPostByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Contents.AsNoTracking().AsSplitQuery()
+            .Where(x => x.Id == id && x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && x.ContentTypeId == null)
+            .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
+                x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
+                x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
+            {
+                Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
+                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
+                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "",
+                Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
+                    .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList()
+            }).SingleOrDefaultAsync(ct);
     }
 
     /// <summary>
@@ -1184,8 +1642,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         var target = await db.SlugRedirects.AsNoTracking()
             .Where(x => x.OldSlug == slug && x.Content.Status == ContentStatus.Published && !x.Content.IsPrivate)
-            .Select(x => new { x.Content.Slug, x.Content.Kind }).SingleOrDefaultAsync(ct);
-        return target is null ? null : new SlugRedirectTarget(target.Slug, target.Kind);
+            .Select(x => new { x.Content.Slug, x.Content.Kind, ContentTypeSlug = x.Content.ContentType != null ? x.Content.ContentType.Slug : null })
+            .SingleOrDefaultAsync(ct);
+        return target is null ? null : new SlugRedirectTarget(target.Slug, target.Kind, target.ContentTypeSlug);
     }
 
     /// <summary>

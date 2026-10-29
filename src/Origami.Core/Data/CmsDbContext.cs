@@ -28,6 +28,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public DbSet<ContentEmbedding> ContentEmbeddings => Set<ContentEmbedding>();
     public DbSet<EmbeddingJob> EmbeddingJobs => Set<EmbeddingJob>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<WebhookDeliveryRecord> WebhookDeliveries => Set<WebhookDeliveryRecord>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -189,6 +190,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Title).HasMaxLength(Limits.Title).IsRequired();
             e.Property(x => x.Markdown).HasMaxLength(Limits.Body).IsRequired();
             e.Property(x => x.Excerpt).HasMaxLength(Limits.Excerpt).IsRequired();
+            e.Property(x => x.SnapshotJson).HasMaxLength(Limits.RevisionSnapshotMax).IsRequired();
             e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.SiteId, x.ContentId, x.CreatedAt });
@@ -368,7 +370,13 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Id).ValueGeneratedNever();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.Property(x => x.AuthorDisplayName).HasMaxLength(Limits.AuthorName).IsRequired();
+            e.Property(x => x.PermalinkScheme).HasMaxLength(Limits.PermalinkScheme).IsRequired();
+            e.Property(x => x.TimeZoneId).HasMaxLength(Limits.TimeZoneId).IsRequired();
+            e.Property(x => x.DateFormat).HasMaxLength(Limits.DateFormat).IsRequired();
+            e.Property(x => x.TimeFormat).HasMaxLength(Limits.TimeFormat).IsRequired();
             e.HasOne<Content>().WithMany().HasForeignKey(x => new { x.SiteId, x.HomePageContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Content>().WithMany().HasForeignKey(x => new { x.SiteId, x.PrivacyPageContentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MediaAsset>().WithMany().HasForeignKey(x => new { x.SiteId, x.SiteIconMediaId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
@@ -410,6 +418,17 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Action).HasMaxLength(Limits.AuditAction).IsRequired();
             e.Property(x => x.Target).HasMaxLength(Limits.AuditDetail).IsRequired();
             e.HasIndex(x => new { x.SiteId, x.CreatedAt, x.Id });
+        });
+        builder.Entity<WebhookDeliveryRecord>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.Property(x => x.Event).HasMaxLength(64).IsRequired();
+            e.Property(x => x.TargetUrl).HasMaxLength(Limits.WebhookUrl).IsRequired();
+            e.Property(x => x.PayloadJson).HasMaxLength(Limits.WebhookPayloadMax).IsRequired();
+            e.Property(x => x.Signature).HasMaxLength(160).IsRequired();
+            e.Property(x => x.LastError).HasMaxLength(Limits.WebhookErrorMax).IsRequired();
+            e.HasIndex(x => new { x.SiteId, x.CreatedAt, x.Id });
+            e.HasIndex(x => new { x.SiteId, x.Status, x.NextAttemptAt });
         });
     }
 

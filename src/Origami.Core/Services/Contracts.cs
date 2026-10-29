@@ -82,9 +82,11 @@ public sealed record TaxonomyEdit
 }
 
 /// <summary>內容清單的批次操作種類。</summary>
-public enum BulkAction { Trash, Restore, Delete }
+public enum BulkAction { Trash, Restore, Delete, SetAuthor, AddCategory, AddTag, EnableComments, DisableComments }
 /// <summary>批次操作的單筆結果；失敗時附原因，單筆失敗不影響其餘項目。</summary>
 public sealed record BulkItemResult(Guid Id, bool Succeeded, string Message);
+/// <summary>批次編輯附加參數（改派作者或新增分類／標籤）。</summary>
+public sealed record BulkEditOptions(string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null);
 
 public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, string Slug,
     ContentStatus Status, DateTimeOffset UpdatedAt, DateTimeOffset? PublishedAt, Guid Version)
@@ -116,6 +118,8 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public bool NoIndex { get; init; }
     /// <summary>作者角色清單判斷編輯權限用的帳號識別。</summary>
     public string? AuthorId { get; init; }
+    /// <summary>自訂內容類型代稱；null 表示內建文章或頁面。</summary>
+    public string? ContentTypeSlug { get; init; }
 }
 public sealed record ContentCounts(int Drafts, int Published, int Pending = 0, int Trashed = 0)
 {
@@ -124,7 +128,27 @@ public sealed record ContentCounts(int Drafts, int Published, int Pending = 0, i
 }
 /// <summary>修訂版本列表項目；本文於需要時載入。</summary>
 public sealed record RevisionItem(Guid Id, string Title, DateTimeOffset CreatedAt);
-public sealed record RevisionDetail(Guid Id, Guid ContentId, string Title, string Markdown, string Excerpt, DateTimeOffset CreatedAt);
+/// <summary>修訂版本的完整快照：涵蓋標題、代稱、本文、摘要、SEO、封面、作者、分類標籤、自訂詞彙與自訂欄位。</summary>
+public sealed record RevisionDetail(Guid Id, Guid ContentId, string Title, string Markdown, string Excerpt, DateTimeOffset CreatedAt)
+{
+    public string Slug { get; init; } = "";
+    public string MetaDescription { get; init; } = "";
+    public bool NoIndex { get; init; }
+    public bool IsSticky { get; init; }
+    public bool AllowComments { get; init; } = true;
+    public int MenuOrder { get; init; }
+    public Guid? ParentId { get; init; }
+    public Guid? CoverMediaId { get; init; }
+    public string CoverFileName { get; init; } = "";
+    public string CoverAltText { get; init; } = "";
+    public string CoverCaption { get; init; } = "";
+    public string? AuthorId { get; init; }
+    public string AuthorName { get; init; } = "";
+    public List<Guid> CategoryIds { get; init; } = [];
+    public List<Guid> TagIds { get; init; } = [];
+    public List<Guid> CustomTermIds { get; init; } = [];
+    public List<FieldValueInput> FieldValues { get; init; } = [];
+}
 public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Version)
 {
     public string Description { get; init; } = "";
@@ -164,7 +188,12 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public DateTimeOffset UpdatedAt { get; init; }
     /// <summary>自訂欄位的公開值；依欄位宣告順序排列。</summary>
     public IReadOnlyList<PublicFieldValue> Fields { get; init; } = [];
+    /// <summary>自訂詞彙的公開清單（附所屬分類法代稱與名稱）。</summary>
+    public IReadOnlyList<PublicCustomTerm> CustomTerms { get; init; } = [];
+    /// <summary>自訂內容類型代稱；null 表示內建文章或頁面。</summary>
+    public string? ContentTypeSlug { get; init; }
 }
+public sealed record PublicCustomTerm(string TaxonomyName, string TaxonomySlug, string TermName, string TermSlug);
 public sealed record NavigationItem(string Title, string Slug);
 /// <summary>作者公開個人資料。</summary>
 public sealed record PublicAuthorProfile(string DisplayName, string Slug, string Bio, string WebsiteUrl, string AvatarUrl);
@@ -209,7 +238,12 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
 /// <summary>批次上傳的單檔結果；失敗時附原因，單檔失敗不影響其他檔案。</summary>
 public sealed record MediaBatchItem(string FileName, bool Succeeded, string Message, MediaItem? Item);
 /// <summary>退役 slug 背後現行的公開目標，供永久轉址使用。</summary>
-public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
+public sealed record SlugRedirectTarget(string Slug, ContentKind Kind, string? ContentTypeSlug = null)
+{
+    public string PublicPath => ContentTypeSlug is { Length: > 0 } typeSlug
+        ? $"/{ContentTypeService.PublicPrefix}/{Uri.EscapeDataString(typeSlug)}/{Uri.EscapeDataString(Slug)}"
+        : Kind == ContentKind.Page ? $"/pages/{Uri.EscapeDataString(Slug)}" : $"/posts/{Uri.EscapeDataString(Slug)}";
+}
 /// <summary>後台重定向規則檢視。</summary>
 public sealed record RedirectItem(Guid Id, string OldSlug, Guid ContentId, string ContentTitle, string ContentSlug, ContentKind ContentKind, DateTimeOffset CreatedAt);
 /// <summary>新增自訂重定向規則輸入。</summary>
@@ -249,6 +283,126 @@ public sealed record TopContentItem(Guid Id, ContentKind Kind, string Title, str
 public sealed record ContentNeighbor(Guid Id, string Slug, string Title, bool IsNewer);
 /// <summary>公開彙整的單一月份與已發布文章數。</summary>
 public sealed record ArchiveMonth(int Year, int Month, int Count);
+
+/// <summary>帳號個人資料匯出套件（GDPR / 個資自助匯出）。</summary>
+public sealed record PersonalDataExport(
+    string UserId,
+    string UserName,
+    string Email,
+    string Bio,
+    string WebsiteUrl,
+    string AvatarUrl,
+    bool TwoFactorEnabled,
+    DateTimeOffset ExportedAt,
+    IReadOnlyList<PersonalSiteMembershipItem> Memberships,
+    IReadOnlyList<PersonalContentItem> AuthoredContents,
+    IReadOnlyList<PersonalAuditItem> RecentAuditLogs);
+
+public sealed record PersonalSiteMembershipItem(Guid SiteId, string SiteName, string SiteSlug, string Role, string DisplayName);
+public sealed record PersonalContentItem(Guid SiteId, Guid Id, string Kind, string Title, string Slug, string Status, DateTimeOffset CreatedAt, DateTimeOffset? PublishedAt);
+public sealed record PersonalAuditItem(Guid SiteId, string Action, string Target, DateTimeOffset CreatedAt);
+
+/// <summary>個人資料抹除／匿名化結果。</summary>
+public sealed record PersonalDataEraseResult(string UserId, int AnonymizedContents, int AnonymizedComments, int RemovedMemberships, int RevokedCredentials);
+
+/// <summary>管理後台 Site Health 單項檢查。</summary>
+public sealed record SiteHealthCheckItem(string Key, string Category, string Title, string Status, string Summary);
+
+/// <summary>管理後台 Site Health 完整診斷報告（不含任何機密或連線字串）。</summary>
+public sealed record SiteHealthReport(
+    string OverallStatus,
+    DateTimeOffset CheckedAt,
+    IReadOnlyList<SiteHealthCheckItem> Items);
+
+/// <summary>評論訂閱項目（供 /feed/comments 輸出）。</summary>
+public sealed record CommentFeedEntry(Guid Id, Guid ContentId, string ContentTitle, string ContentSlug, string PublicPath,
+    string AuthorName, string Markdown, DateTimeOffset CreatedAt);
+
+/// <summary>永久連結（Permalink）與一般設定格式化輔助。</summary>
+public static class PermalinkRules
+{
+    public const string PostName = "post-name";
+    public const string DayAndName = "day-and-name";
+    public const string MonthAndName = "month-and-name";
+    public const string Numeric = "numeric";
+
+    public static readonly IReadOnlyList<(string Key, string Label, string Example)> Schemes =
+    [
+        (PostName, "文章代稱（預設）", "/posts/sample-post"),
+        (DayAndName, "日期與代稱", "/posts/2026/10/29/sample-post"),
+        (MonthAndName, "月份與代稱", "/posts/2026/10/sample-post"),
+        (Numeric, "純識別編號", "/archives/p/{id}")
+    ];
+
+    public static readonly IReadOnlyList<string> AllowedDateFormats =
+    [
+        "yyyy.MM.dd", "yyyy-MM-dd", "yyyy/MM/dd", "yyyy 年 MM 月 dd 日", "MMM dd, yyyy", "dd/MM/yyyy"
+    ];
+
+    public static readonly IReadOnlyList<string> AllowedTimeFormats =
+    [
+        "HH:mm", "hh:mm tt", "HH:mm:ss"
+    ];
+
+    public static bool IsValidScheme(string? value) =>
+        value is PostName or DayAndName or MonthAndName or Numeric;
+
+    public static bool IsValidDateFormat(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && AllowedDateFormats.Contains(value.Trim(), StringComparer.Ordinal);
+
+    public static bool IsValidTimeFormat(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && AllowedTimeFormats.Contains(value.Trim(), StringComparer.Ordinal);
+
+    public static bool IsValidTimeZone(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        if (string.Equals(value.Trim(), "UTC", StringComparison.OrdinalIgnoreCase)) return true;
+        try
+        {
+            _ = TimeZoneInfo.FindSystemTimeZoneById(value.Trim());
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>計算單篇內容的標準公開路徑。</summary>
+    public static string PostPath(string slug, DateTimeOffset? publishedAt = null, Guid? id = null, string? scheme = PostName, string? contentTypeSlug = null)
+    {
+        if (!string.IsNullOrWhiteSpace(contentTypeSlug))
+            return $"/{ContentTypeService.PublicPrefix}/{Uri.EscapeDataString(contentTypeSlug)}/{Uri.EscapeDataString(slug)}";
+        var encoded = Uri.EscapeDataString(slug);
+        var dt = (publishedAt ?? DateTimeOffset.UtcNow).UtcDateTime;
+        return scheme switch
+        {
+            DayAndName => $"/posts/{dt:yyyy}/{dt:MM}/{dt:dd}/{encoded}",
+            MonthAndName => $"/posts/{dt:yyyy}/{dt:MM}/{encoded}",
+            Numeric when id is { } guid && guid != Guid.Empty => $"/archives/p/{guid:D}",
+            _ => $"/posts/{encoded}"
+        };
+    }
+
+    public static string FormatDate(DateTimeOffset? value, string? timeZoneId = "UTC", string? dateFormat = "yyyy.MM.dd")
+    {
+        if (value is not { } dto) return "";
+        var tz = ScheduleTime.Resolve(timeZoneId, TimeSpan.Zero);
+        var local = TimeZoneInfo.ConvertTime(dto, tz);
+        var fmt = IsValidDateFormat(dateFormat) ? dateFormat!.Trim() : "yyyy.MM.dd";
+        return local.ToString(fmt, CultureInfo.InvariantCulture);
+    }
+
+    public static string FormatDateTime(DateTimeOffset? value, string? timeZoneId = "UTC", string? dateFormat = "yyyy.MM.dd", string? timeFormat = "HH:mm")
+    {
+        if (value is not { } dto) return "";
+        var tz = ScheduleTime.Resolve(timeZoneId, TimeSpan.Zero);
+        var local = TimeZoneInfo.ConvertTime(dto, tz);
+        var dFmt = IsValidDateFormat(dateFormat) ? dateFormat!.Trim() : "yyyy.MM.dd";
+        var tFmt = IsValidTimeFormat(timeFormat) ? timeFormat!.Trim() : "HH:mm";
+        return local.ToString($"{dFmt} {tFmt}", CultureInfo.InvariantCulture);
+    }
+}
 public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Total, int Page, int PageSize)
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling((double)Total / PageSize));

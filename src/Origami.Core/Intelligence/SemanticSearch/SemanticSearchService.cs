@@ -1,11 +1,16 @@
 namespace Origami.Core.Intelligence.SemanticSearch;
 
-public sealed record SemanticHit(Guid Id, ContentKind Kind, string Title, string Slug, double Score, string Snippet);
+public sealed record SemanticHit(Guid Id, ContentKind Kind, string Title, string Slug, double Score, string Snippet, string? ContentTypeSlug = null)
+{
+    public string PublicPath => ContentTypeSlug is { Length: > 0 } typeSlug
+        ? $"/{ContentTypeService.PublicPrefix}/{Uri.EscapeDataString(typeSlug)}/{Uri.EscapeDataString(Slug)}"
+        : Kind == ContentKind.Page ? $"/pages/{Uri.EscapeDataString(Slug)}" : $"/posts/{Uri.EscapeDataString(Slug)}";
+}
 
 public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factory, IEmbeddingGateway gateway)
 {
-    /// <summary>依語意搜尋已發布文章。草稿、已撤回與已刪除內容都在 SQL 中過濾。</summary>
-    public async Task<IReadOnlyList<SemanticHit>> SearchAsync(string query, int limit = Limits.PageSize, CancellationToken ct = default)
+    /// <summary>依語意搜尋已發布文章（或全站已發布內容，含獨立頁面與自訂內容類型）。草稿、已撤回與已刪除內容都在 SQL 中過濾。</summary>
+    public async Task<IReadOnlyList<SemanticHit>> SearchAsync(string query, int limit = Limits.PageSize, CancellationToken ct = default, bool includePages = false)
     {
         if (query?.Length > Limits.SearchQueryMax)
             throw new CmsException($"搜尋文字上限為 {Limits.SearchQueryMax} 字。");
@@ -17,14 +22,15 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
         // 發布過濾條件是 SQL 的一部分，絕不是事後的記憶體過濾。
         var rows = await (from e in db.ContentEmbeddings.AsNoTracking()
                           join c in db.Contents.AsNoTracking() on e.ContentId equals c.Id
-                          where c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && !c.IsProtected
+                          where (includePages || c.Kind == ContentKind.Post)
+                              && c.Status == ContentStatus.Published && !c.IsPrivate && !c.IsProtected
                           orderby e.Embedding.CosineDistance(queryVector)
-                          select new { c.Id, c.Kind, c.Title, c.Slug, e.ChunkText, Distance = e.Embedding.CosineDistance(queryVector) })
+                          select new { c.Id, c.Kind, c.Title, c.Slug, TypeSlug = c.ContentType != null ? c.ContentType.Slug : null, e.ChunkText, Distance = e.Embedding.CosineDistance(queryVector) })
             .Take(limit * 3).ToListAsync(ct);
         return rows.GroupBy(x => x.Id)
             .Select(g => g.MinBy(x => x.Distance)!)
             .OrderBy(x => x.Distance).Take(limit)
-            .Select(x => new SemanticHit(x.Id, x.Kind, x.Title, x.Slug, Math.Round(1 - x.Distance, 4), Snippet(x.ChunkText)))
+            .Select(x => new SemanticHit(x.Id, x.Kind, x.Title, x.Slug, Math.Round(1 - x.Distance, 4), Snippet(x.ChunkText), x.TypeSlug))
             .ToList();
     }
 
@@ -57,12 +63,12 @@ public sealed class SemanticSearchService(IDbContextFactory<CmsDbContext> factor
                           where c.Id != contentId && c.Kind == ContentKind.Post && c.Status == ContentStatus.Published
                               && !c.IsPrivate && !c.IsProtected
                           orderby e.Embedding.CosineDistance(queryVector)
-                          select new { c.Id, c.Kind, c.Title, c.Slug, e.ChunkText, Distance = e.Embedding.CosineDistance(queryVector) })
+                          select new { c.Id, c.Kind, c.Title, c.Slug, TypeSlug = c.ContentType != null ? c.ContentType.Slug : null, e.ChunkText, Distance = e.Embedding.CosineDistance(queryVector) })
             .Take(limit * 3).ToListAsync(ct);
         return rows.GroupBy(x => x.Id)
             .Select(g => g.MinBy(x => x.Distance)!)
             .OrderBy(x => x.Distance).Take(limit)
-            .Select(x => new SemanticHit(x.Id, x.Kind, x.Title, x.Slug, Math.Round(1 - x.Distance, 4), Snippet(x.ChunkText)))
+            .Select(x => new SemanticHit(x.Id, x.Kind, x.Title, x.Slug, Math.Round(1 - x.Distance, 4), Snippet(x.ChunkText), x.TypeSlug))
             .ToList();
     }
 }

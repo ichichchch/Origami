@@ -4,7 +4,7 @@ namespace Origami.Core.Services;
 /// 訪客評論：張貼預設待審（可設定自動核可），核可後才公開；蜜罐與連結數
 /// 過量者靜默標為垃圾。基礎反垃圾不依賴任何第三方雲端服務。
 /// </summary>
-public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null)
+public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null)
 {
     public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot, Guid? ParentId = null);
     public sealed record CommentView(Guid Id, Guid ContentId, string ContentTitle, string AuthorName, string Url,
@@ -33,7 +33,8 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         var settings = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1, ct);
         if (!settings.CommentsEnabled) throw new CmsException("本站未開放評論。");
         var content = await db.Contents.AsNoTracking().Where(x => x.Id == contentId)
-            .Select(x => new { x.Kind, x.Status, x.IsProtected, x.IsPrivate, x.AllowComments, x.PublishedAt, x.Title, x.Slug }).SingleOrDefaultAsync(ct)
+            .Select(x => new { x.Kind, x.Status, x.IsProtected, x.IsPrivate, x.AllowComments, x.PublishedAt, x.Title, x.Slug, x.AuthorId })
+            .SingleOrDefaultAsync(ct)
             ?? throw new CmsException("內容不存在。");
         if (content.Kind != ContentKind.Post || content.Status != ContentStatus.Published
             || content.IsProtected || content.IsPrivate || !content.AllowComments)
@@ -74,6 +75,78 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
                 status = status.ToString().ToLowerInvariant()
             }, ct);
         }
+        if (status != CommentStatus.Spam && settings.EmailNotificationsEnabled && emailSender is { IsConfigured: true })
+        {
+            await NotifyNewCommentEmailAsync(db, settings.Name, content.Title, content.Slug, content.AuthorId, name, body, status, ct);
+        }
+    }
+
+    private async Task NotifyNewCommentEmailAsync(CmsDbContext db, string siteName, string contentTitle, string contentSlug,
+        string? authorId, string commenterName, string markdown, CommentStatus status, CancellationToken ct)
+    {
+        try
+        {
+            var recipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(authorId))
+            {
+                var authorEmail = await db.Users.AsNoTracking()
+                    .Where(x => x.Id == authorId && !x.IsDisabled && x.Email != null && x.Email != "")
+                    .Select(x => x.Email!)
+                    .SingleOrDefaultAsync(ct);
+                if (!string.IsNullOrWhiteSpace(authorEmail)) recipients.Add(authorEmail);
+            }
+            var editorEmails = await db.SiteMemberships.AsNoTracking()
+                .Where(x => !x.User.IsDisabled && x.Role >= SiteRole.Editor && x.User.Email != null && x.User.Email != "")
+                .Select(x => x.User.Email!)
+                .ToListAsync(ct);
+            foreach (var email in editorEmails) recipients.Add(email);
+            var netAdminEmails = await db.Users.AsNoTracking()
+                .Where(x => x.SingletonKey == 1 && !x.IsDisabled && x.Email != null && x.Email != "")
+                .Select(x => x.Email!)
+                .ToListAsync(ct);
+            foreach (var email in netAdminEmails) recipients.Add(email);
+
+            var statusLabel = status == CommentStatus.Pending ? "待審核" : "已自動核可";
+            foreach (var to in recipients)
+            {
+                await emailSender!.SendAsync(to,
+                    $"[{siteName}] 新評論通知（{statusLabel}）：{contentTitle}",
+                    $"訪客「{commenterName}」在文章「{contentTitle}」（/posts/{contentSlug}）留下了評論（狀態：{statusLabel}）：\n\n{markdown}",
+                    ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 郵件通知採盡力而為。
+        }
+    }
+
+    /// <summary>全站已核可評論訂閱資料（最新在前，僅限公開可讀且允許評論的文章）。</summary>
+    public async Task<List<CommentFeedEntry>> FeedCommentsAsync(int count, CancellationToken ct = default)
+    {
+        if (count is < 1 or > Limits.MaxFeedItems) throw new CmsException("訂閱筆數超出範圍。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        if (!await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.CommentsEnabled, ct))
+            return [];
+        return await db.Comments.AsNoTracking()
+            .Where(x => x.Status == CommentStatus.Approved
+                && x.Content.Kind == ContentKind.Post && x.Content.Status == ContentStatus.Published
+                && !x.Content.IsProtected && !x.Content.IsPrivate && x.Content.AllowComments
+                && (x.ParentId == null || x.Parent!.Status == CommentStatus.Approved))
+            .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            .Take(count)
+            .Select(x => new CommentFeedEntry(
+                x.Id,
+                x.ContentId,
+                x.Content.Title,
+                x.Content.Slug,
+                x.Content.ContentType != null
+                    ? "/" + ContentTypeService.PublicPrefix + "/" + x.Content.ContentType.Slug + "/" + x.Content.Slug
+                    : "/posts/" + x.Content.Slug,
+                x.AuthorName,
+                x.Markdown,
+                x.CreatedAt))
+            .ToListAsync(ct);
     }
 
     private static bool ContainsBlockedWords(string? blockedWordsRaw, string authorName, string markdown, string url)
