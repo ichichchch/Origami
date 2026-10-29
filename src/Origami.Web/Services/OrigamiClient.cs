@@ -1,8 +1,24 @@
 namespace Origami.Web.Services;
 
 public sealed record PublicSiteSettings(string Name, string Description, int? PostsPerPage, int? FeedItems,
-    bool? FeedShowFullText, string AuthorDisplayName, Guid? HomePageContentId, Guid? SiteIconMediaId)
+    bool? FeedShowFullText, string AuthorDisplayName, Guid? HomePageContentId, Guid? SiteIconMediaId, Guid? LogoMediaId = null)
 {
+    /// <summary>標誌的儲存檔名；未設定時為空字串，頁首僅顯示站名。</summary>
+    public string LogoFileName { get; init; } = "";
+    /// <summary>是否開放訪客評論。</summary>
+    public bool CommentsEnabled { get; init; }
+    /// <summary>受控版型預設名稱。</summary>
+    public string ThemePreset { get; init; } = "reading";
+    /// <summary>版型強調色（十六進位色碼）。</summary>
+    public string AccentColor { get; init; } = "#2f6f4e";
+    /// <summary>正文欄寬（字元）。</summary>
+    public int ReadingWidth { get; init; } = 68;
+    /// <summary>是否顯示文章署名。</summary>
+    public bool ShowByline { get; init; } = true;
+    /// <summary>是否顯示封面圖。</summary>
+    public bool ShowCover { get; init; } = true;
+    /// <summary>文章卡片樣式：list 或 grid。</summary>
+    public string CardStyle { get; init; } = "list";
     /// <summary>Api 無法回應時的後備站名與說明；全站單一來源。</summary>
     public static PublicSiteSettings Default { get; } = new("Origami", "用文字，分享你的世界。", null, null, null, "", null, null);
 }
@@ -10,7 +26,7 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
 public sealed record ApiPreview(PublicContent Content, string? PublishedKind, string? PublishedSlug);
 
 public sealed record ApiFeedItem(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
-    string Excerpt, string Markdown, bool ExcerptIsManual);
+    string Excerpt, string Markdown, bool ExcerptIsManual, string AuthorName = "");
 
 /// <summary>
 /// BFF 資料通道：網站的頁面資料讀寫一律經此用戶端呼叫 Origami.Api；瀏覽器不持有任何 API 憑證。
@@ -34,6 +50,50 @@ public sealed class OrigamiClient
 
     public Task<List<PageNavItem>?> GetNavigationAsync(CancellationToken ct = default) =>
         GetAsync<List<PageNavItem>>("api/v1/navigation", ct);
+
+    // ---------- 受控導覽管理 ----------
+
+    public Task<List<NavItemView>?> ListNavigationAsync(CancellationToken ct = default) =>
+        GetAsync<List<NavItemView>>("api/v1/admin/navigation", ct);
+
+    public Task<NavItemView?> SaveNavigationAsync(NavigationService.NavItemInput input, CancellationToken ct = default) =>
+        input.Id is null
+            ? SendAsync<NavItemView>(new(HttpMethod.Post, "api/v1/admin/navigation"), input, ct)
+            : SendAsync<NavItemView>(new(HttpMethod.Put, $"api/v1/admin/navigation/{input.Id}"), input, ct);
+
+    public async Task DeleteNavigationAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/v1/admin/navigation/{id}?version={version}", ct);
+        await EnsureSuccessAsync(response);
+    }
+
+    public Task<List<BulkItemResult>?> ReorderNavigationAsync(IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default) =>
+        SendAsync<List<BulkItemResult>>(new(HttpMethod.Put, "api/v1/admin/navigation/order"),
+            new { items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
+
+    public Task<List<CommentService.CommentView>?> GetPublicCommentsAsync(Guid contentId, CancellationToken ct = default) =>
+        GetAsync<List<CommentService.CommentView>>($"api/v1/contents/{contentId}/comments", ct);
+
+    public Task PostCommentAsync(Guid contentId, string authorName, string? url, string markdown, bool honeypot, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/contents/{contentId}/comments",
+            new { authorName, url, markdown, honeypot }, ct);
+
+    public Task<PagedResult<CommentService.CommentView>?> ListCommentsAsync(CommentStatus? status, int page = 1, CancellationToken ct = default) =>
+        GetAsync<PagedResult<CommentService.CommentView>>($"api/v1/admin/comments?page={page}" +
+            (status is null ? "" : "&status=" + status), ct);
+
+    public Task<CommentService.CommentCounts?> GetCommentCountsAsync(CancellationToken ct = default) =>
+        GetAsync<CommentService.CommentCounts>("api/v1/admin/comments/counts", ct);
+
+    public Task ModerateCommentAsync(Guid id, CommentStatus status, Guid version, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/comments/{id}/moderate?version={version}",
+            new { status = status.ToString() }, ct);
+
+    public async Task DeleteCommentAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/v1/admin/comments/{id}?version={version}", ct);
+        await EnsureSuccessAsync(response);
+    }
 
     public Task<List<ContentNeighbor>?> GetNeighborsAsync(Guid contentId, CancellationToken ct = default) =>
         GetAsync<List<ContentNeighbor>>($"api/v1/contents/{contentId}/neighbors", ct);
@@ -71,11 +131,12 @@ public sealed class OrigamiClient
         GetAsync<PublicSearchService.Result>($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}&page={page}", ct);
 
     public async Task<PagedResult<ContentSummary>?> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
-        string? category = null, string? tag = null, int? year = null, int? month = null, CancellationToken ct = default)
+        string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null, CancellationToken ct = default)
     {
         var query = $"api/v1/posts?page={page}&pageSize={pageSize}";
         if (category is not null) query += "&category=" + Uri.EscapeDataString(category);
         if (tag is not null) query += "&tag=" + Uri.EscapeDataString(tag);
+        if (author is not null) query += "&author=" + Uri.EscapeDataString(author);
         if (year is { } y) query += "&year=" + y;
         if (month is { } m) query += "&month=" + m;
         return await GetAsync<PagedResult<ContentSummary>>(query, ct);
@@ -243,6 +304,22 @@ public sealed class OrigamiClient
         await EnsureSuccessAsync(response);
     }
 
+    // ---------- 編輯占用鎖（提示性心跳） ----------
+
+    public async Task<ContentService.EditingLockState?> TouchEditingAsync(Guid contentId, bool takeOver = false, CancellationToken ct = default)
+    {
+        var query = takeOver ? "?takeOver=true" : "";
+        using var response = await http.PostAsync($"api/v1/admin/contents/{contentId}/editing{query}", null, ct);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<ContentService.EditingLockState>(Json, ct);
+    }
+
+    public async Task ReleaseEditingAsync(Guid contentId, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/v1/admin/contents/{contentId}/editing", ct);
+        await EnsureSuccessAsync(response);
+    }
+
     /// <summary>清單批次操作；回傳逐筆結果，單筆失敗不影響其他項目。</summary>
     public async Task<List<BulkItemResult>?> BulkContentsAsync(BulkAction action,
         IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default)
@@ -276,6 +353,13 @@ public sealed class OrigamiClient
         return result?.Moved ?? 0;
     }
 
+    /// <summary>批次刪除分類或標籤；回傳逐筆結果，單筆失敗不影響其他項目。</summary>
+    public Task<List<BulkItemResult>?> BulkDeleteTaxonomiesAsync(TaxonomyKind kind,
+        IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default) =>
+        SendAsync<List<BulkItemResult>>(
+            new(HttpMethod.Post, "api/v1/admin/taxonomies/bulk-delete"),
+            new { kind = (int)kind, items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
+
     private sealed record MergeTaxonomyResult(int Moved);
 
     public async Task<PagedResult<MediaItem>?> ListMediaAsync(int page = 1, int pageSize = Limits.PageSize,
@@ -293,6 +377,24 @@ public sealed class OrigamiClient
         using var response = await http.PostAsync("api/v1/admin/media", form, ct);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<MediaItem>(Json, ct);
+    }
+
+    /// <summary>批次上傳：逐檔回報結果，單檔失敗不影響其他檔案。</summary>
+    public async Task<List<MediaBatchItem>?> UploadMediaBatchAsync(IReadOnlyList<IBrowserFile> files, CancellationToken ct = default)
+    {
+        using var form = new MultipartFormDataContent();
+        foreach (var browserFile in files)
+        {
+            // 串流上限以非圖片媒體的單檔上限為準；伺服器仍會依媒體種類個別把關。
+            var stream = browserFile.OpenReadStream(Limits.FileUploadBytes, ct);
+            var content = new StreamContent(stream);
+            if (!string.IsNullOrWhiteSpace(browserFile.ContentType))
+                content.Headers.ContentType = new MediaTypeHeaderValue(browserFile.ContentType);
+            form.Add(content, "files", browserFile.Name);
+        }
+        using var response = await http.PostAsync("api/v1/admin/media/batch", form, ct);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<List<MediaBatchItem>>(Json, ct);
     }
 
     public Task<MediaItem?> UpdateMediaMetaAsync(Guid id, string? altText, string? caption, CancellationToken ct = default) =>
@@ -313,11 +415,33 @@ public sealed class OrigamiClient
     public Task<SiteSettings?> SaveSettingsAsync(SiteSettings input, CancellationToken ct = default) =>
         SendAsync<SiteSettings>(new(HttpMethod.Put, "api/v1/admin/settings"), input, ct);
 
-    public async Task<byte[]> ExportAsync(CancellationToken ct = default)
+    public async Task<byte[]> ExportAsync(CancellationToken ct = default, string? kind = null, string? category = null)
     {
-        using var response = await http.GetAsync("api/v1/admin/transfer/export", ct);
+        var query = "";
+        if (!string.IsNullOrWhiteSpace(kind)) query = "?kind=" + Uri.EscapeDataString(kind);
+        if (!string.IsNullOrWhiteSpace(category)) query += (query.Length == 0 ? "?" : "&") + "category=" + Uri.EscapeDataString(category);
+        using var response = await http.GetAsync("api/v1/admin/transfer/export" + query, ct);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadAsByteArrayAsync(ct);
+    }
+
+    /// <summary>WordPress WXR 匯入：預覽可匯入的內容統計與警告。</summary>
+    public async Task<WxrImportService.WxrPreview?> AnalyzeWxrAsync(byte[] data, CancellationToken ct = default) =>
+        await SendWxrAsync<WxrImportService.WxrPreview>("api/v1/admin/transfer/import-wxr/analyze", data, ct);
+
+    /// <summary>WordPress WXR 匯入：套用（新增內容，不取代現有資料）。</summary>
+    public async Task<WxrImportService.WxrResult?> ApplyWxrAsync(byte[] data, CancellationToken ct = default) =>
+        await SendWxrAsync<WxrImportService.WxrResult>("api/v1/admin/transfer/import-wxr/apply", data, ct);
+
+    private async Task<T?> SendWxrAsync<T>(string path, byte[] data, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(data);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/xml");
+        form.Add(file, "file", "import.wxr.xml");
+        using var response = await http.PostAsync(path, form, ct);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<T>(Json, ct);
     }
 
     /// <summary>完整封裝匯出：JSON 資料＋媒體檔案（原圖與變體）打包為 ZIP。</summary>
@@ -337,6 +461,87 @@ public sealed class OrigamiClient
     private sealed record UnlockState(bool Unlocked);
 
     // ---------- 共用傳輸 ----------
+
+    // ---------- 自訂內容類型與自訂分類法 ----------
+
+    public async Task<List<ContentTypeService.TypeView>> ListContentTypesAsync(CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.TypeView>>("api/v1/admin/content-types", ct)
+        ?? throw new CmsException("無法載入內容類型。");
+
+    public async Task<ContentTypeService.TypeView> SaveContentTypeAsync(ContentTypeService.TypeEdit input,
+        CancellationToken ct = default) =>
+        await SendAsync<ContentTypeService.TypeView>(new(
+            input.Id is null ? HttpMethod.Post : HttpMethod.Put,
+            input.Id is null ? "api/v1/admin/content-types" : $"api/v1/admin/content-types/{input.Id}"), input, ct)
+        ?? throw new CmsException("無法儲存內容類型。");
+
+    public async Task DeleteContentTypeAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/content-types/{id}?version={version}", null, ct);
+
+    public async Task<List<ContentTypeService.TaxonomyView>> ListCustomTaxonomiesAsync(Guid contentTypeId,
+        CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.TaxonomyView>>($"api/v1/admin/content-types/{contentTypeId}/taxonomies", ct)
+        ?? [];
+
+    public async Task<ContentTypeService.TaxonomyView> SaveCustomTaxonomyAsync(ContentTypeService.TaxonomyEdit input,
+        CancellationToken ct = default) =>
+        await SendAsync<ContentTypeService.TaxonomyView>(new(
+            input.Id is null ? HttpMethod.Post : HttpMethod.Put,
+            input.Id is null
+                ? $"api/v1/admin/content-types/{input.ContentTypeId}/taxonomies"
+                : $"api/v1/admin/custom-taxonomies/{input.Id}"), input, ct)
+        ?? throw new CmsException("無法儲存自訂分類法。");
+
+    public async Task DeleteCustomTaxonomyAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/custom-taxonomies/{id}?version={version}", null, ct);
+
+    public async Task<List<ContentTypeService.TermView>> ListCustomTermsAsync(Guid taxonomyId,
+        CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.TermView>>($"api/v1/admin/custom-taxonomies/{taxonomyId}/terms", ct) ?? [];
+
+    public async Task<ContentTypeService.TermView> SaveCustomTermAsync(ContentTypeService.TermEdit input,
+        CancellationToken ct = default) =>
+        await SendAsync<ContentTypeService.TermView>(new(
+            input.Id is null ? HttpMethod.Post : HttpMethod.Put,
+            input.Id is null
+                ? $"api/v1/admin/custom-taxonomies/{input.TaxonomyId}/terms"
+                : $"api/v1/admin/custom-terms/{input.Id}"), input, ct)
+        ?? throw new CmsException("無法儲存詞彙。");
+
+    public async Task DeleteCustomTermAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/custom-terms/{id}?version={version}", null, ct);
+
+    public async Task<List<ContentTypeService.TaxonomyTermsView>> TermsForContentTypeAsync(Guid contentTypeId,
+        CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.TaxonomyTermsView>>($"api/v1/admin/content-types/{contentTypeId}/terms", ct) ?? [];
+
+    public async Task<List<ContentTypeService.FieldView>> ListCustomFieldsAsync(Guid contentTypeId,
+        CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.FieldView>>($"api/v1/admin/content-types/{contentTypeId}/fields", ct) ?? [];
+
+    public async Task<ContentTypeService.FieldView> SaveCustomFieldAsync(ContentTypeService.FieldEdit input,
+        CancellationToken ct = default) =>
+        await SendAsync<ContentTypeService.FieldView>(new(
+            input.Id is null ? HttpMethod.Post : HttpMethod.Put,
+            input.Id is null
+                ? $"api/v1/admin/content-types/{input.ContentTypeId}/fields"
+                : $"api/v1/admin/custom-fields/{input.Id}"), input, ct)
+        ?? throw new CmsException("無法儲存自訂欄位。");
+
+    public async Task DeleteCustomFieldAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/custom-fields/{id}?version={version}", null, ct);
+
+    public async Task<List<ContentTypeService.TypeView>> ListPublicTypesAsync(CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.TypeView>>("api/v1/types", ct) ?? [];
+
+    public async Task<PagedResult<ContentSummary>?> ListTypeContentsAsync(string typeSlug, int page = 1,
+        int pageSize = Limits.PageSize, CancellationToken ct = default) =>
+        await GetAsync<PagedResult<ContentSummary>>(
+            $"api/v1/types/{Uri.EscapeDataString(typeSlug)}/contents?page={page}&pageSize={pageSize}", ct);
+
+    public Task<PublicContent?> GetTypeContentAsync(string typeSlug, string contentSlug, CancellationToken ct = default) =>
+        GetAsync<PublicContent>(
+            $"api/v1/types/{Uri.EscapeDataString(typeSlug)}/contents/{Uri.EscapeDataString(contentSlug)}", ct);
 
     private async Task<T?> SendContentAsync<T>(HttpMethod method, string url, ContentEdit input, CancellationToken ct)
     {
@@ -394,9 +599,9 @@ public sealed class OrigamiClient
     {
         if (response.IsSuccessStatusCode) return;
         if (response.StatusCode == HttpStatusCode.Unauthorized)
-            throw new UnauthorizedAccessException("登入已失效或網站服務憑證無效，請重新登入；若持續失敗請聯絡管理者。");
+            throw new UnauthorizedAccessException(UiText.T("Common.CredentialsExpired", "登入已失效或網站服務憑證無效，請重新登入；若持續失敗請聯絡管理者。"));
         if (response.StatusCode == HttpStatusCode.Forbidden)
-            throw new AccessDeniedException("你已登入，但沒有此站點的操作權限。請聯絡站點管理員。");
+            throw new AccessDeniedException(UiText.T("Common.AccessDenied", "你已登入，但沒有此站點的操作權限。請聯絡站點管理員。"));
         // API 端的驗證訊息以 CmsException 原樣呈現，頁面錯誤處理因此不必改寫。
         string message;
         try
@@ -408,7 +613,8 @@ public sealed class OrigamiClient
         {
             message = "";
         }
-        throw new CmsException(message.Length > 0 ? message : $"API 要求失敗（{(int)response.StatusCode}）。");
+        throw new CmsException(message.Length > 0 ? message : string.Format(CultureInfo.CurrentCulture,
+            UiText.T("Common.ApiFailed", "API 要求失敗（{0}）。"), (int)response.StatusCode));
     }
 
     /// <summary>每次請求獨立加註身分與站點，不把可變使用者狀態寫入 DefaultRequestHeaders。</summary>

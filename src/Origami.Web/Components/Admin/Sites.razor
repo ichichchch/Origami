@@ -6,32 +6,32 @@
 @inject OrigamiClient Api
 @inject NavigationManager Navigation
 
-<PageTitle>站點 · 內容管理</PageTitle>
-<div class="page-heading"><div><p class="eyebrow">多站點工作空間</p><h1>站點</h1><p>只列出你可存取的站點。建立、修改網域與啟停僅限全站管理者。</p></div></div>
+<PageTitle>@UiText.T("Admin.Sites.PageTitle", "站點 · 內容管理")</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Sites.Eyebrow", "多站點工作空間")</p><h1>@UiText.T("Admin.Sites.Title", "站點")</h1><p>@UiText.T("Admin.Sites.Introduction", "只列出你可存取的站點。建立、修改網域與啟停僅限全站管理者。")</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
-<p class="notice">網域登錄不會自動配置 DNS、TLS 或反向代理。下列 HTTPS 連結不代表已部署可用；切站會整頁導覽，各網域需分別登入。</p>
-<p class="field-help">目前網址：@CurrentAuthority</p>
-<button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入站點</button>
+<p class="notice">@UiText.T("Admin.Sites.DomainNotice", "網域登錄不會自動配置 DNS、TLS 或反向代理。下列 HTTPS 連結不代表已部署可用；切站會整頁導覽，各網域需分別登入。")</p>
+<p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Sites.CurrentAuthority", "目前網址：{0}"), CurrentAuthority)</p>
+<button class="button button-secondary" disabled="@Blocked" @onclick="Load">@UiText.T("Admin.Sites.Reload", "重新載入站點")</button>
 @if (_sites is not null)
 {
     <section class="panel"><div class="table-scroll"><table>
-        <caption>可存取的站點</caption>
-        <thead><tr><th>名稱 / 代稱</th><th>登錄主機</th><th>狀態</th><th>操作</th></tr></thead>
+        <caption>@UiText.T("Admin.Sites.TableCaption", "可存取的站點")</caption>
+        <thead><tr><th>@UiText.T("Admin.Sites.NameAndSlug", "名稱 / 代稱")</th><th>@UiText.T("Admin.Sites.RegisteredHost", "登錄主機")</th><th>@UiText.T("Admin.Sites.Status", "狀態")</th><th>@UiText.T("Admin.Sites.Actions", "操作")</th></tr></thead>
         <tbody>
         @foreach (var site in _sites)
         {
             <tr @key="site.Id">
-                <td>@site.Name <small>@site.Slug</small>@if (site.Id == Access?.SiteId) { <span>（本站）</span> }</td>
-                <td>@(site.HostName ?? "尚未設定（舊站相容模式）")</td>
-                <td>@(site.IsActive ? "啟用" : "停用")</td>
+                <td>@site.Name <small>@site.Slug</small>@if (site.Id == Access?.SiteId) { <span>@UiText.T("Admin.Sites.CurrentSite", "（本站）")</span> }</td>
+                <td>@(site.HostName ?? UiText.T("Admin.Sites.HostNotSet", "尚未設定（舊站相容模式）"))</td>
+                <td>@(site.IsActive ? UiText.T("Admin.Sites.Active", "啟用") : UiText.T("Admin.Sites.Inactive", "停用"))</td>
                 <td><div class="table-actions">
                     @if (site.IsActive && SiteUrl(site) is { } url)
                     {
-                        <a href="@url" data-enhance-nav="false">開啟此站（HTTPS）</a>
+                        <a href="@url" data-enhance-nav="false">@UiText.T("Admin.Sites.OpenSite", "開啟此站（HTTPS）")</a>
                     }
                     @if (IsNetworkAdmin)
                     {
-                        <button disabled="@Blocked" @onclick="() => EditSite(site)">編輯</button>
+                        <button disabled="@Blocked" @onclick="() => EditSite(site)">@UiText.T("Admin.Sites.Edit", "編輯")</button>
                     }
                 </div></td>
             </tr>
@@ -42,28 +42,28 @@
 @if (IsNetworkAdmin)
 {
     <section class="panel settings-panel settings-width">
-        <h2>建立站點</h2>
+        <h2>@UiText.T("Admin.Sites.Create", "建立站點")</h2>
         <EditForm Model="_create" OnSubmit="Create" FormName="site-create">
             <fieldset disabled="@Blocked">
-                <div class="field"><label for="new-site-name">名稱</label><input id="new-site-name" @bind="_create.Name" maxlength="@Limits.SiteName" required /></div>
-                <div class="field"><label for="new-site-slug">固定代稱</label><input id="new-site-slug" @bind="_create.Slug" maxlength="@Limits.SiteSlug" required /><span class="field-help">英數字或連字號，建立後不可修改。</span></div>
-                <div class="field"><label for="new-site-host">完整主機名稱</label><input id="new-site-host" @bind="_create.HostName" maxlength="@Limits.HostName" placeholder="news.example.com" required /><span class="field-help">不含 https://、路徑或通訊埠，不接受萬用字元。</span></div>
-                <button class="button" type="submit">建立站點</button>
+                <div class="field"><label for="new-site-name">@UiText.T("Admin.Sites.Name", "名稱")</label><input id="new-site-name" @bind="_create.Name" maxlength="@Limits.SiteName" required /></div>
+                <div class="field"><label for="new-site-slug">@UiText.T("Admin.Sites.Slug", "固定代稱")</label><input id="new-site-slug" @bind="_create.Slug" maxlength="@Limits.SiteSlug" required /><span class="field-help">@UiText.T("Admin.Sites.SlugHelp", "英數字或連字號，建立後不可修改。")</span></div>
+                <div class="field"><label for="new-site-host">@UiText.T("Admin.Sites.HostName", "完整主機名稱")</label><input id="new-site-host" @bind="_create.HostName" maxlength="@Limits.HostName" placeholder="news.example.com" required /><span class="field-help">@UiText.T("Admin.Sites.HostHelp", "不含 https://、路徑或通訊埠，不接受萬用字元。")</span></div>
+                <button class="button" type="submit">@UiText.T("Admin.Sites.Create", "建立站點")</button>
             </fieldset>
         </EditForm>
     </section>
     @if (_editing is { } editing)
     {
         <section class="panel settings-panel settings-width">
-            <h2>編輯站點：@editing.Name</h2>
+            <h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Sites.EditTitle", "編輯站點：{0}"), editing.Name)</h2>
             <EditForm Model="_update" OnSubmit="Update" FormName="site-update">
                 <fieldset disabled="@Blocked">
-                    <div class="field"><label for="edit-site-name">名稱</label><input id="edit-site-name" @bind="_update.Name" maxlength="@Limits.SiteName" required /></div>
-                    <div class="field"><label for="edit-site-host">完整主機名稱</label><input id="edit-site-host" @bind="_update.HostName" maxlength="@Limits.HostName" required="@(editing.Id != SiteDefaults.DefaultSiteId)" /></div>
-                    <div class="field"><label><input type="checkbox" @bind="_update.IsActive" disabled="@(editing.Id == SiteDefaults.DefaultSiteId)" /> 啟用站點</label></div>
-                    <p class="field-help">預設站點不可停用。修改本站主機或停用本站後，原網址可能無法繼續使用，請預先確認新主機配置。</p>
-                    <button class="button" type="submit">儲存站點</button>
-                    <button class="button button-secondary" type="button" @onclick="() => _editing = null">取消</button>
+                    <div class="field"><label for="edit-site-name">@UiText.T("Admin.Sites.Name", "名稱")</label><input id="edit-site-name" @bind="_update.Name" maxlength="@Limits.SiteName" required /></div>
+                    <div class="field"><label for="edit-site-host">@UiText.T("Admin.Sites.HostName", "完整主機名稱")</label><input id="edit-site-host" @bind="_update.HostName" maxlength="@Limits.HostName" required="@(editing.Id != SiteDefaults.DefaultSiteId)" /></div>
+                    <div class="field"><label><input type="checkbox" @bind="_update.IsActive" disabled="@(editing.Id == SiteDefaults.DefaultSiteId)" /> @UiText.T("Admin.Sites.EnableSite", "啟用站點")</label></div>
+                    <p class="field-help">@UiText.T("Admin.Sites.UpdateHelp", "預設站點不可停用。修改本站主機或停用本站後，原網址可能無法繼續使用，請預先確認新主機配置。")</p>
+                    <button class="button" type="submit">@UiText.T("Admin.Sites.Save", "儲存站點")</button>
+                    <button class="button button-secondary" type="button" @onclick="() => _editing = null">@UiText.T("Admin.Sites.Cancel", "取消")</button>
                 </fieldset>
             </EditForm>
         </section>
@@ -99,19 +99,19 @@
     }
     private Task Create() => RunAsync(async ct =>
     {
-        if (!IsNetworkAdmin) throw new AccessDeniedException("建立站點僅限全站管理者。");
+        if (!IsNetworkAdmin) throw new AccessDeniedException(UiText.T("Admin.Sites.CreateDenied", "建立站點僅限全站管理者。"));
         await Api.CreateSiteAsync(_create, ct);
         _create = new();
         _sites = await Api.ListSitesAsync(ct);
-    }, "站點已建立；DNS、TLS 與代理仍須由管理者另外配置。");
+    }, UiText.T("Admin.Sites.Created", "站點已建立；DNS、TLS 與代理仍須由管理者另外配置。"));
     private Task Update() => RunAsync(async ct =>
     {
-        if (!IsNetworkAdmin) throw new AccessDeniedException("修改站點僅限全站管理者。");
+        if (!IsNetworkAdmin) throw new AccessDeniedException(UiText.T("Admin.Sites.UpdateDenied", "修改站點僅限全站管理者。"));
         if (_editing is not { } site) return;
         if (site.Id == SiteDefaults.DefaultSiteId && string.IsNullOrWhiteSpace(_update.HostName)) _update.HostName = null;
         var updated = await Api.UpdateSiteAsync(site.Id, _update, ct);
         // 不重新解析或變更本電路的 SiteContext；新的主機只透過整頁導覽切換。
         _sites = _sites?.Select(x => x.Id == updated.Id ? updated : x).ToList();
         _editing = null;
-    }, "站點已更新；目前電路仍綁定原站點。請從登錄主機整頁開啟。");
+    }, UiText.T("Admin.Sites.Updated", "站點已更新；目前電路仍綁定原站點。請從登錄主機整頁開啟。"));
 }

@@ -1,5 +1,5 @@
 @* 一律採用正常 HTTP POST，即使在互動電路中渲染亦然。 *@
 <form action="/account/logout" method="post" data-enhance="false">
     <AntiforgeryToken />
-    <button type="submit">登出</button>
+    <button type="submit">@UiText.T("Account.LogoutForm.Submit", "登出")</button>
 </form>

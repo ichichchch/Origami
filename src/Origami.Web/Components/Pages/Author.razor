@@ -1,0 +1,69 @@
+@page "/author/{Slug}"
+@inject OrigamiClient Api
+@inject MarkdownService Markdown
+@inject NavigationManager Navigation
+@inject ILogger<Author> Logger
+
+@* 完整句型允許翻譯調整語序；新鍵尚未匯入時，沿用既有資源作為回退。 *@
+<PageTitle>@string.Format(UiText.T("Public.Author.TitleFormat", UiText.T("Public.Author.PageTitle", "作者：") + "{0}" + UiText.T("Public.Author.PageTitleSuffix", " · 站內文章")), _authorName ?? Slug)</PageTitle>
+@if (_error is not null)
+{
+    <section class="empty-state" role="alert"><h1>@UiText.T("Public.Author.LoadFailed", "暫時無法載入")</h1><p>@_error</p><a href="/">@UiText.T("Public.Author.BackHome", "回到首頁")</a></section>
+}
+else if (_result is null)
+{
+    <p role="status">@UiText.T("Public.Author.Loading", "正在載入文章…")</p>
+}
+else if (_result.Items.Count == 0)
+{
+    <section class="public-heading"><p class="eyebrow">@UiText.T("Public.Author.Eyebrow", "作者")</p><h1>@(_authorName ?? Slug)<span class="heading-dot">.</span></h1><p>@UiText.T("Public.Author.Empty", "這位作者還沒有公開文章。")</p></section>
+}
+else
+{
+    <section class="public-heading"><p class="eyebrow">@UiText.T("Public.Author.Eyebrow", "作者")</p><h1>@(_authorName ?? Slug)<span class="heading-dot">.</span></h1><p>@UiText.T("Public.Author.Intro", "這位作者的公開文章，依發布時間排序。")</p></section>
+    <div class="post-list">
+        @foreach (var post in _result.Items)
+        {
+            <article class="post-preview">
+                <time datetime="@post.PublishedAt?.ToString("O")">@post.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
+                <div class="post-summary"><h2><a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2><p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
+                <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@string.Format(UiText.T("Public.Author.ReadArticle", "閱讀：{0}"), post.Title)">@UiText.T("Public.Author.Read", "閱讀全文") <span aria-hidden="true">↗</span></a>
+            </article>
+        }
+    </div>
+    <nav class="pagination" aria-label="@UiText.T("Public.Author.Pagination", "作者文章分頁")">
+        @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">@UiText.T("Public.PreviousPage", "上一頁")</a> }
+        <span>@string.Format(UiText.T("Public.Author.PageStatus", UiText.T("Public.PageOf", "第") + " {0} " + UiText.T("Public.PageOfSeparator", "/") + " {1} " + UiText.T("Public.PageOfSuffix", "頁")), _result.Page, _result.TotalPages)</span>
+        @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">@UiText.T("Public.NextPage", "下一頁")</a> }
+    </nav>
+}
+
+@code {
+    /// <summary>以署名代稱（顯示名稱的正規化 slug）列出該作者的公開文章。</summary>
+    [Parameter] public string Slug { get; set; } = "";
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private PagedResult<ContentSummary>? _result;
+    private string? _authorName;
+    private string? _error;
+    [SupplyParameterFromQuery(Name = "page")] private int? RequestedPage { get; set; }
+
+    private string PageUrl(int page) => "/author/" + Uri.EscapeDataString(Slug) + (page <= 1 ? "" : "?page=" + page);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var ct = HttpContext?.RequestAborted ?? default;
+            var page = Math.Max(1, RequestedPage ?? 1);
+            _result = await Api.ListPublishedAsync(page, author: Slug, ct: ct);
+            if (_result is not null && _result.Items.Count > 0)
+                _authorName = _result.Items.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.AuthorName))?.AuthorName;
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客已斷線。 */ }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Author archive unavailable");
+            _error = UiText.T("Public.Author.LoadError", "目前無法載入這位作者的文章，請稍後再試。");
+        }
+    }
+}

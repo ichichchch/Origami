@@ -2,19 +2,29 @@
 @inject OrigamiClient Api
 @inject ILogger<MainLayout> Logger
 
-<a class="skip-link" href="#main-content">跳至主要內容</a>
-<div class="site-shell">
+<a class="skip-link" href="#main-content">@UiText.T("Layout.Main.01", "跳至主要內容")</a>
+<div class="site-shell" style="@ThemeStyle" data-card-style="@_settings.CardStyle"
+     data-show-cover="@(_settings.ShowCover ? "true" : "false")"
+     data-show-byline="@(_settings.ShowByline ? "true" : "false")">
     <header class="site-header">
-        <a class="site-brand" href="/">@_settings.Name</a>
-        <nav class="site-nav" aria-label="網站導覽">
-            <a href="/">首頁</a>
+        <a class="site-brand" href="/">
+            @if (!string.IsNullOrEmpty(_settings.LogoFileName))
+            {
+                <img class="site-logo" src="@("/media/" + Uri.EscapeDataString(_settings.LogoFileName))" alt="" />
+            }
+            @_settings.Name
+        </a>
+        <nav class="site-nav" aria-label="@UiText.T("Layout.Main.Navigation", "網站導覽")">
+            <a href="/">@UiText.T("Layout.Main.02", "首頁")</a>
             @foreach (var (page, depth) in NavOrder())
             {
-                <a class="@(depth > 0 ? "nav-child" : "")" href="@PageHref(page)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
+                // 自訂導覽項目自帶網址；頁面項目仍依階層網址。
+                var href = page.Url ?? PageHref(page);
+                <a class="@(depth > 0 ? "nav-child" : "")" href="@href" target="@(page.IsExternal ? "_blank" : null)" rel="@(page.IsExternal ? "noopener" : null)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
             }
-            <a href="/archives">歸檔</a>
-            <a href="/search">搜尋文章</a>
-            <a href="/admin/posts" data-enhance-nav="false">管理後台</a>
+            <a href="/archives">@UiText.T("Layout.Main.03", "歸檔")</a>
+            <a href="/search">@UiText.T("Layout.Main.04", "搜尋文章")</a>
+            <a href="/admin/posts" data-enhance-nav="false">@UiText.T("Layout.Main.05", "管理後台")</a>
         </nav>
     </header>
     @if (!string.IsNullOrWhiteSpace(_settings.Description))
@@ -24,7 +34,8 @@
     <main id="main-content" class="public-main" tabindex="-1">@Body</main>
     <footer class="site-footer">
         <span>© @DateTime.UtcNow.Year @_settings.Name</span>
-        <a href="/account/login" data-enhance-nav="false">網站管理</a>
+        <a href="/account/login" data-enhance-nav="false">@UiText.T("Layout.Main.06", "網站管理")</a>
+        <LanguageSwitcher />
     </footer>
 </div>
 
@@ -64,6 +75,17 @@
             cursor = node.ParentId;
         }
         return "/pages/" + string.Join("/", parts);
+    }
+
+    /// <summary>受控版型的樣式變數；色碼只接受合法十六進位值，避免注入樣式。</summary>
+    private string ThemeStyle
+    {
+        get
+        {
+            var color = ThemePresets.IsValidColor(_settings.AccentColor) ? _settings.AccentColor : "#2f6f4e";
+            var width = ThemePresets.IsValidReadingWidth(_settings.ReadingWidth) ? _settings.ReadingWidth : 68;
+            return $"--accent:{color};--reading-width:{width}ch";
+        }
     }
 
     protected override async Task OnInitializedAsync()

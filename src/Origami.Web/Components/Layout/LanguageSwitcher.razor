@@ -1,0 +1,11 @@
+@inject NavigationManager Navigation
+
+<nav class="language-switcher" aria-label="@UiText.T("Common.Language", "介面語言")" data-enhance-nav="false">
+    @foreach (var culture in UiTextLanguages.Supported)
+    {
+        <a href="@Navigation.GetUriWithQueryParameter("lang", culture)" lang="@culture"
+           aria-current="@(string.Equals(CultureInfo.CurrentUICulture.Name, culture, StringComparison.OrdinalIgnoreCase) ? "true" : null)">
+            @(culture == "en" ? "English" : "繁體中文")
+        </a>
+    }
+</nav>

@@ -1,0 +1,338 @@
+@page "/admin/types"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.ContentTypes.PageTitle", "內容類型 · 內容管理")</PageTitle>
+<UnsavedGuard Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.ContentTypes.Eyebrow", "受控擴充")</p><h1>@UiText.T("Admin.ContentTypes.Title", "內容類型")</h1><p>@UiText.T("Admin.ContentTypes.Introduction", "以宣告方式定義新的內容種類與其自訂分類法；不載入任何程式碼，既有內容與網址不受影響。")</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="@LoginRequired" />
+@if (Access?.CanRead == true && !CanEdit)
+{
+    <p class="notice">@UiText.T("Admin.ContentTypes.ReadOnlyNotice", "本站唯讀成員可檢視內容類型，但不能新增或修改。")</p>
+}
+<section class="panel settings-panel settings-width">
+    <h2>@(_edit.Id is null ? UiText.T("Admin.ContentTypes.AddType", "新增內容類型") : UiText.T("Admin.ContentTypes.EditType", "編輯內容類型"))</h2>
+    <EditForm Model="_edit" OnSubmit="SaveType" FormName="content-type-editor">
+        <fieldset disabled="@EditBlocked">
+            <div class="field"><label for="type-name">@UiText.T("Admin.ContentTypes.Name", "名稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="type-name" @bind="_edit.Name" @bind:event="oninput" maxlength="@Limits.ContentTypeName" required /></div>
+            <div class="field"><label for="type-slug">@UiText.T("Admin.ContentTypes.Slug", "路由代稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="type-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.ContentTypeSlug" required aria-describedby="type-slug-help" /><span id="type-slug-help" class="field-help">@UiText.T("Admin.ContentTypes.SlugHelp", "公開區塊網址為 /t/{代稱}；同一站點內不可重複。")</span></div>
+            <div class="field"><label for="type-description">@UiText.T("Admin.ContentTypes.Description", "說明")</label><textarea id="type-description" @bind="_edit.Description" @bind:event="oninput" maxlength="@Limits.Description" rows="2"></textarea></div>
+            <div class="field checkbox-field"><label for="type-categories"><input id="type-categories" type="checkbox" @bind="_edit.SupportsCategories" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.SupportsCategories", "可指派分類")</label></div>
+            <div class="field checkbox-field"><label for="type-tags"><input id="type-tags" type="checkbox" @bind="_edit.SupportsTags" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.SupportsTags", "可指派標籤")</label></div>
+            <div class="field checkbox-field"><label for="type-hierarchy"><input id="type-hierarchy" type="checkbox" @bind="_edit.SupportsHierarchy" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.SupportsHierarchy", "支援階層（上層內容）")</label></div>
+            <div class="field checkbox-field"><label for="type-archived"><input id="type-archived" type="checkbox" @bind="_edit.IsArchived" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.Archived", "封存（不再接受新內容）")</label></div>
+            <div class="button-row">
+                <button type="submit" class="button">@(Busy ? UiText.T("Admin.ContentTypes.Saving", "儲存中…") : UiText.T("Admin.ContentTypes.SaveType", "儲存類型"))</button>
+                @if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="ResetType">@UiText.T("Admin.ContentTypes.CancelOrAdd", "取消 / 新增")</button> }
+            </div>
+        </fieldset>
+    </EditForm>
+</section>
+@if (_types is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@UiText.T("Admin.ContentTypes.List", "內容類型") <span class="count">@_types.Count</span></h2></div>
+        @if (_types.Count == 0)
+        {
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>@UiText.T("Admin.ContentTypes.EmptyTitle", "還沒有自訂內容類型")</h2><p>@UiText.T("Admin.ContentTypes.EmptyHelp", "新增類型後，其內容會出現在 /t/{代稱} 公開區塊，並可在內容編輯器中選擇。")</p></div>
+        }
+        else
+        {
+            <div class="table-scroll"><table><caption class="sr-only">@UiText.T("Admin.ContentTypes.List", "內容類型")</caption><thead><tr><th scope="col">@UiText.T("Admin.ContentTypes.Name", "名稱")</th><th scope="col">@UiText.T("Admin.ContentTypes.Slug", "路由代稱")</th><th scope="col">@UiText.T("Admin.ContentTypes.Count", "內容數")</th><th scope="col">@UiText.T("Admin.ContentTypes.Status", "狀態")</th><th scope="col">@UiText.T("Admin.ContentTypes.Actions", "操作")</th></tr></thead><tbody>
+            @foreach (var type in _types)
+            {
+                <tr @key="type.Id">
+                    <td class="title-cell"><strong>@type.Name</strong><span class="slug-text">@type.Description</span></td>
+                    <td><code>@type.Slug</code></td>
+                    <td>@type.ContentCount</td>
+                    <td>@(type.IsArchived ? UiText.T("Admin.ContentTypes.ArchivedLabel", "已封存") : UiText.T("Admin.ContentTypes.ActiveLabel", "啟用中"))</td>
+                    <td><div class="table-actions">
+                        <button class="text-button" disabled="@EditBlocked" @onclick="() => EditType(type)">@UiText.T("Admin.ContentTypes.Edit", "編輯")<span class="sr-only"> @type.Name</span></button>
+                        <button class="text-button" disabled="@EditBlocked" @onclick="() => SelectType(type)">@UiText.T("Admin.ContentTypes.ManageTaxonomies", "自訂分類法")<span class="sr-only"> @type.Name</span></button>
+                        <button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDelete = type">@UiText.T("Admin.ContentTypes.Delete", "刪除")<span class="sr-only"> @type.Name</span></button>
+                    </div></td>
+                </tr>
+            }
+            </tbody></table></div>
+        }
+    </section>
+}
+@if (_selected is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.TaxonomiesOf", "{0} 的自訂分類法"), _selected.Name)</h2></div>
+        <EditForm Model="_taxonomy" OnSubmit="SaveTaxonomy" FormName="custom-taxonomy-editor">
+            <fieldset disabled="@EditBlocked">
+                <div class="field"><label for="taxonomy-name">@UiText.T("Admin.ContentTypes.TaxonomyName", "分類法名稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="taxonomy-name" @bind="_taxonomy.Name" @bind:event="oninput" maxlength="@Limits.CustomTaxonomyName" required /></div>
+                <div class="field"><label for="taxonomy-slug">@UiText.T("Admin.ContentTypes.TaxonomySlug", "分類法代稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="taxonomy-slug" @bind="_taxonomy.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required /></div>
+                <div class="field checkbox-field"><label for="taxonomy-hierarchical"><input id="taxonomy-hierarchical" type="checkbox" @bind="_taxonomy.IsHierarchical" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.HierarchicalTaxonomy", "詞彙可有上層")</label></div>
+                <div class="button-row"><button type="submit" class="button">@UiText.T("Admin.ContentTypes.SaveTaxonomy", "儲存分類法")</button></div>
+            </fieldset>
+        </EditForm>
+        @if (_taxonomies is not null)
+        {
+            @if (_taxonomies.Count == 0)
+            {
+                <p class="field-help">@UiText.T("Admin.ContentTypes.NoTaxonomies", "此類型尚未建立自訂分類法。")</p>
+            }
+            else
+            {
+                <ul class="plain-list">
+                    @foreach (var taxonomy in _taxonomies)
+                    {
+                        <li @key="taxonomy.Id">
+                            <strong>@taxonomy.Name</strong> <code>@taxonomy.Slug</code>
+                            <span class="slug-text">@UiText.T("Admin.ContentTypes.TermCount", "詞彙 {0} 個", taxonomy.TermCount)</span>
+                            <div class="button-row">
+                                <button type="button" class="text-button" disabled="@EditBlocked" @onclick="() => SelectTaxonomy(taxonomy)">@UiText.T("Admin.ContentTypes.ManageTerms", "管理詞彙")<span class="sr-only"> @taxonomy.Name</span></button>
+                                <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDeleteTaxonomy = taxonomy">@UiText.T("Admin.ContentTypes.DeleteTaxonomy", "刪除分類法")<span class="sr-only"> @taxonomy.Name</span></button>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </section>
+}
+@if (_selected is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.FieldsOf", "{0} 的自訂欄位"), _selected.Name)</h2></div>
+        <p class="field-help">@UiText.T("Admin.ContentTypes.FieldsHelp", "宣告式擴充點：以資料定義欄位，不載入任何程式碼。")</p>
+        <EditForm Model="_field" OnSubmit="SaveField" FormName="custom-field-editor">
+            <fieldset disabled="@EditBlocked">
+                <div class="field"><label for="field-name">@UiText.T("Admin.ContentTypes.FieldName", "欄位名稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="field-name" @bind="_field.Name" @bind:event="oninput" maxlength="@Limits.CustomFieldName" required /></div>
+                <div class="field"><label for="field-key">@UiText.T("Admin.ContentTypes.FieldKey", "欄位鍵值") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="field-key" @bind="_field.Key" @bind:event="oninput" maxlength="@Limits.CustomFieldName" required aria-describedby="field-key-help" /><span id="field-key-help" class="field-help">@UiText.T("Admin.ContentTypes.FieldKeyHelp", "內容以此鍵保存輸入值；建立後不可修改。")</span></div>
+                <div class="field"><label for="field-type">@UiText.T("Admin.ContentTypes.FieldType", "欄位種類")</label>
+                    <select id="field-type" disabled="@EditBlocked" value="@_field.FieldType" @onchange="FieldTypeChanged">
+                        <option value="@CustomFieldTypes.Text">@UiText.T("Admin.ContentTypes.FieldTypeText", "單行文字")</option>
+                        <option value="@CustomFieldTypes.LongText">@UiText.T("Admin.ContentTypes.FieldTypeLongText", "多行文字")</option>
+                        <option value="@CustomFieldTypes.Number">@UiText.T("Admin.ContentTypes.FieldTypeNumber", "數字")</option>
+                        <option value="@CustomFieldTypes.Date">@UiText.T("Admin.ContentTypes.FieldTypeDate", "日期")</option>
+                        <option value="@CustomFieldTypes.Checkbox">@UiText.T("Admin.ContentTypes.FieldTypeCheckbox", "核取方塊")</option>
+                    </select>
+                </div>
+                <div class="field"><label for="field-position">@UiText.T("Admin.ContentTypes.FieldPosition", "顯示順序")</label><input id="field-position" type="number" min="0" max="999" @bind="_field.Position" disabled="@EditBlocked" /></div>
+                <div class="field checkbox-field"><label for="field-required"><input id="field-required" type="checkbox" @bind="_field.IsRequired" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.FieldRequired", "必填")</label></div>
+                <div class="button-row"><button type="submit" class="button">@UiText.T("Admin.ContentTypes.SaveField", "儲存欄位")</button></div>
+            </fieldset>
+        </EditForm>
+        @if (_fields is not null)
+        {
+            @if (_fields.Count == 0)
+            {
+                <p class="field-help">@UiText.T("Admin.ContentTypes.NoFields", "此類型尚未宣告自訂欄位。")</p>
+            }
+            else
+            {
+                <ul class="plain-list">
+                    @foreach (var field in _fields)
+                    {
+                        <li @key="field.Id"><strong>@field.Name</strong> <code>@field.Key</code>
+                            <span class="slug-text">@field.FieldType@(field.IsRequired ? " · " + UiText.T("Admin.ContentTypes.Required", "必填") : "")</span>
+                            <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDeleteField = field">@UiText.T("Admin.ContentTypes.DeleteField", "刪除欄位")<span class="sr-only"> @field.Name</span></button>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </section>
+}
+@if (_pendingDeleteField is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="field-delete-title">
+        <h2 id="field-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.DeleteFieldTitle", "刪除自訂欄位「{0}」？"), _pendingDeleteField.Name)</h2>
+        <p>@UiText.T("Admin.ContentTypes.DeleteFieldWarning", "內容上已填寫的值會一併移除；此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteField">@UiText.T("Admin.ContentTypes.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDeleteField = null">@UiText.T("Admin.ContentTypes.Cancel", "取消")</button></div>
+    </section>
+}
+@if (_taxonomySelected is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.TermsOf", "{0} 的詞彙"), _taxonomySelected.Name)</h2></div>
+        <EditForm Model="_term" OnSubmit="SaveTerm" FormName="custom-term-editor">
+            <fieldset disabled="@EditBlocked">
+                <div class="field"><label for="term-name">@UiText.T("Admin.ContentTypes.TermName", "詞彙名稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="term-name" @bind="_term.Name" @bind:event="oninput" maxlength="@Limits.CustomTaxonomyName" required /></div>
+                <div class="field"><label for="term-slug">@UiText.T("Admin.ContentTypes.TermSlug", "詞彙代稱") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="term-slug" @bind="_term.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required /></div>
+                <div class="button-row"><button type="submit" class="button">@UiText.T("Admin.ContentTypes.SaveTerm", "儲存詞彙")</button></div>
+            </fieldset>
+        </EditForm>
+        @if (_terms is not null)
+        {
+            @if (_terms.Count == 0)
+            {
+                <p class="field-help">@UiText.T("Admin.ContentTypes.NoTerms", "此分類法尚未建立詞彙。")</p>
+            }
+            else
+            {
+                <ul class="plain-list">
+                    @foreach (var term in _terms)
+                    {
+                        <li @key="term.Id"><strong>@term.Name</strong> <code>@term.Slug</code>
+                            <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDeleteTerm = term">@UiText.T("Admin.ContentTypes.DeleteTerm", "刪除詞彙")<span class="sr-only"> @term.Name</span></button>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </section>
+}
+@if (_pendingDelete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="type-delete-title">
+        <h2 id="type-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.DeleteTitle", "刪除內容類型「{0}」？"), _pendingDelete.Name)</h2>
+        <p>@UiText.T("Admin.ContentTypes.DeleteWarning", "仍有關聯內容時無法刪除；此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteType">@UiText.T("Admin.ContentTypes.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">@UiText.T("Admin.ContentTypes.Cancel", "取消")</button></div>
+    </section>
+}
+@if (_pendingDeleteTaxonomy is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-delete-title">
+        <h2 id="taxonomy-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.DeleteTaxonomyTitle", "刪除自訂分類法「{0}」？"), _pendingDeleteTaxonomy.Name)</h2>
+        <p>@UiText.T("Admin.ContentTypes.DeleteTaxonomyWarning", "分類法底下的詞彙與內容指派都會一併移除；此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteTaxonomy">@UiText.T("Admin.ContentTypes.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDeleteTaxonomy = null">@UiText.T("Admin.ContentTypes.Cancel", "取消")</button></div>
+    </section>
+}
+@if (_pendingDeleteTerm is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="term-delete-title">
+        <h2 id="term-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.DeleteTermTitle", "刪除詞彙「{0}」？"), _pendingDeleteTerm.Name)</h2>
+        <p>@UiText.T("Admin.ContentTypes.DeleteTermWarning", "內容上的指派會一併移除；此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteTerm">@UiText.T("Admin.ContentTypes.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDeleteTerm = null">@UiText.T("Admin.ContentTypes.Cancel", "取消")</button></div>
+    </section>
+}
+
+@code {
+    private List<ContentTypeService.TypeView>? _types;
+    private ContentTypeService.TypeEdit _edit = new();
+    private ContentTypeService.TypeView? _pendingDelete;
+    private ContentTypeService.TypeView? _selected;
+    private ContentTypeService.TaxonomyEdit _taxonomy = new();
+    private List<ContentTypeService.TaxonomyView>? _taxonomies;
+    private ContentTypeService.TaxonomyView? _pendingDeleteTaxonomy;
+    private ContentTypeService.TaxonomyView? _taxonomySelected;
+    private ContentTypeService.TermEdit _term = new();
+    private List<ContentTypeService.TermView>? _terms;
+    private ContentTypeService.TermView? _pendingDeleteTerm;
+    private List<ContentTypeService.FieldView>? _fields;
+    private ContentTypeService.FieldEdit _field = new();
+    private ContentTypeService.FieldView? _pendingDeleteField;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private Task Load() => RunAsync(async ct =>
+    {
+        _types = await Api.ListContentTypesAsync(ct);
+        _edit = new();
+    });
+
+    private void ResetType() => _edit = new();
+
+    private void EditType(ContentTypeService.TypeView type) => _edit = new()
+    {
+        Id = type.Id, Name = type.Name, Slug = type.Slug, Description = type.Description,
+        SupportsCategories = type.SupportsCategories, SupportsTags = type.SupportsTags,
+        SupportsHierarchy = type.SupportsHierarchy, IsArchived = type.IsArchived, Version = type.Version
+    };
+
+    private Task SaveType() => RunEditAsync(async ct =>
+    {
+        await Api.SaveContentTypeAsync(_edit, ct);
+        _edit = new();
+        _types = await Api.ListContentTypesAsync(ct);
+    }, UiText.T("Admin.ContentTypes.Saved", "內容類型已儲存。"));
+
+    private async Task DeleteType()
+    {
+        if (_pendingDelete is not { } type) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteContentTypeAsync(type.Id, type.Version, ct);
+            _pendingDelete = null;
+            _types = await Api.ListContentTypesAsync(ct);
+        }, UiText.T("Admin.ContentTypes.Deleted", "內容類型已刪除。"));
+        _pendingDelete = null;
+    }
+
+    private Task SelectType(ContentTypeService.TypeView type) => RunAsync(async ct =>
+    {
+        _selected = type;
+        _taxonomy = new() { ContentTypeId = type.Id };
+        _taxonomies = await Api.ListCustomTaxonomiesAsync(type.Id, ct);
+        _field = new() { ContentTypeId = type.Id };
+        _fields = await Api.ListCustomFieldsAsync(type.Id, ct);
+    });
+
+    private Task SaveTaxonomy() => RunEditAsync(async ct =>
+    {
+        await Api.SaveCustomTaxonomyAsync(_taxonomy, ct);
+        _taxonomy = new() { ContentTypeId = _selected?.Id ?? Guid.Empty };
+        if (_selected is not null) _taxonomies = await Api.ListCustomTaxonomiesAsync(_selected.Id, ct);
+    }, UiText.T("Admin.ContentTypes.TaxonomySaved", "自訂分類法已儲存。"));
+
+    private async Task DeleteTaxonomy()
+    {
+        if (_pendingDeleteTaxonomy is not { } taxonomy) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteCustomTaxonomyAsync(taxonomy.Id, taxonomy.Version, ct);
+            _pendingDeleteTaxonomy = null;
+            if (_selected is not null) _taxonomies = await Api.ListCustomTaxonomiesAsync(_selected.Id, ct);
+        }, UiText.T("Admin.ContentTypes.TaxonomyDeleted", "自訂分類法已刪除。"));
+        _pendingDeleteTaxonomy = null;
+    }
+
+    private Task SelectTaxonomy(ContentTypeService.TaxonomyView taxonomy) => RunAsync(async ct =>
+    {
+        _taxonomySelected = taxonomy;
+        _term = new() { TaxonomyId = taxonomy.Id };
+        _terms = await Api.ListCustomTermsAsync(taxonomy.Id, ct);
+    });
+
+    private Task SaveTerm() => RunEditAsync(async ct =>
+    {
+        await Api.SaveCustomTermAsync(_term, ct);
+        _term = new() { TaxonomyId = _taxonomySelected?.Id ?? Guid.Empty };
+        if (_taxonomySelected is not null) _terms = await Api.ListCustomTermsAsync(_taxonomySelected.Id, ct);
+    }, UiText.T("Admin.ContentTypes.TermSaved", "詞彙已儲存。"));
+
+    private void FieldTypeChanged(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        if (value is not null && CustomFieldTypes.IsValid(value)) _field.FieldType = value.ToLowerInvariant();
+    }
+
+    private Task SaveField() => RunEditAsync(async ct =>
+    {
+        await Api.SaveCustomFieldAsync(_field, ct);
+        _field = new() { ContentTypeId = _selected?.Id ?? Guid.Empty };
+        if (_selected is not null) _fields = await Api.ListCustomFieldsAsync(_selected.Id, ct);
+    }, UiText.T("Admin.ContentTypes.FieldSaved", "自訂欄位已儲存。"));
+
+    private async Task DeleteField()
+    {
+        if (_pendingDeleteField is not { } field) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteCustomFieldAsync(field.Id, field.Version, ct);
+            _pendingDeleteField = null;
+            if (_selected is not null) _fields = await Api.ListCustomFieldsAsync(_selected.Id, ct);
+        }, UiText.T("Admin.ContentTypes.FieldDeleted", "自訂欄位已刪除。"));
+        _pendingDeleteField = null;
+    }
+
+    private async Task DeleteTerm()
+    {
+        if (_pendingDeleteTerm is not { } term) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteCustomTermAsync(term.Id, term.Version, ct);
+            _pendingDeleteTerm = null;
+            if (_taxonomySelected is not null) _terms = await Api.ListCustomTermsAsync(_taxonomySelected.Id, ct);
+        }, UiText.T("Admin.ContentTypes.TermDeleted", "詞彙已刪除。"));
+        _pendingDeleteTerm = null;
+    }
+}

@@ -5,38 +5,38 @@
 @inject NavigationManager Navigation
 @inject ILogger<Archives> Logger
 
-<PageTitle>@(IsOverview ? "文章歸檔" : $"{Year} 年 {Month} 月文章")</PageTitle>
+<PageTitle>@(IsOverview ? UiText.T("Public.Archives.04", "文章歸檔") : string.Format(UiText.T("Public.Archives.MonthTitle", "{0} 年 {1} 月文章"), Year, Month))</PageTitle>
 @if (_error is not null)
 {
-    <section class="empty-state" role="alert"><h1>暫時無法載入</h1><p>@_error</p><a href="/">回到首頁</a></section>
+    <section class="empty-state" role="alert"><h1>@UiText.T("Public.Archives.01", "暫時無法載入")</h1><p>@_error</p><a href="/">@UiText.T("Public.Archives.02", "回到首頁")</a></section>
 }
 else if (IsOverview)
 {
-    <section class="public-heading"><p class="eyebrow">按時間回顧</p><h1>文章歸檔<span class="heading-dot">.</span></h1><p>依發布月份整理所有公開文章。</p></section>
+    <section class="public-heading"><p class="eyebrow">@UiText.T("Public.Archives.03", "按時間回顧")</p><h1>@UiText.T("Public.Archives.04", "文章歸檔")<span class="heading-dot">.</span></h1><p>@UiText.T("Public.Archives.05", "依發布月份整理所有公開文章。")</p></section>
     @if (_months.Count == 0)
     {
-        <section class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>還沒有可歸檔的文章</h2><p>第一篇公開文章發布後，就會出現在這裡。</p></section>
+        <section class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>@UiText.T("Public.Archives.06", "還沒有可歸檔的文章")</h2><p>@UiText.T("Public.Archives.07", "第一篇公開文章發布後，就會出現在這裡。")</p></section>
     }
     else
     {
         <ul class="archive-list">
             @foreach (var month in _months)
             {
-                <li><a href="@($"/archives/{month.Year}/{month.Month}")">@month.Year 年 @month.Month 月</a><span class="muted">@month.Count 篇</span></li>
+                <li><a href="@($"/archives/{month.Year}/{month.Month}")">@string.Format(UiText.T("Public.Archives.YearMonth", "{0} 年 {1} 月"), month.Year, month.Month)</a><span class="muted">@string.Format(UiText.T("Public.Archives.ArticleCount", "{0} 篇"), month.Count)</span></li>
             }
         </ul>
     }
 }
 else
 {
-    <section class="public-heading"><p class="eyebrow"><a href="/archives">所有月份</a></p><h1>@Year 年 @Month 月<span class="heading-dot">.</span></h1><p>這個月份發布的公開文章。</p></section>
+    <section class="public-heading"><p class="eyebrow"><a href="/archives">@UiText.T("Public.Archives.08", "所有月份")</a></p><h1>@string.Format(UiText.T("Public.Archives.YearMonth", "{0} 年 {1} 月"), Year, Month)<span class="heading-dot">.</span></h1><p>@UiText.T("Public.Archives.09", "這個月份發布的公開文章。")</p></section>
     @if (_result is null)
     {
-        <p role="status">正在載入文章…</p>
+        <p role="status">@UiText.T("Public.Archives.10", "正在載入文章…")</p>
     }
     else if (_result.Items.Count == 0)
     {
-        <section class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>這個月份沒有文章</h2><p>換個月份，或<a href="/archives">查看所有月份</a>。</p></section>
+        <section class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>@UiText.T("Public.Archives.11", "這個月份沒有文章")</h2><p>@UiText.T("Public.Archives.12", "換個月份，或")<a href="/archives">@UiText.T("Public.Archives.13", "查看所有月份")</a>@UiText.T("Public.Archives.SentenceEnd", "。")</p></section>
     }
     else
     {
@@ -46,14 +46,14 @@ else
                 <article class="post-preview">
                     <time datetime="@post.PublishedAt?.ToString("O")">@post.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
                     <div class="post-summary"><h2><a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2><p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
-                    <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@("閱讀：" + post.Title)">閱讀全文 <span aria-hidden="true">↗</span></a>
+                    <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@string.Format(UiText.T("Public.Archives.ReadArticle", "閱讀：{0}"), post.Title)">@UiText.T("Public.Archives.14", "閱讀全文")<span aria-hidden="true">↗</span></a>
                 </article>
             }
         </div>
-        <nav class="pagination" aria-label="文章分頁">
-            @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">上一頁</a> }
-            <span>第 @_result.Page / @_result.TotalPages 頁</span>
-            @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">下一頁</a> }
+        <nav class="pagination" aria-label="@UiText.T("Public.Archives.Pagination", "文章分頁")">
+            @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">@UiText.T("Public.Archives.15", "上一頁")</a> }
+            <span>@string.Format(UiText.T("Public.Archives.PageStatus", "第 {0} / {1} 頁"), _result.Page, _result.TotalPages)</span>
+            @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">@UiText.T("Public.Archives.16", "下一頁")</a> }
         </nav>
     }
 }
@@ -95,7 +95,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Archive page unavailable");
-            _error = "目前無法載入歸檔，請稍後再試。";
+            _error = UiText.T("Public.Archives.LoadError", "目前無法載入歸檔，請稍後再試。");
         }
     }
 

@@ -5,44 +5,45 @@
 @inherits AdminComponentBase
 @inject OrigamiClient Api
 
-<PageTitle>站點成員 · 內容管理</PageTitle>
-<div class="page-heading"><div><p class="eyebrow">本站權限</p><h1>站點成員</h1><p>站點管理員可加入既有帳號並指派角色。移除本站成員不會刪除全站帳號。</p></div></div>
+<PageTitle>@UiText.T("Admin.Members.PageTitle", "站點成員 · 內容管理")</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Members.Eyebrow", "本站權限")</p><h1>@UiText.T("Admin.Members.Title", "站點成員")</h1><p>@UiText.T("Admin.Members.Introduction", "站點管理員可加入既有帳號並指派角色。移除本站成員不會刪除全站帳號。")</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
-<button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入成員</button>
+<button class="button button-secondary" disabled="@Blocked" @onclick="Load">@UiText.T("Admin.Members.Reload", "重新載入成員")</button>
 @if (CanAdminister)
 {
     <section class="panel settings-panel settings-width">
-        <h2>@(_edit.Version is null ? "加入既有帳號" : "修改成員角色")</h2>
+        <h2>@(_edit.Version is null ? UiText.T("Admin.Members.AddTitle", "加入既有帳號") : UiText.T("Admin.Members.EditTitle", "修改成員角色"))</h2>
         <EditForm Model="_edit" OnSubmit="Save" FormName="member-edit">
             <fieldset disabled="@AdministrationBlocked">
-                <div class="field"><label for="member-name">使用者名稱</label><input id="member-name" @bind="_edit.UserName" maxlength="256" readonly="@(_edit.Version is not null)" autocomplete="off" required /></div>
-                <div class="field"><label for="member-role">本站角色</label><InputSelect id="member-role" @bind-Value="_edit.Role">
-                    <option value="Reader">唯讀成員</option><option value="Editor">編輯者</option><option value="Administrator">站點管理員</option>
+                <div class="field"><label for="member-name">@UiText.T("Admin.Members.UserName", "使用者名稱")</label><input id="member-name" @bind="_edit.UserName" maxlength="256" readonly="@(_edit.Version is not null)" autocomplete="off" required /></div>
+                <div class="field"><label for="member-role">@UiText.T("Admin.Members.SiteRole", "本站角色")</label><InputSelect id="member-role" @bind-Value="_edit.Role">
+                    <option value="Reader">@UiText.T("Admin.Members.ReaderRole", "唯讀成員")</option><option value="Author">@UiText.T("Admin.Members.AuthorRole", "作者")</option><option value="Editor">@UiText.T("Admin.Members.EditorRole", "編輯者")</option><option value="Administrator">@UiText.T("Admin.Members.AdministratorRole", "站點管理員")</option>
                 </InputSelect></div>
-                <p class="field-help">唯讀成員只能讀取；編輯者可管理內容及發布；站點管理員另可管理設定及成員。全站管理者權限不受本站角色降級影響。</p>
-                <button class="button" type="submit">儲存成員</button>
-                <button class="button button-secondary" type="button" @onclick="() => _edit = new()">取消 / 新增</button>
+                <div class="field"><label for="member-display-name">@UiText.T("Admin.Members.DisplayName", "顯示名稱（選填）")</label><input id="member-display-name" @bind="_edit.DisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" autocomplete="off" aria-describedby="member-display-help" placeholder="@UiText.T("Admin.Members.DisplayNamePlaceholder", "例如：單文浩")" /><span id="member-display-help" class="field-help">@UiText.T("Admin.Members.DisplayNameHelp", "此成員建立的文章會以此名稱署名；留空退回站點設定的作者名稱。改名會同步他既有文章的作者列。")</span></div>
+                <p class="field-help">@UiText.T("Admin.Members.RolesHelp", "唯讀成員只能讀取；作者可撰寫並提交自己的內容待審；編輯者可管理及發布全部內容；站點管理員另可管理設定及成員。全站管理者權限不受本站角色降級影響。")</p>
+                <button class="button" type="submit">@UiText.T("Admin.Members.Save", "儲存成員")</button>
+                <button class="button button-secondary" type="button" @onclick="() => _edit = new()">@UiText.T("Admin.Members.CancelOrAdd", "取消 / 新增")</button>
             </fieldset>
         </EditForm>
     </section>
     @if (_members is not null)
     {
-        <section class="panel"><div class="table-scroll"><table><caption>本站成員</caption>
-            <thead><tr><th>帳號</th><th>角色</th><th>帳號狀態</th><th>操作</th></tr></thead><tbody>
+        <section class="panel"><div class="table-scroll"><table><caption>@UiText.T("Admin.Members.TableCaption", "本站成員")</caption>
+            <thead><tr><th>@UiText.T("Admin.Members.Account", "帳號")</th><th>@UiText.T("Admin.Members.Role", "角色")</th><th>@UiText.T("Admin.Members.Byline", "署名")</th><th>@UiText.T("Admin.Members.AccountStatus", "帳號狀態")</th><th>@UiText.T("Admin.Members.Actions", "操作")</th></tr></thead><tbody>
             @foreach (var member in _members)
             {
-                <tr @key="member.UserId"><td>@member.UserName</td><td>@RoleLabel(member.Role)</td><td>@(member.IsDisabled ? "已停用" : "啟用")</td>
-                    <td><div class="table-actions"><button disabled="@AdministrationBlocked" @onclick="() => EditMember(member)">修改角色</button><button class="text-danger" disabled="@(AdministrationBlocked || IsLastAdministrator(member))" @onclick="() => _pending = member">移除</button></div></td></tr>
+                <tr @key="member.UserId"><td>@member.UserName</td><td>@RoleLabel(member.Role)</td><td>@(string.IsNullOrEmpty(member.DisplayName) ? "—" : member.DisplayName)</td><td>@(member.IsDisabled ? UiText.T("Admin.Members.Disabled", "已停用") : UiText.T("Admin.Members.Enabled", "啟用"))</td>
+                    <td><div class="table-actions"><button disabled="@AdministrationBlocked" @onclick="() => EditMember(member)">@UiText.T("Admin.Members.EditRole", "修改角色")</button><button class="text-danger" disabled="@(AdministrationBlocked || IsLastAdministrator(member))" @onclick="() => _pending = member">@UiText.T("Admin.Members.Remove", "移除")</button></div></td></tr>
             }
-            </tbody></table></div><p class="field-help">不能移除或降級最後一位啟用中站點管理員。版本衝突時請重新載入並確認後再送出。</p></section>
+            </tbody></table></div><p class="field-help">@UiText.T("Admin.Members.AdministratorHelp", "不能移除或降級最後一位啟用中站點管理員。版本衝突時請重新載入並確認後再送出。")</p></section>
     }
     @if (_pending is { } pending)
     {
         <section class="notice notice-danger" role="alertdialog" aria-labelledby="member-remove-title">
-            <h2 id="member-remove-title">移除本站成員「@pending.UserName」？</h2>
-            <p>此使用者會立即失去本站成員權限，其他站點不受影響。</p>
-            <button class="button button-danger" disabled="@AdministrationBlocked" @onclick="Remove">確認移除</button>
-            <button class="button button-secondary" disabled="@Blocked" @onclick="() => _pending = null">取消</button>
+            <h2 id="member-remove-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Members.RemoveTitle", "移除本站成員「{0}」？"), pending.UserName)</h2>
+            <p>@UiText.T("Admin.Members.RemoveHelp", "此使用者會立即失去本站成員權限，其他站點不受影響。")</p>
+            <button class="button button-danger" disabled="@AdministrationBlocked" @onclick="Remove">@UiText.T("Admin.Members.ConfirmRemove", "確認移除")</button>
+            <button class="button button-secondary" disabled="@Blocked" @onclick="() => _pending = null">@UiText.T("Admin.Members.Cancel", "取消")</button>
         </section>
     }
 }
@@ -54,7 +55,7 @@
     protected override Task OnInitializedAsync() => Load();
     private void RequireAdministrator()
     {
-        if (!CanAdminister) throw new AccessDeniedException("成員管理僅限本站管理員；你的登入仍有效。");
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Members.AdministrationDenied", "成員管理僅限本站管理員；你的登入仍有效。"));
     }
     private Task Load() => RunAsync(async ct =>
     {
@@ -65,7 +66,11 @@
     });
     private static string RoleLabel(SiteRole role) => role switch
     {
-        SiteRole.Reader => "唯讀成員", SiteRole.Editor => "編輯者", SiteRole.Administrator => "站點管理員", _ => "未知角色"
+        SiteRole.Reader => UiText.T("Admin.Members.ReaderRole", "唯讀成員"),
+        SiteRole.Author => UiText.T("Admin.Members.AuthorRole", "作者"),
+        SiteRole.Editor => UiText.T("Admin.Members.EditorRole", "編輯者"),
+        SiteRole.Administrator => UiText.T("Admin.Members.AdministratorRole", "站點管理員"),
+        _ => UiText.T("Admin.Members.UnknownRole", "未知角色")
     };
     private bool IsLastAdministrator(MemberSummary member) =>
         !member.IsDisabled && member.Role == SiteRole.Administrator &&
@@ -73,18 +78,18 @@
     private void EditMember(MemberSummary member)
     {
         if (AdministrationBlocked) return;
-        _edit = new() { UserName = member.UserName, Role = member.Role, Version = member.Version };
+        _edit = new() { UserName = member.UserName, Role = member.Role, DisplayName = member.DisplayName, Version = member.Version };
     }
     private Task Save() => RunAsync(async ct =>
     {
         RequireAdministrator();
         var original = _members?.FirstOrDefault(x => x.Version == _edit.Version && x.UserName == _edit.UserName);
         if (original is not null && IsLastAdministrator(original) && _edit.Role != SiteRole.Administrator)
-            throw new CmsException("不能降級最後一位啟用中站點管理員，請先指派另一位管理員。");
+            throw new CmsException(UiText.T("Admin.Members.LastAdministrator", "不能降級最後一位啟用中站點管理員，請先指派另一位管理員。"));
         await Api.SetMemberAsync(_edit, ct);
         _edit = new();
         _members = await Api.ListMembersAsync(ct);
-    }, "成員角色已更新。");
+    }, UiText.T("Admin.Members.Saved", "成員角色已更新。"));
     private Task Remove() => RunAsync(async ct =>
     {
         RequireAdministrator();
@@ -92,5 +97,5 @@
         await Api.RemoveMemberAsync(member.UserId, member.Version, ct);
         _pending = null;
         _members = await Api.ListMembersAsync(ct);
-    }, "已移除本站成員。");
+    }, UiText.T("Admin.Members.Removed", "已移除本站成員。"));
 }

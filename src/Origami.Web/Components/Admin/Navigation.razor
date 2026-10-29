@@ -1,0 +1,150 @@
+@page "/admin/navigation"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Navigation.PageTitle", "網站導覽 · 內容管理")</PageTitle>
+<UnsavedGuard Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Navigation.Eyebrow", "受控導覽")</p><h1>@UiText.T("Admin.Navigation.Title", "網站導覽")</h1><p>@UiText.T("Admin.Navigation.Introduction", "自訂前台導覽的項目、順序與顯示；不啟用時沿用「已發布頁面自動排序」的預設導覽。")</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access?.CanRead == true && !CanEdit)
+{
+    <p class="notice">@UiText.T("Admin.Navigation.ReadOnlyNotice", "本站唯讀成員可檢視導覽設定，但不能調整。")</p>
+}
+@if (_customEnabled)
+{
+    <section class="panel settings-panel settings-width">
+        <h2>@(_edit.Id is null ? UiText.T("Admin.Navigation.AddItem", "新增導覽項目") : UiText.T("Admin.Navigation.EditItem", "編輯導覽項目"))</h2>
+        <EditForm Model="_edit" OnSubmit="Save" FormName="nav-editor">
+            <fieldset disabled="@EditBlocked">
+                <div class="field"><label for="nav-title">@UiText.T("Admin.Navigation.DisplayText", "顯示文字") <span class="required">@UiText.T("Admin.Navigation.Required", "必填")</span></label><input id="nav-title" @bind="_edit.Title" @bind:event="oninput" maxlength="@Limits.NavTitle" required /></div>
+                <div class="field">
+                    <label for="nav-target">@UiText.T("Admin.Navigation.InternalPageOptional", "站內頁面（選填）")</label>
+                    <select id="nav-target" value="@(_edit.ContentId?.ToString() ?? "")" @onchange="TargetChanged" disabled="@EditBlocked">
+                        <option value="">@UiText.T("Admin.Navigation.UseExternalLink", "不使用站內頁面（改填外部連結）")</option>
+                        @foreach (var option in _pageOptions)
+                        {
+                            <option value="@option.Id">@option.Title</option>
+                        }
+                    </select>
+                </div>
+                <div class="field"><label for="nav-url">@UiText.T("Admin.Navigation.ExternalLinkOptional", "外部連結（選填）")</label><input id="nav-url" @bind="_edit.Url" @bind:event="oninput" maxlength="@Limits.NavUrl" placeholder="https://example.com/" aria-describedby="nav-url-help" /><span id="nav-url-help" class="field-help">@UiText.T("Admin.Navigation.ExternalLinkHelp", "僅接受 http／https 的絕對網址；選擇站內頁面時此欄位會被忽略。")</span></div>
+                <div class="field checkbox-field"><label for="nav-visible"><input id="nav-visible" type="checkbox" @bind="_edit.IsVisible" disabled="@EditBlocked" /> @UiText.T("Admin.Navigation.ShowInNavigation", "顯示於前台導覽")</label></div>
+                <div class="button-row">
+                    <button type="submit" class="button">@(Busy ? UiText.T("Admin.Navigation.Saving", "儲存中…") : UiText.T("Admin.Navigation.SaveItem", "儲存項目"))</button>
+                    @if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => _edit = new()">@UiText.T("Admin.Navigation.CancelOrAdd", "取消 / 新增")</button> }
+                </div>
+            </fieldset>
+        </EditForm>
+    </section>
+    @if (_items is not null)
+    {
+        <section class="panel">
+            <div class="panel-toolbar"><h2>@UiText.T("Admin.Navigation.Items", "導覽項目") <span class="count">@_items.Count</span></h2></div>
+            @if (_items.Count == 0)
+            {
+                <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@UiText.T("Admin.Navigation.EmptyTitle", "還沒有導覽項目")</h2><p>@UiText.T("Admin.Navigation.EmptyHelp", "新增站內頁面或外部連結後，前台導覽會依此清單顯示。")</p></div>
+            }
+            else
+            {
+                <div class="table-scroll"><table><caption class="sr-only">@UiText.T("Admin.Navigation.Items", "導覽項目")</caption><thead><tr><th scope="col">@UiText.T("Admin.Navigation.Order", "順序")</th><th scope="col">@UiText.T("Admin.Navigation.Item", "項目")</th><th scope="col">@UiText.T("Admin.Navigation.Visible", "顯示")</th><th scope="col">@UiText.T("Admin.Navigation.Actions", "操作")</th></tr></thead><tbody>
+                @for (var index = 0; index < _items.Count; index++)
+                {
+                    var item = _items[index];
+                    var position = index;
+                    <tr @key="item.Id">
+                        <td class="date-cell">@(position + 1)</td>
+                        <td class="title-cell"><strong>@item.Title</strong><span class="slug-text">@(item.ContentId is null ? item.Url : UiText.T("Admin.Navigation.InternalPage", "站內頁面"))</span></td>
+                        <td>@(item.IsVisible ? UiText.T("Admin.Navigation.Visible", "顯示") : UiText.T("Admin.Navigation.Hidden", "隱藏"))</td>
+                        <td><div class="table-actions">
+                            <button disabled="@(EditBlocked || position == 0)" @onclick="() => Move(position, -1)">@UiText.T("Admin.Navigation.MoveUp", "上移")<span class="sr-only"> @item.Title</span></button>
+                            <button disabled="@(EditBlocked || position == _items.Count - 1)" @onclick="() => Move(position, 1)">@UiText.T("Admin.Navigation.MoveDown", "下移")<span class="sr-only"> @item.Title</span></button>
+                            <button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Navigation.Edit", "編輯")<span class="sr-only"> @item.Title</span></button>
+                            <button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDelete = item">@UiText.T("Admin.Navigation.Delete", "刪除")<span class="sr-only"> @item.Title</span></button>
+                        </div></td>
+                    </tr>
+                }
+                </tbody></table></div>
+            }
+        </section>
+    }
+}
+else
+{
+    <section class="panel">
+        <div class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>@UiText.T("Admin.Navigation.DisabledTitle", "自訂導覽尚未啟用")</h2><p>@UiText.T("Admin.Navigation.DisabledHelp", "目前前台使用預設導覽（依標題排序的已發布頁面）。到「網站設定」勾選「使用自訂導覽」即可在此維護項目。")</p><a href="/admin/settings">@UiText.T("Admin.Navigation.GoToSettings", "前往網站設定 →")</a></div>
+    </section>
+}
+@if (_pendingDelete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="nav-delete-title">
+        <h2 id="nav-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Navigation.DeleteTitle", "刪除導覽項目「{0}」？"), _pendingDelete.Title)</h2>
+        <p>@UiText.T("Admin.Navigation.DeleteWarning", "只移除導覽項目，不影響頁面本身。此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Delete">@UiText.T("Admin.Navigation.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">@UiText.T("Admin.Navigation.Cancel", "取消")</button></div>
+    </section>
+}
+
+@code {
+    private List<NavItemView>? _items;
+    private List<PageOption> _pageOptions = [];
+    private NavigationService.NavItemInput _edit = new();
+    private NavItemView? _pendingDelete;
+    private bool _customEnabled;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private Task Load() => RunAsync(async ct =>
+    {
+        var settings = await Api.GetSettingsAsync(ct);
+        _customEnabled = settings?.CustomNavigationEnabled == true;
+        _items = await Api.ListNavigationAsync(ct) ?? [];
+        _pageOptions = (await Api.PageOptionsAsync(ct) ?? [])
+            .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).ToList();
+        _edit = new();
+    });
+
+    private void TargetChanged(ChangeEventArgs args) =>
+        _edit.ContentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+
+    private void Edit(NavItemView item)
+    {
+        _edit = new NavigationService.NavItemInput
+        {
+            Id = item.Id, Title = item.Title, ContentId = item.ContentId,
+            Url = item.ContentId is null ? item.Url : "", IsVisible = item.IsVisible, Version = item.Version
+        };
+    }
+
+    private Task Save() => RunEditAsync(async ct =>
+    {
+        await Api.SaveNavigationAsync(_edit, ct);
+        _edit = new();
+        _items = await Api.ListNavigationAsync(ct) ?? [];
+    }, UiText.T("Admin.Navigation.Saved", "導覽項目已儲存。"));
+
+    private async Task Delete()
+    {
+        if (_pendingDelete is not { } item) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteNavigationAsync(item.Id, item.Version, ct);
+            _pendingDelete = null;
+            _items = await Api.ListNavigationAsync(ct) ?? [];
+        }, UiText.T("Admin.Navigation.Deleted", "導覽項目已刪除。"));
+        _pendingDelete = null;
+    }
+
+    private Task Move(int index, int delta) => RunEditAsync(async ct =>
+    {
+        var list = _items?.ToList() ?? [];
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= list.Count) return;
+        (list[index], list[target]) = (list[target], list[index]);
+        var results = await Api.ReorderNavigationAsync(list.Select(x => (x.Id, x.Version)).ToList(), ct) ?? [];
+        var failed = results.FirstOrDefault(x => !x.Succeeded);
+        if (failed is not null) throw new CmsException(failed.Message);
+        _items = await Api.ListNavigationAsync(ct) ?? [];
+    }, UiText.T("Admin.Navigation.Reordered", "導覽順序已更新。"));
+}

@@ -7,56 +7,56 @@
 @inject MarkdownService Markdown
 @inject AiStatusService StatusService
 
-<PageTitle>AI 助理 · 內容管理</PageTitle>
-<div class="page-heading"><div><p class="eyebrow">問自己的網站</p><h1>AI 助理</h1><p>用自然語言查詢已發布的文章與頁面。這是唯讀內容問答，不是 AI 寫作工具，不會建立、修改或發布內容。</p></div></div>
+<PageTitle>@UiText.T("Admin.Assistant.PageTitle", "AI 助理 · 內容管理")</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Assistant.Eyebrow", "問自己的網站")</p><h1>@UiText.T("Admin.Assistant.Title", "AI 助理")</h1><p>@UiText.T("Admin.Assistant.Introduction", "用自然語言查詢已發布的文章與頁面。這是唯讀內容問答，不是 AI 寫作工具，不會建立、修改或發布內容。")</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 <section class="panel settings-panel settings-width ai-status" aria-labelledby="ai-status-title">
-    <div class="panel-intro"><h2 id="ai-status-title">AI 功能狀態</h2><p>只讀取配置完整性與本站索引資料；刷新不會呼叫模型，也不會重排工作。</p></div>
+    <div class="panel-intro"><h2 id="ai-status-title">@UiText.T("Admin.Assistant.StatusTitle", "AI 功能狀態")</h2><p>@UiText.T("Admin.Assistant.StatusHelp", "只讀取配置完整性與本站索引資料；刷新不會呼叫模型，也不會重排工作。")</p></div>
     <div aria-live="polite">
         @if (_status is not null)
         {
             <dl class="ai-status-grid">
-                <div><dt>嵌入模型配置</dt><dd>@(_status.EmbeddingConfigured ? "配置完整" : "配置未完整")</dd></div>
-                <div><dt>助理模型配置</dt><dd>@(_status.AssistantConfigured ? "配置完整" : "配置未完整")</dd></div>
-                <div><dt>已發布文章</dt><dd>@_status.PublishedPosts</dd></div>
-                <div><dt>已索引且無待處理工作的文章</dt><dd>@_status.IndexedPosts</dd></div>
-                <div><dt>待處理工作總數（含重試）</dt><dd>@_status.PendingJobs</dd></div>
-                <div><dt>重試工作</dt><dd>@_status.RetryJobs</dd></div>
-                <div><dt>最早重試時間（UTC）</dt><dd>@(_status.EarliestRetryAt?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "無重試工作")</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.EmbeddingConfiguration", "嵌入模型配置")</dt><dd>@(_status.EmbeddingConfigured ? UiText.T("Admin.Assistant.Configured", "配置完整") : UiText.T("Admin.Assistant.NotConfigured", "配置未完整"))</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.AssistantConfiguration", "助理模型配置")</dt><dd>@(_status.AssistantConfigured ? UiText.T("Admin.Assistant.Configured", "配置完整") : UiText.T("Admin.Assistant.NotConfigured", "配置未完整"))</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.PublishedPosts", "已發布文章")</dt><dd>@_status.PublishedPosts</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.IndexedPosts", "已索引且無待處理工作的文章")</dt><dd>@_status.IndexedPosts</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.PendingJobs", "待處理工作總數（含重試）")</dt><dd>@_status.PendingJobs</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.RetryJobs", "重試工作")</dt><dd>@_status.RetryJobs</dd></div>
+                <div><dt>@UiText.T("Admin.Assistant.EarliestRetry", "最早重試時間（UTC）")</dt><dd>@(_status.EarliestRetryAt?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? UiText.T("Admin.Assistant.NoRetries", "無重試工作"))</dd></div>
             </dl>
             @if (_status.PublishedPosts == 0)
             {
-                <div class="notice"><p>尚無已發布文章。請先建立並發布文章，再等候嵌入工作完成，讓搜尋與問答有內容可查。</p><a href="/admin/posts/new">建立文章</a></div>
+                <div class="notice"><p>@UiText.T("Admin.Assistant.NoPublishedPosts", "尚無已發布文章。請先建立並發布文章，再等候嵌入工作完成，讓搜尋與問答有內容可查。")</p><a href="/admin/posts/new">@UiText.T("Admin.Assistant.CreatePost", "建立文章")</a></div>
             }
             else if (_status.IndexedPosts < _status.PublishedPosts)
             {
-                <p class="notice">部分文章尚未完成索引。背景工作會自動處理；空白本文沒有可索引文字，請先補充內容。</p>
+                <p class="notice">@UiText.T("Admin.Assistant.IndexingIncomplete", "部分文章尚未完成索引。背景工作會自動處理；空白本文沒有可索引文字，請先補充內容。")</p>
             }
         }
         else
         {
-            <p>尚未取得狀態；問答暫停使用，請刷新重試。</p>
+            <p>@UiText.T("Admin.Assistant.StatusUnavailable", "尚未取得狀態；問答暫停使用，請刷新重試。")</p>
         }
     </div>
-    <p class="field-help">配置完整不代表連線正常、金鑰有效或模型相容。文章數不含獨立頁面；工作數包含文章與頁面，重試時間是排程時間，不保證屆時完成。</p>
-    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="Refresh">刷新狀態</button>
+    <p class="field-help">@UiText.T("Admin.Assistant.StatusCaveat", "配置完整不代表連線正常、金鑰有效或模型相容。文章數不含獨立頁面；工作數包含文章與頁面，重試時間是排程時間，不保證屆時完成。")</p>
+    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="Refresh">@UiText.T("Admin.Assistant.RefreshStatus", "刷新狀態")</button>
 </section>
 <section class="panel settings-panel settings-width ai-setup" aria-labelledby="ai-setup-title">
-    <h2 id="ai-setup-title">模型與密鑰設定</h2>
-    <p>沒有內建可用模型。請由伺服器管理者透過外部環境變數或安全設定提供以下名稱：</p>
+    <h2 id="ai-setup-title">@UiText.T("Admin.Assistant.SetupTitle", "模型與密鑰設定")</h2>
+    <p>@UiText.T("Admin.Assistant.SetupHelp", "沒有內建可用模型。請由伺服器管理者透過外部環境變數或安全設定提供以下名稱：")</p>
     <ul>
-        <li>嵌入：<code>Ai__Embedding__Endpoint</code>、<code>Ai__Embedding__Model</code>、<code>Ai__Embedding__ApiKey</code></li>
-        <li>助理：<code>Ai__Assistant__Endpoint</code>、<code>Ai__Assistant__Model</code>、<code>Ai__Assistant__ApiKey</code></li>
+        <li>@UiText.T("Admin.Assistant.EmbeddingLabel", "嵌入：")<code>Ai__Embedding__Endpoint</code>@UiText.T("Admin.Assistant.ConfigurationSeparator", "、")<code>Ai__Embedding__Model</code>@UiText.T("Admin.Assistant.ConfigurationSeparator", "、")<code>Ai__Embedding__ApiKey</code></li>
+        <li>@UiText.T("Admin.Assistant.AssistantLabel", "助理：")<code>Ai__Assistant__Endpoint</code>@UiText.T("Admin.Assistant.ConfigurationSeparator", "、")<code>Ai__Assistant__Model</code>@UiText.T("Admin.Assistant.ConfigurationSeparator", "、")<code>Ai__Assistant__ApiKey</code></li>
     </ul>
-    <p>使用 OpenAI 相容端點：嵌入需填完整請求網址（通常以 <code>/v1/embeddings</code> 結尾）；助理需填 API 基底網址（通常以 <code>/v1</code> 結尾），不含 <code>/chat/completions</code>。</p>
-    <p>嵌入模型須輸出 @Limits.EmbeddingDimensions 維向量。環境變數更新後需重新啟動應用，再刷新狀態。</p>
-    <p class="notice">請勿將密鑰放入文章、對話、原始碼、截圖或日誌；此頁不顯示或儲存密鑰。問題與檢索到的公開內容可能傳送至外部模型，請勿輸入敏感資料。</p>
+    <p>@UiText.T("Admin.Assistant.EndpointHelp", "使用 OpenAI 相容端點：嵌入需填完整請求網址（通常以 /v1/embeddings 結尾）；助理需填 API 基底網址（通常以 /v1 結尾），不含 /chat/completions。")</p>
+    <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Assistant.DimensionsHelp", "嵌入模型須輸出 {0} 維向量。環境變數更新後需重新啟動應用，再刷新狀態。"), Limits.EmbeddingDimensions)</p>
+    <p class="notice">@UiText.T("Admin.Assistant.SecurityNotice", "請勿將密鑰放入文章、對話、原始碼、截圖或日誌；此頁不顯示或儲存密鑰。問題與檢索到的公開內容可能傳送至外部模型，請勿輸入敏感資料。")</p>
 </section>
 <section class="panel settings-panel settings-width">
-    <div class="panel-intro"><h2>內容問答</h2><p>對話僅保存在此頁面，離開或重新載入後清空；每次回覆都會呼叫外部模型並產生費用。</p></div>
+    <div class="panel-intro"><h2>@UiText.T("Admin.Assistant.ChatTitle", "內容問答")</h2><p>@UiText.T("Admin.Assistant.ChatHelp", "對話僅保存在此頁面，離開或重新載入後清空；每次回覆都會呼叫外部模型並產生費用。")</p></div>
     @if (!ModelsConfigured)
     {
-        <p id="assistant-config-help" class="notice">需先取得狀態並完成嵌入與助理模型配置，才能使用問答。上方設定說明仍可查閱。</p>
+        <p id="assistant-config-help" class="notice">@UiText.T("Admin.Assistant.ConfigurationRequiredHelp", "需先取得狀態並完成嵌入與助理模型配置，才能使用問答。上方設定說明仍可查閱。")</p>
     }
     @if (_turns.Count > 0)
     {
@@ -64,7 +64,7 @@
             @foreach (var turn in _turns)
             {
                 <div class="assistant-turn @(turn.FromUser ? "assistant-user" : "assistant-bot")">
-                    <span class="assistant-role">@(turn.FromUser ? "你" : "助理")</span>
+                    <span class="assistant-role">@(turn.FromUser ? UiText.T("Admin.Assistant.UserRole", "你") : UiText.T("Admin.Assistant.AssistantRole", "助理"))</span>
                     @if (turn.FromUser)
                     {
                         <div class="assistant-text">@turn.Text</div>
@@ -79,18 +79,18 @@
     }
     else
     {
-        <p class="field-help">尚無對話。可以問：這個網站有哪些關於某個主題的文章？某篇文章的重點是什麼？</p>
+        <p class="field-help">@UiText.T("Admin.Assistant.EmptyChat", "尚無對話。可以問：這個網站有哪些關於某個主題的文章？某篇文章的重點是什麼？")</p>
     }
     <div class="field">
-        <label for="assistant-question">你的問題</label>
+        <label for="assistant-question">@UiText.T("Admin.Assistant.Question", "你的問題")</label>
         <textarea id="assistant-question" rows="3" maxlength="@Limits.AssistantQuestionMax" @bind="_question" @bind:event="oninput" disabled="@(Blocked || !ModelsConfigured)" aria-describedby="assistant-question-help"></textarea>
-        <span id="assistant-question-help" class="field-help">最多 @Limits.AssistantQuestionMax 字；助理只能查詢已發布內容。</span>
+        <span id="assistant-question-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Assistant.QuestionHelp", "最多 {0} 字；助理只能查詢已發布內容。"), Limits.AssistantQuestionMax)</span>
     </div>
     <div class="form-footer">
-        <button type="button" class="button" disabled="@(Blocked || !ModelsConfigured || string.IsNullOrWhiteSpace(_question))" @onclick="Ask">@(Busy ? "處理中…" : "送出問題")</button>
+        <button type="button" class="button" disabled="@(Blocked || !ModelsConfigured || string.IsNullOrWhiteSpace(_question))" @onclick="Ask">@(Busy ? UiText.T("Admin.Assistant.Processing", "處理中…") : UiText.T("Admin.Assistant.SubmitQuestion", "送出問題"))</button>
         @if (_turns.Count > 0)
         {
-            <button type="button" class="text-button" disabled="@Blocked" @onclick="Clear">清空對話</button>
+            <button type="button" class="text-button" disabled="@Blocked" @onclick="Clear">@UiText.T("Admin.Assistant.ClearChat", "清空對話")</button>
         }
     </div>
 </section>
@@ -114,11 +114,11 @@
         // 重新檢查授權與目前的外部設定，而非僅依賴上次的畫面快照。
         _status = null;
         _status = await StatusService.GetAsync(ct);
-        if (!ModelsConfigured) throw new CmsException("請先完成嵌入與助理模型配置。");
+        if (!ModelsConfigured) throw new CmsException(UiText.T("Admin.Assistant.ConfigurationRequired", "請先完成嵌入與助理模型配置。"));
         var question = _question.Trim();
-        if (question.Length == 0) throw new CmsException("請輸入問題。");
+        if (question.Length == 0) throw new CmsException(UiText.T("Admin.Assistant.QuestionRequired", "請輸入問題。"));
         if (question.Length > Limits.AssistantQuestionMax)
-            throw new CmsException($"問題長度上限為 {Limits.AssistantQuestionMax} 字。");
+            throw new CmsException(string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Assistant.QuestionTooLong", "問題長度上限為 {0} 字。"), Limits.AssistantQuestionMax));
         string reply;
         try { reply = await SiteAssistantService.AskAsync(_turns, question, ct); }
         catch (UnauthorizedAccessException) { throw; }
@@ -127,7 +127,7 @@
         catch (Exception)
         {
             // 用戶端建構失敗的細節同樣不得進入畫面與元件日誌。
-            throw new CmsException("助理暫時無法回覆，請稍後再試。");
+            throw new CmsException(UiText.T("Admin.Assistant.ReplyUnavailable", "助理暫時無法回覆，請稍後再試。"));
         }
         _turns.Add(new(true, question));
         _turns.Add(new(false, reply));

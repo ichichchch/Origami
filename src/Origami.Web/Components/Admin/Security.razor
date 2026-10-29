@@ -5,54 +5,54 @@
 @inherits AdminComponentBase
 @inject TwoFactorService TwoFactor
 
-<PageTitle>安全設定 · 內容管理</PageTitle>
+<PageTitle>@UiText.T("Admin.Security.PageTitle", "安全設定 · 內容管理")</PageTitle>
 <UnsavedGuard Busy="Busy" />
-<div class="page-heading"><div><p class="eyebrow">帳號的第三道鎖</p><h1>安全設定</h1><p>為你目前登入的帳號加上兩步驟驗證（TOTP），不影響其他使用者。</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Security.Eyebrow", "帳號的第三道鎖")</p><h1>@UiText.T("Admin.Security.Title", "安全設定")</h1><p>@UiText.T("Admin.Security.Introduction", "為你目前登入的帳號加上兩步驟驗證（TOTP），不影響其他使用者。")</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 @if (_status is not null)
 {
     <section class="panel settings-panel settings-width">
         <div class="panel-intro">
-            <h2>兩步驟驗證（TOTP）</h2>
+            <h2>@UiText.T("Admin.Security.TotpTitle", "兩步驟驗證（TOTP）")</h2>
             @if (_status.Enabled)
             {
-                <p>目前已啟用。登入時除密碼外，需輸入動態驗證碼。</p>
+                <p>@UiText.T("Admin.Security.EnabledHelp", "目前已啟用。登入時除密碼外，需輸入動態驗證碼。")</p>
             }
             else if (_status.SetupPending)
             {
-                <p>已有待確認的設定金鑰；重新開始會更換金鑰。</p>
+                <p>@UiText.T("Admin.Security.PendingHelp", "已有待確認的設定金鑰；重新開始會更換金鑰。")</p>
             }
             else
             {
-                <p>尚未啟用。可搭配 Google Authenticator、Microsoft Authenticator 等應用程式。</p>
+                <p>@UiText.T("Admin.Security.DisabledHelp", "尚未啟用。可搭配 Google Authenticator、Microsoft Authenticator 等應用程式。")</p>
             }
         </div>
         @if (!_status.Enabled)
         {
             @if (_setup is null)
             {
-                <button type="button" class="button" disabled="@Blocked" @onclick="BeginSetup">開始設定</button>
+                <button type="button" class="button" disabled="@Blocked" @onclick="BeginSetup">@UiText.T("Admin.Security.BeginSetup", "開始設定")</button>
             }
             else
             {
                 <div class="field">
-                    <label for="totp-secret">手動輸入金鑰（Base32）</label>
+                    <label for="totp-secret">@UiText.T("Admin.Security.Secret", "手動輸入金鑰（Base32）")</label>
                     <input id="totp-secret" class="code-input" value="@_setup.Value.Secret" readonly />
-                    <p class="field-help">在驗證器應用程式新增「手動輸入」，貼上金鑰；或將下方網址貼入支援的應用程式。</p>
-                    <input class="code-input" value="@_setup.Value.Uri" readonly aria-label="otpauth 連結" />
+                    <p class="field-help">@UiText.T("Admin.Security.SecretHelp", "在驗證器應用程式新增「手動輸入」，貼上金鑰；或將下方網址貼入支援的應用程式。")</p>
+                    <input class="code-input" value="@_setup.Value.Uri" readonly aria-label="@UiText.T("Admin.Security.OtpAuthLink", "otpauth 連結")" />
                 </div>
                 <EditForm Model="_confirm" OnValidSubmit="ConfirmSetup" FormName="totp-confirm">
                     <DataAnnotationsValidator />
                     <div class="field">
-                        <label for="totp-code">輸入應用程式顯示的 6 位碼</label>
+                        <label for="totp-code">@UiText.T("Admin.Security.SetupCode", "輸入應用程式顯示的 6 位碼")</label>
                         <input id="totp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" @bind="_confirm.Code" @bind:event="oninput" required disabled="@Blocked" />
                     </div>
                     <div class="button-row">
-                        <button type="submit" class="button" disabled="@Blocked">確認並啟用</button>
-                        <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="BeginSetup">重新產生金鑰</button>
+                        <button type="submit" class="button" disabled="@Blocked">@UiText.T("Admin.Security.ConfirmSetup", "確認並啟用")</button>
+                        <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="BeginSetup">@UiText.T("Admin.Security.RegenerateSecret", "重新產生金鑰")</button>
                     </div>
                 </EditForm>
-                <p class="field-help">啟用後既有登入會失效。請妥善保管驗證器；admin-reset 只恢復全站管理者，不能恢復一般帳號。</p>
+                <p class="field-help">@UiText.T("Admin.Security.RecoveryHelp", "啟用後既有登入會失效。請妥善保管驗證器；admin-reset 只恢復全站管理者，不能恢復一般帳號。")</p>
             }
         }
         else
@@ -60,14 +60,14 @@
             <EditForm Model="_disable" OnValidSubmit="Disable" FormName="totp-disable">
                 <DataAnnotationsValidator />
                 <div class="field">
-                    <label for="disable-password">目前密碼</label>
+                    <label for="disable-password">@UiText.T("Admin.Security.CurrentPassword", "目前密碼")</label>
                     <input id="disable-password" type="password" maxlength="1024" @bind="_disable.Password" required disabled="@Blocked" autocomplete="current-password" />
                 </div>
                 <div class="field">
-                    <label for="disable-code">動態驗證碼</label>
+                    <label for="disable-code">@UiText.T("Admin.Security.Code", "動態驗證碼")</label>
                     <input id="disable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" @bind="_disable.Code" @bind:event="oninput" required disabled="@Blocked" />
                 </div>
-                <button type="submit" class="button button-danger" disabled="@Blocked">停用兩步驟驗證</button>
+                <button type="submit" class="button button-danger" disabled="@Blocked">@UiText.T("Admin.Security.Disable", "停用兩步驟驗證")</button>
             </EditForm>
         }
     </section>
@@ -80,19 +80,26 @@
     private (string Secret, string Uri)? _setup;
     private CodeInput _confirm = new();
     private PasswordAndCodeInput _disable = new();
+    public static class ValidationText
+    {
+        public static string CodeRequired => UiText.T("Admin.Security.CodeRequired", "請輸入驗證碼。");
+        public static string CodeLength => UiText.T("Admin.Security.CodeLength", "驗證碼為 6 位數字。");
+        public static string PasswordRequired => UiText.T("Admin.Security.PasswordRequired", "請輸入密碼。");
+        public static string PasswordTooLong => UiText.T("Admin.Security.PasswordTooLong", "密碼過長。");
+    }
     private sealed class CodeInput
     {
-        [Required(ErrorMessage = "請輸入驗證碼。")]
-        [StringLength(6, MinimumLength = 6, ErrorMessage = "驗證碼為 6 位數字。")]
+        [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeRequired))]
+        [StringLength(6, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
         public string Code { get; set; } = "";
     }
     private sealed class PasswordAndCodeInput
     {
-        [Required(ErrorMessage = "請輸入密碼。")]
-        [StringLength(1024)]
+        [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordRequired))]
+        [StringLength(1024, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordTooLong))]
         public string Password { get; set; } = "";
-        [Required(ErrorMessage = "請輸入驗證碼。")]
-        [StringLength(6, MinimumLength = 6)]
+        [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeRequired))]
+        [StringLength(6, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
         public string Code { get; set; } = "";
     }
     protected override Task OnInitializedAsync() => Load();
@@ -108,7 +115,7 @@
         _setup = null;
         _confirm.Code = "";
         _status = await TwoFactor.GetStatusAsync(ct);
-    }, "兩步驟驗證已啟用，下次登入即需輸入動態驗證碼。");
+    }, UiText.T("Admin.Security.Enabled", "兩步驟驗證已啟用，下次登入即需輸入動態驗證碼。"));
     private async Task Disable()
     {
         if (Blocked) return;
@@ -118,7 +125,7 @@
             {
                 await TwoFactor.DisableAsync(_disable.Password, _disable.Code, ct);
                 _status = await TwoFactor.GetStatusAsync(ct);
-            }, "兩步驟驗證已停用。");
+            }, UiText.T("Admin.Security.Disabled", "兩步驟驗證已停用。"));
         }
         finally { _disable = new(); }
     }

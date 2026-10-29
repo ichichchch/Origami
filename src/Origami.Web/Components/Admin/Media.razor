@@ -4,81 +4,101 @@
 @layout AdminLayout
 @inherits AdminComponentBase
 @inject OrigamiClient Api
+@inject IJSRuntime JavaScript
 
-<PageTitle>媒體庫 · 內容管理</PageTitle>
+<PageTitle>@UiText.T("Admin.Media.PageTitle", "媒體庫 · 內容管理")</PageTitle>
 <UnsavedGuard Busy="Busy" />
-<div class="page-heading"><div><p class="eyebrow">用圖片說故事</p><h1>媒體庫</h1><p>上傳圖片，隨時在文章或頁面中使用。</p></div></div>
-<p class="notice privacy-notice"><strong>圖片一律公開。</strong>所有上傳圖片（包含草稿中的圖片）都可透過網址存取。撤回或刪除內容不會隱藏圖片，請勿上傳私人資料。</p>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Media.Eyebrow", "用圖片說故事")</p><h1>@UiText.T("Admin.Media.Title", "媒體庫")</h1><p>@UiText.T("Admin.Media.Introduction", "上傳圖片，隨時在文章或頁面中使用。")</p></div></div>
+<p class="notice privacy-notice"><strong>@UiText.T("Admin.Media.PublicImagesTitle", "圖片一律公開。")</strong>@UiText.T("Admin.Media.PublicImagesNotice", "所有上傳圖片（包含草稿中的圖片）都可透過網址存取。撤回或刪除內容不會隱藏圖片，請勿上傳私人資料。")</p>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 @if (Access?.CanRead == true && !CanEdit)
 {
-    <p class="notice">本站唯讀成員可瀏覽圖片，但不能上傳、修改或刪除。</p>
+    <p class="notice">@UiText.T("Admin.Media.ReadOnlyNotice", "本站唯讀成員可瀏覽圖片，但不能上傳、修改或刪除。")</p>
 }
 <section class="panel upload-panel">
-    <div><h2>上傳新圖片</h2><p>選取後即上傳。每次一張，單張上限 @(Limits.UploadBytes / 1024 / 1024) MB。</p><p class="field-help">支援 JPEG、PNG、WebP（不含動畫）；實際格式與圖片大小由伺服器驗證。不接受 SVG。</p></div>
-    <div class="upload-control"><label for="media-upload" class="sr-only">選取要上傳的圖片</label><InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp" disabled="@EditBlocked" />@if (_uploadName is not null) { <p role="status">正在上傳：@_uploadName</p> }</div>
+    <div><h2>@UiText.T("Admin.Media.UploadImage", "上傳新圖片")</h2><p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.UploadHelp", "選取或拖放即上傳。一次最多 {0} 張，單張上限 {1} MB。"), Limits.MediaBatchMax, Limits.UploadBytes / 1024 / 1024)</p><p class="field-help">@UiText.T("Admin.Media.FormatsHelp", "支援 JPEG、PNG、WebP（不含動畫）；實際格式與圖片大小由伺服器逐檔驗證。不接受 SVG。")</p></div>
+    <div class="upload-control">
+        <div id="media-drop-zone" class="drop-zone" aria-describedby="media-drop-help">
+            <label for="media-upload" class="sr-only">@UiText.T("Admin.Media.SelectImages", "選取要上傳的圖片（可多選）")</label>
+            <InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm" additionalAttributes="@(new Dictionary<string, object> { ["multiple"] = true })" disabled="@EditBlocked" />
+            <p id="media-drop-help" class="field-help">@UiText.T("Admin.Media.DropHelp", "把圖片拖到這裡，或點選選取多個檔案。")</p>
+        </div>
+        @if (_uploadName is not null) { <p role="status">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.Uploading", "正在上傳：{0}"), _uploadName)</p> }
+    </div>
 </section>
 @if (_uploaded is not null)
 {
-    <section class="notice notice-success"><p>最近上傳：<strong>@_uploaded.OriginalName</strong></p><p>在編輯器點選「插入圖片」，或複製下方 Markdown：</p><label class="sr-only" for="uploaded-markdown">最近上傳圖片的 Markdown</label><input id="uploaded-markdown" class="code-input" value="@_uploaded.Markdown" readonly /></section>
+    <section class="notice notice-success"><p>@UiText.T("Admin.Media.RecentUploadLabel", "最近上傳：")<strong>@_uploaded.OriginalName</strong></p><p>@UiText.T("Admin.Media.InsertHelp", "在編輯器點選「插入圖片」，或複製下方 Markdown：")</p><label class="sr-only" for="uploaded-markdown">@UiText.T("Admin.Media.RecentMarkdown", "最近上傳圖片的 Markdown")</label><input id="uploaded-markdown" class="code-input" value="@_uploaded.Markdown" readonly /></section>
 }
-@if (Error is not null && !LoginRequired) { <button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入媒體列表</button> }
+@if (_batchResults is { Count: > 1 })
+{
+    <section class="notice" role="status" aria-label="@UiText.T("Admin.Media.BatchResults", "批次上傳結果")">
+        <p><strong>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.BatchSummary", "本次上傳 {0} 張成功、{1} 張失敗。"), _batchResults.Count(x => x.Succeeded), _batchResults.Count(x => !x.Succeeded))</strong></p>
+        <ul>
+            @foreach (var result in _batchResults)
+            {
+                <li>@result.FileName — @(result.Succeeded ? UiText.T("Admin.Media.Uploaded", "已上傳") : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.UploadFailedDetail", "失敗：{0}"), result.Message))</li>
+            }
+        </ul>
+    </section>
+}
+@if (Error is not null && !LoginRequired) { <button class="button button-secondary" disabled="@Blocked" @onclick="Load">@UiText.T("Admin.Media.Reload", "重新載入媒體列表")</button> }
 @if (_pendingDelete is not null)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="media-delete-title" aria-describedby="media-delete-description">
-        <h2 id="media-delete-title">刪除圖片「@_pendingDelete.OriginalName」？</h2>
+        <h2 id="media-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.DeleteTitle", "刪除圖片「{0}」？"), _pendingDelete.OriginalName)</h2>
         @if (_pendingReferences.Count > 0)
         {
-            <p id="media-delete-description">這張圖片仍被以下內容引用，需先移除引用才能刪除：</p>
+            <p id="media-delete-description">@UiText.T("Admin.Media.ReferencedImageHelp", "這張圖片仍被以下內容引用，需先移除引用才能刪除：")</p>
             <ul>
                 @foreach (var reference in _pendingReferences)
                 {
-                    <li>「@reference.Title」（@(reference.Status switch { ContentStatus.Published => "已發布", ContentStatus.Trashed => "回收桶", _ => "草稿" })）</li>
+                    <li>「@reference.Title」（@(reference.Status switch { ContentStatus.Published => UiText.T("Admin.Media.Published", "已發布"), ContentStatus.Trashed => UiText.T("Admin.Media.Trashed", "回收桶"), _ => UiText.T("Admin.Media.Draft", "草稿") })）</li>
                 }
             </ul>
         }
         else
         {
-            <p id="media-delete-description">沒有任何內容引用這張圖片。刪除後圖片網址立即失效，無法復原（含縮圖變體）。</p>
+            <p id="media-delete-description">@UiText.T("Admin.Media.DeleteDescription", "沒有任何內容引用這張圖片。刪除後圖片網址立即失效，無法復原（含縮圖變體）。")</p>
         }
         <div class="button-row">
-            <button class="button button-danger" disabled="@(EditBlocked || _pendingReferences.Count > 0)" @onclick="DeleteAsync">確認刪除圖片</button>
-            <button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingDelete = null">取消</button>
+            <button class="button button-danger" disabled="@(EditBlocked || _pendingReferences.Count > 0)" @onclick="DeleteAsync">@UiText.T("Admin.Media.ConfirmDelete", "確認刪除圖片")</button>
+            <button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingDelete = null">@UiText.T("Admin.Media.Cancel", "取消")</button>
         </div>
     </section>
 }
 <section class="panel media-library" aria-busy="@Busy.ToString().ToLowerInvariant()">
-    <div class="panel-toolbar"><h2>所有圖片 <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">依上傳時間排序</span></div>
+    <div class="panel-toolbar"><h2>@UiText.T("Admin.Media.AllImages", "所有圖片") <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">@UiText.T("Admin.Media.SortOrder", "依上傳時間排序")</span></div>
     <div class="content-search">
-        <label class="sr-only" for="media-search">搜尋圖片</label>
-        <input id="media-search" type="search" placeholder="搜尋檔名、替代或說明文字…" maxlength="300" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
+        <label class="sr-only" for="media-search">@UiText.T("Admin.Media.Search", "搜尋圖片")</label>
+        <input id="media-search" type="search" placeholder="@UiText.T("Admin.Media.SearchPlaceholder", "搜尋檔名、替代或說明文字…")" maxlength="300" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
         @if (_search.Length > 0)
         {
-            <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">清除</button>
+            <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">@UiText.T("Admin.Media.Clear", "清除")</button>
         }
     </div>
     @if (_result is not null)
     {
         @if (_result.Items.Count == 0)
         {
-            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>為文字添一點畫面</h2><p>上傳第一張圖片，開始建立媒體庫。</p></div>
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@UiText.T("Admin.Media.EmptyTitle", "為文字添一點畫面")</h2><p>@UiText.T("Admin.Media.EmptyHelp", "上傳第一張圖片，開始建立媒體庫。")</p></div>
         }
         else
         {
             <div class="media-grid">
             @foreach (var item in _result.Items)
             {
-                <article class="media-card" @key="item.Id"><a href="@item.Url" target="_blank" rel="noopener" aria-label="@("開啟原圖：" + item.OriginalName)"><img src="@item.Url" alt="@item.AltText" loading="lazy" /></a><div class="media-details"><h3>@item.OriginalName</h3><p>@item.Width × @item.Height · @Size(item.Size)</p><p>@item.UploadedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
+                <article class="media-card" @key="item.Id"><a href="@item.Url" target="_blank" rel="noopener" aria-label="@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.OpenOriginal", "開啟原圖：{0}"), item.OriginalName)">@if (item.Kind == MediaKind.Image) { <img src="@item.Url" alt="@item.AltText" loading="lazy" /> } else { <span class="media-kind">@KindLabel(item.Kind)</span> }</a><div class="media-details"><h3>@item.OriginalName</h3><p>@(item.Kind == MediaKind.Image ? $"{item.Width} × {item.Height} · " : "")@Size(item.Size)</p><p>@item.UploadedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
 @if (item.ReferenceCount > 0)
 {
-    <p class="field-help">被 @item.ReferenceCount 篇內容引用</p>
-}<label for="@("media-alt-" + item.Id)">替代文字（alt）</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">最多 @Limits.AltText 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。</p>
-<label for="@("media-caption-" + item.Id)">說明文字（caption）</label><input id="@("media-caption-" + item.Id)" value="@CaptionValue(item)" maxlength="@Limits.Caption" @oninput="@(e => _captionEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-caption-help-" + item.Id)" /><p id="@("media-caption-help-" + item.Id)" class="field-help">最多 @Limits.Caption 字；圖片作為封面時顯示於圖片下方。</p><button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || (!_altEdits.ContainsKey(item.Id) && !_captionEdits.ContainsKey(item.Id)))" @onclick="() => SaveMeta(item.Id)">儲存圖片資訊</button>
-<button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => RequestDelete(item)">刪除圖片<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">複製 Markdown</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
+    <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.ReferenceCount", "被 {0} 篇內容引用"), item.ReferenceCount)</p>
+}<label for="@("media-alt-" + item.Id)">@UiText.T("Admin.Media.AltText", "替代文字（alt）")</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.AltTextHelp", "最多 {0} 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。"), Limits.AltText)</p>
+<label for="@("media-caption-" + item.Id)">@UiText.T("Admin.Media.Caption", "說明文字（caption）")</label><input id="@("media-caption-" + item.Id)" value="@CaptionValue(item)" maxlength="@Limits.Caption" @oninput="@(e => _captionEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-caption-help-" + item.Id)" /><p id="@("media-caption-help-" + item.Id)" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.CaptionHelp", "最多 {0} 字；圖片作為封面時顯示於圖片下方。"), Limits.Caption)</p><button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || (!_altEdits.ContainsKey(item.Id) && !_captionEdits.ContainsKey(item.Id)))" @onclick="() => SaveMeta(item.Id)">@UiText.T("Admin.Media.SaveMetadata", "儲存圖片資訊")</button>
+<button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => RequestDelete(item)">@UiText.T("Admin.Media.DeleteImage", "刪除圖片")<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">@UiText.T("Admin.Media.CopyMarkdown", "複製 Markdown")</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
             }
             </div>
         }
-        <nav class="pagination" aria-label="媒體分頁"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></nav>
+        <nav class="pagination" aria-label="@UiText.T("Admin.Media.Pagination", "媒體分頁")"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">@UiText.T("Admin.Media.PreviousPage", "上一頁")</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">@UiText.T("Admin.Media.NextPage", "下一頁")</button></nav>
     }
 </section>
 
@@ -88,11 +108,42 @@
     private PagedResult<MediaItem>? _result;
     private MediaItem? _uploaded;
     private string? _uploadName;
+    private List<MediaBatchItem>? _batchResults;
+    private IJSObjectReference? _dropModule;
     private readonly Dictionary<Guid, string> _altEdits = [];
     private readonly Dictionary<Guid, string> _captionEdits = [];
     private MediaItem? _pendingDelete;
     private List<MediaService.MediaReference> _pendingReferences = [];
     protected override Task OnInitializedAsync() => Load();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || EditBlocked) return;
+        try
+        {
+            // 拖放只是把檔案轉送給同一個多選 InputFile；上傳與驗證仍走同一條管線。
+            _dropModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Admin/Media.razor.js");
+            await _dropModule.InvokeVoidAsync("wireDropZone", "media-drop-zone", "media-upload");
+        }
+        catch (JSException) { /* JS 尚未就緒或已被處置；選取檔案入口仍可用。 */ }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { /* 預渲染期間沒有 JS 執行階段。 */ }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!disposing) return;
+        if (_dropModule is not null) _ = DisposeModuleAsync(_dropModule);
+        _dropModule = null;
+    }
+
+    private static async Task DisposeModuleAsync(IJSObjectReference module)
+    {
+        try { await module.DisposeAsync(); }
+        catch (JSException) { /* JS 執行階段已關閉；模組隨頁面釋放。 */ }
+        catch (ObjectDisposedException) { }
+    }
     private string? ListSearch() => string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
     private Task<bool> Load() => RunAsync(async ct => { _result = await ListWithCountsAsync(ct); });
 
@@ -130,7 +181,7 @@
             await Api.DeleteMediaAsync(item.Id, ct);
             _pendingDelete = null;
             _result = await ListWithCountsAsync(ct);
-        }, "圖片已刪除（含縮圖變體）。");
+        }, UiText.T("Admin.Media.DeletedNotice", "圖片已刪除（含縮圖變體）。"));
         if (!deleted) _pendingDelete = null;
     }
     private string AltValue(MediaItem item) => _altEdits.TryGetValue(item.Id, out var value) ? value : item.AltText;
@@ -145,7 +196,7 @@
         _altEdits.Remove(id);
         _captionEdits.Remove(id);
         _result = await ListWithCountsAsync(ct);
-    }, "圖片資訊已儲存，替代文字會自動帶入插入語法。");
+    }, UiText.T("Admin.Media.MetadataSaved", "圖片資訊已儲存，替代文字會自動帶入插入語法。"));
     private async Task Move(int delta)
     {
         if (Blocked) return;
@@ -156,19 +207,29 @@
     private async Task Upload(InputFileChangeEventArgs args)
     {
         if (EditBlocked) return;
+        // 多選與拖放共用此入口；超過上限的檔案會被明確拒絕而非靜默丟棄。
+        var files = args.GetMultipleFiles(Limits.MediaBatchMax + 1);
         await RunEditAsync(async ct =>
         {
-            var file = args.File;
-            if (file.Size > Limits.UploadBytes) throw new CmsException($"圖片超過 {Limits.UploadBytes / 1024 / 1024} MB 上限，請選擇較小的檔案。");
-            _uploadName = file.Name;
-            await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
-            using var buffer = new MemoryStream();
-            await stream.CopyToAsync(buffer, ct);
-            _uploaded = await Api.UploadMediaAsync(buffer.ToArray(), file.Name, ct);
+            if (files.Count > Limits.MediaBatchMax)
+                throw new CmsException(string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.BatchLimit", "單次最多上傳 {0} 張圖片，請分批上傳。"), Limits.MediaBatchMax));
+            _uploadName = files.Count == 1 ? files[0].Name : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.FileCount", "{0} 個檔案"), files.Count);
+            var results = await Api.UploadMediaBatchAsync(files, ct) ?? throw new CmsException(UiText.T("Admin.Media.BatchUploadFailed", "批次上傳失敗，請重新嘗試。"));
+            _batchResults = results;
+            _uploaded = results.LastOrDefault(x => x.Succeeded)?.Item;
+            var succeeded = results.Count(x => x.Succeeded);
+            if (succeeded == 0) throw new CmsException(string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.AllUploadsFailed", "全部檔案都未上傳：{0}"), results[0].Message));
             _page = 1;
             _result = await ListWithCountsAsync(ct);
-        }, "圖片已上傳，現在可在編輯器中插入。");
+        }, UiText.T("Admin.Media.UploadedNotice", "圖片已上傳，現在可在編輯器中插入。"));
         _uploadName = null;
     }
     private static string Size(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.#} KB";
+    private static string KindLabel(MediaKind kind) => kind switch
+    {
+        MediaKind.Document => UiText.T("Admin.Media.Document", "文件（PDF）"),
+        MediaKind.Audio => UiText.T("Admin.Media.Audio", "音訊"),
+        MediaKind.Video => UiText.T("Admin.Media.Video", "影片"),
+        _ => UiText.T("Admin.Media.Image", "圖片")
+    };
 }

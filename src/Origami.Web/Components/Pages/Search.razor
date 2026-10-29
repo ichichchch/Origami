@@ -2,24 +2,24 @@
 @attribute [StreamRendering(false)]
 @inject OrigamiClient Api
 
-<PageTitle>語意搜尋</PageTitle>
+<PageTitle>@UiText.T("Public.Search.01", "語意搜尋")</PageTitle>
 <section class="search-page">
     <header class="public-heading">
-        <p class="eyebrow">用意思，找到文章</p>
-        <h1>語意搜尋</h1>
-        <p>描述你想了解的主題，搜尋本站已發布且已建立索引的文章。</p>
+        <p class="eyebrow">@UiText.T("Public.Search.02", "用意思，找到文章")</p>
+        <h1>@UiText.T("Public.Search.01", "語意搜尋")</h1>
+        <p>@UiText.T("Public.Search.03", "描述你想了解的主題，搜尋本站已發布且已建立索引的文章。")</p>
     </header>
     <form method="get" action="/search" role="search" class="search-form">
         <div class="field">
-            <label for="search-query">搜尋文字</label>
+            <label for="search-query">@UiText.T("Public.Search.04", "搜尋文字")</label>
             <input id="search-query" type="search" name="q" value="@Query" maxlength="@Limits.SearchQueryMax" aria-describedby="search-help" />
-            <p id="search-help" class="field-help">最多 @Limits.SearchQueryMax 字。搜尋文字會傳送至外部嵌入模型，請勿輸入密碼或敏感資料。</p>
+            <p id="search-help" class="field-help">@string.Format(UiText.T("Public.Search.QueryHelp", "最多 {0} 字。搜尋文字會傳送至外部嵌入模型，請勿輸入密碼或敏感資料。"), Limits.SearchQueryMax)</p>
         </div>
-        <button type="submit" class="button">搜尋文章</button>
+        <button type="submit" class="button">@UiText.T("Public.Search.05", "搜尋文章")</button>
     </form>
     @if (!_semanticAvailable && !string.IsNullOrWhiteSpace(Query))
     {
-        <p class="field-help" role="status">語意搜尋暫時無法使用，已改為關鍵字比對；精確詞仍可命中。</p>
+        <p class="field-help" role="status">@UiText.T("Public.Search.06", "語意搜尋暫時無法使用，已改為關鍵字比對；精確詞仍可命中。")</p>
     }
     @if (_error is not null)
     {
@@ -27,23 +27,23 @@
     }
     else if (string.IsNullOrWhiteSpace(Query))
     {
-        <div class="empty-state"><h2>你想找什麼？</h2><p>輸入主題或問題開始搜尋，例如「如何整理寫作靈感」。</p></div>
+        <div class="empty-state"><h2>@UiText.T("Public.Search.07", "你想找什麼？")</h2><p>@UiText.T("Public.Search.08", "輸入主題或問題開始搜尋，例如「如何整理寫作靈感」。")</p></div>
     }
     else if (_hits.Count == 0)
     {
-        <div class="empty-state" role="status"><h2>沒有找到文章</h2><p>試著換個說法；新發布的文章需等候索引完成才會出現。</p></div>
+        <div class="empty-state" role="status"><h2>@UiText.T("Public.Search.09", "沒有找到文章")</h2><p>@UiText.T("Public.Search.10", "試著換個說法；新發布的文章需等候索引完成才會出現。")</p></div>
     }
     else
     {
         <section aria-labelledby="search-results-title">
-            <h2 id="search-results-title">「@(Query?.Trim())」的搜尋結果</h2>
-            <p class="field-help">共 @DisplayTotal 篇符合（第 @_page / @TotalPages 頁）；關鍵字命中排在前面，語意結果補足第一頁。</p>
+            <h2 id="search-results-title">@string.Format(UiText.T("Public.Search.ResultsTitle", "「{0}」的搜尋結果"), Query?.Trim())</h2>
+            <p class="field-help">@string.Format(UiText.T("Public.Search.ResultsSummary", "共 {0} 篇符合（第 {1} / {2} 頁）；關鍵字命中排在前面，語意結果補足第一頁。"), DisplayTotal, _page, TotalPages)</p>
             <ul class="search-results">
                 @foreach (var hit in _hits)
                 {
                     <li>
                         <article>
-                            <h3><span class="chip search-source">@hit.Source</span> <a href="@("/posts/" + Uri.EscapeDataString(hit.Slug))">@hit.Title</a></h3>
+                            <h3><span class="chip search-source">@SearchSourceLabel(hit.Source)</span> <a href="@("/posts/" + Uri.EscapeDataString(hit.Slug))">@hit.Title</a></h3>
                             <p class="search-snippet">@hit.Snippet</p>
                         </article>
                     </li>
@@ -51,10 +51,10 @@
             </ul>
             @if (DisplayTotal > Limits.PageSize)
             {
-                <nav class="pagination" aria-label="搜尋結果分頁">
-                    @if (_page > 1) { <a class="button button-secondary" href="@PageUrl(_page - 1)">上一頁</a> }
-                    <span>第 @_page / @TotalPages 頁</span>
-                    @if (_page < TotalPages) { <a class="button button-secondary" href="@PageUrl(_page + 1)">下一頁</a> }
+                <nav class="pagination" aria-label="@UiText.T("Public.Search.Pagination", "搜尋結果分頁")">
+                    @if (_page > 1) { <a class="button button-secondary" href="@PageUrl(_page - 1)">@UiText.T("Public.Search.11", "上一頁")</a> }
+                    <span>@string.Format(UiText.T("Public.Search.PageStatus", "第 {0} / {1} 頁"), _page, TotalPages)</span>
+                    @if (_page < TotalPages) { <a class="button button-secondary" href="@PageUrl(_page + 1)">@UiText.T("Public.Search.12", "下一頁")</a> }
                 </nav>
             }
         </section>
@@ -74,6 +74,13 @@
     private int DisplayTotal => Math.Max(_total, _hits.Count);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)DisplayTotal / Limits.PageSize));
     private string PageUrl(int page) => "/search?q=" + Uri.EscapeDataString((Query ?? "").Trim()) + "&page=" + page;
+    private static string SearchSourceLabel(string source) => source switch
+    {
+        "關鍵字" => UiText.T("Public.Search.KeywordSource", "關鍵字"),
+        "語意" => UiText.T("Public.Search.SemanticSource", "語意"),
+        "關鍵字＋語意" => UiText.T("Public.Search.CombinedSource", "關鍵字＋語意"),
+        _ => source
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -85,7 +92,7 @@
         {
             if (requested < 1)
             {
-                _error = "分頁參數無效。";
+                _error = UiText.T("Public.Search.InvalidPage", "分頁參數無效。");
                 SetStatus(StatusCodes.Status400BadRequest);
                 return;
             }
@@ -93,14 +100,14 @@
         }
         else if (!string.IsNullOrEmpty(PageParam))
         {
-            _error = "分頁參數無效。";
+            _error = UiText.T("Public.Search.InvalidPage", "分頁參數無效。");
             SetStatus(StatusCodes.Status400BadRequest);
             return;
         }
         else _page = 1;
         if (Query?.Length > Limits.SearchQueryMax)
         {
-            _error = $"搜尋文字上限為 {Limits.SearchQueryMax} 字。";
+            _error = string.Format(UiText.T("Public.Search.QueryTooLong", "搜尋文字上限為 {0} 字。"), Limits.SearchQueryMax);
             SetStatus(StatusCodes.Status400BadRequest);
             return;
         }
@@ -125,12 +132,12 @@
         }
         catch (CmsException)
         {
-            _error = "搜尋暫時無法使用，請稍後再試。";
+            _error = UiText.T("Public.Search.Unavailable", "搜尋暫時無法使用，請稍後再試。");
             SetStatus(StatusCodes.Status503ServiceUnavailable);
         }
         catch (Exception)
         {
-            _error = "搜尋暫時無法使用，請稍後再試。";
+            _error = UiText.T("Public.Search.Unavailable", "搜尋暫時無法使用，請稍後再試。");
             SetStatus(StatusCodes.Status503ServiceUnavailable);
         }
     }

@@ -1,0 +1,3634 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <xsd:schema id="root">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Account.Brand" xml:space="preserve">
+    <value>ORIGAMI · Content Studio</value>
+  </data>
+  <data name="Account.ForgotPassword.BackToLogin" xml:space="preserve">
+    <value>Back to sign in</value>
+  </data>
+  <data name="Account.ForgotPassword.Email" xml:space="preserve">
+    <value>Email address</value>
+  </data>
+  <data name="Account.ForgotPassword.Help" xml:space="preserve">
+    <value>This site does not allow public sign-up. If the account has no email address, ask a site administrator or have one reset it on the server.</value>
+  </data>
+  <data name="Account.ForgotPassword.PageTitle" xml:space="preserve">
+    <value>Reset password · Content Studio</value>
+  </data>
+  <data name="Account.ForgotPassword.Sent" xml:space="preserve">
+    <value>If that email is registered and the account is usable, a reset link has been sent. Check your inbox (including spam); the link is valid for 30 minutes.</value>
+  </data>
+  <data name="Account.ForgotPassword.Submit" xml:space="preserve">
+    <value>Send reset link</value>
+  </data>
+  <data name="Account.ForgotPassword.Title" xml:space="preserve">
+    <value>Forgot your password?</value>
+  </data>
+  <data name="Account.ResetPassword.ConfirmPassword" xml:space="preserve">
+    <value>Confirm new password</value>
+  </data>
+  <data name="Account.ResetPassword.Done" xml:space="preserve">
+    <value>Your password is updated. Sign in with the new one.</value>
+  </data>
+  <data name="Account.ResetPassword.Email" xml:space="preserve">
+    <value>Email address</value>
+  </data>
+  <data name="Account.ResetPassword.GoLogin" xml:space="preserve">
+    <value>Go to sign in</value>
+  </data>
+  <data name="Account.ResetPassword.NewPassword" xml:space="preserve">
+    <value>New password</value>
+  </data>
+  <data name="Account.ResetPassword.PageTitle" xml:space="preserve">
+    <value>Choose a new password · Content Studio</value>
+  </data>
+  <data name="Account.ResetPassword.Submit" xml:space="preserve">
+    <value>Update password</value>
+  </data>
+  <data name="Account.ResetPassword.Title" xml:space="preserve">
+    <value>Set a new password</value>
+  </data>
+  <data name="Layout.Main.01" xml:space="preserve">
+    <value>Skip to main content</value>
+  </data>
+  <data name="Layout.Main.02" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="Layout.Main.03" xml:space="preserve">
+    <value>Archives</value>
+  </data>
+  <data name="Layout.Main.04" xml:space="preserve">
+    <value>Search articles</value>
+  </data>
+  <data name="Layout.Main.05" xml:space="preserve">
+    <value>Admin</value>
+  </data>
+  <data name="Layout.Main.06" xml:space="preserve">
+    <value>Site admin</value>
+  </data>
+  <data name="Public.Archives.01" xml:space="preserve">
+    <value>Cannot load right now</value>
+  </data>
+  <data name="Public.Archives.02" xml:space="preserve">
+    <value>Back to home</value>
+  </data>
+  <data name="Public.Archives.03" xml:space="preserve">
+    <value>Revisit by time</value>
+  </data>
+  <data name="Public.Archives.04" xml:space="preserve">
+    <value>Article archives</value>
+  </data>
+  <data name="Public.Archives.05" xml:space="preserve">
+    <value>Every public article, grouped by publish month.</value>
+  </data>
+  <data name="Public.Archives.06" xml:space="preserve">
+    <value>Nothing to archive yet</value>
+  </data>
+  <data name="Public.Archives.07" xml:space="preserve">
+    <value>Once the first public article is published, it will show up here.</value>
+  </data>
+  <data name="Public.Archives.08" xml:space="preserve">
+    <value>All months</value>
+  </data>
+  <data name="Public.Archives.09" xml:space="preserve">
+    <value>Public articles published in this month.</value>
+  </data>
+  <data name="Public.Archives.10" xml:space="preserve">
+    <value>Loading articles…</value>
+  </data>
+  <data name="Public.Archives.11" xml:space="preserve">
+    <value>No articles this month</value>
+  </data>
+  <data name="Public.Archives.12" xml:space="preserve">
+    <value>Try another month, or</value>
+  </data>
+  <data name="Public.Archives.13" xml:space="preserve">
+    <value>view all months</value>
+  </data>
+  <data name="Public.Archives.14" xml:space="preserve">
+    <value>Read full article</value>
+  </data>
+  <data name="Public.Archives.15" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Public.Archives.16" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Public.Author.BackHome" xml:space="preserve">
+    <value>Back to home</value>
+  </data>
+  <data name="Public.Author.Empty" xml:space="preserve">
+    <value>This author has no public articles yet.</value>
+  </data>
+  <data name="Public.Author.Eyebrow" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="Public.Author.Intro" xml:space="preserve">
+    <value>Public articles by this author, newest first.</value>
+  </data>
+  <data name="Public.Author.LoadFailed" xml:space="preserve">
+    <value>Cannot load right now</value>
+  </data>
+  <data name="Public.Author.Loading" xml:space="preserve">
+    <value>Loading articles…</value>
+  </data>
+  <data name="Public.Author.PageTitle" xml:space="preserve">
+    <value>Author: </value>
+  </data>
+  <data name="Public.Author.PageTitleSuffix" xml:space="preserve">
+    <value> · Articles</value>
+  </data>
+  <data name="Public.Author.Pagination" xml:space="preserve">
+    <value>Author article pages</value>
+  </data>
+  <data name="Public.Author.Read" xml:space="preserve">
+    <value>Read full article</value>
+  </data>
+  <data name="Public.ContentDetail.01" xml:space="preserve">
+    <value>Cannot load right now</value>
+  </data>
+  <data name="Public.ContentDetail.02" xml:space="preserve">
+    <value>Back to home</value>
+  </data>
+  <data name="Public.ContentDetail.03" xml:space="preserve">
+    <value>← Back to home</value>
+  </data>
+  <data name="Public.ContentDetail.04" xml:space="preserve">
+    <value>This content is password protected</value>
+  </data>
+  <data name="Public.ContentDetail.05" xml:space="preserve">
+    <value>Enter the password provided by the administrator to read it; a changed password requires unlocking again.</value>
+  </data>
+  <data name="Public.ContentDetail.06" xml:space="preserve">
+    <value>Content password</value>
+  </data>
+  <data name="Public.ContentDetail.07" xml:space="preserve">
+    <value>Unlock content</value>
+  </data>
+  <data name="Public.ContentDetail.08" xml:space="preserve">
+    <value>Related articles</value>
+  </data>
+  <data name="Public.ContentDetail.09" xml:space="preserve">
+    <value>Loading content…</value>
+  </data>
+  <data name="Public.Error.01" xml:space="preserve">
+    <value>Request could not be completed</value>
+  </data>
+  <data name="Public.Error.02" xml:space="preserve">
+    <value>Try again later</value>
+  </data>
+  <data name="Public.Error.03" xml:space="preserve">
+    <value>Something went a little wrong.</value>
+  </data>
+  <data name="Public.Error.04" xml:space="preserve">
+    <value>The request could not be completed right now. Please try again later.</value>
+  </data>
+  <data name="Public.Error.05" xml:space="preserve">
+    <value>If you were editing, your unsaved changes may not have been kept.</value>
+  </data>
+  <data name="Public.Error.06" xml:space="preserve">
+    <value>Back to home</value>
+  </data>
+  <data name="Public.Home.01" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="Public.Home.02" xml:space="preserve">
+    <value>Want to see every article?</value>
+  </data>
+  <data name="Public.Home.03" xml:space="preserve">
+    <value>Browse all articles →</value>
+  </data>
+  <data name="Public.NextPage" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Public.NotFound.01" xml:space="preserve">
+    <value>Content not found</value>
+  </data>
+  <data name="Public.NotFound.02" xml:space="preserve">
+    <value>This page is temporarily away.</value>
+  </data>
+  <data name="Public.NotFound.03" xml:space="preserve">
+    <value>The address may have changed, or the content is not public yet.</value>
+  </data>
+  <data name="Public.NotFound.04" xml:space="preserve">
+    <value>Head back home and read another story.</value>
+  </data>
+  <data name="Public.NotFound.05" xml:space="preserve">
+    <value>Back to home</value>
+  </data>
+  <data name="Public.PageOf" xml:space="preserve">
+    <value>Page </value>
+  </data>
+  <data name="Public.PageOfSeparator" xml:space="preserve">
+    <value> / </value>
+  </data>
+  <data name="Public.PageOfSuffix" xml:space="preserve">
+    <value />
+  </data>
+  <data name="Public.PostList.01" xml:space="preserve">
+    <value>Words · Opinions · Everyday</value>
+  </data>
+  <data name="Public.PostList.02" xml:space="preserve">
+    <value>All articles</value>
+  </data>
+  <data name="Public.PostList.03" xml:space="preserve">
+    <value>Clear filters and show all articles</value>
+  </data>
+  <data name="Public.PostList.04" xml:space="preserve">
+    <value>Subscribe to the feed for this filter</value>
+  </data>
+  <data name="Public.PostList.05" xml:space="preserve">
+    <value>Reload</value>
+  </data>
+  <data name="Public.PostList.06" xml:space="preserve">
+    <value>Loading articles…</value>
+  </data>
+  <data name="Public.PostList.07" xml:space="preserve">
+    <value>Try another category or tag, or go back to all articles.</value>
+  </data>
+  <data name="Public.PostList.08" xml:space="preserve">
+    <value>Browse all articles →</value>
+  </data>
+  <data name="Public.PostList.09" xml:space="preserve">
+    <value>No public articles yet. If you are the site administrator, sign in to create the first one.</value>
+  </data>
+  <data name="Public.PostList.10" xml:space="preserve">
+    <value>Start managing content</value>
+  </data>
+  <data name="Public.PostList.11" xml:space="preserve">
+    <value>Create a draft → add categories and images → publish, and the article appears here.</value>
+  </data>
+  <data name="Public.PostList.12" xml:space="preserve">
+    <value>Pinned</value>
+  </data>
+  <data name="Public.PostList.13" xml:space="preserve">
+    <value>Read full article</value>
+  </data>
+  <data name="Public.PostList.14" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Public.PostList.15" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Public.Preview.01" xml:space="preserve">
+    <value>Cannot load right now</value>
+  </data>
+  <data name="Public.Preview.02" xml:space="preserve">
+    <value>Back to home</value>
+  </data>
+  <data name="Public.Preview.03" xml:space="preserve">
+    <value>Draft preview</value>
+  </data>
+  <data name="Public.Preview.04" xml:space="preserve">
+    <value>This content is not public yet; only the holder of the link can read it, and the link can be revoked in the editor.</value>
+  </data>
+  <data name="Public.Preview.05" xml:space="preserve">
+    <value>Loading preview…</value>
+  </data>
+  <data name="Public.PreviousPage" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Public.Search.01" xml:space="preserve">
+    <value>Semantic search</value>
+  </data>
+  <data name="Public.Search.02" xml:space="preserve">
+    <value>Find articles by meaning</value>
+  </data>
+  <data name="Public.Search.03" xml:space="preserve">
+    <value>Describe the topic you are after and search published, indexed articles.</value>
+  </data>
+  <data name="Public.Search.04" xml:space="preserve">
+    <value>Search text</value>
+  </data>
+  <data name="Public.Search.05" xml:space="preserve">
+    <value>Search articles</value>
+  </data>
+  <data name="Public.Search.06" xml:space="preserve">
+    <value>Semantic search is unavailable, so keyword matching is used instead; exact terms still match.</value>
+  </data>
+  <data name="Public.Search.07" xml:space="preserve">
+    <value>What are you looking for?</value>
+  </data>
+  <data name="Public.Search.08" xml:space="preserve">
+    <value>Type a topic or question to start searching, for example “how to organise writing ideas”.</value>
+  </data>
+  <data name="Public.Search.09" xml:space="preserve">
+    <value>No articles found</value>
+  </data>
+  <data name="Public.Search.10" xml:space="preserve">
+    <value>Try different wording; newly published articles appear after indexing completes.</value>
+  </data>
+  <data name="Public.Search.11" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Public.Search.12" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Account.ForgotPassword.EmailInvalid" xml:space="preserve">
+    <value>The email address format is invalid.</value>
+  </data>
+  <data name="Account.ForgotPassword.EmailRequired" xml:space="preserve">
+    <value>Enter your email address.</value>
+  </data>
+  <data name="Account.ForgotPassword.EmailTooLong" xml:space="preserve">
+    <value>The email address is too long.</value>
+  </data>
+  <data name="Account.Login.Brand" xml:space="preserve">
+    <value>ORIGAMI · Content studio</value>
+  </data>
+  <data name="Account.Login.Code" xml:space="preserve">
+    <value>Authenticator code</value>
+  </data>
+  <data name="Account.Login.CodeFailure" xml:space="preserve">
+    <value>The authenticator code is incorrect or has expired. Try again.</value>
+  </data>
+  <data name="Account.Login.CodeHelp" xml:space="preserve">
+    <value>Your account and password have been verified. Enter the 6-digit code shown in your authenticator app.</value>
+  </data>
+  <data name="Account.Login.CodeLength" xml:space="preserve">
+    <value>The verification code must be 6 digits.</value>
+  </data>
+  <data name="Account.Login.CodeRequired" xml:space="preserve">
+    <value>Enter the authenticator code.</value>
+  </data>
+  <data name="Account.Login.ForgotPassword" xml:space="preserve">
+    <value>Forgot your password? Get a reset link by email</value>
+  </data>
+  <data name="Account.Login.InitializeHelp" xml:space="preserve">
+    <value>Only the initial network administrator is set up using this server command: {0}.</value>
+  </data>
+  <data name="Account.Login.Introduction" xml:space="preserve">
+    <value>Sign in to write posts, create pages, manage images, and use the site's AI assistant.</value>
+  </data>
+  <data name="Account.Login.Locked" xml:space="preserve">
+    <value>Your account is temporarily locked. Try again after the lockout period.</value>
+  </data>
+  <data name="Account.Login.LoginFailure" xml:space="preserve">
+    <value>Unable to sign in. Check your account and password, or try again later.</value>
+  </data>
+  <data name="Account.Login.PageTitle" xml:space="preserve">
+    <value>Administrator sign-in</value>
+  </data>
+  <data name="Account.Login.Password" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Account.Login.PasswordRequired" xml:space="preserve">
+    <value>Enter your password.</value>
+  </data>
+  <data name="Account.Login.PasswordTooLong" xml:space="preserve">
+    <value>The password is too long.</value>
+  </data>
+  <data name="Account.Login.RegistrationHelp" xml:space="preserve">
+    <value>Public registration is not available. Contact an administrator for an account and site membership. Sign in separately on each domain; cross-domain single sign-on is not supported.</value>
+  </data>
+  <data name="Account.Login.Remember" xml:space="preserve">
+    <value>Remember me (stay signed in on this browser)</value>
+  </data>
+  <data name="Account.Login.ResetHelp" xml:space="preserve">
+    <value>{0} only resets the network administrator's password and disables their two-step verification. Other users are not changed. Enter the password interactively in the terminal, never as a command-line argument.</value>
+  </data>
+  <data name="Account.Login.Restart" xml:space="preserve">
+    <value>Sign in again with your account and password</value>
+  </data>
+  <data name="Account.Login.SetupTitle" xml:space="preserve">
+    <value>First time here, or forgot your password?</value>
+  </data>
+  <data name="Account.Login.Submit" xml:space="preserve">
+    <value>Sign in</value>
+  </data>
+  <data name="Account.Login.Throttled" xml:space="preserve">
+    <value>Too many attempts. Try again later.</value>
+  </data>
+  <data name="Account.Login.Title" xml:space="preserve">
+    <value>Administrator sign-in</value>
+  </data>
+  <data name="Account.Login.UserName" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="Account.Login.UserNameRequired" xml:space="preserve">
+    <value>Enter your account name.</value>
+  </data>
+  <data name="Account.Login.UserNameTooLong" xml:space="preserve">
+    <value>The account name is too long.</value>
+  </data>
+  <data name="Account.Login.Verify" xml:space="preserve">
+    <value>Verify and sign in</value>
+  </data>
+  <data name="Account.LogoutForm.Submit" xml:space="preserve">
+    <value>Sign out</value>
+  </data>
+  <data name="Account.ResetPassword.ConfirmPasswordRequired" xml:space="preserve">
+    <value>Enter the new password again.</value>
+  </data>
+  <data name="Account.ResetPassword.EmailInvalid" xml:space="preserve">
+    <value>The email address format is invalid.</value>
+  </data>
+  <data name="Account.ResetPassword.EmailRequired" xml:space="preserve">
+    <value>Enter your email address.</value>
+  </data>
+  <data name="Account.ResetPassword.EmailTooLong" xml:space="preserve">
+    <value>The email address is too long.</value>
+  </data>
+  <data name="Account.ResetPassword.InvalidLink" xml:space="preserve">
+    <value>The reset link is invalid or has expired. Request a new one.</value>
+  </data>
+  <data name="Account.ResetPassword.InvalidPassword" xml:space="preserve">
+    <value>The new password does not meet the requirements. Request a new reset link.</value>
+  </data>
+  <data name="Account.ResetPassword.PasswordMismatch" xml:space="preserve">
+    <value>The new passwords do not match.</value>
+  </data>
+  <data name="Account.ResetPassword.PasswordRequired" xml:space="preserve">
+    <value>Enter a new password.</value>
+  </data>
+  <data name="Account.ResetPassword.PasswordTooLong" xml:space="preserve">
+    <value>The password is too long.</value>
+  </data>
+  <data name="Account.ResetPassword.ResetFailed" xml:space="preserve">
+    <value>The reset link is invalid or has expired, or the new password does not meet the requirements. Request a new reset link.</value>
+  </data>
+  <data name="Admin.Credentials.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Credentials.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Credentials.ConfirmRevoke" xml:space="preserve">
+    <value>Confirm revocation</value>
+  </data>
+  <data name="Admin.Credentials.Copied" xml:space="preserve">
+    <value>Copied to the clipboard. Hide and clear the credential after saving it.</value>
+  </data>
+  <data name="Admin.Credentials.Copy" xml:space="preserve">
+    <value>Copy credential</value>
+  </data>
+  <data name="Admin.Credentials.CopyFailed" xml:space="preserve">
+    <value>Cannot access the clipboard. Select and copy the credential manually.</value>
+  </data>
+  <data name="Admin.Credentials.Create" xml:space="preserve">
+    <value>Create credential</value>
+  </data>
+  <data name="Admin.Credentials.CreatedAt" xml:space="preserve">
+    <value>Created (UTC)</value>
+  </data>
+  <data name="Admin.Credentials.ExpiredState" xml:space="preserve">
+    <value>Expired</value>
+  </data>
+  <data name="Admin.Credentials.ExpiresAt" xml:space="preserve">
+    <value>Expires (UTC)</value>
+  </data>
+  <data name="Admin.Credentials.Eyebrow" xml:space="preserve">
+    <value>Personal external access</value>
+  </data>
+  <data name="Admin.Credentials.Hide" xml:space="preserve">
+    <value>Hide and clear</value>
+  </data>
+  <data name="Admin.Credentials.Introduction" xml:space="preserve">
+    <value>Credentials represent only the signed-in user and this site, with permissions limited to the holder's current role. They are not the website's BFF service credentials.</value>
+  </data>
+  <data name="Admin.Credentials.InvalidDays" xml:space="preserve">
+    <value>The validity period must be 1–365 days.</value>
+  </data>
+  <data name="Admin.Credentials.Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Admin.Credentials.NewCredential" xml:space="preserve">
+    <value>New credential</value>
+  </data>
+  <data name="Admin.Credentials.PageTitle" xml:space="preserve">
+    <value>API credentials · Content management</value>
+  </data>
+  <data name="Admin.Credentials.Purpose" xml:space="preserve">
+    <value>Purpose name</value>
+  </data>
+  <data name="Admin.Credentials.ReadScope" xml:space="preserve">
+    <value>Read (read-only)</value>
+  </data>
+  <data name="Admin.Credentials.Reload" xml:space="preserve">
+    <value>Reload credentials</value>
+  </data>
+  <data name="Admin.Credentials.RevalidationHelp" xml:space="preserve">
+    <value>Password resets, account disabling, or membership changes may also invalidate credentials. The server revalidates permissions on every request.</value>
+  </data>
+  <data name="Admin.Credentials.Revoke" xml:space="preserve">
+    <value>Revoke</value>
+  </data>
+  <data name="Admin.Credentials.RevokeHelp" xml:space="preserve">
+    <value>Applications using this credential will immediately lose access. This credential cannot be restored.</value>
+  </data>
+  <data name="Admin.Credentials.RevokeTitle" xml:space="preserve">
+    <value>Revoke “{0}”?</value>
+  </data>
+  <data name="Admin.Credentials.Revoked" xml:space="preserve">
+    <value>Credential revoked.</value>
+  </data>
+  <data name="Admin.Credentials.RevokedState" xml:space="preserve">
+    <value>Revoked</value>
+  </data>
+  <data name="Admin.Credentials.SaveSecretFirst" xml:space="preserve">
+    <value>Save and hide the new credential currently displayed before continuing.</value>
+  </data>
+  <data name="Admin.Credentials.Scope" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+  <data name="Admin.Credentials.SecretExpiry" xml:space="preserve">
+    <value>Expires: {0}. You cannot retrieve it again after hiding it, leaving, or reloading the page. If lost, revoke it and create a new credential.</value>
+  </data>
+  <data name="Admin.Credentials.SecretHelp" xml:space="preserve">
+    <value>The secret is not saved in browser storage. Do not paste it into source code, URLs, logs, or conversations. Copying uses your system clipboard.</value>
+  </data>
+  <data name="Admin.Credentials.SecretTitle" xml:space="preserve">
+    <value>Save now: this secret is shown only once</value>
+  </data>
+  <data name="Admin.Credentials.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.Credentials.TableCaption" xml:space="preserve">
+    <value>My credentials for this site</value>
+  </data>
+  <data name="Admin.Credentials.Title" xml:space="preserve">
+    <value>API credentials</value>
+  </data>
+  <data name="Admin.Credentials.UnexpiredState" xml:space="preserve">
+    <value>Not expired</value>
+  </data>
+  <data name="Admin.Credentials.ValidDays" xml:space="preserve">
+    <value>Valid for (days)</value>
+  </data>
+  <data name="Admin.Credentials.ValidDaysHelp" xml:space="preserve">
+    <value>Defaults to 90 days, with a maximum of 365 days. Credentials expire automatically.</value>
+  </data>
+  <data name="Admin.Credentials.WriteDenied" xml:space="preserve">
+    <value>Read-only members cannot create write credentials.</value>
+  </data>
+  <data name="Admin.Credentials.WriteScope" xml:space="preserve">
+    <value>Write (read and write content)</value>
+  </data>
+  <data name="Admin.Members.Account" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="Admin.Members.AccountStatus" xml:space="preserve">
+    <value>Account status</value>
+  </data>
+  <data name="Admin.Members.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Members.AddTitle" xml:space="preserve">
+    <value>Add an existing account</value>
+  </data>
+  <data name="Admin.Members.AdministrationDenied" xml:space="preserve">
+    <value>Only this site's administrators can manage members. Your sign-in is still valid.</value>
+  </data>
+  <data name="Admin.Members.AdministratorHelp" xml:space="preserve">
+    <value>The last enabled site administrator cannot be removed or downgraded. If a version conflict occurs, reload and review the changes before submitting again.</value>
+  </data>
+  <data name="Admin.Members.AdministratorRole" xml:space="preserve">
+    <value>Site administrator</value>
+  </data>
+  <data name="Admin.Members.AuthorRole" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="Admin.Members.Byline" xml:space="preserve">
+    <value>Byline</value>
+  </data>
+  <data name="Admin.Members.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Members.CancelOrAdd" xml:space="preserve">
+    <value>Cancel / Add new</value>
+  </data>
+  <data name="Admin.Members.ConfirmRemove" xml:space="preserve">
+    <value>Confirm removal</value>
+  </data>
+  <data name="Admin.Members.Disabled" xml:space="preserve">
+    <value>Disabled</value>
+  </data>
+  <data name="Admin.Members.DisplayName" xml:space="preserve">
+    <value>Display name (optional)</value>
+  </data>
+  <data name="Admin.Members.DisplayNameHelp" xml:space="preserve">
+    <value>Posts created by this member use this name in the byline. Leave it blank to use the author name in site settings. Renaming also updates the byline on their existing posts.</value>
+  </data>
+  <data name="Admin.Members.DisplayNamePlaceholder" xml:space="preserve">
+    <value>For example: Wenhao Shan</value>
+  </data>
+  <data name="Admin.Members.EditRole" xml:space="preserve">
+    <value>Change role</value>
+  </data>
+  <data name="Admin.Members.EditTitle" xml:space="preserve">
+    <value>Change member role</value>
+  </data>
+  <data name="Admin.Members.EditorRole" xml:space="preserve">
+    <value>Editor</value>
+  </data>
+  <data name="Admin.Members.Enabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Admin.Members.Eyebrow" xml:space="preserve">
+    <value>Site permissions</value>
+  </data>
+  <data name="Admin.Members.Introduction" xml:space="preserve">
+    <value>Site administrators can add existing accounts and assign roles. Removing a member from this site does not delete their network account.</value>
+  </data>
+  <data name="Admin.Members.LastAdministrator" xml:space="preserve">
+    <value>The last enabled site administrator cannot be downgraded. Assign another administrator first.</value>
+  </data>
+  <data name="Admin.Members.PageTitle" xml:space="preserve">
+    <value>Site members · Content management</value>
+  </data>
+  <data name="Admin.Members.ReaderRole" xml:space="preserve">
+    <value>Read-only member</value>
+  </data>
+  <data name="Admin.Members.Reload" xml:space="preserve">
+    <value>Reload members</value>
+  </data>
+  <data name="Admin.Members.Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Admin.Members.RemoveHelp" xml:space="preserve">
+    <value>This user will immediately lose membership permissions on this site. Other sites are not affected.</value>
+  </data>
+  <data name="Admin.Members.RemoveTitle" xml:space="preserve">
+    <value>Remove “{0}” from this site?</value>
+  </data>
+  <data name="Admin.Members.Removed" xml:space="preserve">
+    <value>Member removed from this site.</value>
+  </data>
+  <data name="Admin.Members.Role" xml:space="preserve">
+    <value>Role</value>
+  </data>
+  <data name="Admin.Members.RolesHelp" xml:space="preserve">
+    <value>Read-only members can only read. Authors can write and submit their own content for review. Editors can manage and publish all content. Site administrators can also manage settings and members. Downgrading a site role does not affect network administrator permissions.</value>
+  </data>
+  <data name="Admin.Members.Save" xml:space="preserve">
+    <value>Save member</value>
+  </data>
+  <data name="Admin.Members.Saved" xml:space="preserve">
+    <value>Member role updated.</value>
+  </data>
+  <data name="Admin.Members.SiteRole" xml:space="preserve">
+    <value>Role on this site</value>
+  </data>
+  <data name="Admin.Members.TableCaption" xml:space="preserve">
+    <value>Members of this site</value>
+  </data>
+  <data name="Admin.Members.Title" xml:space="preserve">
+    <value>Site members</value>
+  </data>
+  <data name="Admin.Members.UnknownRole" xml:space="preserve">
+    <value>Unknown role</value>
+  </data>
+  <data name="Admin.Members.UserName" xml:space="preserve">
+    <value>Username</value>
+  </data>
+  <data name="Admin.Security.BeginSetup" xml:space="preserve">
+    <value>Start setup</value>
+  </data>
+  <data name="Admin.Security.Code" xml:space="preserve">
+    <value>Authenticator code</value>
+  </data>
+  <data name="Admin.Security.CodeLength" xml:space="preserve">
+    <value>The verification code must be 6 digits.</value>
+  </data>
+  <data name="Admin.Security.CodeRequired" xml:space="preserve">
+    <value>Enter the verification code.</value>
+  </data>
+  <data name="Admin.Security.ConfirmSetup" xml:space="preserve">
+    <value>Confirm and enable</value>
+  </data>
+  <data name="Admin.Security.CurrentPassword" xml:space="preserve">
+    <value>Current password</value>
+  </data>
+  <data name="Admin.Security.Disable" xml:space="preserve">
+    <value>Disable two-step verification</value>
+  </data>
+  <data name="Admin.Security.Disabled" xml:space="preserve">
+    <value>Two-step verification disabled.</value>
+  </data>
+  <data name="Admin.Security.DisabledHelp" xml:space="preserve">
+    <value>Not enabled. Works with apps such as Google Authenticator and Microsoft Authenticator.</value>
+  </data>
+  <data name="Admin.Security.Enabled" xml:space="preserve">
+    <value>Two-step verification enabled. An authenticator code will be required the next time you sign in.</value>
+  </data>
+  <data name="Admin.Security.EnabledHelp" xml:space="preserve">
+    <value>Currently enabled. Signing in requires an authenticator code in addition to your password.</value>
+  </data>
+  <data name="Admin.Security.Eyebrow" xml:space="preserve">
+    <value>Your account's third lock</value>
+  </data>
+  <data name="Admin.Security.Introduction" xml:space="preserve">
+    <value>Add two-step verification (TOTP) to your signed-in account without affecting other users.</value>
+  </data>
+  <data name="Admin.Security.OtpAuthLink" xml:space="preserve">
+    <value>otpauth link</value>
+  </data>
+  <data name="Admin.Security.PageTitle" xml:space="preserve">
+    <value>Security settings · Content management</value>
+  </data>
+  <data name="Admin.Security.PasswordRequired" xml:space="preserve">
+    <value>Enter your password.</value>
+  </data>
+  <data name="Admin.Security.PasswordTooLong" xml:space="preserve">
+    <value>The password is too long.</value>
+  </data>
+  <data name="Admin.Security.PendingHelp" xml:space="preserve">
+    <value>A setup key is awaiting confirmation. Starting again will replace the key.</value>
+  </data>
+  <data name="Admin.Security.RecoveryHelp" xml:space="preserve">
+    <value>Enabling verification invalidates existing sign-ins. Keep your authenticator safe. admin-reset only recovers the network administrator, not regular accounts.</value>
+  </data>
+  <data name="Admin.Security.RegenerateSecret" xml:space="preserve">
+    <value>Generate a new key</value>
+  </data>
+  <data name="Admin.Security.Secret" xml:space="preserve">
+    <value>Manual setup key (Base32)</value>
+  </data>
+  <data name="Admin.Security.SecretHelp" xml:space="preserve">
+    <value>Add a manual entry in your authenticator app and paste the key, or paste the URL below into a supported app.</value>
+  </data>
+  <data name="Admin.Security.SetupCode" xml:space="preserve">
+    <value>Enter the 6-digit code shown in the app</value>
+  </data>
+  <data name="Admin.Security.Title" xml:space="preserve">
+    <value>Security settings</value>
+  </data>
+  <data name="Admin.Security.TotpTitle" xml:space="preserve">
+    <value>Two-step verification (TOTP)</value>
+  </data>
+  <data name="Admin.Sites.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Sites.Active" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Admin.Sites.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Sites.Create" xml:space="preserve">
+    <value>Create site</value>
+  </data>
+  <data name="Admin.Sites.CreateDenied" xml:space="preserve">
+    <value>Only network administrators can create sites.</value>
+  </data>
+  <data name="Admin.Sites.Created" xml:space="preserve">
+    <value>Site created. DNS, TLS, and proxy configuration must still be handled separately by an administrator.</value>
+  </data>
+  <data name="Admin.Sites.CurrentAuthority" xml:space="preserve">
+    <value>Current address: {0}</value>
+  </data>
+  <data name="Admin.Sites.CurrentSite" xml:space="preserve">
+    <value>(Current site)</value>
+  </data>
+  <data name="Admin.Sites.DomainNotice" xml:space="preserve">
+    <value>Registering a domain does not configure DNS, TLS, or a reverse proxy automatically. The HTTPS links below do not mean the sites are deployed and available. Switching sites loads a new page, and you must sign in separately on each domain.</value>
+  </data>
+  <data name="Admin.Sites.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.Sites.EditTitle" xml:space="preserve">
+    <value>Edit site: {0}</value>
+  </data>
+  <data name="Admin.Sites.EnableSite" xml:space="preserve">
+    <value>Enable site</value>
+  </data>
+  <data name="Admin.Sites.Eyebrow" xml:space="preserve">
+    <value>Multisite workspace</value>
+  </data>
+  <data name="Admin.Sites.HostHelp" xml:space="preserve">
+    <value>Do not include https://, a path, or a port. Wildcards are not accepted.</value>
+  </data>
+  <data name="Admin.Sites.HostName" xml:space="preserve">
+    <value>Full host name</value>
+  </data>
+  <data name="Admin.Sites.HostNotSet" xml:space="preserve">
+    <value>Not configured (legacy site compatibility mode)</value>
+  </data>
+  <data name="Admin.Sites.Inactive" xml:space="preserve">
+    <value>Disabled</value>
+  </data>
+  <data name="Admin.Sites.Introduction" xml:space="preserve">
+    <value>Only sites you can access are listed. Only network administrators can create sites, change domains, or enable and disable sites.</value>
+  </data>
+  <data name="Admin.Sites.Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Admin.Sites.NameAndSlug" xml:space="preserve">
+    <value>Name / Slug</value>
+  </data>
+  <data name="Admin.Sites.OpenSite" xml:space="preserve">
+    <value>Open site (HTTPS)</value>
+  </data>
+  <data name="Admin.Sites.PageTitle" xml:space="preserve">
+    <value>Sites · Content management</value>
+  </data>
+  <data name="Admin.Sites.RegisteredHost" xml:space="preserve">
+    <value>Registered host</value>
+  </data>
+  <data name="Admin.Sites.Reload" xml:space="preserve">
+    <value>Reload sites</value>
+  </data>
+  <data name="Admin.Sites.Save" xml:space="preserve">
+    <value>Save site</value>
+  </data>
+  <data name="Admin.Sites.Slug" xml:space="preserve">
+    <value>Permanent slug</value>
+  </data>
+  <data name="Admin.Sites.SlugHelp" xml:space="preserve">
+    <value>Use letters, numbers, or hyphens. This cannot be changed after creation.</value>
+  </data>
+  <data name="Admin.Sites.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.Sites.TableCaption" xml:space="preserve">
+    <value>Accessible sites</value>
+  </data>
+  <data name="Admin.Sites.Title" xml:space="preserve">
+    <value>Sites</value>
+  </data>
+  <data name="Admin.Sites.UpdateDenied" xml:space="preserve">
+    <value>Only network administrators can update sites.</value>
+  </data>
+  <data name="Admin.Sites.UpdateHelp" xml:space="preserve">
+    <value>The default site cannot be disabled. Changing this site's host or disabling the site may make the current address unavailable. Check the new host configuration first.</value>
+  </data>
+  <data name="Admin.Sites.Updated" xml:space="preserve">
+    <value>Site updated. The current circuit is still bound to the original site. Open the registered host with a full page navigation.</value>
+  </data>
+  <data name="Admin.Users.Account" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="Admin.Users.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Users.AdministrationDenied" xml:space="preserve">
+    <value>Only network administrators can manage users. Your sign-in is still valid.</value>
+  </data>
+  <data name="Admin.Users.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Users.ConfirmChange" xml:space="preserve">
+    <value>Confirm change</value>
+  </data>
+  <data name="Admin.Users.Create" xml:space="preserve">
+    <value>Create user</value>
+  </data>
+  <data name="Admin.Users.Created" xml:space="preserve">
+    <value>Account created. Assign a role in member management on the target site.</value>
+  </data>
+  <data name="Admin.Users.DisableAccount" xml:space="preserve">
+    <value>Disable account</value>
+  </data>
+  <data name="Admin.Users.DisableTitle" xml:space="preserve">
+    <value>Disable “{0}”?</value>
+  </data>
+  <data name="Admin.Users.Disabled" xml:space="preserve">
+    <value>Disabled</value>
+  </data>
+  <data name="Admin.Users.Email" xml:space="preserve">
+    <value>Email (optional)</value>
+  </data>
+  <data name="Admin.Users.EmailHelp" xml:space="preserve">
+    <value>An email address allows this account to reset its password by email and receive review notifications.</value>
+  </data>
+  <data name="Admin.Users.Enabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Admin.Users.Eyebrow" xml:space="preserve">
+    <value>Network account management</value>
+  </data>
+  <data name="Admin.Users.InitialPassword" xml:space="preserve">
+    <value>Initial password</value>
+  </data>
+  <data name="Admin.Users.Introduction" xml:space="preserve">
+    <value>Only network administrators can create or disable accounts. Public registration is not available. New accounts must be added as members on each site separately.</value>
+  </data>
+  <data name="Admin.Users.NetworkAdministrator" xml:space="preserve">
+    <value>(Network administrator)</value>
+  </data>
+  <data name="Admin.Users.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.Users.PageTitle" xml:space="preserve">
+    <value>Users · Content management</value>
+  </data>
+  <data name="Admin.Users.Pagination" xml:space="preserve">
+    <value>User pagination</value>
+  </data>
+  <data name="Admin.Users.PasswordHelp" xml:space="preserve">
+    <value>Use 8–1024 characters, including uppercase and lowercase letters, numbers, symbols, and at least four distinct characters. The account and password fields are cleared after submission, whether successful or not. Deliver credentials through a secure channel.</value>
+  </data>
+  <data name="Admin.Users.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.Users.Reenable" xml:space="preserve">
+    <value>Re-enable</value>
+  </data>
+  <data name="Admin.Users.ReenableTitle" xml:space="preserve">
+    <value>Re-enable “{0}”?</value>
+  </data>
+  <data name="Admin.Users.Reload" xml:space="preserve">
+    <value>Reload users</value>
+  </data>
+  <data name="Admin.Users.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Admin.Users.SearchAccount" xml:space="preserve">
+    <value>Search accounts</value>
+  </data>
+  <data name="Admin.Users.StateChangeHelp" xml:space="preserve">
+    <value>This change revokes the account's existing sign-ins and API credentials. Network administrators and the last enabled administrator of any site cannot be disabled.</value>
+  </data>
+  <data name="Admin.Users.StateChanged" xml:space="preserve">
+    <value>Account status updated. Previous sign-ins and API credentials are now invalid.</value>
+  </data>
+  <data name="Admin.Users.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.Users.TableCaption" xml:space="preserve">
+    <value>User list ({0} total)</value>
+  </data>
+  <data name="Admin.Users.Title" xml:space="preserve">
+    <value>Users</value>
+  </data>
+  <data name="Admin.Users.UserName" xml:space="preserve">
+    <value>Username</value>
+  </data>
+  <data name="Common.AccessDenied" xml:space="preserve">
+    <value>You do not have permission for this operation on this site. Contact the site administrator.</value>
+  </data>
+  <data name="Common.ApiFailed" xml:space="preserve">
+    <value>The API request failed ({0}).</value>
+  </data>
+  <data name="Common.CredentialsExpired" xml:space="preserve">
+    <value>Your sign-in or the website service credentials are invalid. Sign in again; if this continues, contact the administrator.</value>
+  </data>
+  <data name="Common.Language" xml:space="preserve">
+    <value>Interface language</value>
+  </data>
+  <data name="Common.LoginExpired" xml:space="preserve">
+    <value>Your sign-in has expired. Your unsaved input is still on this page; copy it before leaving, then sign in again.</value>
+  </data>
+  <data name="Common.OperationFailed" xml:space="preserve">
+    <value>The operation did not finish, and saving cannot be confirmed. Keep a copy of your input, reload to check the latest data, then try again.</value>
+  </data>
+  <data name="Common.Processing" xml:space="preserve">
+    <value>Processing, please wait…</value>
+  </data>
+  <data name="Common.ReadOnly" xml:space="preserve">
+    <value>You have read-only access to this site and cannot create, edit, or publish content.</value>
+  </data>
+  <data name="Common.Reload" xml:space="preserve">
+    <value>Reload</value>
+  </data>
+  <data name="Common.SignInAgain" xml:space="preserve">
+    <value>Sign in again</value>
+  </data>
+  <data name="Common.SiteMissing" xml:space="preserve">
+    <value>This site does not exist or is disabled.</value>
+  </data>
+  <data name="Common.SiteUnavailable" xml:space="preserve">
+    <value>The site service is temporarily unavailable. Please try again later.</value>
+  </data>
+  <data name="Layout.Admin.Access" xml:space="preserve">
+    <value>Site administration · Access varies by site</value>
+  </data>
+  <data name="Layout.Admin.Assistant" xml:space="preserve">
+    <value>AI assistant</value>
+  </data>
+  <data name="Layout.Admin.Comments" xml:space="preserve">
+    <value>Comments</value>
+  </data>
+  <data name="Layout.Admin.ContentManagement" xml:space="preserve">
+    <value>Content management</value>
+  </data>
+  <data name="Layout.Admin.Credentials" xml:space="preserve">
+    <value>My API credentials</value>
+  </data>
+  <data name="Layout.Admin.DismissError" xml:space="preserve">
+    <value>Dismiss error</value>
+  </data>
+  <data name="Layout.Admin.Error" xml:space="preserve">
+    <value>An interface error occurred. Unsaved changes may be lost; copy your input before reloading.</value>
+  </data>
+  <data name="Layout.Admin.Footer" xml:space="preserve">
+    <value>Focus on content. Start here.</value>
+  </data>
+  <data name="Layout.Admin.Media" xml:space="preserve">
+    <value>Media library</value>
+  </data>
+  <data name="Layout.Admin.Members" xml:space="preserve">
+    <value>Site members</value>
+  </data>
+  <data name="Layout.Admin.Navigation" xml:space="preserve">
+    <value>Admin navigation</value>
+  </data>
+  <data name="Layout.Admin.Pages" xml:space="preserve">
+    <value>Pages</value>
+  </data>
+  <data name="Layout.Admin.Posts" xml:space="preserve">
+    <value>Posts</value>
+  </data>
+  <data name="Layout.Admin.Security" xml:space="preserve">
+    <value>Security settings</value>
+  </data>
+  <data name="Layout.Admin.Settings" xml:space="preserve">
+    <value>Site settings</value>
+  </data>
+  <data name="Layout.Admin.SignOut" xml:space="preserve">
+    <value>Sign out</value>
+  </data>
+  <data name="Layout.Admin.Sites" xml:space="preserve">
+    <value>Sites / Switch site</value>
+  </data>
+  <data name="Layout.Admin.Taxonomies" xml:space="preserve">
+    <value>Categories and tags</value>
+  </data>
+  <data name="Layout.Admin.Users" xml:space="preserve">
+    <value>Users (network administration)</value>
+  </data>
+  <data name="Layout.Admin.ViewSite" xml:space="preserve">
+    <value>View public site ↗</value>
+  </data>
+  <data name="Layout.Admin.Workspace" xml:space="preserve">
+    <value>Workspace</value>
+  </data>
+  <data name="Layout.Main.Navigation" xml:space="preserve">
+    <value>Site navigation</value>
+  </data>
+  <data name="Reconnect.Connecting" xml:space="preserve">
+    <value>Reconnecting to the server…</value>
+  </data>
+  <data name="Reconnect.Countdown" xml:space="preserve">
+    <value>Seconds until the next reconnect attempt:</value>
+  </data>
+  <data name="Reconnect.Failed" xml:space="preserve">
+    <value>Unable to reconnect. Check your network and try again.</value>
+  </data>
+  <data name="Reconnect.Paused" xml:space="preserve">
+    <value>The server has paused this session.</value>
+  </data>
+  <data name="Reconnect.Reload" xml:space="preserve">
+    <value>Reload page (unsaved changes may be lost)</value>
+  </data>
+  <data name="Reconnect.Resume" xml:space="preserve">
+    <value>Resume session</value>
+  </data>
+  <data name="Reconnect.ResumeFailed" xml:space="preserve">
+    <value>Unable to resume this session. Try again or reload the page.</value>
+  </data>
+  <data name="Reconnect.Retry" xml:space="preserve">
+    <value>Reconnect</value>
+  </data>
+  <data name="Reconnect.Title" xml:space="preserve">
+    <value>Connection lost</value>
+  </data>
+  <data name="Reconnect.Warning" xml:space="preserve">
+    <value>Changes that were not saved are still unsaved. Reconnecting does not mean saving succeeded. If the session expires, the page may reload and lose your input. Keep a copy of your text, then check whether it was saved.</value>
+  </data>
+  <data name="Admin.Assistant.AssistantConfiguration" xml:space="preserve">
+    <value>Assistant model configuration</value>
+  </data>
+  <data name="Admin.Assistant.AssistantLabel" xml:space="preserve">
+    <value>Assistant: </value>
+  </data>
+  <data name="Admin.Assistant.AssistantRole" xml:space="preserve">
+    <value>Assistant</value>
+  </data>
+  <data name="Admin.Assistant.ChatHelp" xml:space="preserve">
+    <value>Conversations are kept only on this page and are cleared when you leave or reload. Each reply calls an external model and incurs a cost.</value>
+  </data>
+  <data name="Admin.Assistant.ChatTitle" xml:space="preserve">
+    <value>Content Q&amp;A</value>
+  </data>
+  <data name="Admin.Assistant.ClearChat" xml:space="preserve">
+    <value>Clear conversation</value>
+  </data>
+  <data name="Admin.Assistant.ConfigurationRequired" xml:space="preserve">
+    <value>Complete the embedding and assistant model configurations first.</value>
+  </data>
+  <data name="Admin.Assistant.ConfigurationRequiredHelp" xml:space="preserve">
+    <value>Retrieve the status and complete both embedding and assistant model configurations before using Q&amp;A. The setup instructions above remain available.</value>
+  </data>
+  <data name="Admin.Assistant.ConfigurationSeparator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="Admin.Assistant.Configured" xml:space="preserve">
+    <value>Configuration complete</value>
+  </data>
+  <data name="Admin.Assistant.CreatePost" xml:space="preserve">
+    <value>Create post</value>
+  </data>
+  <data name="Admin.Assistant.DimensionsHelp" xml:space="preserve">
+    <value>The embedding model must output {0}-dimensional vectors. Restart the application after changing environment variables, then refresh the status.</value>
+  </data>
+  <data name="Admin.Assistant.EarliestRetry" xml:space="preserve">
+    <value>Earliest retry time (UTC)</value>
+  </data>
+  <data name="Admin.Assistant.EmbeddingConfiguration" xml:space="preserve">
+    <value>Embedding model configuration</value>
+  </data>
+  <data name="Admin.Assistant.EmbeddingLabel" xml:space="preserve">
+    <value>Embedding: </value>
+  </data>
+  <data name="Admin.Assistant.EmptyChat" xml:space="preserve">
+    <value>No conversation yet. Try asking: Which posts on this site cover a particular topic? What are the key points of a specific post?</value>
+  </data>
+  <data name="Admin.Assistant.EndpointHelp" xml:space="preserve">
+    <value>Use OpenAI-compatible endpoints: embeddings require the full request URL (usually ending in /v1/embeddings); the assistant requires the API base URL (usually ending in /v1), without /chat/completions.</value>
+  </data>
+  <data name="Admin.Assistant.Eyebrow" xml:space="preserve">
+    <value>Ask your own site</value>
+  </data>
+  <data name="Admin.Assistant.IndexedPosts" xml:space="preserve">
+    <value>Indexed posts with no pending jobs</value>
+  </data>
+  <data name="Admin.Assistant.IndexingIncomplete" xml:space="preserve">
+    <value>Some posts have not been fully indexed. Background jobs will process them automatically. Empty bodies have no text to index; add content first.</value>
+  </data>
+  <data name="Admin.Assistant.Introduction" xml:space="preserve">
+    <value>Ask about published posts and pages in natural language. This is read-only content Q&amp;A, not an AI writing tool. It will not create, edit, or publish content.</value>
+  </data>
+  <data name="Admin.Assistant.NoPublishedPosts" xml:space="preserve">
+    <value>No published posts yet. Create and publish a post, then wait for embedding jobs to finish so search and Q&amp;A have content to retrieve.</value>
+  </data>
+  <data name="Admin.Assistant.NoRetries" xml:space="preserve">
+    <value>No retry jobs</value>
+  </data>
+  <data name="Admin.Assistant.NotConfigured" xml:space="preserve">
+    <value>Configuration incomplete</value>
+  </data>
+  <data name="Admin.Assistant.PageTitle" xml:space="preserve">
+    <value>AI assistant · Content management</value>
+  </data>
+  <data name="Admin.Assistant.PendingJobs" xml:space="preserve">
+    <value>Total pending jobs (including retries)</value>
+  </data>
+  <data name="Admin.Assistant.Processing" xml:space="preserve">
+    <value>Processing…</value>
+  </data>
+  <data name="Admin.Assistant.PublishedPosts" xml:space="preserve">
+    <value>Published posts</value>
+  </data>
+  <data name="Admin.Assistant.Question" xml:space="preserve">
+    <value>Your question</value>
+  </data>
+  <data name="Admin.Assistant.QuestionHelp" xml:space="preserve">
+    <value>Up to {0} characters. The assistant can only query published content.</value>
+  </data>
+  <data name="Admin.Assistant.QuestionRequired" xml:space="preserve">
+    <value>Enter a question.</value>
+  </data>
+  <data name="Admin.Assistant.QuestionTooLong" xml:space="preserve">
+    <value>Questions are limited to {0} characters.</value>
+  </data>
+  <data name="Admin.Assistant.RefreshStatus" xml:space="preserve">
+    <value>Refresh status</value>
+  </data>
+  <data name="Admin.Assistant.ReplyUnavailable" xml:space="preserve">
+    <value>The assistant cannot reply right now. Try again later.</value>
+  </data>
+  <data name="Admin.Assistant.RetryJobs" xml:space="preserve">
+    <value>Retry jobs</value>
+  </data>
+  <data name="Admin.Assistant.SecurityNotice" xml:space="preserve">
+    <value>Do not put API keys in posts, conversations, source code, screenshots, or logs. This page does not display or store keys. Questions and retrieved public content may be sent to an external model; do not enter sensitive information.</value>
+  </data>
+  <data name="Admin.Assistant.SetupHelp" xml:space="preserve">
+    <value>No usable model is built in. Ask your server administrator to provide these settings through external environment variables or secure configuration:</value>
+  </data>
+  <data name="Admin.Assistant.SetupTitle" xml:space="preserve">
+    <value>Model and API key setup</value>
+  </data>
+  <data name="Admin.Assistant.StatusCaveat" xml:space="preserve">
+    <value>Complete configuration does not guarantee connectivity, valid API keys, or model compatibility. Post counts exclude standalone pages; job counts include both posts and pages. Retry times are scheduled times, not guaranteed completion times.</value>
+  </data>
+  <data name="Admin.Assistant.StatusHelp" xml:space="preserve">
+    <value>Reads only configuration completeness and this site's index data. Refreshing does not call a model or requeue jobs.</value>
+  </data>
+  <data name="Admin.Assistant.StatusTitle" xml:space="preserve">
+    <value>AI feature status</value>
+  </data>
+  <data name="Admin.Assistant.StatusUnavailable" xml:space="preserve">
+    <value>Status is unavailable. Q&amp;A is paused; refresh to try again.</value>
+  </data>
+  <data name="Admin.Assistant.SubmitQuestion" xml:space="preserve">
+    <value>Send question</value>
+  </data>
+  <data name="Admin.Assistant.Title" xml:space="preserve">
+    <value>AI assistant</value>
+  </data>
+  <data name="Admin.Assistant.UserRole" xml:space="preserve">
+    <value>You</value>
+  </data>
+  <data name="Admin.Comments.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Comments.All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Admin.Comments.Approve" xml:space="preserve">
+    <value>Approve</value>
+  </data>
+  <data name="Admin.Comments.Approved" xml:space="preserve">
+    <value>Approved</value>
+  </data>
+  <data name="Admin.Comments.AuthorAndTime" xml:space="preserve">
+    <value>Visitor / time</value>
+  </data>
+  <data name="Admin.Comments.AuthorComment" xml:space="preserve">
+    <value>comment by {0}</value>
+  </data>
+  <data name="Admin.Comments.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Comments.CommentBody" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="Admin.Comments.ConfirmDelete" xml:space="preserve">
+    <value>Confirm deletion</value>
+  </data>
+  <data name="Admin.Comments.DeletePermanently" xml:space="preserve">
+    <value>Delete permanently</value>
+  </data>
+  <data name="Admin.Comments.DeleteTitle" xml:space="preserve">
+    <value>Permanently delete this comment?</value>
+  </data>
+  <data name="Admin.Comments.DeleteWarning" xml:space="preserve">
+    <value>This comment was posted by “{0}” on “{1}”. Permanent deletion cannot be undone.</value>
+  </data>
+  <data name="Admin.Comments.Deleted" xml:space="preserve">
+    <value>Comment permanently deleted.</value>
+  </data>
+  <data name="Admin.Comments.EmptyHelp" xml:space="preserve">
+    <value>Comments left by visitors on published posts appear in the review queue.</value>
+  </data>
+  <data name="Admin.Comments.EmptyTitle" xml:space="preserve">
+    <value>No matching comments</value>
+  </data>
+  <data name="Admin.Comments.Eyebrow" xml:space="preserve">
+    <value>Community interaction</value>
+  </data>
+  <data name="Admin.Comments.Introduction" xml:space="preserve">
+    <value>Review visitor comments before they become public. Honeypot submissions and comments with excessive links are automatically marked as spam.</value>
+  </data>
+  <data name="Admin.Comments.ListCaption" xml:space="preserve">
+    <value>Comments list</value>
+  </data>
+  <data name="Admin.Comments.Loading" xml:space="preserve">
+    <value>Loading comments…</value>
+  </data>
+  <data name="Admin.Comments.MarkSpam" xml:space="preserve">
+    <value>Mark as spam</value>
+  </data>
+  <data name="Admin.Comments.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.Comments.OnContent" xml:space="preserve">
+    <value>On “{0}”</value>
+  </data>
+  <data name="Admin.Comments.PageTitle" xml:space="preserve">
+    <value>Comments · Content management</value>
+  </data>
+  <data name="Admin.Comments.Pagination" xml:space="preserve">
+    <value>Comment pagination</value>
+  </data>
+  <data name="Admin.Comments.Pending" xml:space="preserve">
+    <value>Pending review</value>
+  </data>
+  <data name="Admin.Comments.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.Comments.ReturnToPending" xml:space="preserve">
+    <value>Return to pending review</value>
+  </data>
+  <data name="Admin.Comments.Spam" xml:space="preserve">
+    <value>Spam</value>
+  </data>
+  <data name="Admin.Comments.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.Comments.StatusFilter" xml:space="preserve">
+    <value>Filter comments by status</value>
+  </data>
+  <data name="Admin.Comments.StatusUpdated" xml:space="preserve">
+    <value>Comment status updated.</value>
+  </data>
+  <data name="Admin.Comments.Title" xml:space="preserve">
+    <value>Comments</value>
+  </data>
+  <data name="Admin.Comments.Trash" xml:space="preserve">
+    <value>Trash</value>
+  </data>
+  <data name="Admin.Navigation.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Navigation.AddItem" xml:space="preserve">
+    <value>Add navigation item</value>
+  </data>
+  <data name="Admin.Navigation.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Navigation.CancelOrAdd" xml:space="preserve">
+    <value>Cancel / Add new</value>
+  </data>
+  <data name="Admin.Navigation.ConfirmDelete" xml:space="preserve">
+    <value>Confirm deletion</value>
+  </data>
+  <data name="Admin.Navigation.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.Navigation.DeleteTitle" xml:space="preserve">
+    <value>Delete navigation item “{0}”?</value>
+  </data>
+  <data name="Admin.Navigation.DeleteWarning" xml:space="preserve">
+    <value>Only the navigation item will be removed; the page itself will not be affected. This cannot be undone.</value>
+  </data>
+  <data name="Admin.Navigation.Deleted" xml:space="preserve">
+    <value>Navigation item deleted.</value>
+  </data>
+  <data name="Admin.Navigation.DisabledHelp" xml:space="preserve">
+    <value>The public site currently uses the default navigation (published pages sorted by title). Enable “Use custom navigation” in Site settings to manage items here.</value>
+  </data>
+  <data name="Admin.Navigation.DisabledTitle" xml:space="preserve">
+    <value>Custom navigation is not enabled</value>
+  </data>
+  <data name="Admin.Navigation.DisplayText" xml:space="preserve">
+    <value>Display text</value>
+  </data>
+  <data name="Admin.Navigation.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.Navigation.EditItem" xml:space="preserve">
+    <value>Edit navigation item</value>
+  </data>
+  <data name="Admin.Navigation.EmptyHelp" xml:space="preserve">
+    <value>Add site pages or external links to display public navigation using this list.</value>
+  </data>
+  <data name="Admin.Navigation.EmptyTitle" xml:space="preserve">
+    <value>No navigation items yet</value>
+  </data>
+  <data name="Admin.Navigation.ExternalLinkHelp" xml:space="preserve">
+    <value>Only absolute http/https URLs are accepted. This field is ignored when a site page is selected.</value>
+  </data>
+  <data name="Admin.Navigation.ExternalLinkOptional" xml:space="preserve">
+    <value>External link (optional)</value>
+  </data>
+  <data name="Admin.Navigation.Eyebrow" xml:space="preserve">
+    <value>Managed navigation</value>
+  </data>
+  <data name="Admin.Navigation.GoToSettings" xml:space="preserve">
+    <value>Go to site settings →</value>
+  </data>
+  <data name="Admin.Navigation.Hidden" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="Admin.Navigation.InternalPage" xml:space="preserve">
+    <value>Site page</value>
+  </data>
+  <data name="Admin.Navigation.InternalPageOptional" xml:space="preserve">
+    <value>Site page (optional)</value>
+  </data>
+  <data name="Admin.Navigation.Introduction" xml:space="preserve">
+    <value>Customize public navigation items, order, and visibility. When disabled, the default navigation automatically sorts published pages.</value>
+  </data>
+  <data name="Admin.Navigation.Item" xml:space="preserve">
+    <value>Item</value>
+  </data>
+  <data name="Admin.Navigation.Items" xml:space="preserve">
+    <value>Navigation items</value>
+  </data>
+  <data name="Admin.Navigation.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Admin.Navigation.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Admin.Navigation.Order" xml:space="preserve">
+    <value>Order</value>
+  </data>
+  <data name="Admin.Navigation.PageTitle" xml:space="preserve">
+    <value>Site navigation · Content management</value>
+  </data>
+  <data name="Admin.Navigation.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can view this site's navigation settings but cannot change them.</value>
+  </data>
+  <data name="Admin.Navigation.Reordered" xml:space="preserve">
+    <value>Navigation order updated.</value>
+  </data>
+  <data name="Admin.Navigation.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Navigation.SaveItem" xml:space="preserve">
+    <value>Save item</value>
+  </data>
+  <data name="Admin.Navigation.Saved" xml:space="preserve">
+    <value>Navigation item saved.</value>
+  </data>
+  <data name="Admin.Navigation.Saving" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="Admin.Navigation.ShowInNavigation" xml:space="preserve">
+    <value>Show in public navigation</value>
+  </data>
+  <data name="Admin.Navigation.Title" xml:space="preserve">
+    <value>Site navigation</value>
+  </data>
+  <data name="Admin.Navigation.UseExternalLink" xml:space="preserve">
+    <value>No site page (use an external link instead)</value>
+  </data>
+  <data name="Admin.Navigation.Visible" xml:space="preserve">
+    <value>Visible</value>
+  </data>
+  <data name="Admin.Settings.AdminOnlyNotice" xml:space="preserve">
+    <value>Site settings and data import/export are restricted to this site's administrators. You are still signed in.</value>
+  </data>
+  <data name="Admin.Settings.AllCategories" xml:space="preserve">
+    <value>All categories</value>
+  </data>
+  <data name="Admin.Settings.AuthorDisplayName" xml:space="preserve">
+    <value>Author display name (optional)</value>
+  </data>
+  <data name="Admin.Settings.AuthorDisplayNameHelp" xml:space="preserve">
+    <value>Up to {0} characters; displayed in post bylines and feed author fields. Leave blank to hide it.</value>
+  </data>
+  <data name="Admin.Settings.AuthorPlaceholder" xml:space="preserve">
+    <value>For example: Shan Wenhao</value>
+  </data>
+  <data name="Admin.Settings.AutoApproveComments" xml:space="preserve">
+    <value>Automatically approve comments</value>
+  </data>
+  <data name="Admin.Settings.BasicInformation" xml:space="preserve">
+    <value>Basic information</value>
+  </data>
+  <data name="Admin.Settings.BasicInformationHelp" xml:space="preserve">
+    <value>The public site's name and description will update as soon as you save.</value>
+  </data>
+  <data name="Admin.Settings.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Settings.CategoryFilterSuffix" xml:space="preserve">
+    <value> / by category</value>
+  </data>
+  <data name="Admin.Settings.ChooseImport" xml:space="preserve">
+    <value>Choose an export file (JSON or ZIP)</value>
+  </data>
+  <data name="Admin.Settings.ChooseWxr" xml:space="preserve">
+    <value>Choose a WXR file (.xml)</value>
+  </data>
+  <data name="Admin.Settings.CommentsHelp" xml:space="preserve">
+    <value>When enabled, published posts display a comment form. Unless automatically approved, comments must be reviewed on the Comments page before becoming public. Honeypot submissions and comments with excessive links are automatically marked as spam.</value>
+  </data>
+  <data name="Admin.Settings.ConfirmImport" xml:space="preserve">
+    <value>Confirm import</value>
+  </data>
+  <data name="Admin.Settings.ConfirmReload" xml:space="preserve">
+    <value>Confirm reload</value>
+  </data>
+  <data name="Admin.Settings.CustomNavigation" xml:space="preserve">
+    <value>Use custom site navigation</value>
+  </data>
+  <data name="Admin.Settings.CustomNavigationHelp" xml:space="preserve">
+    <value>When enabled, public navigation uses the items managed on the Site navigation page, which can be reordered, hidden, or linked to external URLs. Otherwise, published pages are sorted automatically.</value>
+  </data>
+  <data name="Admin.Settings.DownloadBackup" xml:space="preserve">
+    <value>Download full backup (ZIP, including images)</value>
+  </data>
+  <data name="Admin.Settings.DownloadExport" xml:space="preserve">
+    <value>Download data export (JSON{0})</value>
+  </data>
+  <data name="Admin.Settings.EnableComments" xml:space="preserve">
+    <value>Allow visitor comments</value>
+  </data>
+  <data name="Admin.Settings.ExportAll" xml:space="preserve">
+    <value>All content (posts and pages)</value>
+  </data>
+  <data name="Admin.Settings.ExportCategory" xml:space="preserve">
+    <value>Filter further by category (optional)</value>
+  </data>
+  <data name="Admin.Settings.ExportHelp" xml:space="preserve">
+    <value>Export site settings, categories, tags, full content (including drafts), and media metadata as JSON. Image files and account data are not included.</value>
+  </data>
+  <data name="Admin.Settings.ExportPages" xml:space="preserve">
+    <value>Pages only</value>
+  </data>
+  <data name="Admin.Settings.ExportPosts" xml:space="preserve">
+    <value>Posts only</value>
+  </data>
+  <data name="Admin.Settings.ExportScope" xml:space="preserve">
+    <value>Export scope</value>
+  </data>
+  <data name="Admin.Settings.ExportScopeHelp" xml:space="preserve">
+    <value>Filtered exports are incomplete and intended only for selective backups. Use a full ZIP backup to migrate or restore the entire site.</value>
+  </data>
+  <data name="Admin.Settings.ExportSecurityWarning" xml:space="preserve">
+    <value>The export includes password hashes for password-protected content, which can be cracked offline. Treat it as confidential and store it securely.</value>
+  </data>
+  <data name="Admin.Settings.ExportTitle" xml:space="preserve">
+    <value>Export data</value>
+  </data>
+  <data name="Admin.Settings.Eyebrow" xml:space="preserve">
+    <value>Make your site your own</value>
+  </data>
+  <data name="Admin.Settings.FeedFullText" xml:space="preserve">
+    <value>Include full text in feeds</value>
+  </data>
+  <data name="Admin.Settings.FeedFullTextHelp" xml:space="preserve">
+    <value>When enabled, RSS (content:encoded) and Atom (content) include the full rendered body; otherwise, only a summary is included.</value>
+  </data>
+  <data name="Admin.Settings.FeedItems" xml:space="preserve">
+    <value>RSS feed items</value>
+  </data>
+  <data name="Admin.Settings.FeedItemsHelp" xml:space="preserve">
+    <value>1–{0}; leave blank to use the default of {1} items.</value>
+  </data>
+  <data name="Admin.Settings.HomeDisplay" xml:space="preserve">
+    <value>Homepage display</value>
+  </data>
+  <data name="Admin.Settings.HomeDisplayHelp" xml:space="preserve">
+    <value>When a published page is used as the homepage, the post list moves to /posts. If the page is withdrawn or made private, the homepage automatically returns to the post list.</value>
+  </data>
+  <data name="Admin.Settings.ImportConfirmTitle" xml:space="preserve">
+    <value>Import and replace existing data?</value>
+  </data>
+  <data name="Admin.Settings.ImportDenied" xml:space="preserve">
+    <value>Data imports are restricted to this site's administrators.</value>
+  </data>
+  <data name="Admin.Settings.ImportHelp" xml:space="preserve">
+    <value>Replace all text data on this site (settings, categories, tags, content, and media metadata) with an export file. Importing JSON leaves image files unchanged; importing a full ZIP backup also restores images and removes old image files not listed in the backup.</value>
+  </data>
+  <data name="Admin.Settings.ImportPreview" xml:space="preserve">
+    <value>Export loaded: {0}. The import contains {1} categories, {2} tags, {3} posts, {4} pages, and {5} media metadata records.</value>
+  </data>
+  <data name="Admin.Settings.ImportTitle" xml:space="preserve">
+    <value>Import data</value>
+  </data>
+  <data name="Admin.Settings.ImportTooLarge" xml:space="preserve">
+    <value>The import file exceeds the size limit.</value>
+  </data>
+  <data name="Admin.Settings.ImportWarning" xml:space="preserve">
+    <value>Existing settings, categories, tags, content, and media metadata will be permanently replaced. Published public posts will be queued for AI indexing again. This cannot be undone. Download an up-to-date full ZIP backup first.</value>
+  </data>
+  <data name="Admin.Settings.Imported" xml:space="preserve">
+    <value>Data imported. Site content has been replaced with the exported version.</value>
+  </data>
+  <data name="Admin.Settings.Introduction" xml:space="preserve">
+    <value>A short introduction is the first step to helping readers get to know you.</value>
+  </data>
+  <data name="Admin.Settings.KeepEditing" xml:space="preserve">
+    <value>Keep editing</value>
+  </data>
+  <data name="Admin.Settings.LatestPosts" xml:space="preserve">
+    <value>Latest posts</value>
+  </data>
+  <data name="Admin.Settings.LoadDenied" xml:space="preserve">
+    <value>Site settings are restricted to this site's administrators. You are still signed in.</value>
+  </data>
+  <data name="Admin.Settings.MediaOptionLabel" xml:space="preserve">
+    <value>{0} ({1}×{2})</value>
+  </data>
+  <data name="Admin.Settings.NoIcon" xml:space="preserve">
+    <value>None (use the browser's default icon)</value>
+  </data>
+  <data name="Admin.Settings.NoLogo" xml:space="preserve">
+    <value>None (show only the site name in the header)</value>
+  </data>
+  <data name="Admin.Settings.PageTitle" xml:space="preserve">
+    <value>Site settings · Content management</value>
+  </data>
+  <data name="Admin.Settings.PagesFilterSuffix" xml:space="preserve">
+    <value> / pages only</value>
+  </data>
+  <data name="Admin.Settings.PostsFilterSuffix" xml:space="preserve">
+    <value> / posts only</value>
+  </data>
+  <data name="Admin.Settings.PostsPerPage" xml:space="preserve">
+    <value>Posts per page</value>
+  </data>
+  <data name="Admin.Settings.PostsPerPageHelp" xml:space="preserve">
+    <value>1–{0}; leave blank to use the default of {1} posts.</value>
+  </data>
+  <data name="Admin.Settings.ReadingSettings" xml:space="preserve">
+    <value>Reading settings</value>
+  </data>
+  <data name="Admin.Settings.ReadingSettingsHelp" xml:space="preserve">
+    <value>Control how the homepage and post lists are displayed.</value>
+  </data>
+  <data name="Admin.Settings.ReloadSavedVersion" xml:space="preserve">
+    <value>Reload saved version</value>
+  </data>
+  <data name="Admin.Settings.ReloadTitle" xml:space="preserve">
+    <value>Discard your changes and reload?</value>
+  </data>
+  <data name="Admin.Settings.ReloadWarning" xml:space="preserve">
+    <value>Copy any text you want to keep first. Reloading will replace your unsaved changes.</value>
+  </data>
+  <data name="Admin.Settings.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Settings.SaveDenied" xml:space="preserve">
+    <value>Site settings are restricted to this site's administrators.</value>
+  </data>
+  <data name="Admin.Settings.SaveSettings" xml:space="preserve">
+    <value>Save settings</value>
+  </data>
+  <data name="Admin.Settings.Saved" xml:space="preserve">
+    <value>Site settings saved. The public site has been updated.</value>
+  </data>
+  <data name="Admin.Settings.SavedVersion" xml:space="preserve">
+    <value>Showing the saved version</value>
+  </data>
+  <data name="Admin.Settings.Saving" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="Admin.Settings.SiteDescription" xml:space="preserve">
+    <value>Site description</value>
+  </data>
+  <data name="Admin.Settings.SiteDescriptionHelp" xml:space="preserve">
+    <value>Introduce your site in a short paragraph of up to {0} characters. HTML is not supported.</value>
+  </data>
+  <data name="Admin.Settings.SiteIcon" xml:space="preserve">
+    <value>Site icon (favicon)</value>
+  </data>
+  <data name="Admin.Settings.SiteIconHelp" xml:space="preserve">
+    <value>Choose an image from the media library for browser tabs and bookmarks. Square images work best.</value>
+  </data>
+  <data name="Admin.Settings.SiteLogo" xml:space="preserve">
+    <value>Site logo</value>
+  </data>
+  <data name="Admin.Settings.SiteLogoHelp" xml:space="preserve">
+    <value>An image displayed beside the site name in the public header. A width of no more than 480 pixels is recommended for a horizontal layout.</value>
+  </data>
+  <data name="Admin.Settings.SiteName" xml:space="preserve">
+    <value>Site name</value>
+  </data>
+  <data name="Admin.Settings.SiteNameHelp" xml:space="preserve">
+    <value>Up to {0} characters, displayed in the site header.</value>
+  </data>
+  <data name="Admin.Settings.StartImport" xml:space="preserve">
+    <value>Start import</value>
+  </data>
+  <data name="Admin.Settings.Title" xml:space="preserve">
+    <value>Site settings</value>
+  </data>
+  <data name="Admin.Settings.UnsavedChanges" xml:space="preserve">
+    <value>You have unsaved changes</value>
+  </data>
+  <data name="Admin.Settings.WxrHelp" xml:space="preserve">
+    <value>Upload a WXR file created by WordPress Tools → Export to add posts, pages, categories, and tags to this site without replacing existing content. HTML bodies are converted to Markdown; styles and scripts are not imported.</value>
+  </data>
+  <data name="Admin.Settings.WxrImportDenied" xml:space="preserve">
+    <value>WXR imports are restricted to this site's administrators.</value>
+  </data>
+  <data name="Admin.Settings.WxrImported" xml:space="preserve">
+    <value>WXR content has been imported into this site.</value>
+  </data>
+  <data name="Admin.Settings.WxrMediaHelp" xml:space="preserve">
+    <value>Attachment binaries are not included in WXR files; upload media separately. Items with duplicate slugs will be skipped and listed.</value>
+  </data>
+  <data name="Admin.Settings.WxrPreview" xml:space="preserve">
+    <value>The import contains {0} posts, {1} pages, {2} categories, and {3} tags.</value>
+  </data>
+  <data name="Admin.Settings.WxrResult" xml:space="preserve">
+    <value>Import complete: {0} imported, {1} skipped.</value>
+  </data>
+  <data name="Admin.Settings.WxrTitle" xml:space="preserve">
+    <value>Import WordPress (WXR)</value>
+  </data>
+  <data name="Admin.Settings.WxrTooLarge" xml:space="preserve">
+    <value>The WXR file is too large. Use a smaller export file.</value>
+  </data>
+  <data name="Admin.Taxonomies.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Taxonomies.AddAnother" xml:space="preserve">
+    <value>Add another</value>
+  </data>
+  <data name="Admin.Taxonomies.AddTitle" xml:space="preserve">
+    <value>Add {0}</value>
+  </data>
+  <data name="Admin.Taxonomies.AllItems" xml:space="preserve">
+    <value>All {0} items</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkActions" xml:space="preserve">
+    <value>Bulk actions</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkDeleteFailed" xml:space="preserve">
+    <value>Bulk deletion failed. Reload and try again.</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkDeleteTitle" xml:space="preserve">
+    <value>Permanently delete the {0} selected {1} items?</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkDeleteWarning" xml:space="preserve">
+    <value>Only post associations will be removed; no posts will be deleted. Each item's version is checked independently, and one failure does not affect the others. This cannot be undone.</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkDeleted" xml:space="preserve">
+    <value>Selected items deleted. Posts were not deleted.</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkResults" xml:space="preserve">
+    <value>Bulk deletion results</value>
+  </data>
+  <data name="Admin.Taxonomies.BulkSummary" xml:space="preserve">
+    <value>Bulk deletion complete: {0} succeeded, {1} failed.</value>
+  </data>
+  <data name="Admin.Taxonomies.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Taxonomies.CandidateLabel" xml:space="preserve">
+    <value>{0} ({1})</value>
+  </data>
+  <data name="Admin.Taxonomies.CategoriesTab" xml:space="preserve">
+    <value>Categories</value>
+  </data>
+  <data name="Admin.Taxonomies.Category" xml:space="preserve">
+    <value>category</value>
+  </data>
+  <data name="Admin.Taxonomies.ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="Admin.Taxonomies.ConfirmDeleteSelected" xml:space="preserve">
+    <value>Confirm deletion of selected items</value>
+  </data>
+  <data name="Admin.Taxonomies.ConfirmMerge" xml:space="preserve">
+    <value>Confirm merge</value>
+  </data>
+  <data name="Admin.Taxonomies.ConfirmPermanentDelete" xml:space="preserve">
+    <value>Confirm permanent deletion</value>
+  </data>
+  <data name="Admin.Taxonomies.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.Taxonomies.DeleteSelected" xml:space="preserve">
+    <value>Delete selected ({0})</value>
+  </data>
+  <data name="Admin.Taxonomies.DeleteTitle" xml:space="preserve">
+    <value>Permanently delete {0} “{1}”?</value>
+  </data>
+  <data name="Admin.Taxonomies.DeleteWarning" xml:space="preserve">
+    <value>Only post associations will be removed; posts will not be deleted. Unsaved changes to this item will also be discarded. This cannot be undone.</value>
+  </data>
+  <data name="Admin.Taxonomies.Deleted" xml:space="preserve">
+    <value>Permanently deleted {0}. Posts were not deleted.</value>
+  </data>
+  <data name="Admin.Taxonomies.Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Admin.Taxonomies.DescriptionHelp" xml:space="preserve">
+    <value>Description displayed on public category or tag filter pages, up to {0} characters.</value>
+  </data>
+  <data name="Admin.Taxonomies.DiscardAndContinue" xml:space="preserve">
+    <value>Discard and continue</value>
+  </data>
+  <data name="Admin.Taxonomies.DiscardTitle" xml:space="preserve">
+    <value>Discard unsaved changes?</value>
+  </data>
+  <data name="Admin.Taxonomies.DiscardWarning" xml:space="preserve">
+    <value>This will end the current edit. Any unsaved changes will be lost.</value>
+  </data>
+  <data name="Admin.Taxonomies.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.Taxonomies.EditTitle" xml:space="preserve">
+    <value>Edit {0}</value>
+  </data>
+  <data name="Admin.Taxonomies.EmptyHelp" xml:space="preserve">
+    <value>Use the form beside this list to create your first {0}.</value>
+  </data>
+  <data name="Admin.Taxonomies.EmptyTitle" xml:space="preserve">
+    <value>No {0} items yet</value>
+  </data>
+  <data name="Admin.Taxonomies.Eyebrow" xml:space="preserve">
+    <value>Organize content</value>
+  </data>
+  <data name="Admin.Taxonomies.Introduction" xml:space="preserve">
+    <value>Give your posts a clear structure. Categories are flat and do not affect standalone pages.</value>
+  </data>
+  <data name="Admin.Taxonomies.KeepEditing" xml:space="preserve">
+    <value>Keep editing</value>
+  </data>
+  <data name="Admin.Taxonomies.KindTabs" xml:space="preserve">
+    <value>Switch between categories and tags</value>
+  </data>
+  <data name="Admin.Taxonomies.ListCaption" xml:space="preserve">
+    <value>List of {0} items</value>
+  </data>
+  <data name="Admin.Taxonomies.ManualSaveHelp" xml:space="preserve">
+    <value>Click Save after editing. Changes are not saved automatically.</value>
+  </data>
+  <data name="Admin.Taxonomies.Merge" xml:space="preserve">
+    <value>Merge</value>
+  </data>
+  <data name="Admin.Taxonomies.MergeTarget" xml:space="preserve">
+    <value>Merge target</value>
+  </data>
+  <data name="Admin.Taxonomies.MergeTitle" xml:space="preserve">
+    <value>Merge {0} “{1}” into another {0}?</value>
+  </data>
+  <data name="Admin.Taxonomies.MergeWarning" xml:space="preserve">
+    <value>All posts using this {0} will be reassigned to the target, then “{1}” will be deleted. The target's name and content will not change, and no posts will be deleted. This cannot be undone.</value>
+  </data>
+  <data name="Admin.Taxonomies.Merged" xml:space="preserve">
+    <value>Merged {0} and transferred associations for {1} posts.</value>
+  </data>
+  <data name="Admin.Taxonomies.Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Admin.Taxonomies.NameAndSlug" xml:space="preserve">
+    <value>Name / slug</value>
+  </data>
+  <data name="Admin.Taxonomies.NameHelp" xml:space="preserve">
+    <value>Up to {0} characters.</value>
+  </data>
+  <data name="Admin.Taxonomies.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.Taxonomies.NoTargets" xml:space="preserve">
+    <value>No other {0} is available as a target. Create one first.</value>
+  </data>
+  <data name="Admin.Taxonomies.PageTitle" xml:space="preserve">
+    <value>Categories and tags · Content management</value>
+  </data>
+  <data name="Admin.Taxonomies.Pagination" xml:space="preserve">
+    <value>Category and tag pagination</value>
+  </data>
+  <data name="Admin.Taxonomies.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.Taxonomies.Processing" xml:space="preserve">
+    <value>Processing…</value>
+  </data>
+  <data name="Admin.Taxonomies.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can view this site's categories and tags but cannot create, edit, merge, or delete them.</value>
+  </data>
+  <data name="Admin.Taxonomies.ReloadList" xml:space="preserve">
+    <value>Reload the list and stop editing</value>
+  </data>
+  <data name="Admin.Taxonomies.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Taxonomies.Save" xml:space="preserve">
+    <value>Save {0}</value>
+  </data>
+  <data name="Admin.Taxonomies.Saved" xml:space="preserve">
+    <value>Saved {0}.</value>
+  </data>
+  <data name="Admin.Taxonomies.SelectItem" xml:space="preserve">
+    <value>Select {0}</value>
+  </data>
+  <data name="Admin.Taxonomies.SelectPage" xml:space="preserve">
+    <value>Select all on this page</value>
+  </data>
+  <data name="Admin.Taxonomies.SelectTarget" xml:space="preserve">
+    <value>Select the target {0}…</value>
+  </data>
+  <data name="Admin.Taxonomies.SelectionRequired" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Taxonomies.Slug" xml:space="preserve">
+    <value>URL slug</value>
+  </data>
+  <data name="Admin.Taxonomies.SlugHelp" xml:space="preserve">
+    <value>Leave blank on first save to generate it from the name.</value>
+  </data>
+  <data name="Admin.Taxonomies.Tag" xml:space="preserve">
+    <value>tag</value>
+  </data>
+  <data name="Admin.Taxonomies.TagsTab" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Admin.Taxonomies.TargetLimit" xml:space="preserve">
+    <value>Only the first {0} {1} items are listed as candidates.</value>
+  </data>
+  <data name="Admin.Taxonomies.Title" xml:space="preserve">
+    <value>Categories and tags</value>
+  </data>
+  <data name="Admin.Taxonomies.UnsavedChanges" xml:space="preserve">
+    <value>You have unsaved changes.</value>
+  </data>
+  <data name="Public.Archives.ArticleCount" xml:space="preserve">
+    <value>{0} articles</value>
+  </data>
+  <data name="Public.Archives.LoadError" xml:space="preserve">
+    <value>Archives could not be loaded. Please try again later.</value>
+  </data>
+  <data name="Public.Archives.MonthTitle" xml:space="preserve">
+    <value>Articles from {0}-{1:00}</value>
+  </data>
+  <data name="Public.Archives.PageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.Archives.Pagination" xml:space="preserve">
+    <value>Article pagination</value>
+  </data>
+  <data name="Public.Archives.ReadArticle" xml:space="preserve">
+    <value>Read: {0}</value>
+  </data>
+  <data name="Public.Archives.SentenceEnd" xml:space="preserve">
+    <value>.</value>
+  </data>
+  <data name="Public.Archives.YearMonth" xml:space="preserve">
+    <value>{0}-{1:00}</value>
+  </data>
+  <data name="Public.Author.LoadError" xml:space="preserve">
+    <value>This author's articles could not be loaded. Please try again later.</value>
+  </data>
+  <data name="Public.Author.PageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.Author.ReadArticle" xml:space="preserve">
+    <value>Read: {0}</value>
+  </data>
+  <data name="Public.Author.TitleFormat" xml:space="preserve">
+    <value>Author: {0} · Articles</value>
+  </data>
+  <data name="Public.ContentDetail.Author" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="Public.ContentDetail.Categories" xml:space="preserve">
+    <value>Categories</value>
+  </data>
+  <data name="Public.ContentDetail.CommentBody" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="Public.ContentDetail.CommentBodyLength" xml:space="preserve">
+    <value>The comment must be between 1 and {0} characters.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentBodyRequired" xml:space="preserve">
+    <value>Please enter a comment.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentBodyTooLong" xml:space="preserve">
+    <value>The comment must be no longer than {0} characters.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentCount" xml:space="preserve">
+    <value>Comments ({0})</value>
+  </data>
+  <data name="Public.ContentDetail.CommentFailed" xml:space="preserve">
+    <value>Your comment could not be submitted. Please try again later.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentInvalidUrl" xml:space="preserve">
+    <value>The URL must be an absolute http or https URL.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Public.ContentDetail.CommentNameLength" xml:space="preserve">
+    <value>Your name must be between 1 and {0} characters.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentNameRequired" xml:space="preserve">
+    <value>Please enter your name.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentNameTooLong" xml:space="preserve">
+    <value>Your name must be no longer than {0} characters.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentPosted" xml:space="preserve">
+    <value>Your comment has been submitted. It will appear here after approval.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentThrottled" xml:space="preserve">
+    <value>You are posting too frequently. Please try again later.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentUrl" xml:space="preserve">
+    <value>Website (optional)</value>
+  </data>
+  <data name="Public.ContentDetail.CommentUrlTooLong" xml:space="preserve">
+    <value>The URL must be no longer than {0} characters.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentsDisabled" xml:space="preserve">
+    <value>Comments are not enabled on this site.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentsNotAccepted" xml:space="preserve">
+    <value>This content does not accept comments.</value>
+  </data>
+  <data name="Public.ContentDetail.ContentMissing" xml:space="preserve">
+    <value>The content does not exist.</value>
+  </data>
+  <data name="Public.ContentDetail.IncorrectPassword" xml:space="preserve">
+    <value>Incorrect password. Please try again.</value>
+  </data>
+  <data name="Public.ContentDetail.LeaveBlank" xml:space="preserve">
+    <value>Leave blank</value>
+  </data>
+  <data name="Public.ContentDetail.LoadError" xml:space="preserve">
+    <value>This content could not be loaded. Please try again later.</value>
+  </data>
+  <data name="Public.ContentDetail.NeighborNavigation" xml:space="preserve">
+    <value>Previous and next articles</value>
+  </data>
+  <data name="Public.ContentDetail.NewerArticle" xml:space="preserve">
+    <value>Next article →</value>
+  </data>
+  <data name="Public.ContentDetail.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Public.ContentDetail.NoComments" xml:space="preserve">
+    <value>No comments yet. Be the first to leave one.</value>
+  </data>
+  <data name="Public.ContentDetail.OlderArticle" xml:space="preserve">
+    <value>← Previous article</value>
+  </data>
+  <data name="Public.ContentDetail.Page" xml:space="preserve">
+    <value>Page</value>
+  </data>
+  <data name="Public.ContentDetail.PageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.ContentDetail.PageTitle" xml:space="preserve">
+    <value>Read content</value>
+  </data>
+  <data name="Public.ContentDetail.Pagination" xml:space="preserve">
+    <value>Content pagination</value>
+  </data>
+  <data name="Public.ContentDetail.PasswordRequired" xml:space="preserve">
+    <value>Please enter the content password.</value>
+  </data>
+  <data name="Public.ContentDetail.PasswordTooLong" xml:space="preserve">
+    <value>The content password must be no longer than {0} characters.</value>
+  </data>
+  <data name="Public.ContentDetail.Post" xml:space="preserve">
+    <value>Article</value>
+  </data>
+  <data name="Public.ContentDetail.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Public.ContentDetail.PrivateContent" xml:space="preserve">
+    <value>{0} · Private</value>
+  </data>
+  <data name="Public.ContentDetail.ProtectedContent" xml:space="preserve">
+    <value>{0} · Password protected</value>
+  </data>
+  <data name="Public.ContentDetail.PublishedDateFormat" xml:space="preserve">
+    <value>MMMM dd, yyyy</value>
+  </data>
+  <data name="Public.ContentDetail.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Public.ContentDetail.SubmitComment" xml:space="preserve">
+    <value>Submit comment</value>
+  </data>
+  <data name="Public.ContentDetail.Tags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Public.ContentDetail.UnlockFailed" xml:space="preserve">
+    <value>The content could not be unlocked. Please try again later.</value>
+  </data>
+  <data name="Public.ContentDetail.UnlockThrottled" xml:space="preserve">
+    <value>Too many attempts. Please try again later.</value>
+  </data>
+  <data name="Public.PostList.ArticleCount" xml:space="preserve">
+    <value>{0} articles in total</value>
+  </data>
+  <data name="Public.PostList.Empty" xml:space="preserve">
+    <value>The story is about to begin</value>
+  </data>
+  <data name="Public.PostList.FilteredEmpty" xml:space="preserve">
+    <value>No articles match this combination yet</value>
+  </data>
+  <data name="Public.PostList.FilteredIntro" xml:space="preserve">
+    <value>Explore published articles on this topic.</value>
+  </data>
+  <data name="Public.PostList.Intro" xml:space="preserve">
+    <value>Recording ideas and sharing things worth noticing.</value>
+  </data>
+  <data name="Public.PostList.LatestArticles" xml:space="preserve">
+    <value>Latest articles</value>
+  </data>
+  <data name="Public.PostList.LoadError" xml:space="preserve">
+    <value>Articles could not be loaded. Please try again later.</value>
+  </data>
+  <data name="Public.PostList.PageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.PostList.Pagination" xml:space="preserve">
+    <value>Article pagination</value>
+  </data>
+  <data name="Public.PostList.PopularCategories" xml:space="preserve">
+    <value>Popular categories</value>
+  </data>
+  <data name="Public.PostList.ReadArticle" xml:space="preserve">
+    <value>Read: {0}</value>
+  </data>
+  <data name="Public.Posts.PageTitle" xml:space="preserve">
+    <value>Latest articles</value>
+  </data>
+  <data name="Public.Posts.SocialTitle" xml:space="preserve">
+    <value>{0} · Latest articles</value>
+  </data>
+  <data name="Public.Preview.Categories" xml:space="preserve">
+    <value>Categories</value>
+  </data>
+  <data name="Public.Preview.LoadError" xml:space="preserve">
+    <value>This preview could not be loaded. Please try again later.</value>
+  </data>
+  <data name="Public.Preview.PagePreview" xml:space="preserve">
+    <value>Page · Preview</value>
+  </data>
+  <data name="Public.Preview.PageTitle" xml:space="preserve">
+    <value>Content preview</value>
+  </data>
+  <data name="Public.Preview.PostPreview" xml:space="preserve">
+    <value>Article · Preview</value>
+  </data>
+  <data name="Public.Preview.Tags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Public.Search.CombinedSource" xml:space="preserve">
+    <value>Keyword + semantic</value>
+  </data>
+  <data name="Public.Search.InvalidPage" xml:space="preserve">
+    <value>Invalid page parameter.</value>
+  </data>
+  <data name="Public.Search.KeywordSource" xml:space="preserve">
+    <value>Keyword</value>
+  </data>
+  <data name="Public.Search.PageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.Search.Pagination" xml:space="preserve">
+    <value>Search results pagination</value>
+  </data>
+  <data name="Public.Search.QueryHelp" xml:space="preserve">
+    <value>Up to {0} characters. Your search text is sent to an external embedding model. Do not enter passwords or sensitive information.</value>
+  </data>
+  <data name="Public.Search.QueryTooLong" xml:space="preserve">
+    <value>Search text must be no longer than {0} characters.</value>
+  </data>
+  <data name="Public.Search.ResultsSummary" xml:space="preserve">
+    <value>{0} matching articles (page {1} of {2}). Keyword matches appear first; semantic results supplement the first page.</value>
+  </data>
+  <data name="Public.Search.ResultsTitle" xml:space="preserve">
+    <value>Search results for “{0}”</value>
+  </data>
+  <data name="Public.Search.SemanticSource" xml:space="preserve">
+    <value>Semantic</value>
+  </data>
+  <data name="Public.Search.Unavailable" xml:space="preserve">
+    <value>Search is temporarily unavailable. Please try again later.</value>
+  </data>
+  <data name="Admin.ContentEditor.AnotherMember" xml:space="preserve">
+    <value>Another member</value>
+  </data>
+  <data name="Admin.ContentEditor.ApproveAndPublish" xml:space="preserve">
+    <value>Approve and publish</value>
+  </data>
+  <data name="Admin.ContentEditor.AuthorReadOnlyNotice" xml:space="preserve">
+    <value>This content is published and managed by editors. You can still view the content and its revisions.</value>
+  </data>
+  <data name="Admin.ContentEditor.AutosaveHelp" xml:space="preserve">
+    <value>Existing drafts are autosaved every {0} seconds (drafts only). The original publication date is preserved and is not reset when republishing.</value>
+  </data>
+  <data name="Admin.ContentEditor.AutosavedAt" xml:space="preserve">
+    <value>Autosaved at {0}</value>
+  </data>
+  <data name="Admin.ContentEditor.BackToList" xml:space="preserve">
+    <value>← Back to the {0} list</value>
+  </data>
+  <data name="Admin.ContentEditor.BodyPlaceholder" xml:space="preserve">
+    <value>Start writing here…</value>
+  </data>
+  <data name="Admin.ContentEditor.ChangeCover" xml:space="preserve">
+    <value>Change cover</value>
+  </data>
+  <data name="Admin.ContentEditor.ChangePassword" xml:space="preserve">
+    <value>Change protection password (optional)</value>
+  </data>
+  <data name="Admin.ContentEditor.CharacterCount" xml:space="preserve">
+    <value>{0:N0} / {1:N0} characters</value>
+  </data>
+  <data name="Admin.ContentEditor.ChildOperationInProgress" xml:space="preserve">
+    <value>A category, tag, or image operation is still in progress. Wait before saving; you can continue editing the body.</value>
+  </data>
+  <data name="Admin.ContentEditor.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Admin.ContentEditor.CloseDiff" xml:space="preserve">
+    <value>Close differences</value>
+  </data>
+  <data name="Admin.ContentEditor.Collapse" xml:space="preserve">
+    <value>Collapse</value>
+  </data>
+  <data name="Admin.ContentEditor.Compare" xml:space="preserve">
+    <value>Compare</value>
+  </data>
+  <data name="Admin.ContentEditor.ConfirmReload" xml:space="preserve">
+    <value>Confirm reload</value>
+  </data>
+  <data name="Admin.ContentEditor.ConflictHelp" xml:space="preserve">
+    <value>Your input is preserved. If there is a conflict, copy anything you need before reloading the latest version.</value>
+  </data>
+  <data name="Admin.ContentEditor.ContentNoLongerExists" xml:space="preserve">
+    <value>The content no longer exists. Please reload the list.</value>
+  </data>
+  <data name="Admin.ContentEditor.ContentNotFound" xml:space="preserve">
+    <value>The content does not exist. Please reload the list.</value>
+  </data>
+  <data name="Admin.ContentEditor.ContinueEditing" xml:space="preserve">
+    <value>Continue editing</value>
+  </data>
+  <data name="Admin.ContentEditor.CoverHelp" xml:space="preserve">
+    <value>The cover appears in post lists and at the start of the content. It is preferred for social sharing; without a cover, the first body image is used. Edit the caption in the media library.</value>
+  </data>
+  <data name="Admin.ContentEditor.CoverImage" xml:space="preserve">
+    <value>Cover image (optional)</value>
+  </data>
+  <data name="Admin.ContentEditor.CreateDenied" xml:space="preserve">
+    <value>Read-only members cannot create content. Return to the list to view existing content.</value>
+  </data>
+  <data name="Admin.ContentEditor.CurrentStatus" xml:space="preserve">
+    <value>Current status</value>
+  </data>
+  <data name="Admin.ContentEditor.DiffHelp" xml:space="preserve">
+    <value>Red: present only in the revision (restoring adds it back). Green: present only in the current content (restoring removes it).</value>
+  </data>
+  <data name="Admin.ContentEditor.DiffRegion" xml:space="preserve">
+    <value>Line differences between the revision and current content</value>
+  </data>
+  <data name="Admin.ContentEditor.DiffTitle" xml:space="preserve">
+    <value>Differences from the current editor content</value>
+  </data>
+  <data name="Admin.ContentEditor.DiffTooLarge" xml:space="preserve">
+    <value>There are too many lines for a line-by-line comparison. Use “View” to compare the full text instead.</value>
+  </data>
+  <data name="Admin.ContentEditor.Draft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Admin.ContentEditor.DraftCreatedNotice" xml:space="preserve">
+    <value>Content created as a draft. The text is not public.</value>
+  </data>
+  <data name="Admin.ContentEditor.DraftHelp" xml:space="preserve">
+    <value>Drafts are only available for editing in the admin area. Visitors can read them after publication.</value>
+  </data>
+  <data name="Admin.ContentEditor.DraftSavedNotice" xml:space="preserve">
+    <value>Saved as a draft. The text is not public.</value>
+  </data>
+  <data name="Admin.ContentEditor.EditDenied" xml:space="preserve">
+    <value>You do not have permission to edit this content. Authors can only edit their own drafts and content pending review.</value>
+  </data>
+  <data name="Admin.ContentEditor.EditHeading" xml:space="preserve">
+    <value>Edit {0}</value>
+  </data>
+  <data name="Admin.ContentEditor.EditPageTitle" xml:space="preserve">
+    <value>Edit content · Content management</value>
+  </data>
+  <data name="Admin.ContentEditor.EditingInProgress" xml:space="preserve">
+    <value>{0} is editing this content.</value>
+  </data>
+  <data name="Admin.ContentEditor.EditingLockHelp" xml:space="preserve">
+    <value>This is only a notice and does not block your actions; version checks still protect saves. You can take over when the other member leaves or the lock expires, or take over now.</value>
+  </data>
+  <data name="Admin.ContentEditor.Excerpt" xml:space="preserve">
+    <value>Excerpt</value>
+  </data>
+  <data name="Admin.ContentEditor.ExcerptFromSelection" xml:space="preserve">
+    <value>Use selected body text</value>
+  </data>
+  <data name="Admin.ContentEditor.ExcerptHelp" xml:space="preserve">
+    <value>Plain text, up to {0} characters. Shown in post lists, search results, and social sharing descriptions.</value>
+  </data>
+  <data name="Admin.ContentEditor.ExcerptPlaceholder" xml:space="preserve">
+    <value>Introduce this content in a sentence or two; leave blank to use the opening text</value>
+  </data>
+  <data name="Admin.ContentEditor.GenerateLink" xml:space="preserve">
+    <value>Generate preview link</value>
+  </data>
+  <data name="Admin.ContentEditor.GenerateLinkHelp" xml:space="preserve">
+    <value>Create a temporary link to share a draft before publishing.</value>
+  </data>
+  <data name="Admin.ContentEditor.ImageExceedsBodyLimit" xml:space="preserve">
+    <value>Inserting this image would exceed the body length limit. Shorten the content first.</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertImage" xml:space="preserve">
+    <value>Insert image</value>
+  </data>
+  <data name="Admin.ContentEditor.Introduction" xml:space="preserve">
+    <value>Focus on writing. Share with the world when you are ready.</value>
+  </data>
+  <data name="Admin.ContentEditor.KeepPasswordHelp" xml:space="preserve">
+    <value>Leave blank to keep the current protection password.</value>
+  </data>
+  <data name="Admin.ContentEditor.LoadIntoEditor" xml:space="preserve">
+    <value>Load into editor</value>
+  </data>
+  <data name="Admin.ContentEditor.MarkdownBody" xml:space="preserve">
+    <value>Markdown body</value>
+  </data>
+  <data name="Admin.ContentEditor.MarkdownHelp" xml:space="preserve">
+    <value>Markdown is supported; raw HTML is not executed.</value>
+  </data>
+  <data name="Admin.ContentEditor.MetaDescription" xml:space="preserve">
+    <value>SEO description (optional)</value>
+  </data>
+  <data name="Admin.ContentEditor.MetaDescriptionHelp" xml:space="preserve">
+    <value>Up to {0} characters. Leave blank to use the excerpt above. When set, this is used in social sharing descriptions and structured data.</value>
+  </data>
+  <data name="Admin.ContentEditor.MetaDescriptionPlaceholder" xml:space="preserve">
+    <value>Summary text for search results and social sharing</value>
+  </data>
+  <data name="Admin.ContentEditor.NewHeading" xml:space="preserve">
+    <value>New {0}</value>
+  </data>
+  <data name="Admin.ContentEditor.NewPageTitle" xml:space="preserve">
+    <value>New content · Content management</value>
+  </data>
+  <data name="Admin.ContentEditor.NewPasswordHelp" xml:space="preserve">
+    <value>Set a password of at least 8 characters when enabling protection for the first time.</value>
+  </data>
+  <data name="Admin.ContentEditor.NoCover" xml:space="preserve">
+    <value>No cover image set.</value>
+  </data>
+  <data name="Admin.ContentEditor.NoIndex" xml:space="preserve">
+    <value>Exclude from search engine indexing</value>
+  </data>
+  <data name="Admin.ContentEditor.NoIndexHelp" xml:space="preserve">
+    <value>When checked, outputs robots noindex and excludes this content from the sitemap. The content remains publicly readable.</value>
+  </data>
+  <data name="Admin.ContentEditor.NoParent" xml:space="preserve">
+    <value>None (top level)</value>
+  </data>
+  <data name="Admin.ContentEditor.NoRevisions" xml:space="preserve">
+    <value>No revisions yet. Each save keeps the previous version, up to {0} revisions.</value>
+  </data>
+  <data name="Admin.ContentEditor.NotSaved" xml:space="preserve">
+    <value>Not saved yet</value>
+  </data>
+  <data name="Admin.ContentEditor.Page" xml:space="preserve">
+    <value>page</value>
+  </data>
+  <data name="Admin.ContentEditor.PageBreakHelp" xml:space="preserve">
+    <value>For long content, enter {0} on a separate line to add a page break. Visitors read on using “Next page”; RSS and search still use the full text.</value>
+  </data>
+  <data name="Admin.ContentEditor.ParentHelp" xml:space="preserve">
+    <value>This page will appear under the selected page in navigation and lists. Its standalone /pages/slug URL will not change.</value>
+  </data>
+  <data name="Admin.ContentEditor.ParentPage" xml:space="preserve">
+    <value>Parent page (optional)</value>
+  </data>
+  <data name="Admin.ContentEditor.PasswordProtection" xml:space="preserve">
+    <value>Password protection</value>
+  </data>
+  <data name="Admin.ContentEditor.PasswordProtectionHelp" xml:space="preserve">
+    <value>A password is required to read the body at the public URL. Protected content is excluded from search and AI retrieval.</value>
+  </data>
+  <data name="Admin.ContentEditor.PendingReviewHelp" xml:space="preserve">
+    <value>Review this pending content: publish it or return it to draft.</value>
+  </data>
+  <data name="Admin.ContentEditor.Post" xml:space="preserve">
+    <value>post</value>
+  </data>
+  <data name="Admin.ContentEditor.Preview" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewHelp" xml:space="preserve">
+    <value>This previews your current input; it does not mean the content is saved or published.</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewLink" xml:space="preserve">
+    <value>Draft preview link</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewLinkCreated" xml:space="preserve">
+    <value>Preview link generated. Any previous link is now invalid.</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewLinkHelp" xml:space="preserve">
+    <value>Anyone with the link can read this draft, but it will not appear in search. Regenerating or revoking the link immediately invalidates the old one.</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewLinkRevoked" xml:space="preserve">
+    <value>Preview link revoked.</value>
+  </data>
+  <data name="Admin.ContentEditor.Private" xml:space="preserve">
+    <value>Private</value>
+  </data>
+  <data name="Admin.ContentEditor.PrivateHelp" xml:space="preserve">
+    <value>Only signed-in administrators can read the public URL. Visitors and search engines receive 404; private content is excluded from search and AI retrieval.</value>
+  </data>
+  <data name="Admin.ContentEditor.Processing" xml:space="preserve">
+    <value>Processing…</value>
+  </data>
+  <data name="Admin.ContentEditor.PublicImagesNotice" xml:space="preserve">
+    <value>All uploaded images are public resources, including images in drafts. Withdrawing a post does not hide its image URLs.</value>
+  </data>
+  <data name="Admin.ContentEditor.PublishSettings" xml:space="preserve">
+    <value>Publishing settings</value>
+  </data>
+  <data name="Admin.ContentEditor.Published" xml:space="preserve">
+    <value>Published</value>
+  </data>
+  <data name="Admin.ContentEditor.PublishedCreatedNotice" xml:space="preserve">
+    <value>Content created and published.</value>
+  </data>
+  <data name="Admin.ContentEditor.PublishedHelp" xml:space="preserve">
+    <value>Saving immediately updates the public site. Withdrawing makes the text no longer public.</value>
+  </data>
+  <data name="Admin.ContentEditor.PublishedNotice" xml:space="preserve">
+    <value>Saved and published.</value>
+  </data>
+  <data name="Admin.ContentEditor.ReadOnlyMarkdown" xml:space="preserve">
+    <value>Markdown source (read-only, can be copied)</value>
+  </data>
+  <data name="Admin.ContentEditor.ReadOnlyNotice" xml:space="preserve">
+    <value>You do not currently have permission to edit this content. You can view it, but cannot change or publish it.</value>
+  </data>
+  <data name="Admin.ContentEditor.RegenerateLink" xml:space="preserve">
+    <value>Regenerate link</value>
+  </data>
+  <data name="Admin.ContentEditor.ReloadContent" xml:space="preserve">
+    <value>Reload content</value>
+  </data>
+  <data name="Admin.ContentEditor.ReloadDescription" xml:space="preserve">
+    <value>Your unsaved input will be replaced. Copy anything you want to keep first.</value>
+  </data>
+  <data name="Admin.ContentEditor.ReloadLatest" xml:space="preserve">
+    <value>Reload latest version</value>
+  </data>
+  <data name="Admin.ContentEditor.ReloadSaved" xml:space="preserve">
+    <value>Reload saved version</value>
+  </data>
+  <data name="Admin.ContentEditor.ReloadTitle" xml:space="preserve">
+    <value>Discard input and reload?</value>
+  </data>
+  <data name="Admin.ContentEditor.RemoveCover" xml:space="preserve">
+    <value>Remove cover</value>
+  </data>
+  <data name="Admin.ContentEditor.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.ContentEditor.Restore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Admin.ContentEditor.RestoreHelp" xml:space="preserve">
+    <value>Loading replaces the current editor content. You can restore again before saving, but must still save manually after confirming.</value>
+  </data>
+  <data name="Admin.ContentEditor.ReturnToDraft" xml:space="preserve">
+    <value>Return to draft</value>
+  </data>
+  <data name="Admin.ContentEditor.RevisionExcerpt" xml:space="preserve">
+    <value>Excerpt: {0}</value>
+  </data>
+  <data name="Admin.ContentEditor.RevisionMarkdown" xml:space="preserve">
+    <value>Revision content (Markdown)</value>
+  </data>
+  <data name="Admin.ContentEditor.RevisionNotFound" xml:space="preserve">
+    <value>The revision does not exist. Please reload.</value>
+  </data>
+  <data name="Admin.ContentEditor.Revisions" xml:space="preserve">
+    <value>Revisions</value>
+  </data>
+  <data name="Admin.ContentEditor.RevokeLink" xml:space="preserve">
+    <value>Revoke</value>
+  </data>
+  <data name="Admin.ContentEditor.SaveAndPublish" xml:space="preserve">
+    <value>Save and publish</value>
+  </data>
+  <data name="Admin.ContentEditor.SaveAndSubmit" xml:space="preserve">
+    <value>Save and submit for review</value>
+  </data>
+  <data name="Admin.ContentEditor.SaveAndWithdraw" xml:space="preserve">
+    <value>Save and withdraw to draft</value>
+  </data>
+  <data name="Admin.ContentEditor.SaveChanges" xml:space="preserve">
+    <value>Save changes</value>
+  </data>
+  <data name="Admin.ContentEditor.SaveDraft" xml:space="preserve">
+    <value>Save draft</value>
+  </data>
+  <data name="Admin.ContentEditor.SavePending" xml:space="preserve">
+    <value>Save pending content</value>
+  </data>
+  <data name="Admin.ContentEditor.SavedVersionLoaded" xml:space="preserve">
+    <value>Saved version loaded</value>
+  </data>
+  <data name="Admin.ContentEditor.Schedule" xml:space="preserve">
+    <value>Scheduled publication time (optional)</value>
+  </data>
+  <data name="Admin.ContentEditor.ScheduleHelp" xml:space="preserve">
+    <value>Uses your browser's time zone. Choose at least {0} minutes from now; the system publishes automatically at that time. Leave blank for no schedule.</value>
+  </data>
+  <data name="Admin.ContentEditor.SelectCover" xml:space="preserve">
+    <value>Choose cover</value>
+  </data>
+  <data name="Admin.ContentEditor.SelectionReadFailed" xml:space="preserve">
+    <value>Unable to read the selected body text. Copy the excerpt into the field manually.</value>
+  </data>
+  <data name="Admin.ContentEditor.SelectionRequired" xml:space="preserve">
+    <value>Select text in the body to use as the excerpt, then click “Use selected body text”.</value>
+  </data>
+  <data name="Admin.ContentEditor.SelectionTruncated" xml:space="preserve">
+    <value>The selection was converted to plain text and truncated to {0} characters.</value>
+  </data>
+  <data name="Admin.ContentEditor.SetPassword" xml:space="preserve">
+    <value>Set protection password</value>
+  </data>
+  <data name="Admin.ContentEditor.Slug" xml:space="preserve">
+    <value>URL slug</value>
+  </data>
+  <data name="Admin.ContentEditor.SlugHelp" xml:space="preserve">
+    <value>The slug must be unique across the site. Changing it will not automatically redirect the old URL.</value>
+  </data>
+  <data name="Admin.ContentEditor.SlugPlaceholder" xml:space="preserve">
+    <value>Leave blank on first save to generate from the title</value>
+  </data>
+  <data name="Admin.ContentEditor.Sticky" xml:space="preserve">
+    <value>Pin post</value>
+  </data>
+  <data name="Admin.ContentEditor.StickyHelp" xml:space="preserve">
+    <value>Pinned posts stay at the top of the post list.</value>
+  </data>
+  <data name="Admin.ContentEditor.SubmittedForReview" xml:space="preserve">
+    <value>Submitted for review. An editor will review the content before publishing.</value>
+  </data>
+  <data name="Admin.ContentEditor.TakeOver" xml:space="preserve">
+    <value>Take over editing</value>
+  </data>
+  <data name="Admin.ContentEditor.TakeOverNotice" xml:space="preserve">
+    <value>You have taken over editing. If the other member is still editing, they will see a notice at the next heartbeat.</value>
+  </data>
+  <data name="Admin.ContentEditor.Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Admin.ContentEditor.TitleHelp" xml:space="preserve">
+    <value>Up to {0} characters.</value>
+  </data>
+  <data name="Admin.ContentEditor.TitlePlaceholder" xml:space="preserve">
+    <value>Give this idea a title</value>
+  </data>
+  <data name="Admin.ContentEditor.UnsavedChanges" xml:space="preserve">
+    <value>Unsaved changes</value>
+  </data>
+  <data name="Admin.ContentEditor.UnsavedPreview" xml:space="preserve">
+    <value>Preview of unsaved content</value>
+  </data>
+  <data name="Admin.ContentEditor.View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Admin.ContentEditor.ViewCount" xml:space="preserve">
+    <value>Total views: {0}.</value>
+  </data>
+  <data name="Admin.ContentEditor.ViewHeading" xml:space="preserve">
+    <value>View {0}</value>
+  </data>
+  <data name="Admin.ContentEditor.ViewPageTitle" xml:space="preserve">
+    <value>View content · Content management</value>
+  </data>
+  <data name="Admin.ContentEditor.ViewPublicVersion" xml:space="preserve">
+    <value>View public version ↗</value>
+  </data>
+  <data name="Admin.ContentEditor.WithdrawToDraft" xml:space="preserve">
+    <value>Withdraw to draft</value>
+  </data>
+  <data name="Admin.ContentEditor.WithdrawnNotice" xml:space="preserve">
+    <value>Withdrawn to draft. The text is no longer public.</value>
+  </data>
+  <data name="Admin.ContentList.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.ContentList.All" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Admin.ContentList.AllItems" xml:space="preserve">
+    <value>{0}: All</value>
+  </data>
+  <data name="Admin.ContentList.Author" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="Admin.ContentList.AuthorAnnotation" xml:space="preserve">
+    <value> (author)</value>
+  </data>
+  <data name="Admin.ContentList.BulkActions" xml:space="preserve">
+    <value>Bulk actions</value>
+  </data>
+  <data name="Admin.ContentList.BulkDelete" xml:space="preserve">
+    <value>Permanently delete selected items</value>
+  </data>
+  <data name="Admin.ContentList.BulkDeleteDescription" xml:space="preserve">
+    <value>Deletion cannot be undone. Public URLs will stop serving the content. Uploaded images remain public; items that conflict with changes in other tabs will be skipped and reported.</value>
+  </data>
+  <data name="Admin.ContentList.BulkDeletePartial" xml:space="preserve">
+    <value>Bulk permanent deletion completed: {0} succeeded, {1} failed. Example: {2}</value>
+  </data>
+  <data name="Admin.ContentList.BulkDeleteTitle" xml:space="preserve">
+    <value>Permanently delete the {0} selected items?</value>
+  </data>
+  <data name="Admin.ContentList.BulkDeletedNotice" xml:space="preserve">
+    <value>Permanently deleted {0} content items.</value>
+  </data>
+  <data name="Admin.ContentList.BulkFailed" xml:space="preserve">
+    <value>Unable to perform the bulk action. Please try again.</value>
+  </data>
+  <data name="Admin.ContentList.BulkRestore" xml:space="preserve">
+    <value>Restore selected items to draft</value>
+  </data>
+  <data name="Admin.ContentList.BulkRestorePartial" xml:space="preserve">
+    <value>Bulk restore completed: {0} succeeded, {1} failed. Example: {2}</value>
+  </data>
+  <data name="Admin.ContentList.BulkRestoredNotice" xml:space="preserve">
+    <value>Restored {0} content items.</value>
+  </data>
+  <data name="Admin.ContentList.BulkTrash" xml:space="preserve">
+    <value>Move selected items to trash</value>
+  </data>
+  <data name="Admin.ContentList.BulkTrashPartial" xml:space="preserve">
+    <value>Bulk move to trash completed: {0} succeeded, {1} failed. Example: {2}</value>
+  </data>
+  <data name="Admin.ContentList.BulkTrashedNotice" xml:space="preserve">
+    <value>Moved {0} content items to trash.</value>
+  </data>
+  <data name="Admin.ContentList.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.ContentList.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Admin.ContentList.ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="Admin.ContentList.ConfirmDelete" xml:space="preserve">
+    <value>Confirm permanent deletion</value>
+  </data>
+  <data name="Admin.ContentList.ConfirmTrash" xml:space="preserve">
+    <value>Confirm move to trash</value>
+  </data>
+  <data name="Admin.ContentList.ContentManagement" xml:space="preserve">
+    <value>Content management</value>
+  </data>
+  <data name="Admin.ContentList.CreateDraftHelp" xml:space="preserve">
+    <value>Start with a title and Markdown body. The content will not be public immediately.</value>
+  </data>
+  <data name="Admin.ContentList.CreateDraftStep" xml:space="preserve">
+    <value>Create a draft</value>
+  </data>
+  <data name="Admin.ContentList.CreatePage" xml:space="preserve">
+    <value>Create a page →</value>
+  </data>
+  <data name="Admin.ContentList.CreatePost" xml:space="preserve">
+    <value>Create a post →</value>
+  </data>
+  <data name="Admin.ContentList.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.ContentList.DeleteDescription" xml:space="preserve">
+    <value>Deletion cannot be undone. Public URLs will stop serving the content. Uploaded images remain public.</value>
+  </data>
+  <data name="Admin.ContentList.DeletePermanently" xml:space="preserve">
+    <value>Delete permanently</value>
+  </data>
+  <data name="Admin.ContentList.DeleteTitle" xml:space="preserve">
+    <value>Permanently delete “{0}”?</value>
+  </data>
+  <data name="Admin.ContentList.DeletedAt" xml:space="preserve">
+    <value>Deleted at {0}</value>
+  </data>
+  <data name="Admin.ContentList.DeletedNotice" xml:space="preserve">
+    <value>Content permanently deleted. Images were not deleted.</value>
+  </data>
+  <data name="Admin.ContentList.Draft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Admin.ContentList.DraftItems" xml:space="preserve">
+    <value>{0}: Drafts</value>
+  </data>
+  <data name="Admin.ContentList.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.ContentList.EmptyDraftHelp" xml:space="preserve">
+    <value>Create a draft and publish when you are ready.</value>
+  </data>
+  <data name="Admin.ContentList.EmptyFilteredTitle" xml:space="preserve">
+    <value>No items in {0}</value>
+  </data>
+  <data name="Admin.ContentList.EmptyPublishedHelp" xml:space="preserve">
+    <value>Once a draft is saved and published, it will appear here and on the public site.</value>
+  </data>
+  <data name="Admin.ContentList.EmptyTitle" xml:space="preserve">
+    <value>Start with your first idea</value>
+  </data>
+  <data name="Admin.ContentList.GettingStartedTitle" xml:space="preserve">
+    <value>Turn your first idea into website content</value>
+  </data>
+  <data name="Admin.ContentList.LastUpdated" xml:space="preserve">
+    <value>Last updated</value>
+  </data>
+  <data name="Admin.ContentList.LoadFailed" xml:space="preserve">
+    <value>Unable to load the content list.</value>
+  </data>
+  <data name="Admin.ContentList.NewPage" xml:space="preserve">
+    <value>＋ New page</value>
+  </data>
+  <data name="Admin.ContentList.NewPost" xml:space="preserve">
+    <value>＋ New post</value>
+  </data>
+  <data name="Admin.ContentList.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.ContentList.NoMatches" xml:space="preserve">
+    <value>No content currently matches the criteria.</value>
+  </data>
+  <data name="Admin.ContentList.OrganizeHelp" xml:space="preserve">
+    <value>Upload images directly in the editor. For posts, you can also add categories and tags without leaving it.</value>
+  </data>
+  <data name="Admin.ContentList.OrganizeStep" xml:space="preserve">
+    <value>Organize and preview</value>
+  </data>
+  <data name="Admin.ContentList.PageCount" xml:space="preserve">
+    <value>Page {0} / {1}</value>
+  </data>
+  <data name="Admin.ContentList.PageTitle" xml:space="preserve">
+    <value>{0} · Content management</value>
+  </data>
+  <data name="Admin.ContentList.Pages" xml:space="preserve">
+    <value>Standalone pages</value>
+  </data>
+  <data name="Admin.ContentList.PagesIntroduction" xml:space="preserve">
+    <value>Create lasting content such as an About page or contact details.</value>
+  </data>
+  <data name="Admin.ContentList.Pagination" xml:space="preserve">
+    <value>Admin content pagination</value>
+  </data>
+  <data name="Admin.ContentList.ParentPage" xml:space="preserve">
+    <value> · Parent: {0}</value>
+  </data>
+  <data name="Admin.ContentList.PasswordProtected" xml:space="preserve">
+    <value>Password protected</value>
+  </data>
+  <data name="Admin.ContentList.Pending" xml:space="preserve">
+    <value>Pending review</value>
+  </data>
+  <data name="Admin.ContentList.PendingItems" xml:space="preserve">
+    <value>{0}: Pending review</value>
+  </data>
+  <data name="Admin.ContentList.Posts" xml:space="preserve">
+    <value>Posts</value>
+  </data>
+  <data name="Admin.ContentList.PostsIntroduction" xml:space="preserve">
+    <value>Organize your ideas and help every post find its readers.</value>
+  </data>
+  <data name="Admin.ContentList.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.ContentList.Private" xml:space="preserve">
+    <value>Private, visible only to administrators</value>
+  </data>
+  <data name="Admin.ContentList.PublishHelp" xml:space="preserve">
+    <value>Click “Save and publish”, then view the public site. You can withdraw to draft at any time.</value>
+  </data>
+  <data name="Admin.ContentList.PublishStep" xml:space="preserve">
+    <value>Publish for readers</value>
+  </data>
+  <data name="Admin.ContentList.Published" xml:space="preserve">
+    <value>Published</value>
+  </data>
+  <data name="Admin.ContentList.PublishedItems" xml:space="preserve">
+    <value>{0}: Published</value>
+  </data>
+  <data name="Admin.ContentList.QuickEdit" xml:space="preserve">
+    <value>Quick edit</value>
+  </data>
+  <data name="Admin.ContentList.QuickEditHelp" xml:space="preserve">
+    <value>Only updates the title, slug, and status. Publishing cancels the schedule; use the editor for other fields.</value>
+  </data>
+  <data name="Admin.ContentList.QuickEditItem" xml:space="preserve">
+    <value>Quick edit {0}</value>
+  </data>
+  <data name="Admin.ContentList.QuickSaveFailed" xml:space="preserve">
+    <value>Unable to save the quick edit. Please try again.</value>
+  </data>
+  <data name="Admin.ContentList.ReadOnlyNotice" xml:space="preserve">
+    <value>You are a read-only member of this site. You can view, search, and browse pages, but cannot create, edit, or publish content.</value>
+  </data>
+  <data name="Admin.ContentList.Reload" xml:space="preserve">
+    <value>Reload list</value>
+  </data>
+  <data name="Admin.ContentList.Restore" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Admin.ContentList.RestoredNotice" xml:space="preserve">
+    <value>Restored as a draft.</value>
+  </data>
+  <data name="Admin.ContentList.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Admin.ContentList.ScheduledAt" xml:space="preserve">
+    <value>Scheduled for {0} UTC</value>
+  </data>
+  <data name="Admin.ContentList.Search" xml:space="preserve">
+    <value>Search {0}</value>
+  </data>
+  <data name="Admin.ContentList.SearchPlaceholder" xml:space="preserve">
+    <value>Search titles or URL slugs…</value>
+  </data>
+  <data name="Admin.ContentList.SelectItem" xml:space="preserve">
+    <value>Select {0}</value>
+  </data>
+  <data name="Admin.ContentList.SelectPage" xml:space="preserve">
+    <value>Select all on this page</value>
+  </data>
+  <data name="Admin.ContentList.SelectedCount" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="Admin.ContentList.SetSiteName" xml:space="preserve">
+    <value>Set site name</value>
+  </data>
+  <data name="Admin.ContentList.Slug" xml:space="preserve">
+    <value>URL slug</value>
+  </data>
+  <data name="Admin.ContentList.SortOrder" xml:space="preserve">
+    <value>Sorted by last update · UTC</value>
+  </data>
+  <data name="Admin.ContentList.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.ContentList.StatusFilter" xml:space="preserve">
+    <value>Filter content by status</value>
+  </data>
+  <data name="Admin.ContentList.TableCaption" xml:space="preserve">
+    <value>{0} list</value>
+  </data>
+  <data name="Admin.ContentList.Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Admin.ContentList.TitleAndUrl" xml:space="preserve">
+    <value>Title / URL</value>
+  </data>
+  <data name="Admin.ContentList.TrashDescription" xml:space="preserve">
+    <value>The content immediately stops being public, including in search and at old URLs. It stays in trash for {0} days and can be restored as a draft during that time.</value>
+  </data>
+  <data name="Admin.ContentList.TrashTitle" xml:space="preserve">
+    <value>Move “{0}” to trash?</value>
+  </data>
+  <data name="Admin.ContentList.Trashed" xml:space="preserve">
+    <value>Trash</value>
+  </data>
+  <data name="Admin.ContentList.TrashedItems" xml:space="preserve">
+    <value>{0}: Trash</value>
+  </data>
+  <data name="Admin.ContentList.TrashedNotice" xml:space="preserve">
+    <value>Moved to trash. You can restore it within 30 days.</value>
+  </data>
+  <data name="Admin.ContentList.UpdatedNotice" xml:space="preserve">
+    <value>Content updated.</value>
+  </data>
+  <data name="Admin.ContentList.View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Admin.ContentList.ViewAiStatus" xml:space="preserve">
+    <value>View AI feature status</value>
+  </data>
+  <data name="Admin.ContentList.Views" xml:space="preserve">
+    <value>Views</value>
+  </data>
+  <data name="Admin.Media.AllImages" xml:space="preserve">
+    <value>All images</value>
+  </data>
+  <data name="Admin.Media.AllUploadsFailed" xml:space="preserve">
+    <value>No files were uploaded: {0}</value>
+  </data>
+  <data name="Admin.Media.AltText" xml:space="preserve">
+    <value>Alternative text (alt)</value>
+  </data>
+  <data name="Admin.Media.AltTextHelp" xml:space="preserve">
+    <value>Up to {0} characters. Automatically used as the image alt text when inserted in a post, improving accessibility and SEO.</value>
+  </data>
+  <data name="Admin.Media.Audio" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="Admin.Media.BatchLimit" xml:space="preserve">
+    <value>Upload at most {0} images at a time. Please split them into batches.</value>
+  </data>
+  <data name="Admin.Media.BatchResults" xml:space="preserve">
+    <value>Batch upload results</value>
+  </data>
+  <data name="Admin.Media.BatchSummary" xml:space="preserve">
+    <value>This upload: {0} succeeded, {1} failed.</value>
+  </data>
+  <data name="Admin.Media.BatchUploadFailed" xml:space="preserve">
+    <value>Batch upload failed. Please try again.</value>
+  </data>
+  <data name="Admin.Media.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Media.Caption" xml:space="preserve">
+    <value>Caption</value>
+  </data>
+  <data name="Admin.Media.CaptionHelp" xml:space="preserve">
+    <value>Up to {0} characters. Displayed below the image when used as a cover.</value>
+  </data>
+  <data name="Admin.Media.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Admin.Media.ConfirmDelete" xml:space="preserve">
+    <value>Confirm image deletion</value>
+  </data>
+  <data name="Admin.Media.CopyMarkdown" xml:space="preserve">
+    <value>Copy Markdown</value>
+  </data>
+  <data name="Admin.Media.DeleteDescription" xml:space="preserve">
+    <value>No content references this image. Deleting it immediately invalidates its URL and cannot be undone, including thumbnail variants.</value>
+  </data>
+  <data name="Admin.Media.DeleteImage" xml:space="preserve">
+    <value>Delete image</value>
+  </data>
+  <data name="Admin.Media.DeleteTitle" xml:space="preserve">
+    <value>Delete image “{0}”?</value>
+  </data>
+  <data name="Admin.Media.DeletedNotice" xml:space="preserve">
+    <value>Image deleted, including thumbnail variants.</value>
+  </data>
+  <data name="Admin.Media.Document" xml:space="preserve">
+    <value>Document (PDF)</value>
+  </data>
+  <data name="Admin.Media.Draft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Admin.Media.DropHelp" xml:space="preserve">
+    <value>Drop images here, or click to select multiple files.</value>
+  </data>
+  <data name="Admin.Media.EmptyHelp" xml:space="preserve">
+    <value>Upload your first image to start building your media library.</value>
+  </data>
+  <data name="Admin.Media.EmptyTitle" xml:space="preserve">
+    <value>Add some imagery to your words</value>
+  </data>
+  <data name="Admin.Media.Eyebrow" xml:space="preserve">
+    <value>Tell stories with images</value>
+  </data>
+  <data name="Admin.Media.FileCount" xml:space="preserve">
+    <value>{0} files</value>
+  </data>
+  <data name="Admin.Media.FormatsHelp" xml:space="preserve">
+    <value>Supports JPEG, PNG, and WebP (no animation). The server validates each file's actual format and image dimensions. SVG is not accepted.</value>
+  </data>
+  <data name="Admin.Media.Image" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="Admin.Media.InsertHelp" xml:space="preserve">
+    <value>Click “Insert image” in the editor, or copy the Markdown below:</value>
+  </data>
+  <data name="Admin.Media.Introduction" xml:space="preserve">
+    <value>Upload images to use in posts or pages at any time.</value>
+  </data>
+  <data name="Admin.Media.MetadataSaved" xml:space="preserve">
+    <value>Image details saved. Alt text will be included automatically in the insertion markup.</value>
+  </data>
+  <data name="Admin.Media.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.Media.OpenOriginal" xml:space="preserve">
+    <value>Open original image: {0}</value>
+  </data>
+  <data name="Admin.Media.PageTitle" xml:space="preserve">
+    <value>Media library · Content management</value>
+  </data>
+  <data name="Admin.Media.Pagination" xml:space="preserve">
+    <value>Media pagination</value>
+  </data>
+  <data name="Admin.Media.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.Media.PublicImagesNotice" xml:space="preserve">
+    <value>All uploaded images, including those in drafts, can be accessed by URL. Withdrawing or deleting content does not hide images. Do not upload private information.</value>
+  </data>
+  <data name="Admin.Media.PublicImagesTitle" xml:space="preserve">
+    <value>All images are public.</value>
+  </data>
+  <data name="Admin.Media.Published" xml:space="preserve">
+    <value>Published</value>
+  </data>
+  <data name="Admin.Media.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can browse images on this site, but cannot upload, edit, or delete them.</value>
+  </data>
+  <data name="Admin.Media.RecentMarkdown" xml:space="preserve">
+    <value>Markdown for the recently uploaded image</value>
+  </data>
+  <data name="Admin.Media.RecentUploadLabel" xml:space="preserve">
+    <value>Recently uploaded: </value>
+  </data>
+  <data name="Admin.Media.ReferenceCount" xml:space="preserve">
+    <value>Referenced by {0} content items</value>
+  </data>
+  <data name="Admin.Media.ReferencedImageHelp" xml:space="preserve">
+    <value>This image is still referenced by the following content. Remove the references before deleting it:</value>
+  </data>
+  <data name="Admin.Media.Reload" xml:space="preserve">
+    <value>Reload media list</value>
+  </data>
+  <data name="Admin.Media.SaveMetadata" xml:space="preserve">
+    <value>Save image details</value>
+  </data>
+  <data name="Admin.Media.Search" xml:space="preserve">
+    <value>Search images</value>
+  </data>
+  <data name="Admin.Media.SearchPlaceholder" xml:space="preserve">
+    <value>Search file names, alt text, or captions…</value>
+  </data>
+  <data name="Admin.Media.SelectImages" xml:space="preserve">
+    <value>Select images to upload (multiple selection allowed)</value>
+  </data>
+  <data name="Admin.Media.SortOrder" xml:space="preserve">
+    <value>Sorted by upload time</value>
+  </data>
+  <data name="Admin.Media.Title" xml:space="preserve">
+    <value>Media library</value>
+  </data>
+  <data name="Admin.Media.Trashed" xml:space="preserve">
+    <value>Trash</value>
+  </data>
+  <data name="Admin.Media.UploadFailedDetail" xml:space="preserve">
+    <value>Failed: {0}</value>
+  </data>
+  <data name="Admin.Media.UploadHelp" xml:space="preserve">
+    <value>Selecting or dropping images starts uploading immediately. Up to {0} images per batch, with a limit of {1} MB each.</value>
+  </data>
+  <data name="Admin.Media.UploadImage" xml:space="preserve">
+    <value>Upload new images</value>
+  </data>
+  <data name="Admin.Media.Uploaded" xml:space="preserve">
+    <value>Uploaded</value>
+  </data>
+  <data name="Admin.Media.UploadedNotice" xml:space="preserve">
+    <value>Images uploaded. You can now insert them in the editor.</value>
+  </data>
+  <data name="Admin.Media.Uploading" xml:space="preserve">
+    <value>Uploading: {0}</value>
+  </data>
+  <data name="Admin.Media.Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="Admin.MediaPicker.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Admin.MediaPicker.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Admin.MediaPicker.Empty" xml:space="preserve">
+    <value>No images yet. Upload one here without leaving the editor.</value>
+  </data>
+  <data name="Admin.MediaPicker.ErrorHelp" xml:space="preserve">
+    <value>Your body text is still in the editor. Do not reload the whole page; retry the upload or refresh the media list instead.</value>
+  </data>
+  <data name="Admin.MediaPicker.ImageTooLarge" xml:space="preserve">
+    <value>The image exceeds the {0} MB limit. Choose a smaller file.</value>
+  </data>
+  <data name="Admin.MediaPicker.InsertAtEnd" xml:space="preserve">
+    <value>Insert at the end of the body</value>
+  </data>
+  <data name="Admin.MediaPicker.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.MediaPicker.NoMatches" xml:space="preserve">
+    <value>No matching images. Try another keyword or upload an image.</value>
+  </data>
+  <data name="Admin.MediaPicker.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.MediaPicker.PublicImagesNotice" xml:space="preserve">
+    <value>All images are public, including those used in drafts. Withdrawing or deleting content does not hide images. Do not upload private information.</value>
+  </data>
+  <data name="Admin.MediaPicker.RecentUploadHelp" xml:space="preserve">
+    <value>Recently uploaded; click the image to insert it into the body.</value>
+  </data>
+  <data name="Admin.MediaPicker.Refresh" xml:space="preserve">
+    <value>Refresh media list</value>
+  </data>
+  <data name="Admin.MediaPicker.Search" xml:space="preserve">
+    <value>Search media library</value>
+  </data>
+  <data name="Admin.MediaPicker.SearchPlaceholder" xml:space="preserve">
+    <value>Search file names, alt text, or captions…</value>
+  </data>
+  <data name="Admin.MediaPicker.SingleImageRequired" xml:space="preserve">
+    <value>Only one image can be uploaded at a time.</value>
+  </data>
+  <data name="Admin.MediaPicker.Title" xml:space="preserve">
+    <value>Insert from media library</value>
+  </data>
+  <data name="Admin.MediaPicker.UploadHelp" xml:space="preserve">
+    <value>Selecting an image uploads it immediately, one at a time, up to {0} MB. Supports JPEG, PNG, and WebP (no animation); SVG is not accepted. The server validates the actual format and dimensions.</value>
+  </data>
+  <data name="Admin.MediaPicker.UploadImage" xml:space="preserve">
+    <value>Upload a new image</value>
+  </data>
+  <data name="Admin.MediaPicker.UploadedNotice" xml:space="preserve">
+    <value>Image uploaded. Click it to insert; the body has not been saved yet.</value>
+  </data>
+  <data name="Admin.MediaPicker.Uploading" xml:space="preserve">
+    <value>Uploading: {0}</value>
+  </data>
+  <data name="Admin.TaxonomySelector.Categories" xml:space="preserve">
+    <value>Categories</value>
+  </data>
+  <data name="Admin.TaxonomySelector.CategoryCreated" xml:space="preserve">
+    <value>Category created and selected. The body has not been saved yet.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.CategoryLimit" xml:space="preserve">
+    <value>The limit of {0} categories has been reached. Deselect an item first.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.ClearCategories" xml:space="preserve">
+    <value>Clear all selected categories</value>
+  </data>
+  <data name="Admin.TaxonomySelector.ClearTags" xml:space="preserve">
+    <value>Clear all selected tags</value>
+  </data>
+  <data name="Admin.TaxonomySelector.CreateCategory" xml:space="preserve">
+    <value>Create and select category</value>
+  </data>
+  <data name="Admin.TaxonomySelector.CreateFailed" xml:space="preserve">
+    <value>Unable to create the item.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.CreateTag" xml:space="preserve">
+    <value>Create and select tag</value>
+  </data>
+  <data name="Admin.TaxonomySelector.DuplicateCategory" xml:space="preserve">
+    <value>A category with the same name or URL slug already exists. Refresh the options and select the existing item, or use another name.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.DuplicateTag" xml:space="preserve">
+    <value>A tag with the same name or URL slug already exists. Refresh the options and select the existing item, or use another name.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.JustCreated" xml:space="preserve">
+    <value>{0} (just created)</value>
+  </data>
+  <data name="Admin.TaxonomySelector.LoadFailed" xml:space="preserve">
+    <value>Unable to load options.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.NameHelp" xml:space="preserve">
+    <value>Up to {0} characters. Automatically selected after creation; the body will not be saved.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.NewCategoryName" xml:space="preserve">
+    <value>New category name</value>
+  </data>
+  <data name="Admin.TaxonomySelector.NewTagName" xml:space="preserve">
+    <value>New tag name</value>
+  </data>
+  <data name="Admin.TaxonomySelector.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.TaxonomySelector.NoCategories" xml:space="preserve">
+    <value>No categories created yet.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.NoTags" xml:space="preserve">
+    <value>No tags created yet.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.PostCategoryLimit" xml:space="preserve">
+    <value>Each post can have at most {0} categories. Deselect an item first.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.PostTagLimit" xml:space="preserve">
+    <value>Each post can have at most {0} tags. Deselect an item first.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Admin.TaxonomySelector.RefreshCategories" xml:space="preserve">
+    <value>Refresh categories</value>
+  </data>
+  <data name="Admin.TaxonomySelector.RefreshTags" xml:space="preserve">
+    <value>Refresh tags</value>
+  </data>
+  <data name="Admin.TaxonomySelector.SelectedCount" xml:space="preserve">
+    <value>Selected: {0} / {1}</value>
+  </data>
+  <data name="Admin.TaxonomySelector.SelectionHelp" xml:space="preserve">
+    <value>Multiple selections are allowed. Changing pages or refreshing will not clear your selection.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.TagCreated" xml:space="preserve">
+    <value>Tag created and selected. The body has not been saved yet.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.TagLimit" xml:space="preserve">
+    <value>The limit of {0} tags has been reached. Deselect an item first.</value>
+  </data>
+  <data name="Admin.TaxonomySelector.Tags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Admin.UnsavedGuard.DiscardAndLeave" xml:space="preserve">
+    <value>Discard and leave</value>
+  </data>
+  <data name="Admin.UnsavedGuard.LeaveDescription" xml:space="preserve">
+    <value>You have unsaved changes. Leaving will discard this input. Save or copy a backup first.</value>
+  </data>
+  <data name="Admin.UnsavedGuard.LeaveTitle" xml:space="preserve">
+    <value>Leave the editor?</value>
+  </data>
+  <data name="Admin.UnsavedGuard.OperationInProgress" xml:space="preserve">
+    <value>An operation is still in progress. Please wait before leaving.</value>
+  </data>
+  <data name="Admin.UnsavedGuard.Stay" xml:space="preserve">
+    <value>Continue editing</value>
+  </data>
+  <data name="Common.CheckingSignIn" xml:space="preserve">
+    <value>Checking your sign-in…</value>
+  </data>
+  <data name="Common.GoToSignIn" xml:space="preserve">
+    <value>Go to sign-in</value>
+  </data>
+  <data name="Common.SignInRequired" xml:space="preserve">
+    <value>Sign in before managing this site.</value>
+  </data>
+  <data name="Admin.ContentEditor.AuthorManagedReadOnly" xml:space="preserve">
+    <value>This content is published or scheduled and is managed by an editor. You can still view it.</value>
+  </data>
+  <data name="Admin.ContentEditor.EditingStatusUnavailable" xml:space="preserve">
+    <value>Editing availability could not be checked. Keep a copy of your input and check your connection.</value>
+  </data>
+  <data name="Admin.ContentEditor.GenerateLinkPendingHelp" xml:space="preserve">
+    <value>Create a temporary link to share content that has not been published with a reviewer.</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewLinkPending" xml:space="preserve">
+    <value>Pending review preview link</value>
+  </data>
+  <data name="Admin.ContentEditor.PreviewLinkPendingHelp" xml:space="preserve">
+    <value>Anyone with the link can read this pending content. It stays out of search and is never public. Regenerating or revoking the link invalidates the old one immediately.</value>
+  </data>
+  <data name="Admin.ContentEditor.ContentType" xml:space="preserve">
+    <value>Content type</value>
+  </data>
+  <data name="Admin.ContentEditor.ContentTypeHelp" xml:space="preserve">
+    <value>Custom content types publish to their own public section (/t/slug) and stay out of the post list. The type of existing content cannot be changed.</value>
+  </data>
+  <data name="Admin.ContentEditor.ContentTypeUnknown" xml:space="preserve">
+    <value>Custom content type</value>
+  </data>
+  <data name="Admin.ContentEditor.DefaultPost" xml:space="preserve">
+    <value>Post (default)</value>
+  </data>
+  <data name="Admin.ContentTypes.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.ContentTypes.AddType" xml:space="preserve">
+    <value>Add a content type</value>
+  </data>
+  <data name="Admin.ContentTypes.Archived" xml:space="preserve">
+    <value>Archived (no longer accepts new content)</value>
+  </data>
+  <data name="Admin.ContentTypes.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.ContentTypes.CancelOrAdd" xml:space="preserve">
+    <value>Cancel / Add</value>
+  </data>
+  <data name="Admin.ContentTypes.ConfirmDelete" xml:space="preserve">
+    <value>Confirm delete</value>
+  </data>
+  <data name="Admin.ContentTypes.Count" xml:space="preserve">
+    <value>Content count</value>
+  </data>
+  <data name="Admin.ContentTypes.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTaxonomy" xml:space="preserve">
+    <value>Delete taxonomy</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTaxonomyTitle" xml:space="preserve">
+    <value>Delete the custom taxonomy “{0}”?</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTaxonomyWarning" xml:space="preserve">
+    <value>The terms in this taxonomy and every assignment are removed as well. This action cannot be undone.</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTerm" xml:space="preserve">
+    <value>Delete term</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTermTitle" xml:space="preserve">
+    <value>Delete the term “{0}”?</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTermWarning" xml:space="preserve">
+    <value>Assignments on content are removed as well. This action cannot be undone.</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteTitle" xml:space="preserve">
+    <value>Delete the content type “{0}”?</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteWarning" xml:space="preserve">
+    <value>A type that still has content cannot be deleted. This action cannot be undone.</value>
+  </data>
+  <data name="Admin.ContentTypes.Deleted" xml:space="preserve">
+    <value>The content type was deleted.</value>
+  </data>
+  <data name="Admin.ContentTypes.Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Admin.ContentTypes.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.ContentTypes.EditType" xml:space="preserve">
+    <value>Edit the content type</value>
+  </data>
+  <data name="Admin.ContentTypes.EmptyHelp" xml:space="preserve">
+    <value>After you add a type, its content appears in the /t/{slug} public section and can be chosen in the content editor.</value>
+  </data>
+  <data name="Admin.ContentTypes.EmptyTitle" xml:space="preserve">
+    <value>No custom content types yet</value>
+  </data>
+  <data name="Admin.ContentTypes.Eyebrow" xml:space="preserve">
+    <value>Controlled extension</value>
+  </data>
+  <data name="Admin.ContentTypes.HierarchicalTaxonomy" xml:space="preserve">
+    <value>Terms can have a parent term</value>
+  </data>
+  <data name="Admin.ContentTypes.Introduction" xml:space="preserve">
+    <value>Declare new kinds of content and their custom taxonomies. No code is loaded, and existing content and URLs are unaffected.</value>
+  </data>
+  <data name="Admin.ContentTypes.List" xml:space="preserve">
+    <value>Content types</value>
+  </data>
+  <data name="Admin.ContentTypes.ManageTaxonomies" xml:space="preserve">
+    <value>Custom taxonomies</value>
+  </data>
+  <data name="Admin.ContentTypes.ManageTerms" xml:space="preserve">
+    <value>Manage terms</value>
+  </data>
+  <data name="Admin.ContentTypes.Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Admin.ContentTypes.NoTaxonomies" xml:space="preserve">
+    <value>This type has no custom taxonomy yet.</value>
+  </data>
+  <data name="Admin.ContentTypes.NoTerms" xml:space="preserve">
+    <value>This taxonomy has no terms yet.</value>
+  </data>
+  <data name="Admin.ContentTypes.PageTitle" xml:space="preserve">
+    <value>Content types · Content management</value>
+  </data>
+  <data name="Admin.ContentTypes.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can view content types but cannot add or change them.</value>
+  </data>
+  <data name="Admin.ContentTypes.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.ContentTypes.SaveTaxonomy" xml:space="preserve">
+    <value>Save taxonomy</value>
+  </data>
+  <data name="Admin.ContentTypes.SaveTerm" xml:space="preserve">
+    <value>Save term</value>
+  </data>
+  <data name="Admin.ContentTypes.SaveType" xml:space="preserve">
+    <value>Save type</value>
+  </data>
+  <data name="Admin.ContentTypes.Saved" xml:space="preserve">
+    <value>The content type was saved.</value>
+  </data>
+  <data name="Admin.ContentTypes.Saving" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="Admin.ContentTypes.Slug" xml:space="preserve">
+    <value>Route slug</value>
+  </data>
+  <data name="Admin.ContentTypes.SlugHelp" xml:space="preserve">
+    <value>The public section lives at /t/{slug}; slugs must be unique within the site.</value>
+  </data>
+  <data name="Admin.ContentTypes.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.ContentTypes.SupportsCategories" xml:space="preserve">
+    <value>Categories can be assigned</value>
+  </data>
+  <data name="Admin.ContentTypes.SupportsHierarchy" xml:space="preserve">
+    <value>Supports hierarchy (parent content)</value>
+  </data>
+  <data name="Admin.ContentTypes.SupportsTags" xml:space="preserve">
+    <value>Tags can be assigned</value>
+  </data>
+  <data name="Admin.ContentTypes.TaxonomiesOf" xml:space="preserve">
+    <value>Custom taxonomies of {0}</value>
+  </data>
+  <data name="Admin.ContentTypes.TaxonomyDeleted" xml:space="preserve">
+    <value>The custom taxonomy was deleted.</value>
+  </data>
+  <data name="Admin.ContentTypes.TaxonomyName" xml:space="preserve">
+    <value>Taxonomy name</value>
+  </data>
+  <data name="Admin.ContentTypes.TaxonomySaved" xml:space="preserve">
+    <value>The custom taxonomy was saved.</value>
+  </data>
+  <data name="Admin.ContentTypes.TaxonomySlug" xml:space="preserve">
+    <value>Taxonomy slug</value>
+  </data>
+  <data name="Admin.ContentTypes.TermCount" xml:space="preserve">
+    <value>{0} terms</value>
+  </data>
+  <data name="Admin.ContentTypes.TermDeleted" xml:space="preserve">
+    <value>The term was deleted.</value>
+  </data>
+  <data name="Admin.ContentTypes.TermName" xml:space="preserve">
+    <value>Term name</value>
+  </data>
+  <data name="Admin.ContentTypes.TermSaved" xml:space="preserve">
+    <value>The term was saved.</value>
+  </data>
+  <data name="Admin.ContentTypes.TermSlug" xml:space="preserve">
+    <value>Term slug</value>
+  </data>
+  <data name="Admin.ContentTypes.TermsOf" xml:space="preserve">
+    <value>Terms of {0}</value>
+  </data>
+  <data name="Admin.ContentTypes.Title" xml:space="preserve">
+    <value>Content types</value>
+  </data>
+  <data name="Public.TypeArchive.EmptyHelp" xml:space="preserve">
+    <value>Content appears here once it is published.</value>
+  </data>
+  <data name="Public.TypeArchive.EmptyTitle" xml:space="preserve">
+    <value>This section has no content yet</value>
+  </data>
+  <data name="Public.TypeArchive.Eyebrow" xml:space="preserve">
+    <value>Content section</value>
+  </data>
+  <data name="Public.TypeArchive.LoadError" xml:space="preserve">
+    <value>This section cannot be loaded right now. Please try again later.</value>
+  </data>
+  <data name="Public.TypeArchive.Loading" xml:space="preserve">
+    <value>Loading content…</value>
+  </data>
+  <data name="Public.TypeArchive.Next" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Public.TypeArchive.PageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.TypeArchive.PageTitle" xml:space="preserve">
+    <value>{0} · Content section</value>
+  </data>
+  <data name="Public.TypeArchive.Pagination" xml:space="preserve">
+    <value>Content pagination</value>
+  </data>
+  <data name="Public.TypeArchive.Previous" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Public.TypeArchive.Read" xml:space="preserve">
+    <value>Read: {0}</value>
+  </data>
+  <data name="Public.TypeArchive.ReadMore" xml:space="preserve">
+    <value>Read the whole thing</value>
+  </data>
+  <data name="Public.TypeContent.Back" xml:space="preserve">
+    <value>← Back to the section</value>
+  </data>
+  <data name="Public.TypeContent.LoadError" xml:space="preserve">
+    <value>This content cannot be loaded right now. Please try again later.</value>
+  </data>
+  <data name="Public.TypeContent.Loading" xml:space="preserve">
+    <value>Loading content…</value>
+  </data>
+  <data name="Public.TypeContent.PageTitle" xml:space="preserve">
+    <value>{0} · Content section</value>
+  </data>
+  <data name="Admin.ContentTypes.ActiveLabel" xml:space="preserve">
+    <value>Active</value>
+  </data>
+  <data name="Admin.ContentTypes.ArchivedLabel" xml:space="preserve">
+    <value>Archived</value>
+  </data>
+  <data name="Layout.Admin.ContentTypes" xml:space="preserve">
+    <value>Content types</value>
+  </data>
+  <data name="Admin.Settings.ThemeByline" xml:space="preserve">
+    <value>Show the author byline</value>
+  </data>
+  <data name="Admin.Settings.ThemeCardGrid" xml:space="preserve">
+    <value>Grid</value>
+  </data>
+  <data name="Admin.Settings.ThemeCardList" xml:space="preserve">
+    <value>List</value>
+  </data>
+  <data name="Admin.Settings.ThemeCardStyle" xml:space="preserve">
+    <value>Post card style</value>
+  </data>
+  <data name="Admin.Settings.ThemeColor" xml:space="preserve">
+    <value>Accent colour</value>
+  </data>
+  <data name="Admin.Settings.ThemeColorHelp" xml:space="preserve">
+    <value>A hexadecimal colour such as #2f6f4e. It drives links, buttons and headings.</value>
+  </data>
+  <data name="Admin.Settings.ThemeCover" xml:space="preserve">
+    <value>Show cover images</value>
+  </data>
+  <data name="Admin.Settings.ThemePreset" xml:space="preserve">
+    <value>Theme preset</value>
+  </data>
+  <data name="Admin.Settings.ThemePresetHelp" xml:space="preserve">
+    <value>Controlled themes: only built-in presets are available, and no external stylesheet or code is loaded.</value>
+  </data>
+  <data name="Admin.Settings.ThemeWidth" xml:space="preserve">
+    <value>Reading width</value>
+  </data>
+  <data name="Admin.Settings.ThemeWidthHelp" xml:space="preserve">
+    <value>48 to 96 characters. A smaller value shortens line length and reads more easily.</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteField" xml:space="preserve">
+    <value>Delete field</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteFieldTitle" xml:space="preserve">
+    <value>Delete the custom field “{0}”?</value>
+  </data>
+  <data name="Admin.ContentTypes.DeleteFieldWarning" xml:space="preserve">
+    <value>Values already entered on content are removed as well. This action cannot be undone.</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldDeleted" xml:space="preserve">
+    <value>The custom field was deleted.</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldKey" xml:space="preserve">
+    <value>Field key</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldKeyHelp" xml:space="preserve">
+    <value>Content stores the input under this key. It cannot be changed after creation.</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldName" xml:space="preserve">
+    <value>Field name</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldPosition" xml:space="preserve">
+    <value>Display order</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldRequired" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldSaved" xml:space="preserve">
+    <value>The custom field was saved.</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldType" xml:space="preserve">
+    <value>Field type</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeCheckbox" xml:space="preserve">
+    <value>Checkbox</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeDate" xml:space="preserve">
+    <value>Date</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeLongText" xml:space="preserve">
+    <value>Multi-line text</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeNumber" xml:space="preserve">
+    <value>Number</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeText" xml:space="preserve">
+    <value>Single-line text</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldsHelp" xml:space="preserve">
+    <value>A declarative extension point: fields are defined as data, and no code is loaded.</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldsOf" xml:space="preserve">
+    <value>Custom fields of {0}</value>
+  </data>
+  <data name="Admin.ContentTypes.NoFields" xml:space="preserve">
+    <value>This type has no custom field yet.</value>
+  </data>
+  <data name="Admin.ContentTypes.SaveField" xml:space="preserve">
+    <value>Save field</value>
+  </data>
+  <data name="Public.TypeContent.Fields" xml:space="preserve">
+    <value>Custom fields</value>
+  </data>
+  <data name="Public.TypeContent.No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="Public.TypeContent.Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+</root>

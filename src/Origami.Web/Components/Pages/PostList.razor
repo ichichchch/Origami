@@ -3,11 +3,11 @@
 @inject NavigationManager Navigation
 @inject ILogger<PostList> Logger
 
-<section class="public-heading"><p class="eyebrow">文字・觀點・日常</p><h1>@Heading<span class="heading-dot">.</span></h1><p>@(_taxonomyDescription ?? (HasFilter ? "探索這個主題的已發布文章。" : "記錄想法，也分享值得留意的事。"))</p></section>
+<section class="public-heading"><p class="eyebrow">@UiText.T("Public.PostList.01", "文字・觀點・日常")</p><h1>@Heading<span class="heading-dot">.</span></h1><p>@(_taxonomyDescription ?? (HasFilter ? UiText.T("Public.PostList.FilteredIntro", "探索這個主題的已發布文章。") : UiText.T("Public.PostList.Intro", "記錄想法，也分享值得留意的事。")))</p></section>
 @if (_categories.Count > 0)
 {
-    <nav class="category-nav" aria-label="常用分類">
-        <a class="chip @(!HasFilter ? "selected" : "")" href="@BasePath">全部文章</a>
+    <nav class="category-nav" aria-label="@UiText.T("Public.PostList.PopularCategories", "常用分類")">
+        <a class="chip @(!HasFilter ? "selected" : "")" href="@BasePath">@UiText.T("Public.PostList.02", "全部文章")</a>
         @foreach (var category in _categories)
         {
             <a class="chip @(_category?.Slug == category.Slug ? "selected" : "")" href="@(BasePath + (BasePath.Contains('?') ? "&" : "?") + "category=" + Uri.EscapeDataString(category.Slug))">@category.Name <span class="muted">@category.Count</span></a>
@@ -16,30 +16,30 @@
 }
 @if (HasFilter)
 {
-    <p class="field-help"><a href="@BasePath">清除篩選，查看全部文章</a>@if (_result is not null) { <span> · 共 @_result.Total 篇</span> } · <a href="@FilteredFeedHref">訂閱此篩選的文章 feed</a></p>
+    <p class="field-help"><a href="@BasePath">@UiText.T("Public.PostList.03", "清除篩選，查看全部文章")</a>@if (_result is not null) { <span> · @string.Format(UiText.T("Public.PostList.ArticleCount", "共 {0} 篇"), _result.Total)</span> } · <a href="@FilteredFeedHref">@UiText.T("Public.PostList.04", "訂閱此篩選的文章 feed")</a></p>
 }
 @if (_error is not null)
 {
-    <div class="notice notice-error" role="alert">@_error <a href="@BasePath" data-enhance-nav="false">重新載入</a></div>
+    <div class="notice notice-error" role="alert">@_error <a href="@BasePath" data-enhance-nav="false">@UiText.T("Public.PostList.05", "重新載入")</a></div>
 }
 else if (_result is null)
 {
-    <p role="status">正在載入文章…</p>
+    <p role="status">@UiText.T("Public.PostList.06", "正在載入文章…")</p>
 }
 else if (_result.Items.Count == 0)
 {
     <section class="empty-state">
         <span class="empty-symbol" aria-hidden="true">—</span>
-        <h2>@(HasFilter ? "這個組合還沒有文章" : "故事，即將開始")</h2>
+        <h2>@(HasFilter ? UiText.T("Public.PostList.FilteredEmpty", "這個組合還沒有文章") : UiText.T("Public.PostList.Empty", "故事，即將開始"))</h2>
         @if (HasFilter)
         {
-            <p>試試其他分類或標籤，或回到全部文章。</p><a href="@BasePath">瀏覽全部文章 →</a>
+            <p>@UiText.T("Public.PostList.07", "試試其他分類或標籤，或回到全部文章。")</p><a href="@BasePath">@UiText.T("Public.PostList.08", "瀏覽全部文章 →")</a>
         }
         else
         {
-            <p>目前還沒有公開文章。若你是網站管理員，登入後就能建立第一篇內容。</p>
-            <a class="button" href="/admin/posts" data-enhance-nav="false">開始管理內容</a>
-            <p class="field-help">建立草稿 → 加入分類與圖片 → 發布，文章就會出現在這裡。</p>
+            <p>@UiText.T("Public.PostList.09", "目前還沒有公開文章。若你是網站管理員，登入後就能建立第一篇內容。")</p>
+            <a class="button" href="/admin/posts" data-enhance-nav="false">@UiText.T("Public.PostList.10", "開始管理內容")</a>
+            <p class="field-help">@UiText.T("Public.PostList.11", "建立草稿 → 加入分類與圖片 → 發布，文章就會出現在這裡。")</p>
         }
     </section>
 }
@@ -50,15 +50,15 @@ else
         {
             <article class="post-preview">
                 <time datetime="@post.PublishedAt?.ToString("O")">@post.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
-                <div class="post-summary"><h2>@if (post.IsSticky) { <span class="chip sticky-chip">置頂</span> } <a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2>@if (post.CoverUrl is { } cover) { <a class="post-cover" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" tabindex="-1" aria-hidden="true"><img src="@cover" alt="" loading="lazy" /></a> }<p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
-                <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@("閱讀：" + post.Title)">閱讀全文 <span aria-hidden="true">↗</span></a>
+                <div class="post-summary"><h2>@if (post.IsSticky) { <span class="chip sticky-chip">@UiText.T("Public.PostList.12", "置頂")</span> } <a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></h2>@if (post.CoverUrl is { } cover) { <a class="post-cover" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" tabindex="-1" aria-hidden="true"><img src="@cover" alt="" loading="lazy" /></a> }<p>@(post.ExcerptIsManual ? post.Excerpt : Markdown.Excerpt(post.Excerpt))</p></div>
+                <a class="read-link" href="@("/posts/" + Uri.EscapeDataString(post.Slug))" aria-label="@string.Format(UiText.T("Public.PostList.ReadArticle", "閱讀：{0}"), post.Title)">@UiText.T("Public.PostList.13", "閱讀全文")<span aria-hidden="true">↗</span></a>
             </article>
         }
     </div>
-    <nav class="pagination" aria-label="文章分頁">
-        @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">上一頁</a> }
-        <span>第 @_result.Page / @_result.TotalPages 頁</span>
-        @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">下一頁</a> }
+    <nav class="pagination" aria-label="@UiText.T("Public.PostList.Pagination", "文章分頁")">
+        @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">@UiText.T("Public.PostList.14", "上一頁")</a> }
+        <span>@string.Format(UiText.T("Public.PostList.PageStatus", "第 {0} / {1} 頁"), _result.Page, _result.TotalPages)</span>
+        @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">@UiText.T("Public.PostList.15", "下一頁")</a> }
     </nav>
 }
 
@@ -84,7 +84,7 @@ else
         ({ } category, { } tag) => category.Title + " · #" + tag.Title,
         ({ } category, _) => category.Title,
         (_, { } tag) => "#" + tag.Title,
-        _ => "最新文章"
+        _ => UiText.T("Public.PostList.LatestArticles", "最新文章")
     };
     private string PageUrl(int page) => BasePath + (BasePath.Contains('?') ? "&" : "?") + "page=" + page
         + (_category is not null ? "&category=" + Uri.EscapeDataString(_category.Slug) : "")
@@ -136,7 +136,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Public article list unavailable");
-            _error = "目前無法載入文章，請稍後再試。";
+            _error = UiText.T("Public.PostList.LoadError", "目前無法載入文章，請稍後再試。");
             if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
         }
     }

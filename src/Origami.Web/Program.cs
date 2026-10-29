@@ -20,9 +20,23 @@ catch (InvalidOperationException error)
     return 1;
 }
 builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<RequestLocalizationOptions>(options =>
+{
+    options.SetDefaultCulture(UiTextLanguages.Default)
+        .AddSupportedCultures(UiTextLanguages.Supported.ToArray())
+        .AddSupportedUICultures(UiTextLanguages.Supported.ToArray());
+    options.RequestCultureProviders = [new CustomRequestCultureProvider(context =>
+    {
+        var culture = UiTextLanguages.Normalize(context.Request.Query["lang"].ToString())
+            ?? UiTextLanguages.Normalize(context.Request.Cookies[UiTextLanguages.CookieName])
+            ?? UiTextLanguages.Default;
+        return Task.FromResult<ProviderCultureResult?>(new ProviderCultureResult(culture));
+    })];
+});
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SiteResolveThrottle>();
 builder.Services.AddSingleton<ContentUnlockThrottle>();
+builder.Services.AddSingleton<CommentThrottle>();
 builder.Services.AddScoped<SiteContext>(provider =>
 {
     var site = new SiteContext();
@@ -41,6 +55,11 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>(provider => new LoginThrottle(provider.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<ContentService>();
 builder.Services.AddScoped<TaxonomyService>();
+builder.Services.AddScoped<NavigationService>();
+builder.Services.AddScoped<WxrImportService>();
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<CommentService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddSingleton<MarkdownService>();
@@ -112,6 +131,19 @@ if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
 var app = builder.Build();
 if (isCommand) return await RunCommandAsync(args, app);
 
+app.UseRequestLocalization();
+app.Use(async (context, next) =>
+{
+    var requested = UiTextLanguages.Normalize(context.Request.Query["lang"].ToString());
+    if (requested is not null)
+        context.Response.Cookies.Append(UiTextLanguages.CookieName, requested, new CookieOptions
+        {
+            Path = "/", MaxAge = TimeSpan.FromDays(365), SameSite = SameSiteMode.Lax,
+            Secure = context.Request.IsHttps, HttpOnly = true
+        });
+    await next(context);
+});
+
 // 公開錯誤絕不回傳例外細節，本機開發環境也不例外。
 app.UseExceptionHandler("/Error", createScopeForErrors: true);
 if (!app.Environment.IsDevelopment()) app.UseHsts();
@@ -138,13 +170,13 @@ app.Use(async (context, next) =>
     catch (SiteResolutionException)
     {
         context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsync("站點服務暫時無法使用，請稍後重試。", context.RequestAborted);
+        await context.Response.WriteAsync(UiText.T("Common.SiteUnavailable", "站點服務暫時無法使用，請稍後重試。"), context.RequestAborted);
         return;
     }
     if (site is null)
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
-        await context.Response.WriteAsync("站點不存在或已停用。", context.RequestAborted);
+        await context.Response.WriteAsync(UiText.T("Common.SiteMissing", "站點不存在或已停用。"), context.RequestAborted);
         return;
     }
     context.Items[SiteResolver.ResolvedSiteKey] = site;
@@ -153,12 +185,12 @@ app.Use(async (context, next) =>
     catch (AccessDeniedException) when (!context.Response.HasStarted)
     {
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
-        await context.Response.WriteAsync("你已登入，但沒有此站點的操作權限。請聯絡站點管理員。", context.RequestAborted);
+        await context.Response.WriteAsync(UiText.T("Common.AccessDenied", "你已登入，但沒有此站點的操作權限。請聯絡站點管理員。"), context.RequestAborted);
     }
     catch (UnauthorizedAccessException) when (!context.Response.HasStarted)
     {
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        await context.Response.WriteAsync("登入或網站服務憑證已失效，請重新登入；若持續失敗請聯絡管理者。", context.RequestAborted);
+        await context.Response.WriteAsync(UiText.T("Common.CredentialsExpired", "登入或網站服務憑證已失效，請重新登入；若持續失敗請聯絡管理者。"), context.RequestAborted);
     }
 });
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
@@ -172,15 +204,32 @@ app.MapPublicEndpoints();
 // 媒體仍公開，但只服務已核定站點的圖片目錄，絕不映射全域目錄。
 app.MapGet("/media/{filename}", (string filename, StoragePaths paths) =>
 {
-    if (!ContentRules.IsSafeMediaFileName(filename) || filename.Contains("..", StringComparison.Ordinal) ||
+    if (!ContentRules.IsSafeMediaFileNameAny(filename) || filename.Contains("..", StringComparison.Ordinal) ||
         filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
         return Results.NotFound();
-    var contentType = Path.GetExtension(filename).ToLowerInvariant() switch
+    // 內容類型由副檔名白名單決定；未知副檔名一律 404，不猜測型別。
+    var (contentType, disposition) = Path.GetExtension(filename).ToLowerInvariant() switch
     {
-        ".png" => "image/png", ".jpg" => "image/jpeg", ".webp" => "image/webp", _ => null
+        ".png" => ("image/png", "inline"),
+        ".jpg" => ("image/jpeg", "inline"),
+        ".webp" => ("image/webp", "inline"),
+        // 文件以附件下載，避免同源內嵌腳本風險；音訊影片可內嵌播放。
+        ".pdf" => ("application/pdf", "attachment"),
+        ".mp3" => ("audio/mpeg", "inline"),
+        ".m4a" => ("audio/mp4", "inline"),
+        ".ogg" => ("audio/ogg", "inline"),
+        ".wav" => ("audio/wav", "inline"),
+        ".mp4" => ("video/mp4", "inline"),
+        ".webm" => ("video/webm", "inline"),
+        _ => (null, null)
     };
-    var path = Path.Combine(paths.Images, filename);
-    return contentType is not null && File.Exists(path) ? Results.File(path, contentType) : Results.NotFound();
+    if (contentType is null) return Results.NotFound();
+    var path = File.Exists(Path.Combine(paths.Images, filename))
+        ? Path.Combine(paths.Images, filename)
+        : Path.Combine(paths.Files, filename);
+    if (!File.Exists(path)) return Results.NotFound();
+    return Results.File(path, contentType, fileDownloadName: disposition == "attachment" ? filename : null,
+        enableRangeProcessing: true);
 });
 // 瀏覽器依慣例請求這個網址；直接提供已設定的媒體資產，不經媒體庫查詢介面。
 app.MapGet("/favicon.ico", async (MediaService media, CancellationToken ct) =>
@@ -196,8 +245,13 @@ app.MapGet("/apple-touch-icon.png", async (MediaService media, CancellationToken
 });
 app.MapHealthChecks("/health");
 // 匯出資料同樣經 Api（BFF 通道）；Api 端緩衝後一次輸出，失敗不會以 200 狀態串流出被截斷的檔案。
-app.MapGet("/admin/export", async (OrigamiClient api, CancellationToken ct) =>
-    Results.File(await api.ExportAsync(ct), "application/json", "origami-export.json"))
+app.MapGet("/admin/export", async (OrigamiClient api, HttpContext http, CancellationToken ct) =>
+{
+    var kind = http.Request.Query["kind"].ToString();
+    var category = http.Request.Query["category"].ToString();
+    return Results.File(await api.ExportAsync(ct, kind.Length == 0 ? null : kind, category.Length == 0 ? null : category),
+        "application/json", "origami-export.json");
+})
     .RequireAuthorization();
 app.MapGet("/admin/export-archive", async (OrigamiClient api, CancellationToken ct) =>
     Results.File(await api.ExportArchiveAsync(ct), "application/zip", "origami-export.zip"))

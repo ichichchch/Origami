@@ -5,96 +5,158 @@
 @inherits AdminComponentBase
 @inject OrigamiClient Api
 
-<PageTitle>分類與標籤 · 內容管理</PageTitle>
+<PageTitle>@UiText.T("Admin.Taxonomies.PageTitle", "分類與標籤 · 內容管理")</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="Busy" />
-<div class="page-heading"><div><p class="eyebrow">整理內容</p><h1>分類與標籤</h1><p>為文章建立清楚的脈絡。分類採平面結構，不影響獨立頁面。</p></div></div>
-<div class="section-tabs" aria-label="分類與標籤切換">
-    <button class="tab-button @(_kind == TaxonomyKind.Category ? "active" : "")" aria-pressed="@(_kind == TaxonomyKind.Category)" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Category)">分類</button>
-    <button class="tab-button @(_kind == TaxonomyKind.Tag ? "active" : "")" aria-pressed="@(_kind == TaxonomyKind.Tag)" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Tag)">標籤</button>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Taxonomies.Eyebrow", "整理內容")</p><h1>@UiText.T("Admin.Taxonomies.Title", "分類與標籤")</h1><p>@UiText.T("Admin.Taxonomies.Introduction", "為文章建立清楚的脈絡。分類採平面結構，不影響獨立頁面。")</p></div></div>
+<div class="section-tabs" aria-label="@UiText.T("Admin.Taxonomies.KindTabs", "分類與標籤切換")">
+    <button class="tab-button @(_kind == TaxonomyKind.Category ? "active" : "")" aria-pressed="@((_kind == TaxonomyKind.Category).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Category)">@UiText.T("Admin.Taxonomies.CategoriesTab", "分類")</button>
+    <button class="tab-button @(_kind == TaxonomyKind.Tag ? "active" : "")" aria-pressed="@((_kind == TaxonomyKind.Tag).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => Switch(TaxonomyKind.Tag)">@UiText.T("Admin.Taxonomies.TagsTab", "標籤")</button>
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 @if (Access?.CanRead == true && !CanEdit)
 {
-    <p class="notice">本站唯讀成員可檢視分類與標籤，但不能新增、修改、合併或刪除。</p>
+    <p class="notice">@UiText.T("Admin.Taxonomies.ReadOnlyNotice", "本站唯讀成員可檢視分類與標籤，但不能新增、修改、合併或刪除。")</p>
 }
 @if (Error is not null && !LoginRequired)
 {
-    <button class="button button-secondary" disabled="@Blocked" @onclick="() => RequestChange(ResetAndLoad)">重新載入列表並結束編輯</button>
+    <button class="button button-secondary" disabled="@Blocked" @onclick="() => RequestChange(ResetAndLoad)">@UiText.T("Admin.Taxonomies.ReloadList", "重新載入列表並結束編輯")</button>
 }
 @if (_pendingChange is not null)
 {
-    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-discard-title"><h2 id="taxonomy-discard-title">捨棄未儲存的輸入？</h2><p>這會結束目前的編輯，尚未儲存的變更將遺失。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="ConfirmChange">捨棄並繼續</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingChange = null">繼續編輯</button></div></section>
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-discard-title"><h2 id="taxonomy-discard-title">@UiText.T("Admin.Taxonomies.DiscardTitle", "捨棄未儲存的輸入？")</h2><p>@UiText.T("Admin.Taxonomies.DiscardWarning", "這會結束目前的編輯，尚未儲存的變更將遺失。")</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="ConfirmChange">@UiText.T("Admin.Taxonomies.DiscardAndContinue", "捨棄並繼續")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingChange = null">@UiText.T("Admin.Taxonomies.KeepEditing", "繼續編輯")</button></div></section>
 }
 @if (_delete is not null)
 {
-    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-delete-title"><h2 id="taxonomy-delete-title">永久刪除@(Label)「@_delete.Name」？</h2><p>只移除文章關聯，不會刪除文章。此項目的未儲存輸入也會捨棄。這個動作無法復原。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Delete">確認永久刪除</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _delete = null">取消</button></div></section>
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-delete-title"><h2 id="taxonomy-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.DeleteTitle", "永久刪除{0}「{1}」？"), Label, _delete.Name)</h2><p>@UiText.T("Admin.Taxonomies.DeleteWarning", "只移除文章關聯，不會刪除文章。此項目的未儲存輸入也會捨棄。這個動作無法復原。")</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Delete">@UiText.T("Admin.Taxonomies.ConfirmPermanentDelete", "確認永久刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _delete = null">@UiText.T("Admin.Taxonomies.Cancel", "取消")</button></div></section>
+}
+@if (_pendingBulk)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="taxonomy-bulk-delete-title">
+        <h2 id="taxonomy-bulk-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.BulkDeleteTitle", "永久刪除選中的 {0} 個{1}？"), _selected.Count, Label)</h2>
+        <p>@UiText.T("Admin.Taxonomies.BulkDeleteWarning", "只移除文章關聯，不會刪除任何文章；逐筆攜帶版本檢查，單筆失敗不影響其他項目。此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="BulkDelete">@UiText.T("Admin.Taxonomies.ConfirmDeleteSelected", "確認刪除所選")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingBulk = false">@UiText.T("Admin.Taxonomies.Cancel", "取消")</button></div>
+    </section>
+}
+@if (_bulkResults is { Count: > 0 })
+{
+    <section class="notice" role="status" aria-label="@UiText.T("Admin.Taxonomies.BulkResults", "批次刪除結果")">
+        <p><strong>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.BulkSummary", "批次刪除完成：{0} 成功、{1} 失敗。"), _bulkResults.Count(x => x.Succeeded), _bulkResults.Count(x => !x.Succeeded))</strong></p>
+        <ul>@foreach (var result in _bulkResults.Where(x => !x.Succeeded)) { <li>@_result?.Items.FirstOrDefault(i => i.Id == result.Id)?.Name — @result.Message</li> }</ul>
+    </section>
 }
 @if (_merge is not null)
 {
     <section class="notice" role="alertdialog" aria-labelledby="taxonomy-merge-title" aria-describedby="taxonomy-merge-description">
-        <h2 id="taxonomy-merge-title">合併@(Label)「@_merge.Name」到另一個@(Label)？</h2>
-        <p id="taxonomy-merge-description">使用此@(Label)的文章會全部改指到目標，然後刪除「@_merge.Name」。目標的名稱與內容不變，文章不會被刪除。這個動作無法復原。</p>
+        <h2 id="taxonomy-merge-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.MergeTitle", "合併{0}「{1}」到另一個{0}？"), Label, _merge.Name)</h2>
+        <p id="taxonomy-merge-description">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.MergeWarning", "使用此{0}的文章會全部改指到目標，然後刪除「{1}」。目標的名稱與內容不變，文章不會被刪除。這個動作無法復原。"), Label, _merge.Name)</p>
         <div class="field">
-            <label for="merge-target">合併目標 <span class="required">必選</span></label>
+            <label for="merge-target">@UiText.T("Admin.Taxonomies.MergeTarget", "合併目標") <span class="required">@UiText.T("Admin.Taxonomies.SelectionRequired", "必選")</span></label>
             <select id="merge-target" value="@_mergeTargetId" @onchange="MergeTargetChanged" disabled="@Blocked">
-                <option value="">請選擇目標@(Label)…</option>
+                <option value="">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.SelectTarget", "請選擇目標{0}…"), Label)</option>
                 @foreach (var candidate in _mergeCandidates)
                 {
-                    <option value="@candidate.Id">@candidate.Name（@candidate.Slug）</option>
+                    <option value="@candidate.Id">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.CandidateLabel", "{0}（{1}）"), candidate.Name, candidate.Slug)</option>
                 }
             </select>
             @if (_mergeCandidates.Count == 0)
             {
-                <span class="field-help">沒有其他@(Label)可作為目標；請先建立一個。</span>
+                <span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.NoTargets", "沒有其他{0}可作為目標；請先建立一個。"), Label)</span>
             }
             @if (_mergeCandidates.Count >= Limits.MaxPageSize)
             {
-                <span class="field-help">候選清單僅列出前 @Limits.MaxPageSize 個@(Label)。</span>
+                <span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.TargetLimit", "候選清單僅列出前 {0} 個{1}。"), Limits.MaxPageSize, Label)</span>
             }
         </div>
-        <div class="button-row"><button class="button" disabled="@(Blocked || string.IsNullOrEmpty(_mergeTargetId))" @onclick="Merge">確認合併</button><button class="button button-secondary" disabled="@Blocked" @onclick="CancelMerge">取消</button></div>
+        <div class="button-row"><button class="button" disabled="@(Blocked || string.IsNullOrEmpty(_mergeTargetId))" @onclick="Merge">@UiText.T("Admin.Taxonomies.ConfirmMerge", "確認合併")</button><button class="button button-secondary" disabled="@Blocked" @onclick="CancelMerge">@UiText.T("Admin.Taxonomies.Cancel", "取消")</button></div>
     </section>
 }
 <div class="management-grid">
     <section class="panel settings-panel">
-        <h2>@(_edit.Id is null ? "新增" : "編輯")@(Label)</h2>
+        <h2>@string.Format(CultureInfo.CurrentCulture, _edit.Id is null ? UiText.T("Admin.Taxonomies.AddTitle", "新增{0}") : UiText.T("Admin.Taxonomies.EditTitle", "編輯{0}"), Label)</h2>
         <EditForm Model="_edit" OnSubmit="Save" FormName="taxonomy-editor">
             <fieldset disabled="@EditBlocked">
-                <div class="field"><label for="taxonomy-name">名稱 <span class="required">必填</span></label><input id="taxonomy-name" @bind="_edit.Name" @bind:event="oninput" required maxlength="@Limits.TaxonomyName" /><span class="field-help">最多 @Limits.TaxonomyName 字。</span></div>
-                <div class="field"><label for="taxonomy-slug">網址代稱</label><input id="taxonomy-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_edit.Id is not null)" /><span class="field-help">首次儲存可留空，由名稱產生。</span></div>
-                <div class="field"><label for="taxonomy-description">描述</label><textarea id="taxonomy-description" @bind="_edit.Description" @bind:event="oninput" rows="3" maxlength="@Limits.TaxonomyDescription" aria-describedby="taxonomy-description-help"></textarea><span id="taxonomy-description-help" class="field-help">顯示於前台分類或標籤篩選頁的說明文字，最多 @Limits.TaxonomyDescription 字。</span></div>
-                <div class="button-row"><button type="submit" class="button">@(Busy ? "處理中…" : "儲存" + Label)</button>@if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => RequestChange(NewEdit)">新增另一個</button> }</div>
-                <p class="field-help">@(Dirty ? "有未儲存的變更。" : "修改後請按儲存，不會自動儲存。")</p>
+                <div class="field"><label for="taxonomy-name">@UiText.T("Admin.Taxonomies.Name", "名稱") <span class="required">@UiText.T("Admin.Taxonomies.Required", "必填")</span></label><input id="taxonomy-name" @bind="_edit.Name" @bind:event="oninput" required maxlength="@Limits.TaxonomyName" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.NameHelp", "最多 {0} 字。"), Limits.TaxonomyName)</span></div>
+                <div class="field"><label for="taxonomy-slug">@UiText.T("Admin.Taxonomies.Slug", "網址代稱")</label><input id="taxonomy-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_edit.Id is not null)" /><span class="field-help">@UiText.T("Admin.Taxonomies.SlugHelp", "首次儲存可留空，由名稱產生。")</span></div>
+                <div class="field"><label for="taxonomy-description">@UiText.T("Admin.Taxonomies.Description", "描述")</label><textarea id="taxonomy-description" @bind="_edit.Description" @bind:event="oninput" rows="3" maxlength="@Limits.TaxonomyDescription" aria-describedby="taxonomy-description-help"></textarea><span id="taxonomy-description-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.DescriptionHelp", "顯示於前台分類或標籤篩選頁的說明文字，最多 {0} 字。"), Limits.TaxonomyDescription)</span></div>
+                <div class="button-row"><button type="submit" class="button">@(Busy ? UiText.T("Admin.Taxonomies.Processing", "處理中…") : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Save", "儲存{0}"), Label))</button>@if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => RequestChange(NewEdit)">@UiText.T("Admin.Taxonomies.AddAnother", "新增另一個")</button> }</div>
+                <p class="field-help">@(Dirty ? UiText.T("Admin.Taxonomies.UnsavedChanges", "有未儲存的變更。") : UiText.T("Admin.Taxonomies.ManualSaveHelp", "修改後請按儲存，不會自動儲存。"))</p>
             </fieldset>
         </EditForm>
     </section>
     <section class="panel">
-        <div class="panel-toolbar"><h2>全部@(Label) <span class="count">@(_result?.Total ?? 0)</span></h2></div>
+        <div class="panel-toolbar"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.AllItems", "全部{0}"), Label) <span class="count">@(_result?.Total ?? 0)</span></h2></div>
         @if (_result is not null)
         {
-            @if (_result.Items.Count == 0) { <div class="empty-state"><h2>尚無@(Label)</h2><p>使用旁邊的表單建立第一個@(Label)。</p></div> }
+            @if (_result.Items.Count == 0) { <div class="empty-state"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.EmptyTitle", "尚無{0}"), Label)</h2><p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.EmptyHelp", "使用旁邊的表單建立第一個{0}。"), Label)</p></div> }
             else
             {
-                <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col">名稱 / 代稱</th><th scope="col">操作</th></tr></thead><tbody>
+                <div class="table-scroll"><table><caption class="sr-only">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.ListCaption", "{0} 列表"), Label)</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="taxonomy-bulk-select-all">@UiText.T("Admin.Taxonomies.SelectPage", "全選本頁")</label><input id="taxonomy-bulk-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@EditBlocked" /></th><th scope="col">@UiText.T("Admin.Taxonomies.NameAndSlug", "名稱 / 代稱")</th><th scope="col">@UiText.T("Admin.Taxonomies.Actions", "操作")</th></tr></thead><tbody>
                 @foreach (var item in _result.Items)
                 {
-                    <tr @key="item.Id"><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">編輯<span class="sr-only"> @item.Name</span></button><button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">合併<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">刪除<span class="sr-only"> @item.Name</span></button></div></td></tr>
+                    <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("taxonomy-bulk-" + item.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.SelectItem", "選擇 {0}"), item.Name)</label><input id="@("taxonomy-bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Taxonomies.Edit", "編輯")<span class="sr-only"> @item.Name</span></button><button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">@UiText.T("Admin.Taxonomies.Merge", "合併")<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">@UiText.T("Admin.Taxonomies.Delete", "刪除")<span class="sr-only"> @item.Name</span></button></div></td></tr>
                 }
                 </tbody></table></div>
+                @if (CanEdit)
+                {
+                    <div class="button-row" aria-label="@UiText.T("Admin.Taxonomies.BulkActions", "批次操作")">
+                        <button class="button button-danger" disabled="@(EditBlocked || _selected.Count == 0)" @onclick="() => _pendingBulk = true">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.DeleteSelected", "刪除所選（{0}）"), _selected.Count)</button>
+                        @if (_selected.Count > 0)
+                        {
+                            <button class="button button-secondary" disabled="@Blocked" @onclick="ClearSelection">@UiText.T("Admin.Taxonomies.ClearSelection", "清除選擇")</button>
+                        }
+                    </div>
+                }
             }
-            <nav class="pagination" aria-label="分類標籤分頁"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></nav>
+            <nav class="pagination" aria-label="@UiText.T("Admin.Taxonomies.Pagination", "分類標籤分頁")"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">@UiText.T("Admin.Taxonomies.PreviousPage", "上一頁")</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">@UiText.T("Admin.Taxonomies.NextPage", "下一頁")</button></nav>
         }
     </section>
 </div>
 
 @code {
     private TaxonomyKind _kind = TaxonomyKind.Category;
-    private string Label => _kind == TaxonomyKind.Category ? "分類" : "標籤";
+    private string Label => _kind == TaxonomyKind.Category ? UiText.T("Admin.Taxonomies.Category", "分類") : UiText.T("Admin.Taxonomies.Tag", "標籤");
     private int _page = 1;
     private TaxonomyEdit _edit = new();
     private string _baseline = "";
     private PagedResult<TaxonomyItem>? _result;
     private TaxonomyItem? _delete;
+    private bool _pendingBulk;
+    private List<BulkItemResult>? _bulkResults;
+    private readonly HashSet<Guid> _selected = [];
+    private bool AllPageSelected => _result is not null && _result.Items.Count > 0 && _result.Items.All(x => _selected.Contains(x.Id));
+    private void ToggleSelect(TaxonomyItem item, ChangeEventArgs e)
+    {
+        if (e.Value is true) _selected.Add(item.Id);
+        else _selected.Remove(item.Id);
+    }
+    private void ToggleAll(ChangeEventArgs e)
+    {
+        if (_result is null) return;
+        if (e.Value is true) _selected.UnionWith(_result.Items.Select(x => x.Id));
+        else _selected.ExceptWith(_result.Items.Select(x => x.Id));
+    }
+    private void ClearSelection()
+    {
+        _selected.Clear();
+        _bulkResults = null;
+    }
+    private async Task BulkDelete()
+    {
+        if (EditBlocked) return;
+        await RunEditAsync(async ct =>
+        {
+            var items = (_result?.Items ?? []).Where(x => _selected.Contains(x.Id))
+                .Select(x => (x.Id, x.Version)).ToList();
+            _bulkResults = await Api.BulkDeleteTaxonomiesAsync(_kind, items, ct)
+                ?? throw new CmsException(UiText.T("Admin.Taxonomies.BulkDeleteFailed", "批次刪除失敗，請重新載入後再試。"));
+            if (_edit.Id is { } editing && _selected.Contains(editing)) await NewEdit();
+            _pendingBulk = false;
+            _selected.Clear();
+            _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
+            if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
+        }, UiText.T("Admin.Taxonomies.BulkDeleted", "已刪除所選項目，文章未被刪除。"));
+        _pendingBulk = false;
+    }
     private TaxonomyItem? _merge;
     private List<TaxonomyItem> _mergeCandidates = [];
     private string _mergeTargetId = "";
@@ -102,7 +164,7 @@
     private bool Dirty => Snapshot() != _baseline;
     private string Snapshot() => System.Text.Json.JsonSerializer.Serialize(_edit);
     protected override async Task OnInitializedAsync() { _baseline = Snapshot(); await Load(); }
-    private Task<bool> Load() => RunAsync(async ct => { _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); });
+    private Task<bool> Load() => RunAsync(async ct => { _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); _selected.Clear(); _bulkResults = null; });
     private Task NewEdit() { _edit = new(); _baseline = Snapshot(); _delete = null; return Task.CompletedTask; }
     private async Task ResetAndLoad() { await NewEdit(); await Load(); }
     private async Task RequestChange(Func<Task> action)
@@ -140,11 +202,14 @@
     private Task Save() => RunEditAsync(async ct =>
     {
         ContentRules.Validate(_edit);
-        var input = new TaxonomyEdit { Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Version = _edit.Version };
+        var input = new TaxonomyEdit
+        {
+            Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Description = _edit.Description, Version = _edit.Version
+        };
         _edit = await Api.SaveTaxonomyAsync(_kind, input, ct) ?? _edit;
         _baseline = Snapshot();
         _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
-    }, "已儲存" + Label + "。");
+    }, string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Saved", "已儲存{0}。"), Label));
     private async Task Delete()
     {
         if (_delete is not { } item) return;
@@ -155,7 +220,7 @@
             _delete = null;
             _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
             if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
-        }, "已永久刪除" + Label + "，文章未被刪除。");
+        }, string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Deleted", "已永久刪除{0}，文章未被刪除。"), Label));
         _delete = null;
     }
     private async Task BeginMerge(TaxonomyItem item)
@@ -192,6 +257,6 @@
             _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
             if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
         });
-        if (ok) Notice = $"已合併{Label}，移轉 {moved} 篇文章的關聯。";
+        if (ok) Notice = string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Merged", "已合併{0}，移轉 {1} 篇文章的關聯。"), Label, moved);
     }
 }

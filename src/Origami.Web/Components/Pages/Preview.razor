@@ -4,14 +4,14 @@
 @inject NavigationManager Navigation
 @inject ILogger<Preview> Logger
 
-<PageTitle>@(_content?.Title ?? "內容預覽")</PageTitle>
+<PageTitle>@(_content?.Title ?? UiText.T("Public.Preview.PageTitle", "內容預覽"))</PageTitle>
 @if (_redirecting)
 {
     @* 轉址目標已在回應標頭中；不渲染任何內容。 *@
 }
 else if (_error is not null)
 {
-    <section class="empty-state error-page" role="alert"><h1>暫時無法載入</h1><p>@_error</p><a href="/">回到首頁</a></section>
+    <section class="empty-state error-page" role="alert"><h1>@UiText.T("Public.Preview.01", "暫時無法載入")</h1><p>@_error</p><a href="/">@UiText.T("Public.Preview.02", "回到首頁")</a></section>
 }
 else if (_content is not null)
 {
@@ -19,16 +19,16 @@ else if (_content is not null)
         <meta name="robots" content="noindex, nofollow" />
     </HeadContent>
     <div class="preview-banner" role="status">
-        <strong>草稿預覽</strong><span>這份內容尚未公開，僅持有連結的人可以閱讀；連結可在編輯器中撤銷。</span>
+        <strong>@UiText.T("Public.Preview.03", "草稿預覽")</strong><span>@UiText.T("Public.Preview.04", "這份內容尚未公開，僅持有連結的人可以閱讀；連結可在編輯器中撤銷。")</span>
     </div>
     <article class="reading-column">
-        <a class="back-link" href="/" data-enhance-nav="false">回到首頁</a>
+        <a class="back-link" href="/" data-enhance-nav="false">@UiText.T("Public.Preview.02", "回到首頁")</a>
         <header class="article-heading">
-            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面") · 預覽</p>
+            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? UiText.T("Public.Preview.PostPreview", "文章 · 預覽") : UiText.T("Public.Preview.PagePreview", "獨立頁面 · 預覽"))</p>
             <h1>@_content.Title</h1>
             @if (_content.Kind == ContentKind.Post && _content.Categories.Count > 0)
             {
-                <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))" data-enhance-nav="false">@category.Title</a> }</div>
+                <div class="chip-list" aria-label="@UiText.T("Public.Preview.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))" data-enhance-nav="false">@category.Title</a> }</div>
             }
         </header>
         @if (_content.CoverUrl is { } coverUrl)
@@ -38,13 +38,13 @@ else if (_content is not null)
         <div class="prose">@((MarkupString)_html)</div>
         @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
         {
-            <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))" data-enhance-nav="false"># @tag.Title</a> }</footer>
+            <footer class="article-tags" aria-label="@UiText.T("Public.Preview.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))" data-enhance-nav="false"># @tag.Title</a> }</footer>
         }
     </article>
 }
 else
 {
-    @if (!_resolved) { <p role="status">正在載入預覽…</p> }
+    @if (!_resolved) { <p role="status">@UiText.T("Public.Preview.05", "正在載入預覽…")</p> }
 }
 
 @code {
@@ -106,7 +106,7 @@ else
         catch (Exception ex)
         {
             Logger.LogError(ex, "Preview unavailable");
-            _error = "目前無法讀取這份預覽，請稍後再試。";
+            _error = UiText.T("Public.Preview.LoadError", "目前無法讀取這份預覽，請稍後再試。");
             _resolved = true;
             if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
         }

@@ -1,9 +1,9 @@
 @page "/Error"
-<PageTitle>暫時無法完成請求</PageTitle>
+<PageTitle>@UiText.T("Public.Error.01", "暫時無法完成請求")</PageTitle>
 <section class="empty-state error-page" role="alert">
-    <p class="eyebrow">稍後再試</p><h1>出了點小狀況。</h1>
-    <p>目前無法完成請求，請稍後再試。<br />若剛才正在編輯，尚未儲存的變更可能未被保存。</p>
-    <a class="button" href="/" data-enhance-nav="false">回到首頁</a>
+    <p class="eyebrow">@UiText.T("Public.Error.02", "稍後再試")</p><h1>@UiText.T("Public.Error.03", "出了點小狀況。")</h1>
+    <p>@UiText.T("Public.Error.04", "目前無法完成請求，請稍後再試。")<br />@UiText.T("Public.Error.05", "若剛才正在編輯，尚未儲存的變更可能未被保存。")</p>
+    <a class="button" href="/" data-enhance-nav="false">@UiText.T("Public.Error.06", "回到首頁")</a>
 </section>
 @code {
     [CascadingParameter] private HttpContext? HttpContext { get; set; }

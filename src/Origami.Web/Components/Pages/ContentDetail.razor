@@ -5,9 +5,10 @@
 @inject NavigationManager Navigation
 @inject AdminAccess Admin
 @inject ContentUnlockThrottle UnlockThrottle
+@inject CommentThrottle CommentThrottle
 @inject ILogger<ContentDetail> Logger
 
-<PageTitle>@(_content?.Title ?? "閱讀內容")</PageTitle>
+<PageTitle>@(_content?.Title ?? UiText.T("Public.ContentDetail.PageTitle", "閱讀內容"))</PageTitle>
 @if (_content is not null)
 {
     <HeadContent>
@@ -21,6 +22,14 @@
         {
             <meta name="description" content="@MetaDescription" />
             <link rel="canonical" href="@Canonical" />
+            @if (_pageIndex > 1)
+            {
+                <link rel="prev" href="@(BaseUrl + PageHref(_pageIndex - 1))" />
+            }
+            @if (_pageIndex < _pageTotal)
+            {
+                <link rel="next" href="@(BaseUrl + PageHref(_pageIndex + 1))" />
+            }
             <link rel="alternate" type="application/json+oembed" href="@OembedUrl" title="@_content.Title" />
             <meta property="og:site_name" content="@_settings.Name" />
             <meta property="og:title" content="@_content.Title" />
@@ -39,38 +48,59 @@
             {
                 <meta property="article:published_time" content="@published.ToString("O")" />
             }
+            @if (_content.NoIndex)
+            {
+                <meta name="robots" content="noindex, nofollow" />
+            }
+            @if (StructuredData.Length > 0)
+            {
+                @* 結構化資料以原樣輸出；序列化器已逸出 < 與 >，不會形成可執行標記。 *@
+                <script type="application/ld+json">@((MarkupString)StructuredData)</script>
+            }
         }
     </HeadContent>
 }
 @if (_error is not null)
 {
-    <section class="empty-state" role="alert"><h1>暫時無法載入</h1><p>@_error</p><a href="/">回到首頁</a></section>
+    <section class="empty-state" role="alert"><h1>@UiText.T("Public.ContentDetail.01", "暫時無法載入")</h1><p>@_error</p><a href="/">@UiText.T("Public.ContentDetail.02", "回到首頁")</a></section>
 }
 else if (_content is not null)
 {
     <article class="reading-column">
-        <a class="back-link" href="/">← 回到首頁</a>
+        <a class="back-link" href="/">@UiText.T("Public.ContentDetail.03", "← 回到首頁")</a>
         <header class="article-heading">
-            <p class="eyebrow">@(_content.Kind == ContentKind.Post ? "文章" : "獨立頁面")@(_locked ? " · 受密碼保護" : "")@(_isPrivate ? " · 私密" : "")</p>
+            <p class="eyebrow">@ContentLabel</p>
             <h1>@_content.Title</h1>
-            @if (!_locked && _content.Kind == ContentKind.Post && !string.IsNullOrWhiteSpace(_settings.AuthorDisplayName))
+            @if (!_locked && _content.Kind == ContentKind.Post)
             {
-                <p class="byline">作者 · @_settings.AuthorDisplayName</p>
+                // 逐篇作者快照優先；未署名時退回站點設定的作者名稱。有署名代稱者連向作者彙整頁。
+                var byline = string.IsNullOrWhiteSpace(_content.AuthorName) ? _settings.AuthorDisplayName : _content.AuthorName;
+                @if (!string.IsNullOrWhiteSpace(byline))
+                {
+                    @if (!string.IsNullOrWhiteSpace(_content.AuthorSlug))
+                    {
+                        <p class="byline">@UiText.T("Public.ContentDetail.Author", "作者") · <a href="@("/author/" + Uri.EscapeDataString(_content.AuthorSlug))">@byline</a></p>
+                    }
+                    else
+                    {
+                        <p class="byline">@UiText.T("Public.ContentDetail.Author", "作者") · @byline</p>
+                    }
+                }
             }
             @if (!_locked && _content.Kind == ContentKind.Post)
             {
-                <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString("yyyy 年 MM 月 dd 日") <span class="sr-only">UTC</span></time>
+                <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString(UiText.T("Public.ContentDetail.PublishedDateFormat", "yyyy 年 MM 月 dd 日"), CultureInfo.CurrentUICulture) <span class="sr-only">UTC</span></time>
                 @if (_content.Categories.Count > 0)
                 {
-                    <div class="chip-list" aria-label="分類">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
+                    <div class="chip-list" aria-label="@UiText.T("Public.ContentDetail.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
                 }
             }
         </header>
         @if (_locked)
         {
             <section class="protected-gate panel" aria-labelledby="protected-title">
-                <h2 id="protected-title">這份內容受密碼保護</h2>
-                <p class="field-help">輸入管理員提供的密碼即可閱讀；密碼變更後需重新解鎖。</p>
+                <h2 id="protected-title">@UiText.T("Public.ContentDetail.04", "這份內容受密碼保護")</h2>
+                <p class="field-help">@UiText.T("Public.ContentDetail.05", "輸入管理員提供的密碼即可閱讀；密碼變更後需重新解鎖。")</p>
                 @if (_unlockError is not null)
                 {
                     <p class="notice notice-error" role="alert">@_unlockError</p>
@@ -79,11 +109,11 @@ else if (_content is not null)
                 <EditForm Model="Unlock" FormName="content-unlock" method="post" OnValidSubmit="UnlockAsync" Enhance="false">
                     <DataAnnotationsValidator />
                     <div class="field">
-                        <label for="unlock-password">內容密碼</label>
+                        <label for="unlock-password">@UiText.T("Public.ContentDetail.06", "內容密碼")</label>
                         @* name 與表單模型屬性同名，Static SSR 的 POST 才會繫結此欄位。 *@
                         <input id="unlock-password" name="Unlock.Password" type="password" autocomplete="off" maxlength="1024" required />
                     </div>
-                    <button type="submit" class="button">解鎖內容</button>
+                    <button type="submit" class="button">@UiText.T("Public.ContentDetail.07", "解鎖內容")</button>
                 </EditForm>
             </section>
         }
@@ -97,18 +127,32 @@ else if (_content is not null)
                 </figure>
             }
             <div class="prose">@((MarkupString)_html)</div>
+            @if (_pageTotal > 1)
+            {
+                <nav class="post-pagination" aria-label="@UiText.T("Public.ContentDetail.Pagination", "內容分頁")">
+                    @if (_pageIndex > 1)
+                    {
+                        <a class="button button-secondary button-small" rel="prev" href="@PageHref(_pageIndex - 1)">@UiText.T("Public.ContentDetail.PreviousPage", "上一頁")</a>
+                    }
+                    <span class="muted">@string.Format(UiText.T("Public.ContentDetail.PageStatus", "第 {0} 頁，共 {1} 頁"), _pageIndex, _pageTotal)</span>
+                    @if (_pageIndex < _pageTotal)
+                    {
+                        <a class="button button-secondary button-small" rel="next" href="@PageHref(_pageIndex + 1)">@UiText.T("Public.ContentDetail.NextPage", "下一頁")</a>
+                    }
+                </nav>
+            }
             @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
             {
-                <footer class="article-tags" aria-label="標籤">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
+                <footer class="article-tags" aria-label="@UiText.T("Public.ContentDetail.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
             }
         }
         @if (_content.Kind == ContentKind.Post && _neighbors.Count > 0)
         {
-            <nav class="post-neighbors" aria-label="上一篇與下一篇">
+            <nav class="post-neighbors" aria-label="@UiText.T("Public.ContentDetail.NeighborNavigation", "上一篇與下一篇")">
                 @foreach (var neighbor in _neighbors)
                 {
                     <a class="neighbor-link" href="@("/posts/" + Uri.EscapeDataString(neighbor.Slug))">
-                        <span>@(neighbor.IsNewer ? "下一篇 →" : "← 上一篇")</span>
+                        <span>@(neighbor.IsNewer ? UiText.T("Public.ContentDetail.NewerArticle", "下一篇 →") : UiText.T("Public.ContentDetail.OlderArticle", "← 上一篇"))</span>
                         <strong>@neighbor.Title</strong>
                     </a>
                 }
@@ -117,7 +161,7 @@ else if (_content is not null)
         @if (_content.Kind == ContentKind.Post && _related.Count > 0)
         {
             <aside class="related-posts" aria-labelledby="related-heading">
-                <h2 id="related-heading">相關文章</h2>
+                <h2 id="related-heading">@UiText.T("Public.ContentDetail.08", "相關文章")</h2>
                 <ul>
                     @foreach (var item in _related)
                     {
@@ -126,11 +170,57 @@ else if (_content is not null)
                 </ul>
             </aside>
         }
+        @if (_settings.CommentsEnabled && !_locked && !_isPrivate && !_content.IsProtected && _content.Kind == ContentKind.Post)
+        {
+            <section class="comments" aria-labelledby="comments-title">
+                <h2 id="comments-title">@string.Format(UiText.T("Public.ContentDetail.CommentCount", "評論（{0}）"), _comments.Count)</h2>
+                @foreach (var comment in _comments)
+                {
+                    <article class="comment">
+                        <p class="comment-meta">
+                            @if (Uri.TryCreate(comment.Url, UriKind.Absolute, out var website) && website.Scheme is "https" or "http")
+                            {
+                                <a href="@website.AbsoluteUri" rel="nofollow noopener" target="_blank">@comment.AuthorName</a>
+                            }
+                            else
+                            {
+                                @comment.AuthorName
+                            }
+                            · @comment.CreatedAt.ToString("yyyy.MM.dd HH:mm") <span class="sr-only">UTC</span>
+                        </p>
+                        @* 訪客評論與內容走同一條 Markdown 安全渲染管線（停用 HTML、過濾危險協定）。 *@
+                        <div class="comment-body">@((MarkupString)Markdown.Render(comment.Markdown))</div>
+                    </article>
+                }
+                @if (_comments.Count == 0)
+                {
+                    <p class="muted">@UiText.T("Public.ContentDetail.NoComments", "還沒有評論；成為第一位留言的訪客。")</p>
+                }
+                @if (_commentPosted)
+                {
+                    <p class="notice notice-success" role="status">@UiText.T("Public.ContentDetail.CommentPosted", "評論已送出；審核通過後會顯示在此頁。")</p>
+                }
+                @if (_commentError is not null)
+                {
+                    <p class="notice notice-error" role="alert">@_commentError</p>
+                }
+                @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證；評論端點經 BFF 通道寫入。 *@
+                <EditForm Model="CommentForm" method="post" OnValidSubmit="PostCommentAsync" FormName="content-comment" Enhance="false">
+                    <DataAnnotationsValidator />
+                    <div class="field"><label for="comment-name">@UiText.T("Public.ContentDetail.CommentName", "名稱") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><input id="comment-name" name="CommentForm.AuthorName" maxlength="@Limits.CommentAuthor" required autocomplete="name" /></div>
+                    <div class="field"><label for="comment-url">@UiText.T("Public.ContentDetail.CommentUrl", "網址（選填）")</label><input id="comment-url" name="CommentForm.Url" maxlength="@Limits.CommentUrl" autocomplete="url" placeholder="https://" /></div>
+                    @* 蜜罐欄位對正常訪客隱藏；機器人填寫後該則評論靜默進入垃圾佇列。 *@
+                    <div class="hp-field" aria-hidden="true"><label for="comment-website">@UiText.T("Public.ContentDetail.LeaveBlank", "請留空")</label><input id="comment-website" name="CommentForm.Honeypot" tabindex="-1" autocomplete="off" /></div>
+                    <div class="field"><label for="comment-body">@UiText.T("Public.ContentDetail.CommentBody", "評論") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><textarea id="comment-body" name="CommentForm.Body" rows="4" maxlength="@Limits.CommentBody" required></textarea></div>
+                    <button type="submit" class="button">@UiText.T("Public.ContentDetail.SubmitComment", "送出評論")</button>
+                </EditForm>
+            </section>
+        }
     </article>
 }
 else
 {
-    @if (!_redirecting) { <p role="status">正在載入內容…</p> }
+    @if (!_redirecting) { <p role="status">@UiText.T("Public.ContentDetail.09", "正在載入內容…")</p> }
 }
 
 @code {
@@ -152,17 +242,59 @@ else
     private List<string> _canonicalSegments = [];
     private List<ContentNeighbor> _neighbors = [];
     private IReadOnlyList<SemanticHit> _related = [];
+    private List<CommentService.CommentView> _comments = [];
+    private bool _commentPosted;
+    private string? _commentError;
+    private List<string> _pageSections = [""];
+    private int _pageIndex = 1;
+    private int _pageTotal = 1;
+    [SupplyParameterFromQuery(Name = "page")] private int? RequestedPage { get; set; }
+    [SupplyParameterFromForm(FormName = "content-comment")]
+    private CommentFormInput CommentForm { get; set; } = default!;
+    private sealed class CommentFormInput
+    {
+        public static string NameRequired => UiText.T("Public.ContentDetail.CommentNameRequired", "請輸入名稱。");
+        public static string NameTooLong => string.Format(UiText.T("Public.ContentDetail.CommentNameTooLong", "名稱最長 {0} 字。"), Limits.CommentAuthor);
+        public static string UrlTooLong => string.Format(UiText.T("Public.ContentDetail.CommentUrlTooLong", "網址最長 {0} 字。"), Limits.CommentUrl);
+        public static string BodyRequired => UiText.T("Public.ContentDetail.CommentBodyRequired", "請輸入評論內容。");
+        public static string BodyTooLong => string.Format(UiText.T("Public.ContentDetail.CommentBodyTooLong", "評論內容最長 {0} 字。"), Limits.CommentBody);
+
+        [Required(ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(NameRequired))]
+        [StringLength(Limits.CommentAuthor, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(NameTooLong))]
+        public string AuthorName { get; set; } = "";
+        [StringLength(Limits.CommentUrl, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(UrlTooLong))]
+        public string? Url { get; set; }
+        public string? Honeypot { get; set; }
+        [Required(ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyRequired))]
+        [StringLength(Limits.CommentBody, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyTooLong))]
+        public string Body { get; set; } = "";
+    }
     private string? _unlockError;
     [SupplyParameterFromForm(FormName = "content-unlock")]
     private UnlockInput Unlock { get; set; } = default!;
     private sealed class UnlockInput
     {
-        [Required(ErrorMessage = "請輸入內容密碼。")]
-        [StringLength(1024)]
+        public static string PasswordRequired => UiText.T("Public.ContentDetail.PasswordRequired", "請輸入內容密碼。");
+        public static string PasswordTooLong => string.Format(UiText.T("Public.ContentDetail.PasswordTooLong", "內容密碼最長 {0} 字。"), 1024);
+
+        [Required(ErrorMessageResourceType = typeof(UnlockInput), ErrorMessageResourceName = nameof(PasswordRequired))]
+        [StringLength(1024, ErrorMessageResourceType = typeof(UnlockInput), ErrorMessageResourceName = nameof(PasswordTooLong))]
         public string Password { get; set; } = "";
     }
     private string UnlockCookieName => "origami.unlock." + _content?.Id.ToString("N");
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
+    private string ContentLabel
+    {
+        get
+        {
+            var label = _content?.Kind == ContentKind.Post
+                ? UiText.T("Public.ContentDetail.Post", "文章")
+                : UiText.T("Public.ContentDetail.Page", "獨立頁面");
+            if (_locked) label = string.Format(UiText.T("Public.ContentDetail.ProtectedContent", "{0} · 受密碼保護"), label);
+            if (_isPrivate) label = string.Format(UiText.T("Public.ContentDetail.PrivateContent", "{0} · 私密"), label);
+            return label;
+        }
+    }
     /// <summary>退役 slug 的永久轉址；命中時已寫入回應標頭並回傳 true。</summary>
     private async Task<bool> ResolveRetiredSlugAsync(string slug, CancellationToken ct)
     {
@@ -185,12 +317,42 @@ else
         if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
         Navigation.NotFound();
     }
-    private string Canonical => BaseUrl + (_content?.Kind == ContentKind.Page
+    private string Canonical => BaseUrl + DetailPath + (_pageIndex > 1 ? "?page=" + _pageIndex : "");
+    /// <summary>內容的相對網址；分頁連結與 canonical 都以它為基礎。</summary>
+    private string DetailPath => _content?.Kind == ContentKind.Page
         ? "/pages/" + string.Join("/", _canonicalSegments.Select(Uri.EscapeDataString))
-        : "/posts/" + Uri.EscapeDataString(_content?.Slug ?? ""));
+        : "/posts/" + Uri.EscapeDataString(_content?.Slug ?? "");
+    private string PageHref(int page) => page <= 1 ? DetailPath : DetailPath + "?page=" + page;
     /// <summary>oEmbed 探索連結；讓支援的站台以文章網址取得嵌入資訊。</summary>
     private string OembedUrl => BaseUrl + "/oembed?url=" + Uri.EscapeDataString(Canonical) + "&format=json";
-    private string MetaDescription => _content is null ? "" : _content.Excerpt != "" ? _content.Excerpt : Markdown.Excerpt(_content.Markdown);
+    private string MetaDescription => _content is null ? ""
+        : _content.MetaDescription != "" ? _content.MetaDescription
+        : _content.Excerpt != "" ? _content.Excerpt : Markdown.Excerpt(_content.Markdown);
+    /// <summary>schema.org Article 結構化資料；未渲染內容時為空字串。</summary>
+    private string StructuredData => _content is null || !_readable ? "" : BuildStructuredData();
+
+    private string BuildStructuredData()
+    {
+        var data = new System.Text.Json.Nodes.JsonObject
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = _content!.Kind == ContentKind.Post ? "Article" : "WebPage",
+            ["headline"] = _content.Title,
+            ["description"] = MetaDescription,
+            ["url"] = Canonical,
+            ["inLanguage"] = "zh-Hant",
+        };
+        if (_content.PublishedAt is { } published)
+        {
+            data["datePublished"] = published.ToString("O");
+            data["dateModified"] = (_content.UpdatedAt == default ? published : _content.UpdatedAt).ToString("O");
+        }
+        if (!string.IsNullOrWhiteSpace(_content.AuthorName))
+            data["author"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "Person", ["name"] = _content.AuthorName };
+        if (_firstImage is not null) data["image"] = AbsoluteImage;
+        if (_content.Kind == ContentKind.Page) data["isPartOf"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "WebSite", ["name"] = _settings.Name };
+        return data.ToJsonString();
+    }
     private string AbsoluteImage => _firstImage![0] == '/' ? BaseUrl + _firstImage : _firstImage!;
     /// <summary>封面圖的回應式屬性；僅在媒體寬度已知時提供 srcset 候選（與本文圖片同一組變體）。</summary>
     private Dictionary<string, object>? CoverAttributes
@@ -210,8 +372,15 @@ else
     protected override async Task OnParametersSetAsync()
     {
         // Static SSR 的 POST 會替換表單模型；單純瀏覽則從空的模型開始。
+        if (HttpContext?.Request.Method != HttpMethods.Post)
+        {
+            Unlock = new UnlockInput();
+            CommentForm = new CommentFormInput();
+        }
         Unlock ??= new UnlockInput();
+        CommentForm ??= new CommentFormInput();
         _content = null;
+        _settings = PublicSiteSettings.Default;
         _firstImage = null;
         _ogImageAlt = null;
         _html = "";
@@ -223,6 +392,12 @@ else
         _readable = false;
         _neighbors = [];
         _related = [];
+        _comments = [];
+        _commentPosted = false;
+        _commentError = null;
+        _pageSections = [""];
+        _pageIndex = 1;
+        _pageTotal = 1;
         _canonicalSegments = [];
         _unlockError = null;
         try
@@ -298,7 +473,7 @@ else
             _firstImage = null;
             _ogImageAlt = null;
             _html = "";
-            _error = "目前無法讀取這篇內容，請稍後再試。";
+            _error = UiText.T("Public.ContentDetail.LoadError", "目前無法讀取這篇內容，請稍後再試。");
             if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
         }
     }
@@ -309,7 +484,7 @@ else
         if (!UnlockThrottle.TryAcquire(_content.Id, HttpContext.Connection.RemoteIpAddress?.ToString()))
         {
             Unlock.Password = "";
-            _unlockError = "嘗試次數過多，請稍後再試。";
+            _unlockError = UiText.T("Public.ContentDetail.UnlockThrottled", "嘗試次數過多，請稍後再試。");
             return;
         }
         try
@@ -318,7 +493,7 @@ else
             if (token is null)
             {
                 Unlock.Password = "";
-                _unlockError = "密碼不正確，請再試一次。";
+                _unlockError = UiText.T("Public.ContentDetail.IncorrectPassword", "密碼不正確，請再試一次。");
                 return;
             }
             HttpContext.Response.Cookies.Append(UnlockCookieName, token, new CookieOptions
@@ -333,16 +508,70 @@ else
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogError(ex, "Content unlock failed");
-            _unlockError = "解鎖失敗，請稍後再試。";
+            _unlockError = UiText.T("Public.ContentDetail.UnlockFailed", "解鎖失敗，請稍後再試。");
         }
     }
+    private async Task PostCommentAsync()
+    {
+        if (_content is null || HttpContext is null || HttpContext.Response.HasStarted) return;
+        // 線上速率限制：以來源 IP 為鍵，過量提示稍後再試。
+        if (!CommentThrottle.TryAcquire(HttpContext.Connection.RemoteIpAddress?.ToString()))
+        {
+            _commentError = UiText.T("Public.ContentDetail.CommentThrottled", "張貼過於頻繁，請稍後再試。");
+            return;
+        }
+        try
+        {
+            await Api.PostCommentAsync(_content.Id, CommentForm.AuthorName.Trim(), CommentForm.Url?.Trim(),
+                CommentForm.Body.Trim(), !string.IsNullOrEmpty(CommentForm.Honeypot), HttpContext.RequestAborted);
+            _commentPosted = true;
+            _commentError = null;
+            CommentForm = new CommentFormInput();
+            _comments = await Api.GetPublicCommentsAsync(_content.Id, HttpContext.RequestAborted) ?? [];
+        }
+        catch (CmsException error) { _commentError = CommentErrorMessage(error.Message); }
+        catch (Exception error)
+        {
+            Logger.LogWarning(error, "評論送出失敗");
+            _commentError = UiText.T("Public.ContentDetail.CommentFailed", "評論送出失敗，請稍後再試。");
+        }
+    }
+
+    private static string CommentErrorMessage(string message) => message switch
+    {
+        var text when text == $"名稱須為 1–{Limits.CommentAuthor} 字。" =>
+            string.Format(UiText.T("Public.ContentDetail.CommentNameLength", "名稱須為 1–{0} 字。"), Limits.CommentAuthor),
+        var text when text == $"評論內容須為 1–{Limits.CommentBody} 字。" =>
+            string.Format(UiText.T("Public.ContentDetail.CommentBodyLength", "評論內容須為 1–{0} 字。"), Limits.CommentBody),
+        var text when text == $"網址最長 {Limits.CommentUrl} 字。" => CommentFormInput.UrlTooLong,
+        "網址必須是 http 或 https 的絕對網址。" => UiText.T("Public.ContentDetail.CommentInvalidUrl", "網址必須是 http 或 https 的絕對網址。"),
+        "本站未開放評論。" => UiText.T("Public.ContentDetail.CommentsDisabled", "本站未開放評論。"),
+        "內容不存在。" => UiText.T("Public.ContentDetail.ContentMissing", "內容不存在。"),
+        "這篇內容不接受評論。" => UiText.T("Public.ContentDetail.CommentsNotAccepted", "這篇內容不接受評論。"),
+        _ => UiText.T("Public.ContentDetail.CommentFailed", "評論送出失敗，請稍後再試。")
+    };
+
     private async Task RenderBodyAsync(CancellationToken ct)
     {
         _imageWidths = await Api.GetPublicImageWidthsAsync(ct) ?? [];
         // 社群分享圖以封面優先；未設定封面時退回本文第一張圖。
         _firstImage = _content!.CoverUrl ?? Markdown.FirstImage(_content.Markdown);
         _ogImageAlt = _content.CoverUrl is null ? null : _content.CoverAltText;
-        _html = Markdown.Render(_content.Markdown, _imageWidths);
+        // 長文分頁：頁碼超出範圍與不存在的分頁同義，以 404 回應。
+        _pageSections = MarkdownService.SplitPages(_content.Markdown);
+        _pageTotal = _pageSections.Count;
+        if (RequestedPage is { } requested && (requested < 1 || requested > _pageTotal))
+        {
+            ServeNotFound();
+            return;
+        }
+        _pageIndex = Math.Clamp(RequestedPage ?? 1, 1, _pageTotal);
+        _html = Markdown.Render(_pageSections[_pageIndex - 1], _imageWidths);
+        if (_content.Kind == ContentKind.Post && _settings.CommentsEnabled && !_isPrivate && !_content.IsProtected)
+        {
+            try { _comments = await Api.GetPublicCommentsAsync(_content.Id, ct) ?? []; }
+            catch (Exception error) { Logger.LogWarning(error, "評論載入失敗"); }
+        }
         if (_content.Kind == ContentKind.Post)
         {
             _neighbors = await Api.GetNeighborsAsync(_content.Id, ct) ?? [];

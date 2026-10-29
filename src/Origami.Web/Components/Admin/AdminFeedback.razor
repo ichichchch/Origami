@@ -1,6 +1,6 @@
 @if (Busy)
 {
-    <p class="operation-status" role="status" aria-live="polite"><span class="busy-dot" aria-hidden="true"></span>處理中，請稍候…</p>
+    <p class="operation-status" role="status" aria-live="polite"><span class="busy-dot" aria-hidden="true"></span>@UiText.T("Common.Processing", "處理中，請稍候…")</p>
 }
 @if (!string.IsNullOrEmpty(Error))
 {
@@ -8,7 +8,7 @@
         <p>@Error</p>
         @if (LoginRequired)
         {
-            <a href="/account/login" data-enhance-nav="false">重新登入</a>
+            <a href="/account/login" data-enhance-nav="false">@UiText.T("Common.SignInAgain", "重新登入")</a>
         }
     </div>
 }

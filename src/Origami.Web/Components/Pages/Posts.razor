@@ -2,14 +2,14 @@
 @inject OrigamiClient Api
 @inject ILogger<Posts> Logger
 
-<PageTitle>最新文章</PageTitle>
+<PageTitle>@UiText.T("Public.Posts.PageTitle", "最新文章")</PageTitle>
 <HeadContent>
     <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
     <meta name="description" content="@_settings.Description" />
     <link rel="canonical" href="@(BaseUrl + "/posts")" />
     <meta property="og:site_name" content="@_settings.Name" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="@(_settings.Name + " · 最新文章")" />
+    <meta property="og:title" content="@string.Format(UiText.T("Public.Posts.SocialTitle", "{0} · 最新文章"), _settings.Name)" />
     <meta property="og:description" content="@_settings.Description" />
     <meta property="og:url" content="@(BaseUrl + "/posts")" />
 </HeadContent>

@@ -10,37 +10,47 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JavaScript
 
-<PageTitle>@(!CanEdit ? "檢視內容" : _model?.Id is null ? "新增內容" : "編輯內容") · 內容管理</PageTitle>
+<PageTitle>@(ReadOnly ? UiText.T("Admin.ContentEditor.ViewPageTitle", "檢視內容 · 內容管理") : _model?.Id is null ? UiText.T("Admin.ContentEditor.NewPageTitle", "新增內容 · 內容管理") : UiText.T("Admin.ContentEditor.EditPageTitle", "編輯內容 · 內容管理"))</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="@(Busy || ChildBusy)" />
 <div class="page-heading">
-    <div><a class="back-link" href="@ListPath">← 返回@(KindLabel)列表</a><h1>@(!CanEdit ? "檢視" : _model?.Id is null ? "新增" : "編輯")@(KindLabel)</h1><p>專注寫作，準備好再與世界分享。</p></div>
+    <div><a class="back-link" href="@ListPath">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.BackToList", "← 返回{0}列表"), KindLabel)</a><h1>@string.Format(CultureInfo.CurrentCulture, ReadOnly ? UiText.T("Admin.ContentEditor.ViewHeading", "檢視{0}") : _model?.Id is null ? UiText.T("Admin.ContentEditor.NewHeading", "新增{0}") : UiText.T("Admin.ContentEditor.EditHeading", "編輯{0}"), KindLabel)</h1><p>@UiText.T("Admin.ContentEditor.Introduction", "專注寫作，準備好再與世界分享。")</p></div>
     <span class="save-indicator @(Dirty ? "unsaved" : "")" role="status">@SaveStatusText</span>
     @if (_autosaveAt is { } at)
     {
-        <span class="save-indicator autosaved" role="status">已自動儲存 @at.ToString("HH:mm")</span>
+        <span class="save-indicator autosaved" role="status">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.AutosavedAt", "已自動儲存 {0}"), at.ToString("HH:mm"))</span>
     }
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />@if (Error is not null && !LoginRequired)
 {
-    <p class="field-help">輸入仍保留。若資料衝突，請先複製需要的內容，再重新載入最新版本。</p>
-    <button class="button button-secondary" disabled="@SaveBlocked" @onclick="RequestReload">重新載入最新版本</button>
+    <p class="field-help">@UiText.T("Admin.ContentEditor.ConflictHelp", "輸入仍保留。若資料衝突，請先複製需要的內容，再重新載入最新版本。")</p>
+    <button class="button button-secondary" disabled="@SaveBlocked" @onclick="RequestReload">@UiText.T("Admin.ContentEditor.ReloadLatest", "重新載入最新版本")</button>
+}
+@if (_model?.Id is not null && EditAllowed && _editingHeldByOther)
+{
+    <section class="notice notice-danger" role="status">
+        <strong>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.EditingInProgress", "{0} 正在編輯這份內容。"), string.IsNullOrWhiteSpace(_editingHolderName) ? UiText.T("Admin.ContentEditor.AnotherMember", "另一位成員") : _editingHolderName)</strong>
+        @UiText.T("Admin.ContentEditor.EditingLockHelp", "占用只是提示，不會封鎖你的操作；儲存仍受版本檢查保護。對方離開或占用逾時後可自然接手，或立即接管。")
+        <div class="button-row"><button type="button" class="button button-secondary" disabled="@Blocked" @onclick="TakeOverEditingAsync">@UiText.T("Admin.ContentEditor.TakeOver", "接管占用")</button></div>
+    </section>
 }
 @if (_reloadRequested)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="reload-title">
-        <h2 id="reload-title">捨棄輸入並重新載入？</h2><p>目前未儲存的輸入將被取代。請先複製要保留的內容。</p>
-        <div class="button-row"><button class="button button-danger" disabled="@SaveBlocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _reloadRequested = false">繼續編輯</button></div>
+        <h2 id="reload-title">@UiText.T("Admin.ContentEditor.ReloadTitle", "捨棄輸入並重新載入？")</h2><p>@UiText.T("Admin.ContentEditor.ReloadDescription", "目前未儲存的輸入將被取代。請先複製要保留的內容。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@SaveBlocked" @onclick="Reload">@UiText.T("Admin.ContentEditor.ConfirmReload", "確認重新載入")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _reloadRequested = false">@UiText.T("Admin.ContentEditor.ContinueEditing", "繼續編輯")</button></div>
     </section>
 }
-@if (_model is not null && !CanEdit)
+@if (_model is not null && ReadOnly)
 {
-    <p class="notice">你目前只有本站唯讀權限，可以檢視內容，但不能建立、修改或發布。</p>
+    <p class="notice">@(AuthorOwn && (_model.Status == ContentStatus.Published || _model.PublishAt is not null)
+        ? UiText.T("Admin.ContentEditor.AuthorManagedReadOnly", "這份內容已發布或已排程，由編輯者管理；你仍可檢視內容。")
+        : UiText.T("Admin.ContentEditor.ReadOnlyNotice", "你目前沒有編輯這份內容的權限，可以檢視內容，但不能修改或發布。"))</p>
     <section class="panel settings-panel">
         <h2>@_model.Title</h2>
         <p>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/@_model.Slug · @_model.Status</p>
         <div class="prose">@((MarkupString)MarkdownRenderer.Render(_model.Markdown ?? ""))</div>
-        <details><summary>Markdown 原文（唯讀，可複製）</summary><pre>@_model.Markdown</pre></details>
-        <button class="button button-secondary" disabled="@Blocked" @onclick="Load">重新載入內容</button>
+        <details><summary>@UiText.T("Admin.ContentEditor.ReadOnlyMarkdown", "Markdown 原文（唯讀，可複製）")</summary><pre>@_model.Markdown</pre></details>
+        <button class="button button-secondary" disabled="@Blocked" @onclick="Load">@UiText.T("Admin.ContentEditor.ReloadContent", "重新載入內容")</button>
     </section>
 }
 else if (_model is not null)
@@ -49,11 +59,16 @@ else if (_model is not null)
         <fieldset disabled="@Blocked" class="editor-grid">
             <div class="editor-main">
                 <section class="panel editor-fields">
-                    <div class="field"><label for="content-title">標題 <span class="required">必填</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="給這個想法一個標題" /><span class="field-help">最多 @Limits.Title 字。</span></div>
-                    <div class="field"><label for="content-slug">網址代稱</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="首次儲存可留空，自標題產生" /></div><span id="slug-help" class="field-help">代稱須全站唯一；修改後舊網址不會自動轉址。</span></div>
-                    <div class="field"><label for="content-excerpt">摘要</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="用一兩句話介紹這篇內容；留空則自動使用開頭文字"></textarea><div class="excerpt-actions"><button type="button" class="text-button" disabled="@Blocked" @onclick="ExcerptFromSelection">以本文選取文字填入</button><span class="field-help">純文字，最多 @Limits.Excerpt 字；顯示於文章列表、搜尋結果與社群分享描述。</span></div></div>
+                    <div class="field"><label for="content-title">@UiText.T("Admin.ContentEditor.Title", "標題") <span class="required">@UiText.T("Admin.ContentEditor.Required", "必填")</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="@UiText.T("Admin.ContentEditor.TitlePlaceholder", "給這個想法一個標題")" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.TitleHelp", "最多 {0} 字。"), Limits.Title)</span></div>
+                    <div class="field"><label for="content-slug">@UiText.T("Admin.ContentEditor.Slug", "網址代稱")</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="@UiText.T("Admin.ContentEditor.SlugPlaceholder", "首次儲存可留空，自標題產生")" /></div><span id="slug-help" class="field-help">@UiText.T("Admin.ContentEditor.SlugHelp", "代稱須全站唯一；修改後舊網址不會自動轉址。")</span></div>
+                    <div class="field"><label for="content-excerpt">@UiText.T("Admin.ContentEditor.Excerpt", "摘要")</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="@UiText.T("Admin.ContentEditor.ExcerptPlaceholder", "用一兩句話介紹這篇內容；留空則自動使用開頭文字")"></textarea><div class="excerpt-actions"><button type="button" class="text-button" disabled="@Blocked" @onclick="ExcerptFromSelection">@UiText.T("Admin.ContentEditor.ExcerptFromSelection", "以本文選取文字填入")</button><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ExcerptHelp", "純文字，最多 {0} 字；顯示於文章列表、搜尋結果與社群分享描述。"), Limits.Excerpt)</span></div></div>
+                    <div class="field"><label for="content-meta-description">@UiText.T("Admin.ContentEditor.MetaDescription", "SEO 描述（選填）")</label><textarea id="content-meta-description" @bind="_model.MetaDescription" @bind:event="oninput" maxlength="@Limits.MetaDescription" rows="2" aria-describedby="content-meta-help" placeholder="@UiText.T("Admin.ContentEditor.MetaDescriptionPlaceholder", "搜尋結果與社群分享的摘要文字")"></textarea><span id="content-meta-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.MetaDescriptionHelp", "最多 {0} 字；留空時使用上方的摘要。設定後會用於社群分享描述與結構化資料。"), Limits.MetaDescription)</span></div>
+                    <div class="field checkbox-field">
+                        <label for="content-noindex"><input id="content-noindex" type="checkbox" @bind="_model.NoIndex" disabled="@Blocked" /> @UiText.T("Admin.ContentEditor.NoIndex", "不列入搜尋引擎索引")</label>
+                        <p class="field-help">@UiText.T("Admin.ContentEditor.NoIndexHelp", "勾選後會輸出 robots noindex，且不列入 sitemap；內容仍可正常公開閱讀。")</p>
+                    </div>
                     <div class="field">
-                        <label id="content-cover-label">封面圖片（選填）</label>
+                        <label id="content-cover-label">@UiText.T("Admin.ContentEditor.CoverImage", "封面圖片（選填）")</label>
                         <div class="cover-control">
                             @if (_model.CoverFileName != "")
                             {
@@ -61,44 +76,108 @@ else if (_model is not null)
                             }
                             else
                             {
-                                <p class="field-help cover-empty">未設定封面。</p>
+                                <p class="field-help cover-empty">@UiText.T("Admin.ContentEditor.NoCover", "未設定封面。")</p>
                             }
                             <div class="button-row">
-                                <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="OpenCoverPicker">@(_model.CoverFileName == "" ? "選擇封面" : "更換封面")</button>
+                                <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="OpenCoverPicker">@(_model.CoverFileName == "" ? UiText.T("Admin.ContentEditor.SelectCover", "選擇封面") : UiText.T("Admin.ContentEditor.ChangeCover", "更換封面"))</button>
                                 @if (_model.CoverFileName != "")
                                 {
-                                    <button type="button" class="text-button" disabled="@Blocked" @onclick="RemoveCover">移除封面</button>
+                                    <button type="button" class="text-button" disabled="@Blocked" @onclick="RemoveCover">@UiText.T("Admin.ContentEditor.RemoveCover", "移除封面")</button>
                                 }
                             </div>
                         </div>
-                        <span class="field-help">封面顯示於文章列表與內容開頭；社群分享圖以封面優先，未設定時退回本文第一張圖。說明文字（caption）在媒體庫編輯。</span>
+                        <span class="field-help">@UiText.T("Admin.ContentEditor.CoverHelp", "封面顯示於文章列表與內容開頭；社群分享圖以封面優先，未設定時退回本文第一張圖。說明文字（caption）在媒體庫編輯。")</span>
                     </div>
                     @if (_model.Kind == ContentKind.Page)
                     {
                         <div class="field">
-                            <label for="content-parent">上層頁面（選填）</label>
+                            <label for="content-parent">@UiText.T("Admin.ContentEditor.ParentPage", "上層頁面（選填）")</label>
                             <select id="content-parent" disabled="@Blocked" value="@(_model.ParentId?.ToString() ?? "")" @onchange="ParentChanged">
-                                <option value="">無（最上層）</option>
+                                <option value="">@UiText.T("Admin.ContentEditor.NoParent", "無（最上層）")</option>
                                 @foreach (var choice in ParentChoices())
                                 {
                                     <option value="@choice.Id">@choice.Label</option>
                                 }
                             </select>
-                            <span class="field-help">設定後此頁面會排列於該頁面之下（導覽與列表）；網址仍是獨立的 /pages/代稱，不會改變。</span>
+                            <span class="field-help">@UiText.T("Admin.ContentEditor.ParentHelp", "設定後此頁面會排列於該頁面之下（導覽與列表）；網址仍是獨立的 /pages/代稱，不會改變。")</span>
                         </div>
+                    }
+                    @if (_model.Id is null)
+                    {
+                        <div class="field">
+                            <label for="content-type">@UiText.T("Admin.ContentEditor.ContentType", "內容類型")</label>
+                            <select id="content-type" value="@(_model.ContentTypeId?.ToString() ?? "")" @onchange="TypeChanged" disabled="@Blocked">
+                                <option value="">@UiText.T("Admin.ContentEditor.DefaultPost", "文章（預設）")</option>
+                                @foreach (var type in _types)
+                                {
+                                    <option value="@type.Id">@type.Name</option>
+                                }
+                            </select>
+                            <span class="field-help">@UiText.T("Admin.ContentEditor.ContentTypeHelp", "自訂內容類型會發布到自己的公開專區（/t/代稱），不出現在文章列表。既有內容的類型不可變更。")</span>
+                        </div>
+                    }
+                    else if (_model.ContentTypeId is { } fixedTypeId)
+                    {
+                        <div class="field">
+                            <span class="field-label">@UiText.T("Admin.ContentEditor.ContentType", "內容類型")</span>
+                            <p class="field-help">@(_types.FirstOrDefault(x => x.Id == fixedTypeId)?.Name ?? UiText.T("Admin.ContentEditor.ContentTypeUnknown", "自訂內容類型"))</p>
+                        </div>
+                    }
+                    @foreach (var field in _fields)
+                    {
+                        var value = _fieldValues.GetValueOrDefault(field.Id, "");
+                        <div class="field">
+                            <label for="field-@field.Id">@field.Name@(field.IsRequired ? " *" : "")</label>
+                            @switch (field.FieldType)
+                            {
+                                case CustomFieldTypes.LongText:
+                                    <textarea id="field-@field.Id" rows="3" maxlength="@CustomFieldTypes.MaxLength(field.FieldType)" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked"></textarea>
+                                    break;
+                                case CustomFieldTypes.Number:
+                                    <input id="field-@field.Id" type="number" step="any" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                                case CustomFieldTypes.Date:
+                                    <input id="field-@field.Id" type="date" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                                case CustomFieldTypes.Checkbox:
+                                    <input id="field-@field.Id" type="checkbox" checked="@(value == "true")" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                                default:
+                                    <input id="field-@field.Id" type="text" maxlength="@CustomFieldTypes.MaxLength(field.FieldType)" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                            }
+                        </div>
+                    }
+                    @if (_termGroups.Count > 0)
+                    {
+                        @foreach (var group in _termGroups)
+                        {
+                            <fieldset class="field term-fieldset">
+                                <legend>@group.TaxonomyName</legend>
+                                @foreach (var term in group.Terms)
+                                {
+                                    <label class="checkbox-field" for="term-@term.Id">
+                                        <input id="term-@term.Id" type="checkbox" checked="@_selectedTermIds.Contains(term.Id)"
+                                               @onchange="args => ToggleTerm(term.Id, args)" />
+                                        @term.Name
+                                    </label>
+                                }
+                            </fieldset>
+                        }
                     }
                 </section>
                 <section class="panel markdown-panel">
-                    <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@(!_preview)" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview" disabled="@ChildBusy" @onclick="Preview">預覽</button></div><button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">插入圖片</button></div>
+                    <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@((!_preview).ToString().ToLowerInvariant())" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview.ToString().ToLowerInvariant()" disabled="@ChildBusy" @onclick="Preview">@UiText.T("Admin.ContentEditor.Preview", "預覽")</button></div><button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">@UiText.T("Admin.ContentEditor.InsertImage", "插入圖片")</button></div>
                     @if (_preview)
                     {
-                        <div class="prose editor-preview" aria-label="尚未儲存的內容預覽">@((MarkupString)_previewHtml)</div>
-                        <p class="editor-footnote">這是目前輸入的預覽，不代表已儲存或已發布。</p>
+                        <div class="prose editor-preview" aria-label="@UiText.T("Admin.ContentEditor.UnsavedPreview", "尚未儲存的內容預覽")">@((MarkupString)_previewHtml)</div>
+                        <p class="editor-footnote">@UiText.T("Admin.ContentEditor.PreviewHelp", "這是目前輸入的預覽，不代表已儲存或已發布。")</p>
                     }
                     else
                     {
-                        <label class="sr-only" for="content-markdown">Markdown 本文</label><textarea id="content-markdown" class="markdown-input" @bind="_model.Markdown" @bind:event="oninput" maxlength="@Limits.Body" rows="22" placeholder="從這裡開始寫作…" aria-describedby="markdown-help"></textarea>
-                        <div class="editor-footnote"><span id="markdown-help">支援 Markdown；不執行原始 HTML。</span><span>@((_model.Markdown?.Length ?? 0).ToString("N0")) / @Limits.Body.ToString("N0") 字</span></div>
+                        <label class="sr-only" for="content-markdown">@UiText.T("Admin.ContentEditor.MarkdownBody", "Markdown 本文")</label><textarea id="content-markdown" class="markdown-input" @bind="_model.Markdown" @bind:event="oninput" maxlength="@Limits.Body" rows="22" placeholder="@UiText.T("Admin.ContentEditor.BodyPlaceholder", "從這裡開始寫作…")" aria-describedby="markdown-help"></textarea>
+                        <p id="markdown-help" class="field-help">@((MarkupString)string.Format(CultureInfo.CurrentCulture, WebUtility.HtmlEncode(UiText.T("Admin.ContentEditor.PageBreakHelp", "長文可在獨立一行輸入 {0} 分頁，訪客以「下一頁」閱讀；RSS 與搜尋仍以全文為準。")), "<code>&lt;!--nextpage--&gt;</code>"))</p>
+                        <div class="editor-footnote"><span id="markdown-help">@UiText.T("Admin.ContentEditor.MarkdownHelp", "支援 Markdown；不執行原始 HTML。")</span><span>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.CharacterCount", "{0:N0} / {1:N0} 字"), _model.Markdown?.Length ?? 0, Limits.Body)</span></div>
                     }
                 </section>
                 @if (_mediaOpen || _coverPickerOpen)
@@ -108,75 +187,106 @@ else if (_model is not null)
             </div>
             <aside class="editor-aside">
                 <section class="panel publish-panel">
-                    <h2>發布設定</h2><div class="status-line"><span>目前狀態</span><span class="status-badge @(_model.Status == ContentStatus.Published ? "published" : "draft")">@(_model.Status == ContentStatus.Published ? "已發布" : "草稿")</span></div>
+                    <h2>@UiText.T("Admin.ContentEditor.PublishSettings", "發布設定")</h2><div class="status-line"><span>@UiText.T("Admin.ContentEditor.CurrentStatus", "目前狀態")</span><span class="status-badge @(_model.Status == ContentStatus.Published ? "published" : "draft")">@(_model.Status == ContentStatus.Published ? UiText.T("Admin.ContentEditor.Published", "已發布") : UiText.T("Admin.ContentEditor.Draft", "草稿"))</span></div>
                     @if (_model.Kind == ContentKind.Post)
                     {
                         <div class="field checkbox-field">
-                            <label for="content-sticky"><input id="content-sticky" type="checkbox" @bind="_model.IsSticky" disabled="@Blocked" /> 置頂文章</label>
-                            <p class="field-help">置頂文章固定排在文章列表最前面。</p>
+                            <label for="content-sticky"><input id="content-sticky" type="checkbox" @bind="_model.IsSticky" disabled="@Blocked" /> @UiText.T("Admin.ContentEditor.Sticky", "置頂文章")</label>
+                            <p class="field-help">@UiText.T("Admin.ContentEditor.StickyHelp", "置頂文章固定排在文章列表最前面。")</p>
                         </div>
                     }
                     @if (_model.Id is not null)
                     {
-                        <p class="field-help">累積瀏覽 @_model.Views 次。</p>
+                        <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ViewCount", "累積瀏覽 {0} 次。"), _model.Views)</p>
                     }
                     <div class="field checkbox-field">
-                        <label for="content-protect"><input id="content-protect" type="checkbox" @bind="_model.IsProtected" disabled="@(Blocked || _model.IsPrivate)" /> 密碼保護</label>
-                        <p class="field-help">公開網址需輸入密碼才能閱讀內文；受保護內容不進入搜尋與 AI 檢索。</p>
+                        <label for="content-protect"><input id="content-protect" type="checkbox" @bind="_model.IsProtected" disabled="@(Blocked || _model.IsPrivate)" /> @UiText.T("Admin.ContentEditor.PasswordProtection", "密碼保護")</label>
+                        <p class="field-help">@UiText.T("Admin.ContentEditor.PasswordProtectionHelp", "公開網址需輸入密碼才能閱讀內文；受保護內容不進入搜尋與 AI 檢索。")</p>
                     </div>
                     <div class="field checkbox-field">
-                        <label for="content-private"><input id="content-private" type="checkbox" @bind="_model.IsPrivate" disabled="@(Blocked || _model.IsProtected)" /> 私密</label>
-                        <p class="field-help">公開網址僅管理員登入後可讀，訪客與搜尋引擎一律 404；私密內容不進入搜尋與 AI 檢索。</p>
+                        <label for="content-private"><input id="content-private" type="checkbox" @bind="_model.IsPrivate" disabled="@(Blocked || _model.IsProtected)" /> @UiText.T("Admin.ContentEditor.Private", "私密")</label>
+                        <p class="field-help">@UiText.T("Admin.ContentEditor.PrivateHelp", "公開網址僅管理員登入後可讀，訪客與搜尋引擎一律 404；私密內容不進入搜尋與 AI 檢索。")</p>
                     </div>
                     @if (_model.IsProtected)
                     {
                         <div class="field">
-                            <label for="protect-password">@(_model.HasProtectPassword ? "更換保護密碼（選填）" : "設定保護密碼")</label>
+                            <label for="protect-password">@(_model.HasProtectPassword ? UiText.T("Admin.ContentEditor.ChangePassword", "更換保護密碼（選填）") : UiText.T("Admin.ContentEditor.SetPassword", "設定保護密碼"))</label>
                             <input id="protect-password" type="password" maxlength="1024" @bind="_protectPassword" disabled="@Blocked" autocomplete="new-password" aria-describedby="protect-help" />
-                            <span id="protect-help" class="field-help">@(_model.HasProtectPassword ? "留空表示沿用目前的保護密碼。" : "首次啟用需設定密碼，至少 8 個字元。")</span>
+                            <span id="protect-help" class="field-help">@(_model.HasProtectPassword ? UiText.T("Admin.ContentEditor.KeepPasswordHelp", "留空表示沿用目前的保護密碼。") : UiText.T("Admin.ContentEditor.NewPasswordHelp", "首次啟用需設定密碼，至少 8 個字元。"))</span>
                         </div>
                     }
-                    @if (_model.Status == ContentStatus.Draft)
+                    @if (CanEdit && _model.Status == ContentStatus.Draft)
                     {
                         <div class="field">
-                            <label for="content-schedule">排程發布時間（選填）</label>
+                            <label for="content-schedule">@UiText.T("Admin.ContentEditor.Schedule", "排程發布時間（選填）")</label>
                             <input id="content-schedule" type="datetime-local" @bind="_scheduleLocal" @bind:after="() => _scheduleTouched = true" disabled="@Blocked" aria-describedby="schedule-help" />
-                            <span id="schedule-help" class="field-help">以你瀏覽器的時區為準，至少 @Limits.ScheduleLeadMinutes 分鐘後；時間到系統自動發布。留空表示不排程。</span>
+                            <span id="schedule-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ScheduleHelp", "以你瀏覽器的時區為準，至少 {0} 分鐘後；時間到系統自動發布。留空表示不排程。"), Limits.ScheduleLeadMinutes)</span>
                         </div>
+                    }
+                    @if (_model.Status is ContentStatus.Draft or ContentStatus.Pending)
+                    {
                         @if (_model.Id is not null)
                         {
                             <div class="field">
-                                <label id="preview-link-label">草稿預覽連結</label>
+                                <label id="preview-link-label">@(_model.Status == ContentStatus.Pending
+                                    ? UiText.T("Admin.ContentEditor.PreviewLinkPending", "待審預覽連結")
+                                    : UiText.T("Admin.ContentEditor.PreviewLink", "草稿預覽連結"))</label>
                                 @if (_model.PreviewToken is { } token)
                                 {
                                     <input class="code-input" value="@PreviewUrl(token)" readonly aria-labelledby="preview-link-label" />
                                     <div class="button-row">
-                                        <button type="button" class="button button-secondary button-small" disabled="@SaveBlocked" @onclick="CyclePreview">重新產生連結</button>
-                                        <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RevokePreview">撤銷</button>
+                                        <button type="button" class="button button-secondary button-small" disabled="@SaveBlocked" @onclick="CyclePreview">@UiText.T("Admin.ContentEditor.RegenerateLink", "重新產生連結")</button>
+                                        <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RevokePreview">@UiText.T("Admin.ContentEditor.RevokeLink", "撤銷")</button>
                                     </div>
-                                    <span class="field-help">持有連結的人都能閱讀這份草稿（不會進入搜尋）；重新產生或撤銷後，舊連結立即失效。</span>
+                                    <span class="field-help">@(_model.Status == ContentStatus.Pending
+                                        ? UiText.T("Admin.ContentEditor.PreviewLinkPendingHelp", "持有連結的人都能閱讀這份待審內容（不會進入搜尋，也不會公開）；重新產生或撤銷後，舊連結立即失效。")
+                                        : UiText.T("Admin.ContentEditor.PreviewLinkHelp", "持有連結的人都能閱讀這份草稿（不會進入搜尋）；重新產生或撤銷後，舊連結立即失效。"))</span>
                                 }
                                 else
                                 {
-                                    <button type="button" class="button button-secondary button-small" disabled="@SaveBlocked" @onclick="CyclePreview">產生預覽連結</button>
-                                    <span class="field-help">產生臨時連結，在發布前分享草稿給其他人看。</span>
+                                    <button type="button" class="button button-secondary button-small" disabled="@SaveBlocked" @onclick="CyclePreview">@UiText.T("Admin.ContentEditor.GenerateLink", "產生預覽連結")</button>
+                                    <span class="field-help">@(_model.Status == ContentStatus.Pending
+                                        ? UiText.T("Admin.ContentEditor.GenerateLinkPendingHelp", "產生臨時連結，分享尚未發布的內容給審核者。")
+                                        : UiText.T("Admin.ContentEditor.GenerateLinkHelp", "產生臨時連結，在發布前分享草稿給其他人看。"))</span>
                                 }
                             </div>
                         }
                     }
-                    <p class="field-help">@(_model.Status == ContentStatus.Published ? "儲存會立即更新公開網站。撤回後，文字內容將不再公開。" : "草稿僅供管理員編輯，發布後訪客才能閱讀。")</p>
-                    <button type="submit" class="button full-width" disabled="@SaveBlocked">@(SubmitText)</button>
-                    @if (_model.Status == ContentStatus.Draft)
+                    <p class="field-help">@(_model.Status switch
                     {
-                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Published)">儲存並發布</button>
+                        ContentStatus.Published => UiText.T("Admin.ContentEditor.PublishedHelp", "儲存會立即更新公開網站。撤回後，文字內容將不再公開。"),
+                        ContentStatus.Pending => AuthorOwn && !CanEdit ? UiText.T("Admin.ContentEditor.SubmittedForReview", "已提交待審；發布由編輯者審核後執行。") : UiText.T("Admin.ContentEditor.PendingReviewHelp", "待審內容由你審核：可發布或退回草稿。"),
+                        _ => UiText.T("Admin.ContentEditor.DraftHelp", "草稿僅供後台編輯，發布後訪客才能閱讀。")
+                    })</p>
+                    <button type="submit" class="button full-width" disabled="@SaveBlocked">@(SubmitText)</button>
+                    @if (AuthorOwn && !CanEdit)
+                    {
+                        // 作者循環：草稿↔待審；發布與審核屬於編輯者。
+                        @if (_model.Status == ContentStatus.Draft)
+                        {
+                            <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Pending)">@UiText.T("Admin.ContentEditor.SaveAndSubmit", "儲存並提交待審")</button>
+                        }
+                        else if (_model.Status == ContentStatus.Pending)
+                        {
+                            <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Draft)">@UiText.T("Admin.ContentEditor.WithdrawToDraft", "撤回為草稿")</button>
+                        }
+                    }
+                    else if (_model.Status == ContentStatus.Draft)
+                    {
+                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Published)">@UiText.T("Admin.ContentEditor.SaveAndPublish", "儲存並發布")</button>
+                    }
+                    else if (_model.Status == ContentStatus.Pending)
+                    {
+                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Published)">@UiText.T("Admin.ContentEditor.ApproveAndPublish", "審核通過並發布")</button>
+                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Draft)">@UiText.T("Admin.ContentEditor.ReturnToDraft", "退回為草稿")</button>
                     }
                     else
                     {
-                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Draft)">儲存並撤回為草稿</button>
-                        <a class="public-preview-link" href="@PublicPath" target="_blank" rel="noopener" data-enhance-nav="false">檢視公開版本 ↗</a>
+                        <button type="button" class="button button-secondary full-width" disabled="@SaveBlocked" @onclick="() => Save(ContentStatus.Draft)">@UiText.T("Admin.ContentEditor.SaveAndWithdraw", "儲存並撤回為草稿")</button>
+                        <a class="public-preview-link" href="@PublicPath" target="_blank" rel="noopener" data-enhance-nav="false">@UiText.T("Admin.ContentEditor.ViewPublicVersion", "檢視公開版本 ↗")</a>
                     }
-                    @if (ChildBusy) { <p class="field-help" role="status">分類、標籤或圖片操作尚未完成，請稍候再儲存；可繼續編輯本文。</p> }
-                    <p class="field-help">既有草稿每 @Limits.AutosaveSeconds 秒自動儲存一次（僅草稿）。首次發布日期由系統保留，重新發布不會重設。</p>
+                    @if (ChildBusy) { <p class="field-help" role="status">@UiText.T("Admin.ContentEditor.ChildOperationInProgress", "分類、標籤或圖片操作尚未完成，請稍候再儲存；可繼續編輯本文。")</p> }
+                    <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.AutosaveHelp", "既有草稿每 {0} 秒自動儲存一次（僅草稿）。首次發布日期由系統保留，重新發布不會重設。"), Limits.AutosaveSeconds)</p>
                 </section>
                 @if (_model.Kind == ContentKind.Post)
                 {
@@ -188,59 +298,59 @@ else if (_model is not null)
                 @if (_model.Id is not null)
                 {
                     <section class="panel revisions-panel">
-                        <div class="panel-toolbar"><h2>修訂版本</h2><button type="button" class="text-button" disabled="@Blocked" @onclick="ToggleRevisions">@(_revisionsOpen ? "收起" : "查看")</button></div>
+                        <div class="panel-toolbar"><h2>@UiText.T("Admin.ContentEditor.Revisions", "修訂版本")</h2><button type="button" class="text-button" disabled="@Blocked" @onclick="ToggleRevisions">@(_revisionsOpen ? UiText.T("Admin.ContentEditor.Collapse", "收起") : UiText.T("Admin.ContentEditor.View", "查看"))</button></div>
                         @if (_revisionsOpen)
                         {
                             @if (_revisionView is not null)
                             {
                                 <div class="revision-view">
                                     <p><strong>@_revisionView.Title</strong> · @_revisionView.CreatedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
-                                    <label class="sr-only" for="@("revision-body-" + _revisionView.Id)">修訂內容（Markdown）</label>
+                                    <label class="sr-only" for="@("revision-body-" + _revisionView.Id)">@UiText.T("Admin.ContentEditor.RevisionMarkdown", "修訂內容（Markdown）")</label>
                                     <pre id="@("revision-body-" + _revisionView.Id)" class="revision-body">@_revisionView.Markdown</pre>
-                                    @if (_revisionView.Excerpt != "") { <p class="field-help">摘要：@_revisionView.Excerpt</p> }
+                                    @if (_revisionView.Excerpt != "") { <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.RevisionExcerpt", "摘要：{0}"), _revisionView.Excerpt)</p> }
                                     <div class="button-row">
-                                        <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RestoreRevision(_revisionView)">載入至編輯器</button>
-                                        <button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionView = null">關閉</button>
+                                        <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RestoreRevision(_revisionView)">@UiText.T("Admin.ContentEditor.LoadIntoEditor", "載入至編輯器")</button>
+                                        <button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionView = null">@UiText.T("Admin.ContentEditor.Close", "關閉")</button>
                                     </div>
-                                    <p class="field-help">載入會覆蓋編輯器目前內容（未儲存前可再次還原），確認後仍需手動儲存。</p>
+                                    <p class="field-help">@UiText.T("Admin.ContentEditor.RestoreHelp", "載入會覆蓋編輯器目前內容（未儲存前可再次還原），確認後仍需手動儲存。")</p>
                                 </div>
                             }
                             @if (_revisionDiff is { } diff)
                             {
                                 <div class="revision-diff">
-                                    <p><strong>與目前編輯器內容的差異</strong></p>
-                                    <p class="field-help">紅色＝修訂版有、目前沒有（還原會加回）；綠色＝目前有、修訂版沒有（還原會移除）。</p>
-                                    <div class="diff-output" role="region" aria-label="修訂與目前內容的行差異">
+                                    <p><strong>@UiText.T("Admin.ContentEditor.DiffTitle", "與目前編輯器內容的差異")</strong></p>
+                                    <p class="field-help">@UiText.T("Admin.ContentEditor.DiffHelp", "紅色＝修訂版有、目前沒有（還原會加回）；綠色＝目前有、修訂版沒有（還原會移除）。")</p>
+                                    <div class="diff-output" role="region" aria-label="@UiText.T("Admin.ContentEditor.DiffRegion", "修訂與目前內容的行差異")">
                                         @foreach (var line in diff)
                                         {
                                             <span class="diff-line @(line.Kind switch { TextDiff.DiffKind.Added => "diff-added", TextDiff.DiffKind.Removed => "diff-removed", _ => "diff-same" })" data-mark="@(line.Kind switch { TextDiff.DiffKind.Added => "+", TextDiff.DiffKind.Removed => "−", _ => " " })">@line.Text</span>
                                         }
                                     </div>
-                                    <div class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionDiff = null">關閉差異</button></div>
+                                    <div class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionDiff = null">@UiText.T("Admin.ContentEditor.CloseDiff", "關閉差異")</button></div>
                                 </div>
                             }
                             @if (_diffTooLarge)
                             {
-                                <p class="field-help">本文行數過多，無法逐行比對；請改用「查看」對照全文。</p>
+                                <p class="field-help">@UiText.T("Admin.ContentEditor.DiffTooLarge", "本文行數過多，無法逐行比對；請改用「查看」對照全文。")</p>
                             }
                             @if (_revisions.Count == 0)
                             {
-                                <p class="field-help">還沒有修訂記錄；每次儲存都會保留前一版，最多 @Limits.RevisionKeep 筆。</p>
+                                <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.NoRevisions", "還沒有修訂記錄；每次儲存都會保留前一版，最多 {0} 筆。"), Limits.RevisionKeep)</p>
                             }
                             else
                             {
                                 <ul class="revision-list">
                                     @foreach (var revision in _revisions)
                                     {
-                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">查看</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => CompareRevision(revision.Id)">比較</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">還原</button></span></li>
+                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">@UiText.T("Admin.ContentEditor.View", "查看")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => CompareRevision(revision.Id)">@UiText.T("Admin.ContentEditor.Compare", "比較")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">@UiText.T("Admin.ContentEditor.Restore", "還原")</button></span></li>
                                     }
                                 </ul>
                             }
                         }
                     </section>
                 }
-                <p class="privacy-note">所有上傳圖片均為公開資源，草稿中的圖片也不例外。撤回文章不會隱藏圖片網址。</p>
-                @if (_model.Id is not null) { <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RequestReload">重新載入儲存版本</button> }
+                <p class="privacy-note">@UiText.T("Admin.ContentEditor.PublicImagesNotice", "所有上傳圖片均為公開資源，草稿中的圖片也不例外。撤回文章不會隱藏圖片網址。")</p>
+                @if (_model.Id is not null) { <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RequestReload">@UiText.T("Admin.ContentEditor.ReloadSaved", "重新載入儲存版本")</button> }
             </aside>
         </fieldset>
     </EditForm>
@@ -277,11 +387,31 @@ else if (_model is not null)
     private string _protectPassword = "";
     private List<PageOption> _pageOptions = [];
     private CancellationTokenSource? _autosaveCts;
+    private CancellationTokenSource? _editingCts;
+    private bool _editingHeldByOther;
+    private string _editingHolderName = "";
+    private List<ContentTypeService.TypeView> _types = [];
+    private List<ContentTypeService.TaxonomyTermsView> _termGroups = [];
+    private List<Guid> _selectedTermIds = [];
+    private List<ContentTypeService.FieldView> _fields = [];
+    private Dictionary<Guid, string> _fieldValues = [];
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
     // 不要把 ChildBusy 串入外層 fieldset 或子元件的 Disabled 參數：
     // 每個子元件都必須能完成自己的操作與回呼，不能被父層連帶停用。
-    private bool SaveBlocked => EditBlocked || ChildBusy;
-    private string KindLabel => _model?.Kind == ContentKind.Page ? "頁面" : "文章";
+    private bool SaveBlocked => Blocked || !EditAllowed || ChildBusy;
+    /// <summary>作者角色標記：可建立內容並編輯自己的草稿／待審內容；發布屬於編輯者。</summary>
+    private bool AuthorOwn => Access?.Role == SiteRole.Author;
+    private bool EditAllowed => _canEditThis && (CanEdit
+        || _model is { Status: ContentStatus.Draft or ContentStatus.Pending, PublishAt: null });
+    private bool _canEditThis;
+    private bool ReadOnly => _model is null || !EditAllowed;
+    private Task<bool> RunSaveAsync(Func<CancellationToken, Task> action, string? success = null) =>
+        RunAsync(async ct =>
+        {
+            if (!EditAllowed) throw new AccessDeniedException(UiText.T("Admin.ContentEditor.EditDenied", "你沒有編輯這份內容的權限；作者僅能編輯自己的草稿與待審內容。"));
+            await action(ct);
+        }, success);
+    private string KindLabel => _model?.Kind == ContentKind.Page ? UiText.T("Admin.ContentEditor.Page", "頁面") : UiText.T("Admin.ContentEditor.Post", "文章");
     private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
     private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
     private bool Dirty => _model is not null && (Snapshot(_model) != _baseline || ScheduleChanged);
@@ -298,26 +428,32 @@ else if (_model is not null)
     {
         get
         {
-            if (Dirty) return "有未儲存的變更";
-            if (_model?.Id is not null) return "已載入儲存版本";
-            return "尚未儲存";
+            if (Dirty) return UiText.T("Admin.ContentEditor.UnsavedChanges", "有未儲存的變更");
+            if (_model?.Id is not null) return UiText.T("Admin.ContentEditor.SavedVersionLoaded", "已載入儲存版本");
+            return UiText.T("Admin.ContentEditor.NotSaved", "尚未儲存");
         }
     }
     private string SubmitText
     {
         get
         {
-            if (Busy) return "處理中…";
-            return _model!.Status == ContentStatus.Published ? "儲存變更" : "儲存草稿";
+            if (Busy) return UiText.T("Admin.ContentEditor.Processing", "處理中…");
+            return _model!.Status switch
+            {
+                ContentStatus.Published => UiText.T("Admin.ContentEditor.SaveChanges", "儲存變更"),
+                ContentStatus.Pending => UiText.T("Admin.ContentEditor.SavePending", "儲存待審內容"),
+                _ => UiText.T("Admin.ContentEditor.SaveDraft", "儲存草稿"),
+            };
         }
     }
     private ContentKind InferNewKind() => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages/", StringComparison.OrdinalIgnoreCase)
         ? ContentKind.Page : ContentKind.Post;
     private static string SaveNotice(ContentStatus status, bool wasPublished)
     {
-        if (status == ContentStatus.Published) return "已儲存並公開。";
-        if (wasPublished) return "已撤回為草稿，文字內容不再公開。";
-        return "已儲存為草稿，文字內容不對外公開。";
+        if (status == ContentStatus.Published) return UiText.T("Admin.ContentEditor.PublishedNotice", "已儲存並公開。");
+        if (status == ContentStatus.Pending) return UiText.T("Admin.ContentEditor.SubmittedForReview", "已提交待審；發布由編輯者審核後執行。");
+        if (wasPublished) return UiText.T("Admin.ContentEditor.WithdrawnNotice", "已撤回為草稿，文字內容不再公開。");
+        return UiText.T("Admin.ContentEditor.DraftSavedNotice", "已儲存為草稿，文字內容不對外公開。");
     }
     // 快照只涵蓋可編輯欄位：伺服器端管理的值與分享 token
     // 不會讓編輯器誤顯為未儲存。
@@ -348,8 +484,8 @@ else if (_model is not null)
         _scheduleLocal = null;
         var flash = Saved switch
         {
-            "draft" => "內容已建立為草稿，文字內容不對外公開。",
-            "published" => "內容已建立並公開。",
+            "draft" => UiText.T("Admin.ContentEditor.DraftCreatedNotice", "內容已建立為草稿，文字內容不對外公開。"),
+            "published" => UiText.T("Admin.ContentEditor.PublishedCreatedNotice", "內容已建立並公開。"),
             _ => null
         };
         await Load();
@@ -373,6 +509,12 @@ else if (_model is not null)
             _autosaveCts = new CancellationTokenSource();
             _ = RunAutosaveLoopAsync(_autosaveCts.Token);
         }
+        // 編輯占用心跳：唯讀檢視不占用；只有可編輯本頁者刷新占用並顯示他人占用提示。
+        if (_model?.Id is { } editingId && EditAllowed)
+        {
+            _editingCts = new CancellationTokenSource();
+            _ = RunEditingHeartbeatAsync(editingId, _editingCts.Token);
+        }
         if (Saved is not null)
         {
             // 把結果標記移出網址列，重新載入時才不會重複出現。
@@ -388,7 +530,68 @@ else if (_model is not null)
         _autosaveCts?.Cancel();
         _autosaveCts?.Dispose();
         _autosaveCts = null;
+        _editingCts?.Cancel();
+        _editingCts?.Dispose();
+        _editingCts = null;
+        // 離開編輯器時盡力釋放占用；釋放失敗時占用會在期限後自然逾期。
+        if (_model?.Id is { } releasedId) _ = ReleaseEditingBestEffortAsync(releasedId);
     }
+
+    private async Task ReleaseEditingBestEffortAsync(Guid contentId)
+    {
+        try { await Api.ReleaseEditingAsync(contentId); }
+        catch (CmsException) { }
+        catch (UnauthorizedAccessException) { }
+        catch (AccessDeniedException) { }
+        catch (HttpRequestException) { }
+        catch (ObjectDisposedException) { }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task RunEditingHeartbeatAsync(Guid contentId, CancellationToken cancellation)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Limits.EditingHeartbeatSeconds));
+        try
+        {
+            await InvokeAsync(() => TouchEditingAsync(contentId, cancellation));
+            while (!cancellation.IsCancellationRequested && await timer.WaitForNextTickAsync(cancellation))
+                await InvokeAsync(() => TouchEditingAsync(contentId, cancellation));
+        }
+        catch (OperationCanceledException) { /* circuit 已關閉；占用由釋放或逾期收尾。 */ }
+        catch (ObjectDisposedException) { /* 等待計時器期間元件已被處置。 */ }
+    }
+
+    private async Task TouchEditingAsync(Guid contentId, CancellationToken cancellation)
+    {
+        if (cancellation.IsCancellationRequested || _model?.Id != contentId || !EditAllowed || Blocked) return;
+        try
+        {
+            var state = await Api.TouchEditingAsync(contentId, ct: cancellation);
+            _editingHeldByOther = state?.HeldByOther ?? false;
+            _editingHolderName = state?.DisplayName ?? "";
+        }
+        catch (CmsException error) { Error = error.Message; }
+        catch (UnauthorizedAccessException) { RequireLogin(); }
+        catch (AccessDeniedException error) { _canEditThis = false; Error = error.Message; }
+        catch (HttpRequestException)
+        {
+            Error = UiText.T("Admin.ContentEditor.EditingStatusUnavailable", "暫時無法確認編輯占用狀態，請保留輸入並檢查連線。");
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (!cancellation.IsCancellationRequested) StateHasChanged();
+        }
+    }
+
+    private Task TakeOverEditingAsync() => RunSaveAsync(async ct =>
+    {
+        if (_model?.Id is not { } id) return;
+        var state = await Api.TouchEditingAsync(id, takeOver: true, ct);
+        _editingHeldByOther = state?.HeldByOther ?? false;
+        _editingHolderName = state?.DisplayName ?? "";
+    }, UiText.T("Admin.ContentEditor.TakeOverNotice", "已接管編輯占用；對方仍在編輯時會在下次心跳看到提示。"));
+
     private async Task RunAutosaveLoopAsync(CancellationToken cancellation)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Limits.AutosaveSeconds));
@@ -469,21 +672,21 @@ else if (_model is not null)
     });
     private Task ViewRevision(Guid revisionId) => RunAsync(async ct =>
     {
-        _revisionView = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        _revisionView = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.RevisionNotFound", "修訂記錄不存在，請重新載入。"));
         _revisionDiff = null;
         _diffTooLarge = false;
     });
     /// <summary>以行差異比較修訂版與目前編輯器內容；過長內容退回全文對照。</summary>
     private Task CompareRevision(Guid revisionId) => RunAsync(async ct =>
     {
-        var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.RevisionNotFound", "修訂記錄不存在，請重新載入。"));
         _revisionView = null;
         _revisionDiff = TextDiff.Compare(revision.Markdown, _model?.Markdown ?? "");
         _diffTooLarge = _revisionDiff is null;
     });
     private Task RestoreRevisionById(Guid revisionId) => RunAsync(async ct =>
     {
-        var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException("修訂記錄不存在，請重新載入。");
+        var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.RevisionNotFound", "修訂記錄不存在，請重新載入。"));
         RestoreRevision(revision);
     });
     private void RestoreRevision(RevisionDetail revision)
@@ -497,25 +700,42 @@ else if (_model is not null)
         _diffTooLarge = false;
         _preview = false;
     }
-    private Task CyclePreview() => RunEditAsync(async ct =>
+    private Task CyclePreview() => RunSaveAsync(async ct =>
     {
         var token = await Api.CyclePreviewTokenAsync(_model!.Id!.Value, ct);
         // 分享連結不算內容編輯：編輯器保有自己的文字與版本，因此
         // 他處同時的儲存仍會以明顯衝突收場，而不是遭到靜默覆寫。
         _model.PreviewToken = token;
-    }, "預覽連結已產生；舊連結（若有）已失效。");
-    private Task RevokePreview() => RunEditAsync(async ct =>
+    }, UiText.T("Admin.ContentEditor.PreviewLinkCreated", "預覽連結已產生；舊連結（若有）已失效。"));
+    private Task RevokePreview() => RunSaveAsync(async ct =>
     {
         await Api.RevokePreviewTokenAsync(_model!.Id!.Value, ct);
         _model.PreviewToken = null;
-    }, "預覽連結已撤銷。");
+    }, UiText.T("Admin.ContentEditor.PreviewLinkRevoked", "預覽連結已撤銷。"));
     private Task Load() => RunAsync(async ct =>
     {
-        if (Id is null && !CanEdit) throw new AccessDeniedException("唯讀成員不能新增內容，請返回列表檢視既有內容。");
+        // 新建內容：編輯者以上或作者皆可；權限判定使用本次已載入的 Access。
+        _canEditThis = CanEdit || Access?.Role == SiteRole.Author;
+        if (Id is null && !_canEditThis) throw new AccessDeniedException(UiText.T("Admin.ContentEditor.CreateDenied", "唯讀成員不能新增內容，請返回列表檢視既有內容。"));
         var loaded = Id is { } id
-            ? await Api.GetEditAsync(id, ct) ?? throw new CmsException("內容不存在，請重新載入列表。")
+            ? await Api.GetEditAsync(id, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.ContentNotFound", "內容不存在，請重新載入列表。"))
             : new ContentEdit { Kind = InferNewKind() };
+        // 既有內容：作者僅能編輯自己建立的內容。
+        _canEditThis = loaded.Id is null
+            ? _canEditThis
+            : CanEdit || (Access?.Role == SiteRole.Author && loaded.AuthorId is not null && loaded.AuthorId == Access.UserId);
         _model = loaded;
+        _types = await Api.ListContentTypesAsync(ct);
+        _selectedTermIds = loaded.CustomTermIds.ToList();
+        _termGroups = loaded.ContentTypeId is { } loadedTypeId
+            ? await Api.TermsForContentTypeAsync(loadedTypeId, ct)
+            : [];
+        _fields = loaded.ContentTypeId is { } loadedFieldTypeId
+            ? await Api.ListCustomFieldsAsync(loadedFieldTypeId, ct)
+            : [];
+        _fieldValues = loaded.FieldValues.ToDictionary(x => x.FieldId, x => x.Value);
+        _editingHeldByOther = loaded.EditingByOther;
+        _editingHolderName = loaded.EditingByName;
         if (loaded.Kind == ContentKind.Page) _pageOptions = await Api.PageOptionsAsync(ct) ?? [];
         _baseline = Snapshot(loaded);
         // 已儲存的排程應填入選擇器；此時時區可能還無法得知，
@@ -529,6 +749,39 @@ else if (_model is not null)
     {
         if (_model is null) return;
         _model.ParentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    /// <summary>選擇自訂內容類型；切換類型會清空原本選取的詞彙。</summary>
+    private Task TypeChanged(ChangeEventArgs args) => RunAsync(async ct =>
+    {
+        if (_model is null) return;
+        var parsed = Guid.TryParse(args.Value?.ToString(), out var id) ? id : (Guid?)null;
+        _model.ContentTypeId = parsed;
+        _selectedTermIds = [];
+        _termGroups = parsed is { } typeId ? await Api.TermsForContentTypeAsync(typeId, ct) : [];
+        _fields = parsed is { } fieldTypeId ? await Api.ListCustomFieldsAsync(fieldTypeId, ct) : [];
+        _fieldValues = [];
+    });
+
+    private void FieldChanged(Guid fieldId, ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString() ?? "";
+        if (value.Length == 0) _fieldValues.Remove(fieldId);
+        else _fieldValues[fieldId] = value;
+    }
+
+    private void ToggleTerm(Guid termId, ChangeEventArgs args)
+    {
+        var isChecked = args.Value is bool flag ? flag
+            : string.Equals(args.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+        if (isChecked)
+        {
+            if (!_selectedTermIds.Contains(termId)) _selectedTermIds.Add(termId);
+        }
+        else
+        {
+            _selectedTermIds.Remove(termId);
+        }
     }
 
     /// <summary>上層候選頁面（標籤含祖先路徑）；已排除頁面本身與其子樹。</summary>
@@ -595,10 +848,14 @@ else if (_model is not null)
     {
         Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
+        MetaDescription = _model.MetaDescription, NoIndex = _model.NoIndex,
         IsProtected = _model.IsProtected, IsPrivate = _model.IsPrivate, NewProtectPassword = _protectPassword,
         ParentId = _model.Kind == ContentKind.Page ? _model.ParentId : null,
         CoverMediaId = _model.CoverMediaId,
-        PublishAt = status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
+        ContentTypeId = _model.ContentTypeId,
+        CustomTermIds = [.. _selectedTermIds],
+        FieldValues = [.. _fieldValues.Select(x => new FieldValueInput(x.Key, x.Value))],
+        PublishAt = CanEdit && status == ContentStatus.Draft ? FromLocalPick(_scheduleLocal) : null,
         Version = _model.Version, Status = status,
         CategoryIds = [.. _model.CategoryIds], TagIds = [.. _model.TagIds]
     };
@@ -610,14 +867,14 @@ else if (_model is not null)
         catch (CmsException error) { Error = error.Message; return; }
         var isNew = input.Id is null;
         var wasPublished = _model.Status == ContentStatus.Published;
-        var success = await RunEditAsync(async ct =>
+        var success = await RunSaveAsync(async ct =>
         {
             ContentRules.Validate(input);
             // 內容類型由伺服器決定；提交的類型只在建立時使用。
             _model = (isNew
                 ? await Api.CreateContentAsync(input, ct)
                 : await Api.UpdateContentAsync(input.Id!.Value, input, ct))
-                ?? throw new CmsException("內容已不存在，請重新載入列表。");
+                ?? throw new CmsException(UiText.T("Admin.ContentEditor.ContentNoLongerExists", "內容已不存在，請重新載入列表。"));
             _baseline = Snapshot(_model);
             _scheduleTouched = false;
             _scheduleLocal = ToLocalOffset(_model.PublishAt);
@@ -642,7 +899,7 @@ else if (_model is not null)
     {
         if (_model is null || Blocked) return;
         if ((_model.Markdown?.Length ?? 0) + item.Markdown.Length + 4 > Limits.Body)
-        { Error = "插入圖片後將超過本文長度上限，請先縮短內容。"; return; }
+        { Error = UiText.T("Admin.ContentEditor.ImageExceedsBodyLimit", "插入圖片後將超過本文長度上限，請先縮短內容。"); return; }
         _model.Markdown = (_model.Markdown ?? "").TrimEnd() + "\n\n" + item.Markdown + "\n\n";
         _preview = false;
         _mediaOpen = false;
@@ -662,13 +919,13 @@ else if (_model is not null)
         }
         catch (JSException)
         {
-            Error = "無法讀取本文選取範圍，請手動把摘要複製到欄位中。";
+            Error = UiText.T("Admin.ContentEditor.SelectionReadFailed", "無法讀取本文選取範圍，請手動把摘要複製到欄位中。");
             return;
         }
         if (string.IsNullOrWhiteSpace(selected))
         {
             Notice = null;
-            Error = "請先在本文中選取要作為摘要的文字，再按「以本文選取文字填入」。";
+            Error = UiText.T("Admin.ContentEditor.SelectionRequired", "請先在本文中選取要作為摘要的文字，再按「以本文選取文字填入」。");
             return;
         }
         var text = MarkdownRenderer.PlainText(selected);
@@ -677,7 +934,7 @@ else if (_model is not null)
             // 代理配對邊界向內退一字，避免切出無效的字元。
             var cut = char.IsHighSurrogate(text[Limits.Excerpt - 1]) ? Limits.Excerpt - 1 : Limits.Excerpt;
             text = text[..cut].TrimEnd();
-            Notice = $"選取文字已轉為純文字並截斷為 {text.Length} 字。";
+            Notice = string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.SelectionTruncated", "選取文字已轉為純文字並截斷為 {0} 字。"), text.Length);
         }
         else Notice = null;
         _model.Excerpt = text;

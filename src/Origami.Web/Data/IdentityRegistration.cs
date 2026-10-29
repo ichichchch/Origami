@@ -29,6 +29,9 @@ public static class IdentityRegistration
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
+        // 預設資料保護權杖有效期為一天；密碼重設郵件承諾 30 分鐘，必須在伺服器端同步強制。
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+            options.TokenLifespan = TimeSpan.FromMinutes(PasswordResetService.TokenMinutes));
         services.Configure<SecurityStampValidatorOptions>(options =>
             options.ValidationInterval = TimeSpan.Zero);
 

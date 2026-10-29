@@ -1,0 +1,108 @@
+@page "/t/{Slug}"
+@inject OrigamiClient Api
+@inject MarkdownService Markdown
+@inject NavigationManager Navigation
+@inject ILogger<TypeArchive> Logger
+
+<PageTitle>@UiText.T("Public.TypeArchive.PageTitle", "{0} · 內容專區")</PageTitle>
+<HeadContent>
+    <meta name="description" content="@_settings.Description" />
+    <link rel="canonical" href="@(BaseUrl + "/t/" + Uri.EscapeDataString(Slug ?? ""))" />
+    <meta property="og:site_name" content="@_settings.Name" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@_title" />
+    <meta property="og:description" content="@_settings.Description" />
+</HeadContent>
+@if (_result is null && _error is null)
+{
+    <p role="status">@UiText.T("Public.TypeArchive.Loading", "正在載入內容…")</p>
+}
+else if (_error is not null)
+{
+    <div class="notice notice-error" role="alert">@_error</div>
+}
+else if (_result!.Items.Count == 0)
+{
+    <section class="empty-state">
+        <span class="empty-symbol" aria-hidden="true">—</span>
+        <h2>@UiText.T("Public.TypeArchive.EmptyTitle", "這個專區還沒有內容")</h2>
+        <p>@UiText.T("Public.TypeArchive.EmptyHelp", "內容發布後會出現在這裡。")</p>
+    </section>
+}
+else
+{
+    <section class="public-heading">
+        <p class="eyebrow">@UiText.T("Public.TypeArchive.Eyebrow", "內容專區")</p>
+        <h1>@_title<span class="heading-dot">.</span></h1>
+        @if (!string.IsNullOrEmpty(_description)) { <p>@_description</p> }
+    </section>
+    <div class="post-list">
+        @foreach (var item in _result.Items)
+        {
+            <article class="post-preview">
+                <time datetime="@item.PublishedAt?.ToString("O")">@item.PublishedAt?.ToString("yyyy.MM.dd") <span class="sr-only">UTC</span></time>
+                <div class="post-summary">
+                    <h2><a href="@ItemUrl(item.Slug)">@item.Title</a></h2>
+                    @if (item.CoverUrl is { } cover) { <a class="post-cover" href="@ItemUrl(item.Slug)" tabindex="-1" aria-hidden="true"><img src="@cover" alt="" loading="lazy" /></a> }
+                    <p>@(item.ExcerptIsManual ? item.Excerpt : Markdown.Excerpt(item.Excerpt))</p>
+                </div>
+                <a class="read-link" href="@ItemUrl(item.Slug)" aria-label="@string.Format(UiText.T("Public.TypeArchive.Read", "閱讀：{0}"), item.Title)">@UiText.T("Public.TypeArchive.ReadMore", "閱讀全文")<span aria-hidden="true">↗</span></a>
+            </article>
+        }
+    </div>
+    <nav class="pagination" aria-label="@UiText.T("Public.TypeArchive.Pagination", "內容分頁")">
+        @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">@UiText.T("Public.TypeArchive.Previous", "上一頁")</a> }
+        <span>@string.Format(UiText.T("Public.TypeArchive.PageStatus", "第 {0} / {1} 頁"), _result.Page, _result.TotalPages)</span>
+        @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">@UiText.T("Public.TypeArchive.Next", "下一頁")</a> }
+    </nav>
+}
+
+@code {
+    [Parameter] public string? Slug { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public string? Page { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private PublicSiteSettings _settings = PublicSiteSettings.Default;
+    private PagedResult<ContentSummary>? _result;
+    private string? _error;
+    private string _title = "";
+    private string _description = "";
+    private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
+
+    private string ItemUrl(string slug) => "/t/" + Uri.EscapeDataString(Slug ?? "") + "/" + Uri.EscapeDataString(slug);
+    private string PageUrl(int page) => "/t/" + Uri.EscapeDataString(Slug ?? "") + "?page=" + page;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _result = null;
+        _error = null;
+        var page = 1;
+        if (Page is not null && (!int.TryParse(Page, out page) || page < 1 || page > int.MaxValue / Limits.PageSize))
+        { Missing(); return; }
+        try
+        {
+            var ct = HttpContext?.RequestAborted ?? default;
+            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
+            var types = await Api.ListPublicTypesAsync(ct);
+            var type = types.FirstOrDefault(x => string.Equals(x.Slug, Slug, StringComparison.OrdinalIgnoreCase));
+            if (type is null) { Missing(); return; }
+            _title = type.Name;
+            _description = type.Description;
+            _result = await Api.ListTypeContentsAsync(type.Slug, page, _settings.PostsPerPage ?? Limits.PageSize, ct);
+            if (_result is null || page > _result.TotalPages) { Missing(); return; }
+        }
+        catch (CmsException) { Missing(); }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Content type archive unavailable");
+            _error = UiText.T("Public.TypeArchive.LoadError", "目前無法載入這個專區，請稍後再試。");
+            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
+        }
+    }
+
+    private void Missing()
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+        Navigation.NotFound();
+    }
+}

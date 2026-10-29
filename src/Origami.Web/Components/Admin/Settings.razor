@@ -5,57 +5,97 @@
 @inherits AdminComponentBase
 @inject OrigamiClient Api
 
-<PageTitle>網站設定 · 內容管理</PageTitle>
+<PageTitle>@UiText.T("Admin.Settings.PageTitle", "網站設定 · 內容管理")</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="Busy" />
-<div class="page-heading"><div><p class="eyebrow">讓網站成為你的樣子</p><h1>網站設定</h1><p>簡單的介紹，是讀者認識你的第一步。</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Settings.Eyebrow", "讓網站成為你的樣子")</p><h1>@UiText.T("Admin.Settings.Title", "網站設定")</h1><p>@UiText.T("Admin.Settings.Introduction", "簡單的介紹，是讀者認識你的第一步。")</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 @if (Access is not null && !CanAdminister)
 {
-    <p class="notice">網站設定及資料匯入匯出僅限本站管理員，你的登入仍有效。</p>
+    <p class="notice">@UiText.T("Admin.Settings.AdminOnlyNotice", "網站設定及資料匯入匯出僅限本站管理員，你的登入仍有效。")</p>
 }
 @if (_confirmReload)
 {
-    <section class="notice notice-danger" role="alertdialog" aria-labelledby="settings-reload-title"><h2 id="settings-reload-title">捨棄輸入並重新載入？</h2><p>請先複製要保留的文字。重新載入會取代目前未儲存的輸入。</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Reload">確認重新載入</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _confirmReload = false">繼續編輯</button></div></section>
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="settings-reload-title"><h2 id="settings-reload-title">@UiText.T("Admin.Settings.ReloadTitle", "捨棄輸入並重新載入？")</h2><p>@UiText.T("Admin.Settings.ReloadWarning", "請先複製要保留的文字。重新載入會取代目前未儲存的輸入。")</p><div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Reload">@UiText.T("Admin.Settings.ConfirmReload", "確認重新載入")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _confirmReload = false">@UiText.T("Admin.Settings.KeepEditing", "繼續編輯")</button></div></section>
 }
 @if (_model is not null)
 {
     <section class="panel settings-panel settings-width">
-        <div class="panel-intro"><h2>基本資訊</h2><p>儲存後會立即用於公開網站的名稱與說明。</p></div>
+        <div class="panel-intro"><h2>@UiText.T("Admin.Settings.BasicInformation", "基本資訊")</h2><p>@UiText.T("Admin.Settings.BasicInformationHelp", "儲存後會立即用於公開網站的名稱與說明。")</p></div>
         <EditForm Model="_model" OnSubmit="Save" FormName="site-settings">
             <fieldset disabled="@AdministrationBlocked">
-                <div class="field"><label for="site-name">網站名稱 <span class="required">必填</span></label><input id="site-name" @bind="_model.Name" @bind:event="oninput" maxlength="@Limits.SiteName" required aria-describedby="site-name-help" /><span id="site-name-help" class="field-help">最多 @Limits.SiteName 字，顯示於網站頁首。</span></div>
-                <div class="field"><label for="site-description">網站說明</label><textarea id="site-description" @bind="_model.Description" @bind:event="oninput" maxlength="@Limits.Description" rows="4" aria-describedby="site-description-help"></textarea><span id="site-description-help" class="field-help">用一小段文字介紹網站，最多 @Limits.Description 字。不支援 HTML。</span></div>
-                <div class="panel-intro reading-intro"><h2>閱讀設定</h2><p>控制首頁與文章列表的呈現方式。</p></div>
+                <div class="field"><label for="site-name">@UiText.T("Admin.Settings.SiteName", "網站名稱") <span class="required">@UiText.T("Admin.Settings.Required", "必填")</span></label><input id="site-name" @bind="_model.Name" @bind:event="oninput" maxlength="@Limits.SiteName" required aria-describedby="site-name-help" /><span id="site-name-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.SiteNameHelp", "最多 {0} 字，顯示於網站頁首。"), Limits.SiteName)</span></div>
+                <div class="field"><label for="site-description">@UiText.T("Admin.Settings.SiteDescription", "網站說明")</label><textarea id="site-description" @bind="_model.Description" @bind:event="oninput" maxlength="@Limits.Description" rows="4" aria-describedby="site-description-help"></textarea><span id="site-description-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.SiteDescriptionHelp", "用一小段文字介紹網站，最多 {0} 字。不支援 HTML。"), Limits.Description)</span></div>
+                <div class="panel-intro reading-intro"><h2>@UiText.T("Admin.Settings.ReadingSettings", "閱讀設定")</h2><p>@UiText.T("Admin.Settings.ReadingSettingsHelp", "控制首頁與文章列表的呈現方式。")</p></div>
                 <div class="field">
-                    <label for="home-page">首頁顯示</label>
+                    <label for="home-page">@UiText.T("Admin.Settings.HomeDisplay", "首頁顯示")</label>
                     <select id="home-page" disabled="@Blocked" value="@(_model.HomePageContentId?.ToString() ?? "")" @onchange="HomeChanged">
-                        <option value="">最新文章列表</option>
+                        <option value="">@UiText.T("Admin.Settings.LatestPosts", "最新文章列表")</option>
                         @foreach (var option in _homeOptions)
                         {
                             <option value="@option.Id">@option.Title</option>
                         }
                     </select>
-                    <span class="field-help">選擇已發布頁面作為首頁時，文章列表會改到 /posts；頁面撤回或轉為私密時自動退回文章列表。</span>
+                    <span class="field-help">@UiText.T("Admin.Settings.HomeDisplayHelp", "選擇已發布頁面作為首頁時，文章列表會改到 /posts；頁面撤回或轉為私密時自動退回文章列表。")</span>
                 </div>
-                <div class="field"><label for="posts-per-page">每頁文章數</label><input id="posts-per-page" type="number" min="1" max="@Limits.MaxPageSize" @bind="_model.PostsPerPage" disabled="@Blocked" aria-describedby="posts-per-page-help" /><span id="posts-per-page-help" class="field-help">1–@Limits.MaxPageSize；留空使用預設 @Limits.PageSize 篇。</span></div>
-                <div class="field"><label for="feed-items">RSS Feed 條數</label><input id="feed-items" type="number" min="1" max="@Limits.MaxFeedItems" @bind="_model.FeedItems" disabled="@Blocked" aria-describedby="feed-items-help" /><span id="feed-items-help" class="field-help">1–@Limits.MaxFeedItems；留空使用預設 @Limits.FeedItems 篇。</span></div>
+                <div class="field"><label for="posts-per-page">@UiText.T("Admin.Settings.PostsPerPage", "每頁文章數")</label><input id="posts-per-page" type="number" min="1" max="@Limits.MaxPageSize" @bind="_model.PostsPerPage" disabled="@Blocked" aria-describedby="posts-per-page-help" /><span id="posts-per-page-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.PostsPerPageHelp", "1–{0}；留空使用預設 {1} 篇。"), Limits.MaxPageSize, Limits.PageSize)</span></div>
+                <div class="field"><label for="feed-items">@UiText.T("Admin.Settings.FeedItems", "RSS Feed 條數")</label><input id="feed-items" type="number" min="1" max="@Limits.MaxFeedItems" @bind="_model.FeedItems" disabled="@Blocked" aria-describedby="feed-items-help" /><span id="feed-items-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.FeedItemsHelp", "1–{0}；留空使用預設 {1} 篇。"), Limits.MaxFeedItems, Limits.FeedItems)</span></div>
                 <div class="field checkbox-field">
-                    <label for="feed-full-text"><input id="feed-full-text" type="checkbox" @bind="_model.FeedShowFullText" disabled="@Blocked" /> Feed 輸出全文</label>
-                    <p class="field-help">開啟後 RSS（content:encoded）與 Atom（content）包含完整渲染後的本文；關閉則僅摘要。</p>
+                    <label for="feed-full-text"><input id="feed-full-text" type="checkbox" @bind="_model.FeedShowFullText" disabled="@Blocked" /> @UiText.T("Admin.Settings.FeedFullText", "Feed 輸出全文")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.FeedFullTextHelp", "開啟後 RSS（content:encoded）與 Atom（content）包含完整渲染後的本文；關閉則僅摘要。")</p>
                 </div>
-                <div class="field"><label for="author-name">作者顯示名稱（選填）</label><input id="author-name" @bind="_model.AuthorDisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" disabled="@Blocked" aria-describedby="author-name-help" placeholder="例如：單文浩" /><span id="author-name-help" class="field-help">最多 @Limits.AuthorName 字；顯示於文章詳情的作者列與 feed 作者欄位，留空不顯示。</span></div>
-                <div class="field">
-                    <label for="site-icon">網站圖示（favicon）</label>
+                <div class="field"><label for="author-name">@UiText.T("Admin.Settings.AuthorDisplayName", "作者顯示名稱（選填）")</label><input id="author-name" @bind="_model.AuthorDisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" disabled="@Blocked" aria-describedby="author-name-help" placeholder="@UiText.T("Admin.Settings.AuthorPlaceholder", "例如：單文浩")" /><span id="author-name-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.AuthorDisplayNameHelp", "最多 {0} 字；顯示於文章詳情的作者列與 feed 作者欄位，留空不顯示。"), Limits.AuthorName)</span></div>
+                <div class="field checkbox-field">
+                    <label for="comments-enabled"><input id="comments-enabled" type="checkbox" @bind="_model.CommentsEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.EnableComments", "開放訪客評論")</label>
+                    <label for="comments-auto"><input id="comments-auto" type="checkbox" @bind="_model.CommentAutoApprove" disabled="@Blocked" /> @UiText.T("Admin.Settings.AutoApproveComments", "評論自動核可")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.CommentsHelp", "開放後已發布文章顯示評論表單；未自動核可時，評論須在「評論」頁審核後才會公開。蜜罐與連結過量的評論會自動進入垃圾佇列。")</p>
+                </div>
+                <div class="field checkbox-field">
+                    <label for="custom-navigation"><input id="custom-navigation" type="checkbox" @bind="_model.CustomNavigationEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.CustomNavigation", "使用自訂網站導覽")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.CustomNavigationHelp", "開啟後前台導覽改由「網站導覽」頁維護的項目決定（可排序、隱藏或連到外部網址）；關閉時沿用已發布頁面自動排序。")</p>
+                </div>
+                <div class="field"><label for="theme-preset">@UiText.T("Admin.Settings.ThemePreset", "版型預設")</label>
+                    <select id="theme-preset" disabled="@Blocked" value="@_model.ThemePreset" @onchange="ThemePresetChanged">
+                        @foreach (var preset in ThemePresets.All)
+                        {
+                            <option value="@preset.Name">@preset.Label</option>
+                        }
+                    </select>
+                    <span class="field-help">@UiText.T("Admin.Settings.ThemePresetHelp", "受控版型：只能選擇內建預設，不載入任何外部樣式或程式碼。")</span>
+                </div>
+                <div class="field"><label for="theme-color">@UiText.T("Admin.Settings.ThemeColor", "強調色")</label><input id="theme-color" @bind="_model.AccentColor" @bind:event="oninput" maxlength="@Limits.ThemeColor" pattern="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?" disabled="@Blocked" aria-describedby="theme-color-help" /><span id="theme-color-help" class="field-help">@UiText.T("Admin.Settings.ThemeColorHelp", "十六進位色碼，例如 #2f6f4e；影響連結、按鈕與標題的強調色。")</span></div>
+                <div class="field"><label for="theme-width">@UiText.T("Admin.Settings.ThemeWidth", "正文欄寬")</label><input id="theme-width" type="number" min="48" max="96" @bind="_model.ReadingWidth" disabled="@Blocked" aria-describedby="theme-width-help" /><span id="theme-width-help" class="field-help">@UiText.T("Admin.Settings.ThemeWidthHelp", "48–96 字；數值越小行長越短，閱讀越輕鬆。")</span></div>
+                <div class="field checkbox-field">
+                    <label for="theme-byline"><input id="theme-byline" type="checkbox" @bind="_model.ShowByline" disabled="@Blocked" /> @UiText.T("Admin.Settings.ThemeByline", "顯示文章署名")</label>
+                    <label for="theme-cover"><input id="theme-cover" type="checkbox" @bind="_model.ShowCover" disabled="@Blocked" /> @UiText.T("Admin.Settings.ThemeCover", "顯示封面圖")</label>
+                </div>
+                <div class="field"><label for="theme-card-style">@UiText.T("Admin.Settings.ThemeCardStyle", "文章卡片樣式")</label>
+                    <select id="theme-card-style" disabled="@Blocked" value="@_model.CardStyle" @onchange="CardStyleChanged">
+                        <option value="@ThemePresets.CardStyleList">@UiText.T("Admin.Settings.ThemeCardList", "清單")</option>
+                        <option value="@ThemePresets.CardStyleGrid">@UiText.T("Admin.Settings.ThemeCardGrid", "格狀")</option>
+                    </select>
+                </div>
+                <div class="field"><label for="site-icon">@UiText.T("Admin.Settings.SiteIcon", "網站圖示（favicon）")</label>
                     <select id="site-icon" disabled="@Blocked" value="@(_model.SiteIconMediaId?.ToString() ?? "")" @onchange="IconChanged">
-                        <option value="">無（瀏覽器顯示預設圖示）</option>
+                        <option value="">@UiText.T("Admin.Settings.NoIcon", "無（瀏覽器顯示預設圖示）")</option>
                         @foreach (var option in _iconOptions)
                         {
                             <option value="@option.Id">@option.Label</option>
                         }
                     </select>
-                    <span class="field-help">從媒體庫選擇圖片作為瀏覽器分頁與書籤的圖示；正方形圖片效果最好。</span>
+                    <span class="field-help">@UiText.T("Admin.Settings.SiteIconHelp", "從媒體庫選擇圖片作為瀏覽器分頁與書籤的圖示；正方形圖片效果最好。")</span>
                 </div>
-                <div class="form-footer"><button type="submit" class="button">@(Busy ? "儲存中…" : "儲存設定")</button><span class="save-indicator" role="status">@(Dirty ? "有未儲存的變更" : "目前為儲存版本")</span></div>
+                <div class="field">
+                    <label for="site-logo">@UiText.T("Admin.Settings.SiteLogo", "網站標誌（logo）")</label>
+                    <select id="site-logo" disabled="@Blocked" value="@(_model.LogoMediaId?.ToString() ?? "")" @onchange="LogoChanged">
+                        <option value="">@UiText.T("Admin.Settings.NoLogo", "無（頁首僅顯示站名文字）")</option>
+                        @foreach (var option in _iconOptions)
+                        {
+                            <option value="@option.Id">@option.Label</option>
+                        }
+                    </select>
+                    <span class="field-help">@UiText.T("Admin.Settings.SiteLogoHelp", "顯示於前台頁首站名旁的圖片；橫向排列時建議寬度不超過 480 像素。")</span>
+                </div>
+                <div class="form-footer"><button type="submit" class="button">@(Busy ? UiText.T("Admin.Settings.Saving", "儲存中…") : UiText.T("Admin.Settings.SaveSettings", "儲存設定"))</button><span class="save-indicator" role="status">@(Dirty ? UiText.T("Admin.Settings.UnsavedChanges", "有未儲存的變更") : UiText.T("Admin.Settings.SavedVersion", "目前為儲存版本"))</span></div>
             </fieldset>
         </EditForm>
     </section>
@@ -63,34 +103,56 @@
 @if (_model is not null && CanAdminister)
 {
     <section class="panel settings-panel settings-width">
-        <div class="panel-intro"><h2>資料匯出</h2><p>將站點設定、分類標籤、內容全文（含草稿）與媒體中繼資料匯出為 JSON 檔。圖片檔案與帳號資料不包含在內。</p><p class="field-help">匯出檔包含受密碼保護內容的密碼雜湊，可離線破解，請視為機密檔案並妥善保管。</p></div>
+        <div class="panel-intro"><h2>@UiText.T("Admin.Settings.ExportTitle", "資料匯出")</h2><p>@UiText.T("Admin.Settings.ExportHelp", "將站點設定、分類標籤、內容全文（含草稿）與媒體中繼資料匯出為 JSON 檔。圖片檔案與帳號資料不包含在內。")</p><p class="field-help">@UiText.T("Admin.Settings.ExportSecurityWarning", "匯出檔包含受密碼保護內容的密碼雜湊，可離線破解，請視為機密檔案並妥善保管。")</p></div>
+        <div class="field">
+            <label for="export-kind">@UiText.T("Admin.Settings.ExportScope", "匯出範圍")</label>
+            <select id="export-kind" value="@_exportKind" @onchange="ExportKindChanged" disabled="@Blocked">
+                <option value="">@UiText.T("Admin.Settings.ExportAll", "全部內容（文章＋頁面）")</option>
+                <option value="Post">@UiText.T("Admin.Settings.ExportPosts", "僅文章")</option>
+                <option value="Page">@UiText.T("Admin.Settings.ExportPages", "僅頁面")</option>
+            </select>
+            <span class="field-help">@UiText.T("Admin.Settings.ExportScopeHelp", "篩選匯出的內容不完整，僅供挑選性備份；整站遷移還原請改用完整備份（ZIP）。")</span>
+        </div>
+        @if (_exportKind == "Post")
+        {
+            <div class="field">
+                <label for="export-category">@UiText.T("Admin.Settings.ExportCategory", "再依分類篩選（選填）")</label>
+                <select id="export-category" value="@_exportCategory" @onchange="ExportCategoryChanged" disabled="@Blocked">
+                    <option value="">@UiText.T("Admin.Settings.AllCategories", "全部分類")</option>
+                    @foreach (var option in _categoryOptions)
+                    {
+                        <option value="@option.Slug">@option.Name</option>
+                    }
+                </select>
+            </div>
+        }
         <div class="button-row">
-            <a class="button button-secondary" href="/admin/export" download data-enhance-nav="false">下載資料匯出（JSON）</a>
-            <a class="button button-secondary" href="/admin/export-archive" download data-enhance-nav="false">下載完整備份（ZIP，含圖片）</a>
+            <a class="button button-secondary" href="@ExportHref" download data-enhance-nav="false">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.DownloadExport", "下載資料匯出（JSON{0}）"), FilterSuffix)</a>
+            <a class="button button-secondary" href="/admin/export-archive" download data-enhance-nav="false">@UiText.T("Admin.Settings.DownloadBackup", "下載完整備份（ZIP，含圖片）")</a>
         </div>
     </section>
     <section class="panel settings-panel settings-width">
-        <div class="panel-intro"><h2>資料匯入</h2><p>以匯出檔<strong>取代</strong>站內全部文字資料（設定、分類標籤、內容、媒體中繼資料）。上傳 JSON 時圖片檔案不會變動；上傳完整備份（ZIP）時會一併還原圖片並清理清單外的舊圖檔。</p></div>
+        <div class="panel-intro"><h2>@UiText.T("Admin.Settings.ImportTitle", "資料匯入")</h2><p>@UiText.T("Admin.Settings.ImportHelp", "以匯出檔取代站內全部文字資料（設定、分類標籤、內容、媒體中繼資料）。上傳 JSON 時圖片檔案不會變動；上傳完整備份（ZIP）時會一併還原圖片並清理清單外的舊圖檔。")</p></div>
         @if (_importPreview is not null)
         {
             <div class="notice" role="status">
-                <p>已讀取匯出檔：<strong>@_importPreview.SiteName</strong>，將匯入 @_importPreview.Categories 個分類、@_importPreview.Tags 個標籤、@_importPreview.Posts 篇文章、@_importPreview.Pages 個頁面、@_importPreview.Media 筆媒體中繼資料。</p>
+                <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.ImportPreview", "已讀取匯出檔：{0}，將匯入 {1} 個分類、{2} 個標籤、{3} 篇文章、{4} 個頁面、{5} 筆媒體中繼資料。"), _importPreview.SiteName, _importPreview.Categories, _importPreview.Tags, _importPreview.Posts, _importPreview.Pages, _importPreview.Media)</p>
             </div>
         }
         @if (_importPreview is not null)
         {
             <section class="notice notice-danger" role="alertdialog" aria-labelledby="import-confirm-title">
-                <h2 id="import-confirm-title">確認匯入並取代現有資料？</h2>
-                <p>現有設定、分類標籤、內容與媒體中繼資料會被<strong>永久取代</strong>；已發表的公開文章會重新排入 AI 索引。此動作無法復原，建議先下載最新的完整備份（ZIP）。</p>
+                <h2 id="import-confirm-title">@UiText.T("Admin.Settings.ImportConfirmTitle", "確認匯入並取代現有資料？")</h2>
+                <p>@UiText.T("Admin.Settings.ImportWarning", "現有設定、分類標籤、內容與媒體中繼資料會被永久取代；已發表的公開文章會重新排入 AI 索引。此動作無法復原，建議先下載最新的完整備份（ZIP）。")</p>
                 <div class="button-row">
-                    <button type="button" class="button button-danger" disabled="@Blocked" @onclick="ApplyImport">確認匯入</button>
-                    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelImport">取消</button>
+                    <button type="button" class="button button-danger" disabled="@Blocked" @onclick="ApplyImport">@UiText.T("Admin.Settings.ConfirmImport", "確認匯入")</button>
+                    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelImport">@UiText.T("Admin.Settings.Cancel", "取消")</button>
                 </div>
             </section>
         }
         else
         {
-            <label class="button button-secondary" for="import-file">選擇匯出檔（JSON 或 ZIP）</label>
+            <label class="button button-secondary" for="import-file">@UiText.T("Admin.Settings.ChooseImport", "選擇匯出檔（JSON 或 ZIP）")</label>
             <InputFile id="import-file" OnChange="ChooseImport" accept=".json,application/json,.zip,application/zip" class="import-file-input" />
             @if (_importError is not null)
             {
@@ -98,10 +160,46 @@
             }
         }
     </section>
+    <section class="panel settings-panel settings-width">
+        <div class="panel-intro"><h2>@UiText.T("Admin.Settings.WxrTitle", "匯入 WordPress（WXR）")</h2><p>@UiText.T("Admin.Settings.WxrHelp", "上傳 WordPress 匯出工具（Tools → Export）產生的 WXR 檔，把文章、頁面、分類與標籤加入本站；不會取代現有內容。HTML 內文會轉為 Markdown，樣式與腳本不會匯入。")</p><p class="field-help">@UiText.T("Admin.Settings.WxrMediaHelp", "附件二進位不在 WXR 檔內，媒體請另外上傳；代稱重複的項目會略過並列出。")</p></div>
+        @if (_wxrResult is not null)
+        {
+            <div class="notice" role="status">
+                <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.WxrResult", "匯入完成：成功 {0} 筆，略過 {1} 筆。"), _wxrResult.Imported, _wxrResult.Skipped)</p>
+                @if (_wxrResult.Warnings.Count > 0)
+                {
+                    <ul>@foreach (var warning in _wxrResult.Warnings) { <li>@warning</li> }</ul>
+                }
+            </div>
+        }
+        else if (_wxrPreview is not null)
+        {
+            <div class="notice" role="status">
+                <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.WxrPreview", "將匯入 {0} 篇文章、{1} 個頁面、{2} 個分類、{3} 個標籤。"), _wxrPreview.Posts, _wxrPreview.Pages, _wxrPreview.Categories, _wxrPreview.Tags)</p>
+                @if (_wxrPreview.Warnings.Count > 0)
+                {
+                    <ul>@foreach (var warning in _wxrPreview.Warnings) { <li>@warning</li> }</ul>
+                }
+            </div>
+            <div class="button-row">
+                <button type="button" class="button" disabled="@AdministrationBlocked" @onclick="ApplyWxr">@UiText.T("Admin.Settings.StartImport", "開始匯入")</button>
+                <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelWxr">@UiText.T("Admin.Settings.Cancel", "取消")</button>
+            </div>
+        }
+        else
+        {
+            <label class="button button-secondary" for="wxr-file">@UiText.T("Admin.Settings.ChooseWxr", "選擇 WXR 檔（.xml）")</label>
+            <InputFile id="wxr-file" OnChange="ChooseWxr" accept=".xml,application/xml,text/xml" class="import-file-input" />
+            @if (_wxrError is not null)
+            {
+                <p class="notice notice-error" role="alert">@_wxrError</p>
+            }
+        }
+    </section>
 }
 @if (!LoginRequired)
 {
-    <button class="text-button reload-settings" disabled="@Blocked" @onclick="RequestReload">重新載入儲存版本</button>
+    <button class="text-button reload-settings" disabled="@Blocked" @onclick="RequestReload">@UiText.T("Admin.Settings.ReloadSavedVersion", "重新載入儲存版本")</button>
 }
 
 @code {
@@ -112,16 +210,39 @@
     private List<(Guid Id, string Label)> _iconOptions = [];
     private bool Dirty => _model is not null && Snapshot(_model) != _baseline;
     private static string Snapshot(SiteSettings model) => System.Text.Json.JsonSerializer.Serialize(model);
+    private string _exportKind = "";
+    private string _exportCategory = "";
+    private List<TaxonomyItem> _categoryOptions = [];
+    private string ExportHref
+    {
+        get
+        {
+            if (_exportKind.Length == 0) return "/admin/export";
+            var query = "?kind=" + _exportKind;
+            if (_exportKind == "Post" && _exportCategory.Length > 0) query += "&category=" + Uri.EscapeDataString(_exportCategory);
+            return "/admin/export" + query;
+        }
+    }
+    private string FilterSuffix => _exportKind.Length == 0
+        ? ""
+        : _exportKind == "Post" && _exportCategory.Length > 0 ? UiText.T("Admin.Settings.CategoryFilterSuffix", "／依分類") : _exportKind == "Post" ? UiText.T("Admin.Settings.PostsFilterSuffix", "／僅文章") : UiText.T("Admin.Settings.PagesFilterSuffix", "／僅頁面");
+    private void ExportKindChanged(ChangeEventArgs args)
+    {
+        _exportKind = args.Value?.ToString() ?? "";
+        if (_exportKind != "Post") _exportCategory = "";
+    }
+    private void ExportCategoryChanged(ChangeEventArgs args) => _exportCategory = args.Value?.ToString() ?? "";
     protected override Task OnInitializedAsync() => Load();
     private Task Load() => RunAsync(async ct =>
     {
-        if (!CanAdminister) throw new AccessDeniedException("網站設定僅限本站管理員；你的登入仍有效。");
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.LoadDenied", "網站設定僅限本站管理員；你的登入仍有效。"));
         _model = await Api.GetSettingsAsync(ct) ?? new SiteSettings();
         _homeOptions = (await Api.PageOptionsAsync(ct) ?? [])
             .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).ToList();
         var media = await Api.ListMediaAsync(1, Limits.MaxPageSize, ct: ct)
             ?? new PagedResult<MediaItem>([], 0, 1, Limits.MaxPageSize);
-        _iconOptions = [.. media.Items.Select(x => (x.Id, $"{x.OriginalName}（{x.Width}×{x.Height}）"))];
+        _iconOptions = [.. media.Items.Select(x => (x.Id, string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.MediaOptionLabel", "{0}（{1}×{2}）"), x.OriginalName, x.Width, x.Height)))];
+        _categoryOptions = (await Api.ListTaxonomiesAsync(TaxonomyKind.Category, 1, Limits.MaxPageSize, ct: ct))?.Items.ToList() ?? [];
         _baseline = Snapshot(_model);
     });
     private void HomeChanged(ChangeEventArgs args)
@@ -134,9 +255,76 @@
         if (_model is null) return;
         _model.SiteIconMediaId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
     }
+    private void LogoChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        _model.LogoMediaId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+    /// <summary>切換版型預設時套用該預設的變數；使用者仍可再微調。</summary>
+    private void ThemePresetChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        var preset = ThemePresets.Find(args.Value?.ToString());
+        if (preset is null) return;
+        _model.ThemePreset = preset.Name;
+        _model.AccentColor = preset.AccentColor;
+        _model.ReadingWidth = preset.ReadingWidth;
+        _model.ShowByline = preset.ShowByline;
+        _model.ShowCover = preset.ShowCover;
+        _model.CardStyle = preset.CardStyle;
+    }
+    private void CardStyleChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        _model.CardStyle = args.Value?.ToString() ?? ThemePresets.CardStyleList;
+    }
     private ImportService.ImportPreview? _importPreview;
     private byte[]? _importFile;
     private string? _importError;
+    private WxrImportService.WxrPreview? _wxrPreview;
+    private WxrImportService.WxrResult? _wxrResult;
+    private byte[]? _wxrFile;
+    private string? _wxrError;
+
+    private async Task ChooseWxr(InputFileChangeEventArgs args)
+    {
+        _wxrError = null;
+        _wxrPreview = null;
+        _wxrResult = null;
+        _wxrFile = null;
+        if (AdministrationBlocked) return;
+        try
+        {
+            await using (var stream = args.File.OpenReadStream(WxrImportService.MaxBytes))
+            using (var buffer = new MemoryStream())
+            {
+                await stream.CopyToAsync(buffer);
+                _wxrFile = buffer.ToArray();
+            }
+            _wxrPreview = await Api.AnalyzeWxrAsync(_wxrFile);
+        }
+        catch (UnauthorizedAccessException) { _wxrFile = null; RequireLogin(); }
+        catch (AccessDeniedException error) { _wxrFile = null; _wxrError = error.Message; }
+        catch (CmsException error) { _wxrFile = null; _wxrError = error.Message; }
+        catch (IOException) { _wxrError = UiText.T("Admin.Settings.WxrTooLarge", "WXR 檔案過大，請改用較小的匯出檔。"); }
+    }
+
+    private Task ApplyWxr() => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.WxrImportDenied", "WXR 匯入僅限本站管理員。"));
+        if (_wxrFile is null) return;
+        _wxrResult = await Api.ApplyWxrAsync(_wxrFile, ct);
+        _wxrFile = null;
+        _wxrPreview = null;
+    }, UiText.T("Admin.Settings.WxrImported", "WXR 內容已匯入本站。"));
+
+    private void CancelWxr()
+    {
+        _wxrPreview = null;
+        _wxrResult = null;
+        _wxrFile = null;
+        _wxrError = null;
+    }
 
     private async Task ChooseImport(InputFileChangeEventArgs args)
     {
@@ -157,18 +345,18 @@
         catch (UnauthorizedAccessException) { _importFile = null; RequireLogin(); }
         catch (AccessDeniedException error) { _importFile = null; _importError = error.Message; }
         catch (CmsException error) { _importError = error.Message; }
-        catch (IOException) { _importError = "匯入檔超過大小上限。"; }
+        catch (IOException) { _importError = UiText.T("Admin.Settings.ImportTooLarge", "匯入檔超過大小上限。"); }
     }
 
     private Task ApplyImport() => RunAsync(async ct =>
     {
-        if (!CanAdminister) throw new AccessDeniedException("資料匯入僅限本站管理員。");
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.ImportDenied", "資料匯入僅限本站管理員。"));
         if (_importFile is null) return;
         await Api.ApplyImportAsync(_importFile, ct);
         _importFile = null;
         _importPreview = null;
         await Load();
-    }, "資料已匯入，網站內容已取代為匯出檔版本。");
+    }, UiText.T("Admin.Settings.Imported", "資料已匯入，網站內容已取代為匯出檔版本。"));
 
     private void CancelImport()
     {
@@ -184,7 +372,7 @@
     private async Task Reload() { _confirmReload = false; await Load(); }
     private Task Save() => RunAsync(async ct =>
     {
-        if (!CanAdminister) throw new AccessDeniedException("網站設定僅限本站管理員。");
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.SaveDenied", "網站設定僅限本站管理員。"));
         if (_model is null) return;
         ContentRules.Validate(_model);
         var input = new SiteSettings
@@ -193,8 +381,12 @@
             PostsPerPage = _model.PostsPerPage, FeedItems = _model.FeedItems,
             FeedShowFullText = _model.FeedShowFullText, AuthorDisplayName = _model.AuthorDisplayName,
             HomePageContentId = _model.HomePageContentId, SiteIconMediaId = _model.SiteIconMediaId,
+            LogoMediaId = _model.LogoMediaId, CustomNavigationEnabled = _model.CustomNavigationEnabled,
+            CommentsEnabled = _model.CommentsEnabled, CommentAutoApprove = _model.CommentAutoApprove,
+            ThemePreset = _model.ThemePreset, AccentColor = _model.AccentColor, ReadingWidth = _model.ReadingWidth,
+            ShowByline = _model.ShowByline, ShowCover = _model.ShowCover, CardStyle = _model.CardStyle,
         };
         _model = await Api.SaveSettingsAsync(input, ct) ?? input;
         _baseline = Snapshot(_model);
-    }, "網站設定已儲存，公開網站已更新。");
+    }, UiText.T("Admin.Settings.Saved", "網站設定已儲存，公開網站已更新。"));
 }

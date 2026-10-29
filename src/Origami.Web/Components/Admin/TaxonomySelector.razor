@@ -2,28 +2,28 @@
 @inject OrigamiClient Api
 
 <section class="taxonomy-selector" aria-label="@(Label)">
-    <div class="panel-toolbar compact"><h3>@(Label)</h3><span class="muted">已選 @Selected.Count / @Limits.MaxTaxonomiesPerKind</span></div>
-    <p class="field-help">可複選；換頁或刷新不會清除已選項目。</p>
+    <div class="panel-toolbar compact"><h3>@(Label)</h3><span class="muted">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.TaxonomySelector.SelectedCount", "已選 {0} / {1}"), Selected.Count, Limits.MaxTaxonomiesPerKind)</span></div>
+    <p class="field-help">@UiText.T("Admin.TaxonomySelector.SelectionHelp", "可複選；換頁或刷新不會清除已選項目。")</p>
     <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
     <fieldset disabled="@(Disabled || Blocked)">
         <div class="field">
-            <label for="@NameInputId">新增@(Label)名稱</label>
+            <label for="@NameInputId">@(Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.NewCategoryName", "新增分類名稱") : UiText.T("Admin.TaxonomySelector.NewTagName", "新增標籤名稱"))</label>
             @* 不得隱含送出所在的 EditForm，也不得將 IME 確認視為建立。 *@
             <input id="@NameInputId" @bind="_newName" @bind:event="oninput" maxlength="@Limits.TaxonomyName" disabled="@AtLimit" onkeydown="if (event.key === 'Enter' && !event.isComposing) event.preventDefault();" />
-            <span class="field-help">最多 @Limits.TaxonomyName 字；建立後自動選取，不會儲存本文。</span>
+            <span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.TaxonomySelector.NameHelp", "最多 {0} 字；建立後自動選取，不會儲存本文。"), Limits.TaxonomyName)</span>
         </div>
         <div class="button-row">
-            <button type="button" class="button button-secondary button-small" disabled="@(AtLimit || string.IsNullOrWhiteSpace(_newName))" @onclick="Create">建立並選取@(Label)</button>
-            <button type="button" class="text-button" @onclick="Refresh">刷新@(Label)</button>
+            <button type="button" class="button button-secondary button-small" disabled="@(AtLimit || string.IsNullOrWhiteSpace(_newName))" @onclick="Create">@(Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.CreateCategory", "建立並選取分類") : UiText.T("Admin.TaxonomySelector.CreateTag", "建立並選取標籤"))</button>
+            <button type="button" class="text-button" @onclick="Refresh">@(Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.RefreshCategories", "刷新分類") : UiText.T("Admin.TaxonomySelector.RefreshTags", "刷新標籤"))</button>
         </div>
-        @if (AtLimit) { <p class="field-help" role="status">已達 @Limits.MaxTaxonomiesPerKind 個@(Label)上限，請先取消選取。</p> }
+        @if (AtLimit) { <p class="field-help" role="status">@string.Format(CultureInfo.CurrentCulture, Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.CategoryLimit", "已達 {0} 個分類上限，請先取消選取。") : UiText.T("Admin.TaxonomySelector.TagLimit", "已達 {0} 個標籤上限，請先取消選取。"), Limits.MaxTaxonomiesPerKind)</p> }
         @if (_created is not null && (_result is null || !_result.Items.Any(item => item.Id == _created.Id)))
         {
-            <div class="checkbox-list"><label><input type="checkbox" checked="@Selected.Contains(_created.Id)" disabled="@(AtLimit && !Selected.Contains(_created.Id))" @onchange="e => Toggle(_created.Id, e.Value is true)" /> @_created.Name（剛建立）</label></div>
+            <div class="checkbox-list"><label><input type="checkbox" checked="@Selected.Contains(_created.Id)" disabled="@(AtLimit && !Selected.Contains(_created.Id))" @onchange="e => Toggle(_created.Id, e.Value is true)" /> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.TaxonomySelector.JustCreated", "{0}（剛建立）"), _created.Name)</label></div>
         }
         @if (_result is not null)
         {
-            @if (_result.Items.Count == 0 && _created is null) { <p class="muted">尚未建立@(Label)。</p> }
+            @if (_result.Items.Count == 0 && _created is null) { <p class="muted">@(Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.NoCategories", "尚未建立分類。") : UiText.T("Admin.TaxonomySelector.NoTags", "尚未建立標籤。"))</p> }
             <div class="checkbox-list">
             @foreach (var item in _result.Items)
             {
@@ -32,10 +32,10 @@
             </div>
             @if (_result.TotalPages > 1)
             {
-                <div class="pagination compact"><button type="button" class="button button-secondary" disabled="@(_page <= 1)" @onclick="() => Move(-1)">上一頁</button><span>@_result.Page / @_result.TotalPages</span><button type="button" class="button button-secondary" disabled="@(_page >= _result.TotalPages)" @onclick="() => Move(1)">下一頁</button></div>
+                <div class="pagination compact"><button type="button" class="button button-secondary" disabled="@(_page <= 1)" @onclick="() => Move(-1)">@UiText.T("Admin.TaxonomySelector.PreviousPage", "上一頁")</button><span>@_result.Page / @_result.TotalPages</span><button type="button" class="button button-secondary" disabled="@(_page >= _result.TotalPages)" @onclick="() => Move(1)">@UiText.T("Admin.TaxonomySelector.NextPage", "下一頁")</button></div>
             }
         }
-        @if (Selected.Count > 0) { <button type="button" class="text-button" @onclick="Clear">清除全部已選@(Label)</button> }
+        @if (Selected.Count > 0) { <button type="button" class="text-button" @onclick="Clear">@(Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.ClearCategories", "清除全部已選分類") : UiText.T("Admin.TaxonomySelector.ClearTags", "清除全部已選標籤"))</button> }
     </fieldset>
 </section>
 
@@ -46,7 +46,7 @@
     [Parameter] public EventCallback Changed { get; set; }
     [Parameter] public EventCallback<bool> BusyChanged { get; set; }
     [Parameter] public EventCallback OnUnauthorized { get; set; }
-    private string Label => Kind == TaxonomyKind.Category ? "分類" : "標籤";
+    private string Label => Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.Categories", "分類") : UiText.T("Admin.TaxonomySelector.Tags", "標籤");
     private string NameInputId => "new-taxonomy-" + Kind;
     private bool AtLimit => Selected.Count >= Limits.MaxTaxonomiesPerKind;
     private string _newName = "";
@@ -58,7 +58,7 @@
     private async Task LoadOptions(CancellationToken ct)
     {
         var result = await Api.ListTaxonomiesAsync(Kind, _page, Limits.MaxPageSize, ct)
-            ?? throw new CmsException("無法載入選項。");
+            ?? throw new CmsException(UiText.T("Admin.TaxonomySelector.LoadFailed", "無法載入選項。"));
         if (_page > result.TotalPages)
             result = await Api.ListTaxonomiesAsync(Kind, result.TotalPages, Limits.MaxPageSize, ct) ?? result;
         _page = result.Page;
@@ -92,13 +92,13 @@
         if (Disabled || Blocked) return;
         await RunOperationAsync(async ct =>
         {
-            if (AtLimit) throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個{Label}，請先取消選取。");
+            if (AtLimit) throw new CmsException(string.Format(CultureInfo.CurrentCulture, Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.PostCategoryLimit", "每篇文章最多 {0} 個分類，請先取消選取。") : UiText.T("Admin.TaxonomySelector.PostTagLimit", "每篇文章最多 {0} 個標籤，請先取消選取。"), Limits.MaxTaxonomiesPerKind));
             TaxonomyEdit saved;
             try { saved = await Api.SaveTaxonomyAsync(Kind, new TaxonomyEdit { Name = _newName.Trim() }, ct)
-                    ?? throw new CmsException("無法建立項目。"); }
+                    ?? throw new CmsException(UiText.T("Admin.TaxonomySelector.CreateFailed", "無法建立項目。")); }
             catch (CmsException ex) when (ex.Message == "網址代稱已存在，請使用其他代稱。")
             {
-                throw new CmsException($"相同名稱或網址代稱的{Label}已存在。請刷新選項後選取既有項目，或改用其他名稱。");
+                throw new CmsException(Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.DuplicateCategory", "相同名稱或網址代稱的分類已存在。請刷新選項後選取既有項目，或改用其他名稱。") : UiText.T("Admin.TaxonomySelector.DuplicateTag", "相同名稱或網址代稱的標籤已存在。請刷新選項後選取既有項目，或改用其他名稱。"));
             }
             _created = new(saved.Id!.Value, saved.Name, saved.Slug, saved.Version);
             Selected.Add(_created.Id);
@@ -106,7 +106,7 @@
             // 即使之後刷新列表失敗，仍保留成功的選取結果。
             await Changed.InvokeAsync();
             await LoadOptions(ct);
-        }, $"已建立並選取{Label}；本文尚未儲存。");
+        }, Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.CategoryCreated", "已建立並選取分類；本文尚未儲存。") : UiText.T("Admin.TaxonomySelector.TagCreated", "已建立並選取標籤；本文尚未儲存。"));
     }
     private async Task Move(int delta)
     {
@@ -120,7 +120,7 @@
         if (Disabled || Blocked) return;
         if (selected && !Selected.Contains(id))
         {
-            if (AtLimit) { Error = $"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個{Label}，請先取消選取。"; return; }
+            if (AtLimit) { Error = string.Format(CultureInfo.CurrentCulture, Kind == TaxonomyKind.Category ? UiText.T("Admin.TaxonomySelector.PostCategoryLimit", "每篇文章最多 {0} 個分類，請先取消選取。") : UiText.T("Admin.TaxonomySelector.PostTagLimit", "每篇文章最多 {0} 個標籤，請先取消選取。"), Limits.MaxTaxonomiesPerKind); return; }
             Selected.Add(id);
         }
         if (!selected) Selected.Remove(id);

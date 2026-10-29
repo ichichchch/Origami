@@ -3,12 +3,12 @@
 @attribute [ExcludeFromInteractiveRouting]
 @inject NavigationManager Navigation
 
-<PageTitle>管理員登入</PageTitle>
+<PageTitle>@UiText.T("Account.Login.PageTitle", "管理員登入")</PageTitle>
 
 <section class="auth-card" aria-labelledby="login-title">
-    <p class="eyebrow">ORIGAMI · 內容工作室</p>
-    <h1 id="login-title">管理員登入</h1>
-    <p class="field-help">登入後可撰寫文章、建立獨立頁面、管理圖片與使用站內 AI 助理。</p>
+    <p class="eyebrow">@UiText.T("Account.Login.Brand", "ORIGAMI · 內容工作室")</p>
+    <h1 id="login-title">@UiText.T("Account.Login.Title", "管理員登入")</h1>
+    <p class="field-help">@UiText.T("Account.Login.Introduction", "登入後可撰寫文章、建立獨立頁面、管理圖片與使用站內 AI 助理。")</p>
 
     @if (errorMessage is not null)
     {
@@ -17,17 +17,17 @@
 
     @if (awaitingCode)
     {
-        <p class="field-help">帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼。</p>
+        <p class="field-help">@UiText.T("Account.Login.CodeHelp", "帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼。")</p>
         @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證。 *@
         <EditForm Model="CodeForm" method="post" OnValidSubmit="CodeAsync" OnInvalidSubmit="ClearCode" FormName="account-code" Enhance="false">
             <DataAnnotationsValidator />
             <ValidationSummary />
             <div class="field">
-                <label for="code">動態驗證碼</label>
+                <label for="code">@UiText.T("Account.Login.Code", "動態驗證碼")</label>
                 <input id="code" name="CodeForm.Code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
             </div>
-            <button type="submit" class="button full-width">驗證並登入</button>
-            <p class="field-help"><a href="/account/login">改用帳號密碼重新登入</a></p>
+            <button type="submit" class="button full-width">@UiText.T("Account.Login.Verify", "驗證並登入")</button>
+            <p class="field-help"><a href="/account/login">@UiText.T("Account.Login.Restart", "改用帳號密碼重新登入")</a></p>
         </EditForm>
     }
     else
@@ -37,33 +37,34 @@
             <DataAnnotationsValidator />
             <ValidationSummary />
             <div class="field">
-                <label for="username">帳號</label>
+                <label for="username">@UiText.T("Account.Login.UserName", "帳號")</label>
                 <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
             </div>
             <div class="field">
-                <label for="password">密碼</label>
+                <label for="password">@UiText.T("Account.Login.Password", "密碼")</label>
                 @* 表單對應在 POST 時讀取此欄位；絕不繫結或渲染其送出值。 *@
                 <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
             </div>
             <div class="field checkbox-field">
-                <label for="remember"><input id="remember" name="Input.Remember" type="checkbox" value="true" /> 記住我（在此瀏覽器保持登入）</label>
+                <label for="remember"><input id="remember" name="Input.Remember" type="checkbox" value="true" /> @UiText.T("Account.Login.Remember", "記住我（在此瀏覽器保持登入）")</label>
             </div>
-            <button type="submit" class="button full-width">登入</button>
+            <button type="submit" class="button full-width">@UiText.T("Account.Login.Submit", "登入")</button>
         </EditForm>
     }
+    <p class="field-help"><a href="/account/forgot-password">@UiText.T("Account.Login.ForgotPassword", "忘記密碼？以電子郵件取得重設連結")</a></p>
     <details class="setup-help">
-        <summary>第一次使用，或忘記密碼？</summary>
-        <p>本網站不提供公開註冊。一般帳號與站點成員資格請聯絡管理者；各網域需分別登入，不提供跨域單一登入。</p>
-        <p>只有首次全站管理者初始化使用伺服器命令：<code>dotnet run --project src/Origami.Web -- admin-init</code>。</p>
-        <p><code>admin-reset</code> 只恢復全站管理者密碼並停用其兩步驟驗證，不會修改其他使用者。密碼仍由終端機互動輸入，不可放入命令列。</p>
+        <summary>@UiText.T("Account.Login.SetupTitle", "第一次使用，或忘記密碼？")</summary>
+        <p>@UiText.T("Account.Login.RegistrationHelp", "本網站不提供公開註冊。一般帳號與站點成員資格請聯絡管理者；各網域需分別登入，不提供跨域單一登入。")</p>
+        <p>@((MarkupString)string.Format(CultureInfo.CurrentCulture, WebUtility.HtmlEncode(UiText.T("Account.Login.InitializeHelp", "只有首次全站管理者初始化使用伺服器命令：{0}。")), "<code>dotnet run --project src/Origami.Web -- admin-init</code>"))</p>
+        <p>@((MarkupString)string.Format(CultureInfo.CurrentCulture, WebUtility.HtmlEncode(UiText.T("Account.Login.ResetHelp", "{0} 只恢復全站管理者密碼並停用其兩步驟驗證，不會修改其他使用者。密碼仍由終端機互動輸入，不可放入命令列。")), "<code>admin-reset</code>"))</p>
     </details>
 </section>
 
 @code {
-    private const string LoginFailure = "無法登入。請確認帳號密碼，或稍後再試。";
-    private const string ThrottledMessage = "嘗試次數過多，請稍後再試。";
-    private const string CodeFailure = "動態驗證碼不正確或已過期，請再試一次。";
-    private const string LockedMessage = "帳戶已暫時鎖定，請於鎖定時間過後再試。";
+    private static string LoginFailure => UiText.T("Account.Login.LoginFailure", "無法登入。請確認帳號密碼，或稍後再試。");
+    private static string ThrottledMessage => UiText.T("Account.Login.Throttled", "嘗試次數過多，請稍後再試。");
+    private static string CodeFailure => UiText.T("Account.Login.CodeFailure", "動態驗證碼不正確或已過期，請再試一次。");
+    private static string LockedMessage => UiText.T("Account.Login.Locked", "帳戶已暫時鎖定，請於鎖定時間過後再試。");
     private const string PendingCookie = "origami.2fa";
     private string? errorMessage;
     private bool awaitingCode;
@@ -245,14 +246,24 @@
     private void ClearPassword() => Input.Password = string.Empty;
     private void ClearCode() => CodeForm.Code = string.Empty;
 
+    public static class ValidationText
+    {
+        public static string UserNameRequired => UiText.T("Account.Login.UserNameRequired", "請輸入帳號。");
+        public static string UserNameTooLong => UiText.T("Account.Login.UserNameTooLong", "帳號過長。");
+        public static string PasswordRequired => UiText.T("Account.Login.PasswordRequired", "請輸入密碼。");
+        public static string PasswordTooLong => UiText.T("Account.Login.PasswordTooLong", "密碼過長。");
+        public static string CodeRequired => UiText.T("Account.Login.CodeRequired", "請輸入動態驗證碼。");
+        public static string CodeLength => UiText.T("Account.Login.CodeLength", "驗證碼為 6 位數字。");
+    }
+
     public sealed class LoginInput
     {
-        [Required(ErrorMessage = "請輸入帳號。")]
-        [StringLength(AdminProvisioner.MaximumUserNameLength, ErrorMessage = "帳號過長。")]
+        [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.UserNameRequired))]
+        [StringLength(AdminProvisioner.MaximumUserNameLength, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.UserNameTooLong))]
         public string Username { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "請輸入密碼。")]
-        [StringLength(AdminProvisioner.MaximumPasswordLength, ErrorMessage = "密碼過長。")]
+        [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordRequired))]
+        [StringLength(AdminProvisioner.MaximumPasswordLength, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordTooLong))]
         public string Password { get; set; } = string.Empty;
 
         /// <summary>勾選後以持久 Cookie 登入（兩步驗證路徑會把此選擇帶到第二階段）。</summary>
@@ -261,8 +272,8 @@
 
     public sealed class CodeInput
     {
-        [Required(ErrorMessage = "請輸入動態驗證碼。")]
-        [StringLength(6, MinimumLength = 6, ErrorMessage = "驗證碼為 6 位數字。")]
+        [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeRequired))]
+        [StringLength(6, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
         public string Code { get; set; } = string.Empty;
     }
 }

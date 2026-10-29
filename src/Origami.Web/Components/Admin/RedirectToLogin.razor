@@ -1,6 +1,6 @@
 @inject NavigationManager Navigation
-<p role="status">請先登入後再管理網站。</p>
-<a class="button" href="/account/login" data-enhance-nav="false">前往登入</a>
+<p role="status">@UiText.T("Common.SignInRequired", "請先登入後再管理網站。")</p>
+<a class="button" href="/account/login" data-enhance-nav="false">@UiText.T("Common.GoToSignIn", "前往登入")</a>
 
 @code {
     protected override void OnInitialized() =>

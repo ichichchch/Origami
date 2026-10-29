@@ -23,7 +23,7 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
     protected void RequireLogin()
     {
         LoginRequired = true;
-        Error = "登入已失效，請重新登入。未儲存的輸入仍保留在此頁，離開前請先複製備份。";
+        Error = UiText.T("Common.LoginExpired", "登入已失效，請重新登入。未儲存的輸入仍保留在此頁，離開前請先複製備份。");
         Notice = null;
     }
 
@@ -39,7 +39,8 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
             if (UsesSiteAccess)
             {
                 Access = await AccessApi.GetAccessAsync(Lifetime.Token);
-                if (RequiresMembership && !Access.CanRead) throw new AccessDeniedException();
+                if (RequiresMembership && !Access.CanRead)
+                    throw new AccessDeniedException(UiText.T("Common.AccessDenied", "你沒有此站點的操作權限。"));
             }
             await action(Lifetime.Token);
             Notice = success;
@@ -52,7 +53,7 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
         catch (Exception ex)
         {
             Log.ComponentOperationFailed(Logger, ex);
-            Error = "操作未完成，無法確認是否已儲存。請保留輸入並重新載入，確認最新資料後再試。";
+            Error = UiText.T("Common.OperationFailed", "操作未完成，無法確認是否已儲存。請保留輸入並重新載入，確認最新資料後再試。");
         }
         finally { Busy = false; }
         return false;
@@ -61,7 +62,7 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
     protected Task<bool> RunEditAsync(Func<CancellationToken, Task> action, string? success = null) =>
         RunAsync(async ct =>
         {
-            if (!CanEdit) throw new AccessDeniedException("你只有本站唯讀權限，無法建立、修改或發布內容。");
+            if (!CanEdit) throw new AccessDeniedException(UiText.T("Common.ReadOnly", "你只有本站唯讀權限，無法建立、修改或發布內容。"));
             await action(ct);
         }, success);
 

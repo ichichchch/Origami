@@ -5,18 +5,18 @@
 {
     <div class="dialog-backdrop">
         <section class="confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="leave-title" aria-describedby="leave-description" tabindex="-1">
-            <h2 id="leave-title">離開編輯頁面？</h2>
-            <p id="leave-description">尚有未儲存的變更。離開會捨棄這些輸入，請先儲存或複製備份。</p>
+            <h2 id="leave-title">@UiText.T("Admin.UnsavedGuard.LeaveTitle", "離開編輯頁面？")</h2>
+            <p id="leave-description">@UiText.T("Admin.UnsavedGuard.LeaveDescription", "尚有未儲存的變更。離開會捨棄這些輸入，請先儲存或複製備份。")</p>
             <div class="button-row">
-                <button type="button" class="button" autofocus @onclick="Stay">繼續編輯</button>
-                <button type="button" class="button button-danger" @onclick="Leave">捨棄並離開</button>
+                <button type="button" class="button" autofocus @onclick="Stay">@UiText.T("Admin.UnsavedGuard.Stay", "繼續編輯")</button>
+                <button type="button" class="button button-danger" @onclick="Leave">@UiText.T("Admin.UnsavedGuard.DiscardAndLeave", "捨棄並離開")</button>
             </div>
         </section>
     </div>
 }
 @if (_blocked && Busy)
 {
-    <p class="notice" role="alert">操作尚未結束，請稍候再離開。</p>
+    <p class="notice" role="alert">@UiText.T("Admin.UnsavedGuard.OperationInProgress", "操作尚未結束，請稍候再離開。")</p>
 }
 
 @code {

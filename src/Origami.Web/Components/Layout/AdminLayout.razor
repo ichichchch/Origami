@@ -2,54 +2,58 @@
 @inject NavigationManager Navigation
 @inject OrigamiClient AccessApi
 
-<a class="skip-link" href="#main-content">跳至主要內容</a>
+<a class="skip-link" href="#main-content">@UiText.T("Layout.Main.01", "跳至主要內容")</a>
 @* 各頁面的互動島嶼無法攔截 Static SSR 連結的增強導覽。
    後台採整份文件導覽，讓 NavigationLock 得以保護未儲存的輸入。 *@
 <div class="admin-shell" data-enhance-nav="false">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="/admin/posts"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>內容管理</small></span></a>
-        <nav class="admin-nav" aria-label="後台導覽">
-            <span class="nav-label">工作空間</span>
-            <NavLink href="/admin/posts">文章<span aria-hidden="true">↗</span></NavLink>
-            <NavLink href="/admin/pages">獨立頁面<span aria-hidden="true">↗</span></NavLink>
-            <NavLink href="/admin/taxonomies">分類與標籤<span aria-hidden="true">↗</span></NavLink>
-            <NavLink href="/admin/media">媒體庫<span aria-hidden="true">↗</span></NavLink>
-            <NavLink href="/admin/settings">網站設定<span aria-hidden="true">↗</span></NavLink>
+        <a class="admin-brand" href="/admin/posts"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>@UiText.T("Layout.Admin.ContentManagement", "內容管理")</small></span></a>
+        <nav class="admin-nav" aria-label="@UiText.T("Layout.Admin.Navigation", "後台導覽")">
+            <span class="nav-label">@UiText.T("Layout.Admin.Workspace", "工作空間")</span>
+            <NavLink href="/admin/posts">@UiText.T("Layout.Admin.Posts", "文章")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/pages">@UiText.T("Layout.Admin.Pages", "獨立頁面")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/taxonomies">@UiText.T("Layout.Admin.Taxonomies", "分類與標籤")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/types">@UiText.T("Layout.Admin.ContentTypes", "內容類型")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/navigation">@UiText.T("Layout.Main.Navigation", "網站導覽")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/comments">@UiText.T("Layout.Admin.Comments", "評論")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/media">@UiText.T("Layout.Admin.Media", "媒體庫")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/settings">@UiText.T("Layout.Admin.Settings", "網站設定")<span aria-hidden="true">↗</span></NavLink>
             @* 連結顯示只是導覽體驗；各頁與 API 仍逐一重驗角色。 *@
             @if (_access?.CanAdminister == true)
             {
-                <NavLink href="/admin/members">站點成員</NavLink>
+                <NavLink href="/admin/members">@UiText.T("Layout.Admin.Members", "站點成員")</NavLink>
             }
             @if (_access?.CanRead == true)
             {
-                <NavLink href="/admin/sites">站點 / 切換站點</NavLink>
-                <NavLink href="/admin/credentials">我的 API 憑證</NavLink>
+                <NavLink href="/admin/sites">@UiText.T("Layout.Admin.Sites", "站點 / 切換站點")</NavLink>
+                <NavLink href="/admin/credentials">@UiText.T("Layout.Admin.Credentials", "我的 API 憑證")</NavLink>
             }
             @if (_access?.IsNetworkAdmin == true)
             {
-                <NavLink href="/admin/users">使用者（全站管理）</NavLink>
+                <NavLink href="/admin/users">@UiText.T("Layout.Admin.Users", "使用者（全站管理）")</NavLink>
             }
-            <NavLink href="/admin/security">安全設定<span aria-hidden="true">↗</span></NavLink>
-            <NavLink href="/admin/assistant">AI 助理<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/security">@UiText.T("Layout.Admin.Security", "安全設定")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/assistant">@UiText.T("Layout.Admin.Assistant", "AI 助理")<span aria-hidden="true">↗</span></NavLink>
         </nav>
         <div class="sidebar-bottom">
-            <a href="/" data-enhance-nav="false">檢視公開網站 ↗</a>
+            <a href="/" data-enhance-nav="false">@UiText.T("Layout.Admin.ViewSite", "檢視公開網站 ↗")</a>
             <form method="post" action="/account/logout" data-enhance="false">
                 <AntiforgeryToken />
-                <button type="submit" class="logout-button">登出</button>
+                <button type="submit" class="logout-button">@UiText.T("Layout.Admin.SignOut", "登出")</button>
             </form>
+            <LanguageSwitcher />
         </div>
     </aside>
     <div class="admin-workspace">
-        <header class="admin-topbar"><span>@(new Uri(Navigation.Uri).Authority)</span><span class="workspace-label">網站後台 · 權限依站點而定</span></header>
+        <header class="admin-topbar"><span>@(new Uri(Navigation.Uri).Authority)</span><span class="workspace-label">@UiText.T("Layout.Admin.Access", "網站後台 · 權限依站點而定")</span></header>
         <main id="main-content" class="admin-main" tabindex="-1">@Body</main>
-        <footer class="admin-footer">專注內容，從這裡開始。</footer>
+        <footer class="admin-footer">@UiText.T("Layout.Admin.Footer", "專注內容，從這裡開始。")</footer>
     </div>
 </div>
 <div id="blazor-error-ui" role="alert" data-nosnippet>
-    介面發生錯誤。未儲存的變更可能遺失，請先複製輸入再重新載入。
-    <a href="" class="reload">重新載入</a>
-    <button type="button" class="dismiss" aria-label="關閉錯誤提示">×</button>
+    @UiText.T("Layout.Admin.Error", "介面發生錯誤。未儲存的變更可能遺失，請先複製輸入再重新載入。")
+    <a href="" class="reload">@UiText.T("Common.Reload", "重新載入")</a>
+    <button type="button" class="dismiss" aria-label="@UiText.T("Layout.Admin.DismissError", "關閉錯誤提示")">×</button>
 </div>
 
 @code {

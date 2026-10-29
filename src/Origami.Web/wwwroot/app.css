@@ -85,7 +85,7 @@ input[type="file"]::file-selector-button { border: 1px solid var(--border); back
 .setup-help { margin-top: 1.2rem; font-size: .8rem; color: var(--muted); overflow-wrap: anywhere; }
 .setup-help summary { color: var(--accent); cursor: pointer; margin-bottom: .7rem; }
 @media (max-width: 800px) { .setup-steps { grid-template-columns: 1fr; gap: 1rem; } }
-.reading-column { max-width: 760px; margin: 0 auto; }
+.reading-column { max-width: var(--reading-width, 760px); margin: 0 auto; }
 .article-heading { padding-bottom: 2rem; border-bottom: 1px solid var(--border); margin-bottom: 2.5rem; }
 .article-heading h1 { font-family: "Noto Serif TC", "PMingLiU", serif; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.5; }
 .article-heading time { font-size: .85rem; color: var(--muted); }
@@ -318,3 +318,48 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 
 /* 呈現細節包：文章 byline */
 .byline { margin: .3rem 0 0; color: var(--muted); font-size: .82rem; letter-spacing: .02em; }
+
+/* 媒體批次上傳拖放區 */
+.drop-zone { border: 2px dashed #b8bfc9; border-radius: 10px; padding: 1.1rem; text-align: center; transition: border-color .15s ease, background-color .15s ease; }
+.drop-zone.drag-over { border-color: #2f6f8f; background-color: rgba(47, 111, 143, .08); }
+.drop-zone input[type="file"] { margin: .35rem auto; }
+
+/* 頁首網站標誌 */
+.site-logo { height: 2.1rem; width: auto; max-width: 9rem; vertical-align: middle; margin-right: .55rem; border-radius: 6px; display: inline-block; }
+.language-switcher { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.language-switcher a[aria-current="true"] { font-weight: 700; text-decoration: underline; text-underline-offset: .2em; }
+.sidebar-bottom .language-switcher { margin-top: .75rem; }
+
+/* 單篇長文分頁導覽 */
+.post-pagination { display: flex; align-items: center; gap: .8rem; margin: 1.6rem 0 0; }
+
+/* 白名單影片嵌入（YouTube/Vimeo） */
+.video-embed { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; display: block; margin: 1.2rem 0; }
+
+/* 非圖片媒體卡片 */
+.media-kind { display: inline-block; padding: .35rem .6rem; border: 1px solid var(--line, #d7dce3); border-radius: 8px; font-size: .8rem; color: var(--muted); }
+
+
+/* 訪客評論 */
+.comments { margin-top: 2.4rem; border-top: 1px solid var(--line, #e3e6ea); padding-top: 1.6rem; }
+.comment { padding: .9rem 0; border-bottom: 1px dashed var(--line, #e3e6ea); }
+.comment-meta { font-size: .82rem; color: var(--muted); margin: 0 0 .35rem; }
+.comment-body :where(p) { margin: .2rem 0; }
+.hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* 受控版型：強調色衍生色在覆寫 --accent 的容器上重算，欄寬與顯示開關同樣由站點設定驅動。 */
+.site-shell { --accent-hover: color-mix(in srgb, var(--accent) 84%, #000); --accent-soft: color-mix(in srgb, var(--accent) 12%, #fff); }
+.site-shell[data-show-cover="false"] .post-cover,
+.site-shell[data-show-cover="false"] .cover-figure { display: none; }
+.site-shell[data-show-byline="false"] .byline { display: none; }
+.site-shell[data-card-style="grid"] .post-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.5rem; border-top: 0; }
+.site-shell[data-card-style="grid"] .post-preview { grid-template-columns: 1fr; gap: .6rem; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem; }
+.site-shell[data-card-style="grid"] .post-preview .post-cover { order: -1; }
+.site-shell[data-card-style="grid"] .read-link { justify-self: start; }
+
+/* 自訂欄位（宣告式擴充點）在公開內容的呈現。 */
+.field-list { margin: 2rem 0 0; border-top: 1px solid var(--border); }
+.field-list-row { display: grid; grid-template-columns: minmax(6rem, 12rem) minmax(0, 1fr); gap: 1rem; padding: .7rem 0; border-bottom: 1px solid var(--border); }
+.field-list dt { color: var(--muted); font-size: .85rem; }
+.field-list dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .field-list-row { grid-template-columns: 1fr; gap: .2rem; } }

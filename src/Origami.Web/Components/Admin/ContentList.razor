@@ -7,45 +7,45 @@
 @inject OrigamiClient Api
 @inject NavigationManager Navigation
 
-<PageTitle>@(Label) · 內容管理</PageTitle>
+<PageTitle>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.PageTitle", "{0} · 內容管理"), Label)</PageTitle>
 <div class="page-heading">
-    <div><p class="eyebrow">內容管理</p><h1>@(Label)</h1><p>@(Kind == ContentKind.Post ? "整理想法，讓每一篇文章找到讀者。" : "建立關於、聯絡方式等長期使用的內容。")</p></div>
+    <div><p class="eyebrow">@UiText.T("Admin.ContentList.ContentManagement", "內容管理")</p><h1>@(Label)</h1><p>@(Kind == ContentKind.Post ? UiText.T("Admin.ContentList.PostsIntroduction", "整理想法，讓每一篇文章找到讀者。") : UiText.T("Admin.ContentList.PagesIntroduction", "建立關於、聯絡方式等長期使用的內容。"))</p></div>
     @if (CanEdit)
     {
-        <a class="button" href="@(ListPath + "/new")">＋ 新增@(Kind == ContentKind.Post ? "文章" : "頁面")</a>
+        <a class="button" href="@(ListPath + "/new")">@(Kind == ContentKind.Post ? UiText.T("Admin.ContentList.NewPost", "＋ 新增文章") : UiText.T("Admin.ContentList.NewPage", "＋ 新增頁面"))</a>
     }
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 @if (Access?.CanRead == true && !CanEdit)
 {
-    <p class="notice">你是本站唯讀成員，可檢視、搜尋與分頁，不能建立、編輯或發布內容。</p>
+    <p class="notice">@UiText.T("Admin.ContentList.ReadOnlyNotice", "你是本站唯讀成員，可檢視、搜尋與分頁，不能建立、編輯或發布內容。")</p>
 }
 @if (Error is not null && !LoginRequired)
 {
-    <button class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">重新載入列表</button>
+    <button class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">@UiText.T("Admin.ContentList.Reload", "重新載入列表")</button>
 }
 @if (_pendingTrash is not null)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="trash-title" aria-describedby="trash-description">
-        <h2 id="trash-title">將「@_pendingTrash.Title」移入回收桶？</h2>
-        <p id="trash-description">內容會立即停止公開（含搜尋與舊網址），在回收桶保留 @(Limits.TrashRetentionDays) 天，期間可隨時還原為草稿。</p>
-        <div class="button-row"><button class="button button-danger" disabled="@EditBlocked" @onclick="TrashAsync">確認移入回收桶</button><button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingTrash = null">取消</button></div>
+        <h2 id="trash-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.TrashTitle", "將「{0}」移入回收桶？"), _pendingTrash.Title)</h2>
+        <p id="trash-description">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.TrashDescription", "內容會立即停止公開（含搜尋與舊網址），在回收桶保留 {0} 天，期間可隨時還原為草稿。"), Limits.TrashRetentionDays)</p>
+        <div class="button-row"><button class="button button-danger" disabled="@EditBlocked" @onclick="TrashAsync">@UiText.T("Admin.ContentList.ConfirmTrash", "確認移入回收桶")</button><button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingTrash = null">@UiText.T("Admin.ContentList.Cancel", "取消")</button></div>
     </section>
 }
 @if (_pendingDelete is not null)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="delete-title" aria-describedby="delete-description">
-        <h2 id="delete-title">永久刪除「@_pendingDelete.Title」？</h2>
-        <p id="delete-description">刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開。</p>
-        <div class="button-row"><button class="button button-danger" disabled="@EditBlocked" @onclick="DeleteAsync">確認永久刪除</button><button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingDelete = null">取消</button></div>
+        <h2 id="delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.DeleteTitle", "永久刪除「{0}」？"), _pendingDelete.Title)</h2>
+        <p id="delete-description">@UiText.T("Admin.ContentList.DeleteDescription", "刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@EditBlocked" @onclick="DeleteAsync">@UiText.T("Admin.ContentList.ConfirmDelete", "確認永久刪除")</button><button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingDelete = null">@UiText.T("Admin.ContentList.Cancel", "取消")</button></div>
     </section>
 }
 @if (_pendingBulkDelete)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="bulk-delete-title" aria-describedby="bulk-delete-description">
-        <h2 id="bulk-delete-title">永久刪除已選擇的 @_selected.Count 筆內容？</h2>
-        <p id="bulk-delete-description">刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開；與其他分頁衝突的項目會被略過並回報。</p>
-        <div class="button-row"><button class="button button-danger" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Delete)">確認永久刪除</button><button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingBulkDelete = false">取消</button></div>
+        <h2 id="bulk-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.BulkDeleteTitle", "永久刪除已選擇的 {0} 筆內容？"), _selected.Count)</h2>
+        <p id="bulk-delete-description">@UiText.T("Admin.ContentList.BulkDeleteDescription", "刪除後無法復原，公開網址將停止提供內容。已上傳的圖片仍然公開；與其他分頁衝突的項目會被略過並回報。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Delete)">@UiText.T("Admin.ContentList.ConfirmDelete", "確認永久刪除")</button><button class="button button-secondary" disabled="@EditBlocked" @onclick="() => _pendingBulkDelete = false">@UiText.T("Admin.ContentList.Cancel", "取消")</button></div>
     </section>
 }
 @if (_result is not null && _counts is not null)
@@ -53,49 +53,53 @@
     @if (_counts.Total == 0 && CanEdit)
     {
         <section class="getting-started panel" aria-labelledby="start-title">
-            <h2 id="start-title">把第一個想法變成網站內容</h2>
+            <h2 id="start-title">@UiText.T("Admin.ContentList.GettingStartedTitle", "把第一個想法變成網站內容")</h2>
             <ol class="setup-steps">
-                <li><strong>建立草稿</strong><span>先寫標題與 Markdown 本文，內容不會立即公開。</span></li>
-                <li><strong>整理與預覽</strong><span>編輯器內即可上傳圖片；文章還能就地新增分類與標籤。</span></li>
-                <li><strong>發布給讀者</strong><span>按「儲存並發布」，再到前台查看；隨時可撤回為草稿。</span></li>
+                <li><strong>@UiText.T("Admin.ContentList.CreateDraftStep", "建立草稿")</strong><span>@UiText.T("Admin.ContentList.CreateDraftHelp", "先寫標題與 Markdown 本文，內容不會立即公開。")</span></li>
+                <li><strong>@UiText.T("Admin.ContentList.OrganizeStep", "整理與預覽")</strong><span>@UiText.T("Admin.ContentList.OrganizeHelp", "編輯器內即可上傳圖片；文章還能就地新增分類與標籤。")</span></li>
+                <li><strong>@UiText.T("Admin.ContentList.PublishStep", "發布給讀者")</strong><span>@UiText.T("Admin.ContentList.PublishHelp", "按「儲存並發布」，再到前台查看；隨時可撤回為草稿。")</span></li>
             </ol>
-            <div class="button-row"><a href="/admin/settings">設定網站名稱</a><a href="/admin/assistant">查看 AI 功能狀態</a></div>
+            <div class="button-row"><a href="/admin/settings">@UiText.T("Admin.ContentList.SetSiteName", "設定網站名稱")</a><a href="/admin/assistant">@UiText.T("Admin.ContentList.ViewAiStatus", "查看 AI 功能狀態")</a></div>
         </section>
     }
-    <div class="section-tabs content-filters" role="group" aria-label="內容狀態篩選">
-        <button type="button" class="tab-button @(_status is null ? "active" : "")" aria-pressed="@(_status is null)" disabled="@Blocked" @onclick="() => ChangeStatus(null)">全部 <span class="count">@_counts.Total</span></button>
-        <button type="button" class="tab-button @(_status == ContentStatus.Draft ? "active" : "")" aria-pressed="@(_status == ContentStatus.Draft)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Draft)">草稿 <span class="count">@_counts.Drafts</span></button>
-        <button type="button" class="tab-button @(_status == ContentStatus.Published ? "active" : "")" aria-pressed="@(_status == ContentStatus.Published)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Published)">已發布 <span class="count">@_counts.Published</span></button>
+    <div class="section-tabs content-filters" role="group" aria-label="@UiText.T("Admin.ContentList.StatusFilter", "內容狀態篩選")">
+        <button type="button" class="tab-button @(_status is null ? "active" : "")" aria-pressed="@((_status is null).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(null)">@UiText.T("Admin.ContentList.All", "全部") <span class="count">@_counts.Total</span></button>
+        <button type="button" class="tab-button @(_status == ContentStatus.Draft ? "active" : "")" aria-pressed="@((_status == ContentStatus.Draft).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Draft)">@UiText.T("Admin.ContentList.Draft", "草稿") <span class="count">@_counts.Drafts</span></button>
+        <button type="button" class="tab-button @(_status == ContentStatus.Published ? "active" : "")" aria-pressed="@((_status == ContentStatus.Published).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Published)">@UiText.T("Admin.ContentList.Published", "已發布") <span class="count">@_counts.Published</span></button>
+        @if (_counts.Pending > 0)
+        {
+            <button type="button" class="tab-button @(_status == ContentStatus.Pending ? "active" : "")" aria-pressed="@((_status == ContentStatus.Pending).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Pending)">@UiText.T("Admin.ContentList.Pending", "待審") <span class="count">@_counts.Pending</span></button>
+        }
         @if (_counts.Trashed > 0)
         {
-            <button type="button" class="tab-button @(_status == ContentStatus.Trashed ? "active" : "")" aria-pressed="@(_status == ContentStatus.Trashed)" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Trashed)">回收桶 <span class="count">@_counts.Trashed</span></button>
+            <button type="button" class="tab-button @(_status == ContentStatus.Trashed ? "active" : "")" aria-pressed="@((_status == ContentStatus.Trashed).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Trashed)">@UiText.T("Admin.ContentList.Trashed", "回收桶") <span class="count">@_counts.Trashed</span></button>
         }
     </div>
     <div class="content-search">
-        <label class="sr-only" for="content-search">搜尋@(Label)</label>
-        <input id="content-search" type="search" placeholder="搜尋標題或網址代稱…" maxlength="200" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
+        <label class="sr-only" for="content-search">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.Search", "搜尋{0}"), Label)</label>
+        <input id="content-search" type="search" placeholder="@UiText.T("Admin.ContentList.SearchPlaceholder", "搜尋標題或網址代稱…")" maxlength="200" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
         @if (_search.Length > 0)
         {
-            <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">清除</button>
+            <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">@UiText.T("Admin.ContentList.Clear", "清除")</button>
         }
     </div>
     <section class="panel" aria-busy="@Busy.ToString().ToLowerInvariant()">
-        <div class="panel-toolbar"><h2>@FilterLabel@(Label) <span class="count">@_result.Total</span></h2><span class="muted">依最後更新排序 · UTC</span></div>
+        <div class="panel-toolbar"><h2>@FilterLabel <span class="count">@_result.Total</span></h2><span class="muted">@UiText.T("Admin.ContentList.SortOrder", "依最後更新排序 · UTC")</span></div>
         @if (_selected.Count > 0)
         {
-            <div class="bulk-bar" role="group" aria-label="批次操作">
-                <span class="bulk-count">已選 @_selected.Count 筆</span>
+            <div class="bulk-bar" role="group" aria-label="@UiText.T("Admin.ContentList.BulkActions", "批次操作")">
+                <span class="bulk-count">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.SelectedCount", "已選 {0} 筆"), _selected.Count)</span>
                 <div class="button-row">
                     @if (_status == ContentStatus.Trashed)
                     {
-                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Restore)">批次還原為草稿</button>
-                        <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="RequestBulkDelete">批次永久刪除</button>
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Restore)">@UiText.T("Admin.ContentList.BulkRestore", "批次還原為草稿")</button>
+                        <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="RequestBulkDelete">@UiText.T("Admin.ContentList.BulkDelete", "批次永久刪除")</button>
                     }
                     else
                     {
-                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Trash)">批次移入回收桶</button>
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Trash)">@UiText.T("Admin.ContentList.BulkTrash", "批次移入回收桶")</button>
                     }
-                    <button type="button" class="text-button" disabled="@EditBlocked" @onclick="ClearSelection">取消選取</button>
+                    <button type="button" class="text-button" disabled="@EditBlocked" @onclick="ClearSelection">@UiText.T("Admin.ContentList.ClearSelection", "取消選取")</button>
                 </div>
             </div>
         }
@@ -103,60 +107,62 @@
         {
             @if (CanEdit)
             {
-                <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@(_status is null ? "從第一個想法開始" : "目前沒有" + FilterLabel + Label)</h2><p>@(_status == ContentStatus.Published ? "將草稿儲存並發布後，內容會出現在這裡與公開網站。" : "新增草稿，準備好再發布。")</p><a href="@(ListPath + "/new")">建立@(Kind == ContentKind.Post ? "文章" : "頁面") →</a></div>
+                <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@(_status is null ? UiText.T("Admin.ContentList.EmptyTitle", "從第一個想法開始") : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.EmptyFilteredTitle", "目前沒有{0}"), FilterLabel))</h2><p>@(_status == ContentStatus.Published ? UiText.T("Admin.ContentList.EmptyPublishedHelp", "將草稿儲存並發布後，內容會出現在這裡與公開網站。") : UiText.T("Admin.ContentList.EmptyDraftHelp", "新增草稿，準備好再發布。"))</p><a href="@(ListPath + "/new")">@(Kind == ContentKind.Post ? UiText.T("Admin.ContentList.CreatePost", "建立文章 →") : UiText.T("Admin.ContentList.CreatePage", "建立頁面 →"))</a></div>
             }
             else
             {
-                <p class="empty-state">目前沒有符合條件的內容。</p>
+                <p class="empty-state">@UiText.T("Admin.ContentList.NoMatches", "目前沒有符合條件的內容。")</p>
             }
         }
         else
         {
-            <div class="table-scroll"><table><caption class="sr-only">@(Label) 列表</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="bulk-select-all">全選本頁</label><input id="bulk-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@EditBlocked" /></th><th scope="col">標題 / 網址</th><th scope="col">狀態</th><th scope="col">最後更新</th><th scope="col">瀏覽</th><th scope="col">操作</th></tr></thead><tbody>
+            <div class="table-scroll"><table><caption class="sr-only">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.TableCaption", "{0} 列表"), Label)</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="bulk-select-all">@UiText.T("Admin.ContentList.SelectPage", "全選本頁")</label><input id="bulk-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@EditBlocked" /></th><th scope="col">@UiText.T("Admin.ContentList.TitleAndUrl", "標題 / 網址")</th><th scope="col">@UiText.T("Admin.ContentList.Status", "狀態")</th><th scope="col">@UiText.T("Admin.ContentList.LastUpdated", "最後更新")</th><th scope="col">@UiText.T("Admin.ContentList.Author", "作者")</th><th scope="col">@UiText.T("Admin.ContentList.Views", "瀏覽")</th><th scope="col">@UiText.T("Admin.ContentList.Actions", "操作")</th></tr></thead><tbody>
             @foreach (var item in _result.Items)
             {
-                <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("bulk-" + item.Id)">選擇 @item.Title</label><input id="@("bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug@if (item.IsProtected) { <span class="locked-mark" title="受密碼保護">🔒</span> }@if (item.IsPrivate) { <span class="locked-mark" title="私密，僅管理員可見">🚫</span> }@if (!string.IsNullOrEmpty(item.ParentTitle)) { <text> · 上層 @item.ParentTitle</text> }</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status switch { ContentStatus.Published => "已發布", ContentStatus.Trashed => "回收桶", _ => "草稿" })</span>@if (item.Status == ContentStatus.Draft && item.PublishAt is { } scheduled) { <small class="schedule-hint" title="@scheduled.ToString("O")">排程 @scheduled.ToString("MM.dd HH:mm") UTC</small> }</td><td class="date-cell">@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deleted ? deleted.ToString("yyyy.MM.dd") : item.UpdatedAt.ToString("yyyy.MM.dd"))<small>@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deletedAt ? "刪除於 " + deletedAt.ToString("HH:mm") : item.UpdatedAt.ToString("HH:mm"))</small></td><td class="views-cell">@(item.Views.ToString("N0"))</td><td><div class="table-actions">@if (item.Status == ContentStatus.Trashed) { <button disabled="@EditBlocked" @onclick="() => RestoreAsync(item)">還原<span class="sr-only"> @item.Title</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDelete = item">永久刪除<span class="sr-only"> @item.Title</span></button> } else { <a href="@("/admin/content/" + item.Id)">@(CanEdit ? "編輯" : "檢視")<span class="sr-only"> @item.Title</span></a><button type="button" class="text-button" disabled="@EditBlocked" @onclick="() => BeginQuickEdit(item)">快速編輯<span class="sr-only"> @item.Title</span></button>@if (item.Status == ContentStatus.Published) { <a href="@((item.Kind == ContentKind.Post ? "/posts/" : "/pages/") + Uri.EscapeDataString(item.Slug))" target="_blank" rel="noopener" data-enhance-nav="false">檢視<span class="sr-only"> @item.Title</span></a> }<button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingTrash = item">刪除<span class="sr-only"> @item.Title</span></button> }</div></td></tr>
+                <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("bulk-" + item.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.SelectItem", "選擇 {0}"), item.Title)</label><input id="@("bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><a class="content-title" href="@("/admin/content/" + item.Id)">@item.Title</a><span class="slug-text">/@(item.Kind == ContentKind.Post ? "posts" : "pages")/@item.Slug@if (item.IsProtected) { <span class="locked-mark" title="@UiText.T("Admin.ContentList.PasswordProtected", "受密碼保護")">🔒</span> }@if (item.IsPrivate) { <span class="locked-mark" title="@UiText.T("Admin.ContentList.Private", "私密，僅管理員可見")">🚫</span> }@if (!string.IsNullOrEmpty(item.ParentTitle)) { <text>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.ParentPage", " · 上層 {0}"), item.ParentTitle)</text> }</span></td><td><span class="status-badge @(item.Status == ContentStatus.Published ? "published" : "draft")">@(item.Status switch { ContentStatus.Published => UiText.T("Admin.ContentList.Published", "已發布"), ContentStatus.Trashed => UiText.T("Admin.ContentList.Trashed", "回收桶"), ContentStatus.Pending => UiText.T("Admin.ContentList.Pending", "待審"), _ => UiText.T("Admin.ContentList.Draft", "草稿") })</span>@if (item.Status == ContentStatus.Draft && item.PublishAt is { } scheduled) { <small class="schedule-hint" title="@scheduled.ToString("O")">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.ScheduledAt", "排程 {0} UTC"), scheduled.ToString("MM.dd HH:mm"))</small> }</td><td class="date-cell">@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deleted ? deleted.ToString("yyyy.MM.dd") : item.UpdatedAt.ToString("yyyy.MM.dd"))<small>@(item.Status == ContentStatus.Trashed && item.DeletedAt is { } deletedAt ? string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.DeletedAt", "刪除於 {0}"), deletedAt.ToString("HH:mm")) : item.UpdatedAt.ToString("HH:mm"))</small></td><td>@(string.IsNullOrEmpty(item.AuthorName) ? "—" : item.AuthorName)<span class="sr-only">@UiText.T("Admin.ContentList.AuthorAnnotation", "（作者）")</span></td><td class="views-cell">@(item.Views.ToString("N0"))</td><td><div class="table-actions">@if (item.Status == ContentStatus.Trashed) { <button disabled="@EditBlocked" @onclick="() => RestoreAsync(item)">@UiText.T("Admin.ContentList.Restore", "還原")<span class="sr-only"> @item.Title</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDelete = item">@UiText.T("Admin.ContentList.DeletePermanently", "永久刪除")<span class="sr-only"> @item.Title</span></button> } else { <a href="@("/admin/content/" + item.Id)">@(CanEdit ? UiText.T("Admin.ContentList.Edit", "編輯") : UiText.T("Admin.ContentList.View", "檢視"))<span class="sr-only"> @item.Title</span></a><button type="button" class="text-button" disabled="@EditBlocked" @onclick="() => BeginQuickEdit(item)">@UiText.T("Admin.ContentList.QuickEdit", "快速編輯")<span class="sr-only"> @item.Title</span></button>@if (item.Status == ContentStatus.Published) { <a href="@((item.Kind == ContentKind.Post ? "/posts/" : "/pages/") + Uri.EscapeDataString(item.Slug))" target="_blank" rel="noopener" data-enhance-nav="false">@UiText.T("Admin.ContentList.View", "檢視")<span class="sr-only"> @item.Title</span></a> }<button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingTrash = item">@UiText.T("Admin.ContentList.Delete", "刪除")<span class="sr-only"> @item.Title</span></button> }</div></td></tr>
                 @if (_quickEdit is { } quick && quick.Id == item.Id)
                 {
-                    <tr class="quick-edit-row"><td colspan="6">
-                        <div class="quick-edit-form" role="group" aria-label="快速編輯 @item.Title">
-                            <label class="sr-only" for="quick-title">標題</label>
+                    <tr class="quick-edit-row"><td colspan="7">
+                        <div class="quick-edit-form" role="group" aria-label="@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.QuickEditItem", "快速編輯 {0}"), item.Title)">
+                            <label class="sr-only" for="quick-title">@UiText.T("Admin.ContentList.Title", "標題")</label>
                             <input id="quick-title" value="@_quickTitle" @oninput="OnQuickTitle" disabled="@EditBlocked" maxlength="@Limits.Title" />
-                            <label class="sr-only" for="quick-slug">網址代稱</label>
+                            <label class="sr-only" for="quick-slug">@UiText.T("Admin.ContentList.Slug", "網址代稱")</label>
                             <input id="quick-slug" value="@_quickSlug" @oninput="OnQuickSlug" disabled="@EditBlocked" maxlength="@Limits.Slug" />
-                            <label class="sr-only" for="quick-status">狀態</label>
+                            <label class="sr-only" for="quick-status">@UiText.T("Admin.ContentList.Status", "狀態")</label>
                             <select id="quick-status" value="@_quickStatus" @onchange="OnQuickStatus" disabled="@EditBlocked">
-                                <option value="Draft">草稿</option>
-                                <option value="Published">已發布</option>
+                                <option value="Draft">@UiText.T("Admin.ContentList.Draft", "草稿")</option>
+                                <option value="Pending">@UiText.T("Admin.ContentList.Pending", "待審")</option>
+                                <option value="Published">@UiText.T("Admin.ContentList.Published", "已發布")</option>
                             </select>
-                            <button type="button" class="button button-small" disabled="@EditBlocked" @onclick="QuickSaveAsync">儲存</button>
-                            <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="CancelQuickEdit">取消</button>
-                            <span class="field-help">僅更新標題、代稱與狀態；排程會因發布而取消，其餘欄位請進入編輯器。</span>
+                            <button type="button" class="button button-small" disabled="@EditBlocked" @onclick="QuickSaveAsync">@UiText.T("Admin.ContentList.Save", "儲存")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="CancelQuickEdit">@UiText.T("Admin.ContentList.Cancel", "取消")</button>
+                            <span class="field-help">@UiText.T("Admin.ContentList.QuickEditHelp", "僅更新標題、代稱與狀態；排程會因發布而取消，其餘欄位請進入編輯器。")</span>
                         </div>
                     </td></tr>
                 }
             }
             </tbody></table></div>
         }
-        <nav class="pagination" aria-label="後台內容分頁"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => ChangePage(-1)">上一頁</button><span>第 @_result.Page / @_result.TotalPages 頁</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => ChangePage(1)">下一頁</button></nav>
+        <nav class="pagination" aria-label="@UiText.T("Admin.ContentList.Pagination", "後台內容分頁")"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => ChangePage(-1)">@UiText.T("Admin.ContentList.PreviousPage", "上一頁")</button><span>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.PageCount", "第 {0} / {1} 頁"), _result.Page, _result.TotalPages)</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => ChangePage(1)">@UiText.T("Admin.ContentList.NextPage", "下一頁")</button></nav>
     </section>
 }
 
 @code {
     private ContentKind Kind;
-    private string Label => Kind == ContentKind.Post ? "文章" : "獨立頁面";
+    private string Label => Kind == ContentKind.Post ? UiText.T("Admin.ContentList.Posts", "文章") : UiText.T("Admin.ContentList.Pages", "獨立頁面");
     private string ListPath => Kind == ContentKind.Post ? "/admin/posts" : "/admin/pages";
     private int _page = 1;
     private ContentStatus? _status;
     private string _search = "";
     private ContentCounts? _counts;
-    private string FilterLabel => _status switch
+    private string FilterLabel => string.Format(CultureInfo.CurrentCulture, _status switch
     {
-        ContentStatus.Draft => "草稿",
-        ContentStatus.Published => "已發布",
-        ContentStatus.Trashed => "回收桶",
-        _ => "全部"
-    };
+        ContentStatus.Draft => UiText.T("Admin.ContentList.DraftItems", "草稿{0}"),
+        ContentStatus.Published => UiText.T("Admin.ContentList.PublishedItems", "已發布{0}"),
+        ContentStatus.Pending => UiText.T("Admin.ContentList.PendingItems", "待審{0}"),
+        ContentStatus.Trashed => UiText.T("Admin.ContentList.TrashedItems", "回收桶{0}"),
+        _ => UiText.T("Admin.ContentList.AllItems", "全部{0}")
+    }, Label);
     private PagedResult<ContentSummary>? _result;
     private ContentSummary? _pendingDelete;
     private ContentSummary? _pendingTrash;
@@ -187,7 +193,7 @@
     {
         var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
         var result = await Api.ListAdminAsync(Kind, _page, status: _status, search: search, ct: ct)
-            ?? throw new CmsException("無法載入內容列表。");
+            ?? throw new CmsException(UiText.T("Admin.ContentList.LoadFailed", "無法載入內容列表。"));
         if (_page > result.TotalPages)
             result = await Api.ListAdminAsync(Kind, result.TotalPages, status: _status, search: search, ct: ct) ?? result;
         var counts = await Api.CountAdminAsync(Kind, ct) ?? new ContentCounts(0, 0);
@@ -243,7 +249,7 @@
             await Api.PurgeContentAsync(item.Id, item.Version, ct);
             _pendingDelete = null;
             await RefreshAsync(ct);
-        }, "已永久刪除內容。圖片未被刪除。");
+        }, UiText.T("Admin.ContentList.DeletedNotice", "已永久刪除內容。圖片未被刪除。"));
         if (!deleted) _pendingDelete = null;
     }
     private async Task TrashAsync()
@@ -254,7 +260,7 @@
             await Api.TrashContentAsync(item.Id, item.Version, ct);
             _pendingTrash = null;
             await RefreshAsync(ct);
-        }, "已移入回收桶，可於 30 天內還原。");
+        }, UiText.T("Admin.ContentList.TrashedNotice", "已移入回收桶，可於 30 天內還原。"));
         if (!trashed) _pendingTrash = null;
     }
     private async Task RestoreAsync(ContentSummary item)
@@ -264,7 +270,7 @@
         {
             await Api.RestoreContentAsync(item.Id, item.Version, ct);
             await RefreshAsync(ct);
-        }, "已還原為草稿。");
+        }, UiText.T("Admin.ContentList.RestoredNotice", "已還原為草稿。"));
     }
     private void BeginQuickEdit(ContentSummary item)
     {
@@ -285,10 +291,10 @@
         {
             _ = await Api.QuickEditContentAsync(item.Id, _quickTitle, _quickSlug,
                 Enum.Parse<ContentStatus>(_quickStatus), item.Version, ct)
-                ?? throw new CmsException("無法儲存快速編輯，請重試。");
+                ?? throw new CmsException(UiText.T("Admin.ContentList.QuickSaveFailed", "無法儲存快速編輯，請重試。"));
             _quickEdit = null;
             await RefreshAsync(ct);
-        }, "已更新內容。");
+        }, UiText.T("Admin.ContentList.UpdatedNotice", "已更新內容。"));
     }
     private void ToggleAll(ChangeEventArgs args)
     {
@@ -313,15 +319,24 @@
         _pendingBulkDelete = false;
         var targets = _result.Items.Where(x => _selected.Contains(x.Id)).Select(x => (x.Id, x.Version)).ToList();
         if (targets.Count == 0) return;
-        var label = action switch { BulkAction.Trash => "移入回收桶", BulkAction.Restore => "還原", _ => "永久刪除" };
         await RunEditAsync(async ct =>
         {
-            var results = await Api.BulkContentsAsync(action, targets, ct) ?? throw new CmsException("批次操作無法執行，請重試。");
+            var results = await Api.BulkContentsAsync(action, targets, ct) ?? throw new CmsException(UiText.T("Admin.ContentList.BulkFailed", "批次操作無法執行，請重試。"));
             _selected.Clear();
             await RefreshAsync(ct);
             var failed = results.Where(x => !x.Succeeded).ToList();
             if (failed.Count > 0)
-                throw new CmsException($"批次{label}完成：成功 {results.Count - failed.Count} 筆、失敗 {failed.Count} 筆。例：{failed[0].Message}");
-        }, $"已批次{label} {targets.Count} 筆內容。");
+                throw new CmsException(string.Format(CultureInfo.CurrentCulture, action switch
+                {
+                    BulkAction.Trash => UiText.T("Admin.ContentList.BulkTrashPartial", "批次移入回收桶完成：成功 {0} 筆、失敗 {1} 筆。例：{2}"),
+                    BulkAction.Restore => UiText.T("Admin.ContentList.BulkRestorePartial", "批次還原完成：成功 {0} 筆、失敗 {1} 筆。例：{2}"),
+                    _ => UiText.T("Admin.ContentList.BulkDeletePartial", "批次永久刪除完成：成功 {0} 筆、失敗 {1} 筆。例：{2}")
+                }, results.Count - failed.Count, failed.Count, failed[0].Message));
+        }, string.Format(CultureInfo.CurrentCulture, action switch
+        {
+            BulkAction.Trash => UiText.T("Admin.ContentList.BulkTrashedNotice", "已批次移入回收桶 {0} 筆內容。"),
+            BulkAction.Restore => UiText.T("Admin.ContentList.BulkRestoredNotice", "已批次還原 {0} 筆內容。"),
+            _ => UiText.T("Admin.ContentList.BulkDeletedNotice", "已批次永久刪除 {0} 筆內容。")
+        }, targets.Count));
     }
 }

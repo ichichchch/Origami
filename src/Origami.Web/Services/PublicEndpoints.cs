@@ -34,8 +34,10 @@ public static class PublicEndpoints
             var fullText = site.FeedShowFullText == true;
             var widths = fullText ? await api.GetPublicImageWidthsAsync(ct) ?? [] : null;
             XNamespace contentNs = "http://purl.org/rss/1.0/modules/content/";
+            XNamespace dc = "http://purl.org/dc/elements/1.1/";
             var document = new XDocument(new XDeclaration("1.0", "utf-8", null),
-                new XElement("rss", new XAttribute("version", "2.0"), new XAttribute(XNamespace.Xmlns + "content", contentNs),
+                new XElement("rss", new XAttribute("version", "2.0"),
+                    new XAttribute(XNamespace.Xmlns + "content", contentNs), new XAttribute(XNamespace.Xmlns + "dc", dc),
                     new XElement("channel",
                         new XElement("title", ChannelTitle(site.Name, category, tag)),
                         new XElement("link", BaseUrl(http) + "/"),
@@ -52,6 +54,8 @@ public static class PublicEndpoints
                                 new XElement("link", link),
                                 new XElement("guid", new XAttribute("isPermaLink", "true"), link),
                                 item.PublishedAt is { } published ? new XElement("pubDate", published.UtcDateTime.ToString("R")) : null,
+                                // 逐篇作者以內容上的署名快照為準（Dublin Core creator）。
+                                !string.IsNullOrWhiteSpace(item.AuthorName) ? new XElement(dc + "creator", item.AuthorName) : null,
                                 new XElement("description", summary),
                                 fullText ? new XElement(contentNs + "encoded", markdown.Render(item.Markdown, widths)) : null);
                         }))));
@@ -88,6 +92,8 @@ public static class PublicEndpoints
                             new XElement(atom + "link", new XAttribute("href", link)),
                             new XElement(atom + "id", link),
                             item.PublishedAt is { } published ? new XElement(atom + "updated", published.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ")) : null,
+                            !string.IsNullOrWhiteSpace(item.AuthorName)
+                                ? new XElement(atom + "author", new XElement(atom + "name", item.AuthorName)) : null,
                             new XElement(atom + "summary", summary),
                             fullText ? new XElement(atom + "content", new XAttribute("type", "html"), markdown.Render(item.Markdown, widths)) : null);
                     })));

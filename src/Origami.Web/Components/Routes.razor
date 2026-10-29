@@ -3,7 +3,7 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized><RedirectToLogin /></NotAuthorized>
-                <Authorizing><p role="status">正在確認登入狀態…</p></Authorizing>
+                <Authorizing><p role="status">@UiText.T("Common.CheckingSignIn", "正在確認登入狀態…")</p></Authorizing>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>

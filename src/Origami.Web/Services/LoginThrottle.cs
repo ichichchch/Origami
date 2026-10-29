@@ -68,3 +68,17 @@ public sealed class ContentUnlockThrottle(TimeProvider clock)
     public bool TryAcquire(Guid contentId, string? remoteIp) =>
         budget.TryAcquire(contentId.ToString("N") + ":" + (remoteIp ?? "unknown"));
 }
+
+/// <summary>
+/// 訪客評論的張貼預算；與登入限流分開計數。過量時提示稍後再試，不封鎖閱讀。
+/// </summary>
+public sealed class CommentThrottle(TimeProvider clock)
+{
+    public const int MaxAttempts = 5;
+    public static readonly TimeSpan Window = TimeSpan.FromMinutes(15);
+
+    private readonly LoginThrottle budget = new(clock, MaxAttempts, maxSources: 4096, Window);
+
+    /// <summary>以來源 IP 為鍵消耗一個張貼許可。</summary>
+    public bool TryAcquire(string? remoteIp) => budget.TryAcquire("comment:" + (remoteIp ?? "unknown"));
+}

@@ -18,10 +18,10 @@
 @if (_homePage is not null && !HasFilter)
 {
     <article class="reading-column">
-        <header class="article-heading"><p class="eyebrow">首頁</p><h1>@_homePage.Title</h1></header>
+        <header class="article-heading"><p class="eyebrow">@UiText.T("Public.Home.01", "首頁")</p><h1>@_homePage.Title</h1></header>
         <div class="prose">@((MarkupString)_homePageHtml)</div>
     </article>
-    <p class="field-help home-posts-link">想看所有文章？<a href="/posts">前往文章列表 →</a></p>
+    <p class="field-help home-posts-link">@UiText.T("Public.Home.02", "想看所有文章？")<a href="/posts">@UiText.T("Public.Home.03", "前往文章列表 →")</a></p>
 }
 else
 {

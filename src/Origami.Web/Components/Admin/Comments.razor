@@ -1,0 +1,154 @@
+@page "/admin/comments"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Comments.PageTitle", "評論 · 內容管理")</PageTitle>
+<UnsavedGuard Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Comments.Eyebrow", "社群互動")</p><h1>@UiText.T("Admin.Comments.Title", "評論")</h1><p>@UiText.T("Admin.Comments.Introduction", "審核訪客評論：核可後才會公開顯示；蜜罐與連結過量者會自動進入垃圾佇列。")</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (_counts is null)
+{
+    @if (Error is null)
+    {
+        <p role="status">@UiText.T("Admin.Comments.Loading", "正在載入評論…")</p>
+    }
+    else
+    {
+        <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">@UiText.T("Common.Reload", "重新載入")</button>
+    }
+}
+else
+{
+    <div class="section-tabs" role="group" aria-label="@UiText.T("Admin.Comments.StatusFilter", "評論狀態篩選")">
+        <button type="button" class="tab-button @(_status is null ? "active" : "")" aria-pressed="@((_status is null).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(null)">@UiText.T("Admin.Comments.All", "全部") <span class="count">@TotalCount</span></button>
+        <button type="button" class="tab-button @(_status == CommentStatus.Pending ? "active" : "")" aria-pressed="@((_status == CommentStatus.Pending).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(CommentStatus.Pending)">@UiText.T("Admin.Comments.Pending", "待審") <span class="count">@_counts.Pending</span></button>
+        <button type="button" class="tab-button @(_status == CommentStatus.Approved ? "active" : "")" aria-pressed="@((_status == CommentStatus.Approved).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(CommentStatus.Approved)">@UiText.T("Admin.Comments.Approved", "已核可") <span class="count">@_counts.Approved</span></button>
+        <button type="button" class="tab-button @(_status == CommentStatus.Spam ? "active" : "")" aria-pressed="@((_status == CommentStatus.Spam).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(CommentStatus.Spam)">@UiText.T("Admin.Comments.Spam", "垃圾") <span class="count">@_counts.Spam</span></button>
+        <button type="button" class="tab-button @(_status == CommentStatus.Trashed ? "active" : "")" aria-pressed="@((_status == CommentStatus.Trashed).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(CommentStatus.Trashed)">@UiText.T("Admin.Comments.Trash", "垃圾桶") <span class="count">@_counts.Trashed</span></button>
+    </div>
+    @if (_result is not null)
+    {
+        @if (_result.Items.Count == 0)
+        {
+            <section class="empty-state"><span class="empty-symbol" aria-hidden="true">—</span><h2>@UiText.T("Admin.Comments.EmptyTitle", "沒有符合條件的評論")</h2><p>@UiText.T("Admin.Comments.EmptyHelp", "訪客在已發布文章留言後，會出現在待審佇列。")</p></section>
+        }
+        else
+        {
+            <section class="panel"><div class="table-scroll"><table><caption class="sr-only">@UiText.T("Admin.Comments.ListCaption", "評論列表")</caption><thead><tr><th scope="col">@UiText.T("Admin.Comments.AuthorAndTime", "訪客 / 時間")</th><th scope="col">@UiText.T("Admin.Comments.CommentBody", "評論內容")</th><th scope="col">@UiText.T("Admin.Comments.Status", "狀態")</th><th scope="col">@UiText.T("Admin.Comments.Actions", "操作")</th></tr></thead><tbody>
+            @foreach (var comment in _result.Items)
+            {
+                <tr @key="comment.Id">
+                    <td class="date-cell">
+                        <strong>@comment.AuthorName</strong>
+                        @if (comment.Url.Length > 0) { <br /><small class="slug-text">@comment.Url</small> }
+                        <small>@comment.CreatedAt.ToString("yyyy.MM.dd HH:mm") UTC</small>
+                    </td>
+                    <td class="title-cell"><span class="slug-text">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.OnContent", "於「{0}」"), comment.ContentTitle)</span><div class="comment-body">@MarkdownPreview(comment.Markdown)</div></td>
+                    <td><span class="status-badge @(comment.Status == CommentStatus.Approved ? "published" : "draft")">@StatusText(comment.Status)</span></td>
+                    <td><div class="table-actions">
+                        @if (comment.Status != CommentStatus.Approved)
+                        {
+                            <button disabled="@EditBlocked" @onclick="() => ModerateAsync(comment, CommentStatus.Approved)">@UiText.T("Admin.Comments.Approve", "核可")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
+                        }
+                        @if (comment.Status != CommentStatus.Spam)
+                        {
+                            <button class="text-button" disabled="@EditBlocked" @onclick="() => ModerateAsync(comment, CommentStatus.Spam)">@UiText.T("Admin.Comments.MarkSpam", "標記垃圾")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
+                        }
+                        @if (comment.Status == CommentStatus.Spam || comment.Status == CommentStatus.Trashed)
+                        {
+                            <button class="text-button" disabled="@EditBlocked" @onclick="() => ModerateAsync(comment, CommentStatus.Pending)">@UiText.T("Admin.Comments.ReturnToPending", "退回待審")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
+                            <button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDelete = comment">@UiText.T("Admin.Comments.DeletePermanently", "永久刪除")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
+                        }
+                        else
+                        {
+                            <button class="text-button" disabled="@EditBlocked" @onclick="() => ModerateAsync(comment, CommentStatus.Trashed)">@UiText.T("Admin.Comments.Trash", "垃圾桶")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
+                        }
+                    </div></td>
+                </tr>
+            }
+            </tbody></table></div>
+            <nav class="pagination" aria-label="@UiText.T("Admin.Comments.Pagination", "評論分頁")"><button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">@UiText.T("Admin.Comments.PreviousPage", "上一頁")</button><span>@_result.Page / @_result.TotalPages</span><button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">@UiText.T("Admin.Comments.NextPage", "下一頁")</button></nav>
+            </section>
+        }
+    }
+}
+@if (_pendingDelete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="comment-delete-title">
+        <h2 id="comment-delete-title">@UiText.T("Admin.Comments.DeleteTitle", "永久刪除這則評論？")</h2>
+        <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.DeleteWarning", "評論由「{0}」發表於「{1}」。永久刪除無法復原。"), _pendingDelete.AuthorName, _pendingDelete.ContentTitle)</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteAsync">@UiText.T("Admin.Comments.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">@UiText.T("Admin.Comments.Cancel", "取消")</button></div>
+    </section>
+}
+
+@code {
+    private int _page = 1;
+    private CommentStatus? _status;
+    private PagedResult<CommentService.CommentView>? _result;
+    private CommentService.CommentCounts? _counts;
+    private CommentService.CommentView? _pendingDelete;
+    private int TotalCount => _counts is null ? 0 : _counts.Pending + _counts.Approved + _counts.Spam + _counts.Trashed;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => RunAsync(LoadDataAsync);
+
+    private async Task LoadDataAsync(CancellationToken ct)
+    {
+        var counts = await Api.GetCommentCountsAsync(ct);
+        var result = await Api.ListCommentsAsync(_status, _page, ct);
+        var page = Math.Min(_page, Math.Max(1, result?.TotalPages ?? 1));
+        if (page != _page) result = await Api.ListCommentsAsync(_status, page, ct);
+        _counts = counts;
+        _result = result;
+        _page = page;
+    }
+
+    private async Task ChangeStatus(CommentStatus? status)
+    {
+        if (Blocked) return;
+        var previous = (_status, _page);
+        _status = status;
+        _page = 1;
+        if (!await RunAsync(LoadDataAsync)) (_status, _page) = previous;
+    }
+
+    private async Task Move(int delta)
+    {
+        if (Blocked) return;
+        var previous = _page;
+        _page += delta;
+        if (!await RunAsync(LoadDataAsync)) _page = previous;
+    }
+
+    private Task ModerateAsync(CommentService.CommentView comment, CommentStatus target) => RunEditAsync(async ct =>
+    {
+        await Api.ModerateCommentAsync(comment.Id, target, comment.Version, ct);
+        await LoadDataAsync(ct);
+    }, UiText.T("Admin.Comments.StatusUpdated", "評論狀態已更新。"));
+
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is not { } comment) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteCommentAsync(comment.Id, comment.Version, ct);
+            _pendingDelete = null;
+            await LoadDataAsync(ct);
+        }, UiText.T("Admin.Comments.Deleted", "評論已永久刪除。"));
+    }
+
+    private static string StatusText(CommentStatus status) => status switch
+    {
+        CommentStatus.Approved => UiText.T("Admin.Comments.Approved", "已核可"),
+        CommentStatus.Spam => UiText.T("Admin.Comments.Spam", "垃圾"),
+        CommentStatus.Trashed => UiText.T("Admin.Comments.Trash", "垃圾桶"),
+        _ => UiText.T("Admin.Comments.Pending", "待審")
+    };
+
+    private static string MarkdownPreview(string body) =>
+        body.Length <= 160 ? body : body[..160] + "…";
+}
