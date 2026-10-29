@@ -331,6 +331,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 field.Name = Bounded(node, "name", Limits.CustomFieldName, "自訂欄位名稱");
                 field.FieldType = node.GetString("fieldType") ?? CustomFieldTypes.Text;
                 if (!CustomFieldTypes.IsValid(field.FieldType)) throw new CmsException($"自訂欄位「{key}」的種類無效。");
+                field.Options = Bounded(node, "options", Limits.CustomFieldOptions, "自訂欄位選項", optional: true);
                 field.IsRequired = node.TryGetProperty("isRequired", out var required) && required.GetBoolean();
                 field.Position = node.TryGetProperty("position", out var position) && position.ValueKind == JsonValueKind.Number ? position.GetInt32() : 0;
                 if (!fieldsByKey.TryAdd(key, field)) throw new CmsException($"匯入的自訂欄位鍵值重複：{key}。");
@@ -434,7 +435,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 {
                     if (!fieldsByKey.TryGetValue(pair.Name, out var field))
                         throw new CmsException($"內容「{content.Title}」引用了不存在的自訂欄位：{pair.Name}。");
-                    CustomFieldRules.ValidateValue(field.FieldType, pair.Value.GetString(), field.IsRequired);
+                    CustomFieldRules.ValidateValue(field.FieldType, pair.Value.GetString(), field.IsRequired, field.Options);
                     content.FieldValues.Add(new ContentFieldValue
                     {
                         Id = Guid.NewGuid(), SiteId = db.CurrentSiteId, ContentId = content.Id,
@@ -497,6 +498,17 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         settings.LogoMediaId = logoId;
         settings.CustomNavigationEnabled = site.TryGetProperty("customNavigationEnabled", out var customNav)
             && customNav.ValueKind == JsonValueKind.True;
+        var scheme = Bounded(site, "colorScheme", Limits.ThemeColorScheme, "色彩模式", optional: true);
+        settings.ColorScheme = ThemePresets.IsValidColorScheme(scheme) ? scheme : ThemePresets.ColorSchemeAuto;
+        settings.FooterText = Bounded(site, "footerText", Limits.FooterText, "頁尾文字", optional: true);
+        settings.SocialGithubUrl = Bounded(site, "socialGithubUrl", Limits.SocialUrl, "GitHub 連結", optional: true);
+        settings.SocialXUrl = Bounded(site, "socialXUrl", Limits.SocialUrl, "X 連結", optional: true);
+        settings.SocialMastodonUrl = Bounded(site, "socialMastodonUrl", Limits.SocialUrl, "Mastodon 連結", optional: true);
+        settings.CommentBlockedWords = Bounded(site, "commentBlockedWords", Limits.CommentBlockedWords, "評論敏感詞", optional: true);
+        settings.CommentCloseDays = site.TryGetProperty("commentCloseDays", out var closeDays) && closeDays.ValueKind == JsonValueKind.Number
+            ? Math.Clamp(closeDays.GetInt32(), 0, 3650) : 0;
+        settings.MaintenanceMode = site.TryGetProperty("maintenanceMode", out var maint) && maint.ValueKind == JsonValueKind.True;
+        settings.MaintenanceMessage = Bounded(site, "maintenanceMessage", Limits.MaintenanceMessage, "維護提示訊息", optional: true);
         settings.Version = Guid.NewGuid();
 
         // 已發布的公開內容與全新發布一樣，重新進入嵌入管道；站點僅由伺服器指定。

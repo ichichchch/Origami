@@ -20,12 +20,26 @@ public sealed partial class MarkdownService
         var hasToc = TocMarker().IsMatch(markdown);
         if (hasToc)
             markdown = TocMarker().Replace(markdown, "\n\nTOC-ORIGAMI-MARKER\n\n");
-        // 白名單影片連結（獨立一行）先換成自製佔位段落；渲染後以同樣由本服務
-        // 構造的 iframe 取代。佔位與 iframe 都不含作者輸入的原始字串，無法偽造任意網域。
+        markdown = DetailsFenceStart().Replace(markdown, match =>
+        {
+            var title = match.Groups[1].Value.Trim();
+            return title.Length > 0 ? $"::: details\n{title}\n\n" : "::: details\n";
+        });
+        // 白名單影片連結（獨立一行）與站內音訊／影片／文件連結先換成自製佔位段落；渲染後以同樣由本服務
+        // 構造的標籤取代。佔位與輸出都不含作者輸入的原始字串，無法偽造任意網域或屬性。
         var embeds = new List<string>();
         markdown = VideoLinkLine().Replace(markdown, match =>
         {
             var html = VideoEmbed(match.Groups[1].Value);
+            if (html is null) return match.Value;
+            embeds.Add(html);
+            return "\n\nEMBED-ORIGAMI-" + (embeds.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n\n";
+        });
+        markdown = MediaLinkLine().Replace(markdown, match =>
+        {
+            var label = match.Groups[1].Value;
+            var fileName = match.Groups[2].Value;
+            var html = LocalMediaEmbed(label, fileName);
             if (html is null) return match.Value;
             embeds.Add(html);
             return "\n\nEMBED-ORIGAMI-" + (embeds.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n\n";
@@ -45,6 +59,23 @@ public sealed partial class MarkdownService
             if (!IsAllowedUrl(e.SanitizedUrl)) e.SanitizedUrl = null;
         };
         var html = sanitizer.Sanitize(Markdown.ToHtml(markdown, pipeline));
+        // ::: details 標題 -> 轉換為原生可摺疊 <details><summary> 面板
+        html = DetailsContainer().Replace(html, match =>
+        {
+            var inner = match.Groups[1].Value.Trim();
+            var summary = "詳細內容";
+            var firstP = FirstParagraph().Match(inner);
+            if (firstP.Success)
+            {
+                var text = StripHtmlTags().Replace(firstP.Groups[1].Value, "").Trim();
+                if (text.Length > 0 && text.Length <= 120)
+                {
+                    summary = WebUtility.HtmlEncode(text);
+                    inner = inner[firstP.Length..].Trim();
+                }
+            }
+            return $"<details class=\"details-block\"><summary>{summary}</summary>{inner}</details>";
+        });
         if (hasToc)
         {
             var tocHtml = BuildTocHtml(html);
@@ -60,6 +91,65 @@ public sealed partial class MarkdownService
         html = html.Replace("<img ", "<img loading=\"lazy\" decoding=\"async\" ", StringComparison.Ordinal);
         return mediaWidths is { Count: > 0 } ? AddResponsiveSources(html, mediaWidths) : html;
     }
+
+    /// <summary>計算純文字字數（CJK 字元逐字計數，西文依單字計數）與預計閱讀分鐘數（每分鐘約 300 字，最少 1 分鐘）。</summary>
+    public (int WordCount, int ReadingMinutes) WordCountAndReadingTime(string? markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown)) return (0, 1);
+        var clean = NextPageSeparator().Replace(markdown, " ");
+        clean = TocMarker().Replace(clean, " ");
+        var plain = PlainText(clean);
+        if (plain.Length == 0) return (0, 1);
+        var count = 0;
+        var inAsciiWord = false;
+        foreach (var ch in plain)
+        {
+            if (char.IsWhiteSpace(ch) || char.IsPunctuation(ch) || char.IsSymbol(ch))
+            {
+                inAsciiWord = false;
+                continue;
+            }
+            if (ch > 0x7F)
+            {
+                count++;
+                inAsciiWord = false;
+            }
+            else if (!inAsciiWord)
+            {
+                count++;
+                inAsciiWord = true;
+            }
+        }
+        var minutes = Math.Max(1, (int)Math.Ceiling(count / 300.0));
+        return (count, minutes);
+    }
+
+    private static string? LocalMediaEmbed(string label, string fileName)
+    {
+        if (!ContentRules.IsSafeMediaFileNameAny(fileName)) return null;
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        var safeUrl = "/media/" + fileName;
+        var safeLabel = WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(label) ? fileName : label.Trim());
+        return ext switch
+        {
+            ".mp3" or ".m4a" or ".ogg" or ".wav" =>
+                $"<figure class=\"media-embed audio-embed\"><audio controls preload=\"metadata\" src=\"{safeUrl}\"></audio><figcaption><a href=\"{safeUrl}\" download>{safeLabel}</a></figcaption></figure>",
+            ".mp4" or ".webm" =>
+                $"<figure class=\"media-embed video-file-embed\"><video controls preload=\"metadata\" src=\"{safeUrl}\"></video><figcaption><a href=\"{safeUrl}\" download>{safeLabel}</a></figcaption></figure>",
+            ".pdf" =>
+                $"<div class=\"media-embed file-card\"><a class=\"file-download-link\" href=\"{safeUrl}\" target=\"_blank\" rel=\"noopener\">📄 {safeLabel}</a></div>",
+            _ => null
+        };
+    }
+
+    [GeneratedRegex(@"(?im)^[\t ]*\[([^\]]*)\]\(/media/([a-f0-9]{32}\.(?:mp3|m4a|ogg|wav|mp4|webm|pdf))\)[\t ]*(?:\r?\n|$)", RegexOptions.CultureInvariant)]
+    private static partial Regex MediaLinkLine();
+
+    [GeneratedRegex(@"<div class=""details"">(.*?)</div>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    private static partial Regex DetailsContainer();
+
+    [GeneratedRegex(@"^\s*<p>(.*?)</p>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    private static partial Regex FirstParagraph();
 
     private static string BuildTocHtml(string html)
     {
@@ -82,6 +172,9 @@ public sealed partial class MarkdownService
 
     [GeneratedRegex(@"(?im)^[\t ]*\[toc\][\t ]*(?:\r?\n|$)", RegexOptions.CultureInvariant)]
     private static partial Regex TocMarker();
+
+    [GeneratedRegex(@"(?im)^[\t ]*:::[\t ]*details(?:[\t ]+([^\r\n]+))?[\t ]*\r?\n", RegexOptions.CultureInvariant)]
+    private static partial Regex DetailsFenceStart();
 
     [GeneratedRegex(@"<h([2-4])\s+[^>]*?id=""([^""]+)""[^>]*>(.*?)</h\1>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex HeadingTag();

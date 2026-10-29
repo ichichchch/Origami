@@ -166,8 +166,21 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public IReadOnlyList<PublicFieldValue> Fields { get; init; } = [];
 }
 public sealed record NavigationItem(string Title, string Slug);
+/// <summary>作者公開個人資料。</summary>
+public sealed record PublicAuthorProfile(string DisplayName, string Slug, string Bio, string WebsiteUrl, string AvatarUrl);
+/// <summary>後台可指派為文章作者的候選名單。</summary>
+public sealed record AuthorOption(string UserId, string UserName, string DisplayName);
+/// <summary>管理操作審計日誌檢視。</summary>
+public sealed record AuditLogItem(Guid Id, string UserId, string UserName, string Action, string Target, DateTimeOffset CreatedAt);
+/// <summary>AI 編輯器寫作輔助建議結果。</summary>
+public sealed record AiContentSuggestion(string Excerpt, string MetaDescription);
+/// <summary>頁面階層麵包屑的單一節點。</summary>
+public sealed record BreadcrumbNode(string Title, string Path);
 /// <summary>以路徑解析的已發布頁面；Segments 為根到本頁的完整 slug 鏈（未含 /pages/ 前綴）。</summary>
-public sealed record PagePathContent(PublicContent Content, IReadOnlyList<string> Segments);
+public sealed record PagePathContent(PublicContent Content, IReadOnlyList<string> Segments)
+{
+    public IReadOnlyList<BreadcrumbNode> Breadcrumbs { get; init; } = [];
+}
 /// <summary>公開導覽中的已發布頁面，附階層指標。</summary>
 public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId, string? Url = null, bool IsExternal = false);
 /// <summary>受控導覽項目的管理端檢視。</summary>
@@ -201,8 +214,6 @@ public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
 public sealed record RedirectItem(Guid Id, string OldSlug, Guid ContentId, string ContentTitle, string ContentSlug, ContentKind ContentKind, DateTimeOffset CreatedAt);
 /// <summary>新增自訂重定向規則輸入。</summary>
 public sealed record RedirectCreateInput(string OldSlug, Guid ContentId);
-/// <summary>作者公開個人資料。</summary>
-public sealed record PublicAuthorProfile(string DisplayName, string Slug, string Bio, string WebsiteUrl, string AvatarUrl);
 /// <summary>帳號自助個人資料與顯示名稱。</summary>
 public sealed class AccountProfileEdit
 {

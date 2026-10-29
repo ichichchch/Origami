@@ -13,6 +13,14 @@ public static class ThemePresets
     public const string CardStyleList = "list";
     public const string CardStyleGrid = "grid";
 
+    /// <summary>色彩模式：auto（跟隨系統）、light（淺色）或 dark（深色）。</summary>
+    public const string ColorSchemeAuto = "auto";
+    public const string ColorSchemeLight = "light";
+    public const string ColorSchemeDark = "dark";
+
+    public static bool IsValidColorScheme(string? scheme) =>
+        scheme is ColorSchemeAuto or ColorSchemeLight or ColorSchemeDark;
+
     public static readonly IReadOnlyList<Preset> All =
     [
         new("reading", "閱讀", "#2f6f4e", 68, true, true, CardStyleList),

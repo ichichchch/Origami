@@ -149,7 +149,7 @@ public sealed class SiteAdministrationService(
         }
         var total = await query.CountAsync(ct);
         var items = await query.OrderBy(x => x.NormalizedUserName).ThenBy(x => x.Id).Skip(offset).Take(Limits.SitePageSize)
-            .Select(x => new UserSummary(x.Id, x.UserName ?? "", x.IsDisabled, x.SingletonKey == 1)).ToListAsync(ct);
+            .Select(x => new UserSummary(x.Id, x.UserName ?? "", x.IsDisabled, x.SingletonKey == 1) { TwoFactorEnabled = x.TwoFactorEnabled }).ToListAsync(ct);
         return new(items, total, page, Limits.SitePageSize);
     }
 
@@ -427,6 +427,39 @@ public sealed class SiteAdministrationService(
         var result = await userManager.ChangePasswordAsync(user, input.CurrentPassword ?? "", newPassword);
         if (!result.Succeeded)
             throw new CmsException("目前密碼不正確，或新密碼不符合規則。");
+    }
+
+    /// <summary>全站管理者重設一般使用者的兩步驗證（TOTP 與恢復碼），並輪替安全戳記使其重新登入。</summary>
+    public async Task ResetUserTwoFactorAsync(string id, CancellationToken ct = default)
+    {
+        var actor = await admin.RequireNetworkAdminAsync(ct);
+        ValidateUserId(id);
+        await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var user = await db.Users.FromSqlInterpolated($"SELECT * FROM \"AspNetUsers\" WHERE \"Id\" = {id} FOR UPDATE")
+                .SingleOrDefaultAsync(ct) ?? throw new CmsException("使用者不存在。");
+            if (user.SingletonKey == 1)
+                throw new CmsException("全站管理者的兩步驟驗證請使用伺服器端 admin-reset 命令重設。");
+            user.TwoFactorEnabled = false;
+            user.TwoFactorSecret = "";
+            user.RecoveryCodeHashes = "";
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.ConcurrencyStamp = Guid.NewGuid().ToString("N");
+            db.AuditLogs.Add(new AuditLog
+            {
+                SiteId = db.CurrentSiteId,
+                UserId = actor.Id,
+                UserName = actor.UserName ?? "",
+                Action = "user.2fa_reset",
+                Target = user.UserName ?? user.Id,
+                CreatedAt = timeProvider.GetUtcNow()
+            });
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        });
     }
 
     private static SiteSummary Summary(CmsSite site) =>

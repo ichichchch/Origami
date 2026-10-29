@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
+public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null)
 {
     // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
@@ -132,6 +132,34 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         {
             RequireAuthorEditable(entity, access);
         }
+        // 編輯者以上可明確指定或變更內容署名作者；作者本人不可改派他人。
+        if (!isAuthorOnly && !string.IsNullOrWhiteSpace(input.AuthorId) && input.AuthorId != entity.AuthorId)
+        {
+            var assignedMember = await db.SiteMemberships.AsNoTracking()
+                .Include(x => x.User)
+                .SingleOrDefaultAsync(x => x.UserId == input.AuthorId && !x.User.IsDisabled, ct);
+            if (assignedMember is not null)
+            {
+                var assignedName = string.IsNullOrWhiteSpace(assignedMember.DisplayName)
+                    ? (assignedMember.User.UserName ?? "")
+                    : assignedMember.DisplayName;
+                entity.AuthorId = assignedMember.UserId;
+                entity.AuthorName = assignedName;
+                try { entity.AuthorSlug = assignedName.Length == 0 ? "" : ContentRules.NormalizeSlug(assignedName); }
+                catch (CmsException) { entity.AuthorSlug = ""; }
+            }
+            else
+            {
+                var netAdmin = await db.Users.AsNoTracking()
+                    .SingleOrDefaultAsync(x => x.Id == input.AuthorId && x.SingletonKey == 1 && !x.IsDisabled, ct);
+                if (netAdmin is null) throw new CmsException("所選作者不是本站有效成員。");
+                var assignedName = netAdmin.UserName ?? "";
+                entity.AuthorId = netAdmin.Id;
+                entity.AuthorName = assignedName;
+                try { entity.AuthorSlug = assignedName.Length == 0 ? "" : ContentRules.NormalizeSlug(assignedName); }
+                catch (CmsException) { entity.AuthorSlug = ""; }
+            }
+        }
         if (isAuthorOnly && input.Status is not (ContentStatus.Draft or ContentStatus.Pending))
             throw new CmsException("作者只能儲存草稿或提交待審；發布由編輯者審核後執行。");
         if (isAuthorOnly && input.PublishAt is not null)
@@ -218,6 +246,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             && schedule <= now.AddMinutes(Limits.ScheduleLeadMinutes))
             throw new CmsException($"排程時間至少需在 {Limits.ScheduleLeadMinutes} 分鐘之後。");
         var oldSlug = entity.Slug;
+        var wasPublished = id is not null && entity.Status == ContentStatus.Published;
         // 被覆寫的舊狀態成為修訂版本；與儲存共用同一個交易。
         ContentRevision? revision = null;
         if (id is not null)
@@ -248,7 +277,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             if (contentType is null) throw new CmsException("內建文章與頁面不可使用自訂欄位。");
             var fields = await db.CustomFields.AsNoTracking()
                 .Where(field => field.ContentTypeId == contentType.Id)
-                .Select(field => new { field.Id, field.FieldType, field.IsRequired })
+                .Select(field => new { field.Id, field.FieldType, field.IsRequired, field.Options })
                 .ToListAsync(ct);
             var supplied = fieldValues.Select(x => x.FieldId).ToHashSet();
             if (supplied.Except(fields.Select(x => x.Id)).Any())
@@ -256,11 +285,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             foreach (var value in fieldValues)
             {
                 var field = fields.First(x => x.Id == value.FieldId);
-                CustomFieldRules.ValidateValue(field.FieldType, value.Value, field.IsRequired);
+                CustomFieldRules.ValidateValue(field.FieldType, value.Value, field.IsRequired, field.Options);
             }
             // 必填欄位若未送出值，等同留空，必須拒絕。
             foreach (var field in fields.Where(x => x.IsRequired && !supplied.Contains(x.Id)))
-                CustomFieldRules.ValidateValue(field.FieldType, "", required: true);
+                CustomFieldRules.ValidateValue(field.FieldType, "", required: true, field.Options);
         }
         var currentValues = await db.ContentFieldValues.Where(x => x.ContentId == entity.Id).ToListAsync(ct);
         db.ContentFieldValues.RemoveRange(currentValues);
@@ -311,13 +340,38 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             await TrimRevisionsAsync(db, entity.Id, ct);
         }
         await SyncEmbeddingAsync(db, entity, now, ct);
+        db.AuditLogs.Add(new AuditLog
+        {
+            SiteId = db.CurrentSiteId,
+            UserId = access.UserId ?? "",
+            UserName = access.UserName ?? "",
+            Action = entity.Status == ContentStatus.Published && !wasPublished
+                ? "content.published"
+                : id is null ? "content.created" : "content.updated",
+            Target = $"{entity.Title} (/{(entity.Kind == ContentKind.Page ? "pages" : "posts")}/{entity.Slug})",
+            CreatedAt = now
+        });
         // EF Core 會把內容更新與兩個關聯表的更新包進同一個交易。
         await ContentRules.SaveAsync(db, ct);
         if (hierarchyTransaction is not null) await hierarchyTransaction.CommitAsync(ct);
+        if (entity.Status == ContentStatus.Published && !wasPublished && webhooks is not null)
+        {
+            await webhooks.DispatchAsync("content.published", new
+            {
+                id = entity.Id,
+                kind = entity.Kind.ToString().ToLowerInvariant(),
+                title = entity.Title,
+                slug = entity.Slug,
+                authorName = entity.AuthorName,
+                publishedAt = entity.PublishedAt
+            }, ct);
+        }
         input.Id = entity.Id;
         input.Kind = entity.Kind;
         input.Slug = entity.Slug;
         input.Excerpt = entity.Excerpt;
+        input.AuthorId = entity.AuthorId;
+        input.AuthorName = entity.AuthorName;
         input.PublishAt = entity.PublishAt;
         input.PreviewToken = entity.PreviewToken;
         input.PublishedAt = entity.PublishedAt;
@@ -1031,20 +1085,33 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         // 由下往上蒐集已發布且非私密的祖先；遇到未發布、私密或缺失的祖先即停止
         // （子頁退回平面網址——私密頁 slug 不得出現在公開鏈上）。
         var chain = new List<string>();
+        var nodes = new List<(string Title, string Slug)>();
         Guid? cursor = target.ParentId;
         var guard = 0;
         while (cursor is { } currentId && ++guard <= 10)
         {
             var node = await db.Contents.AsNoTracking()
                 .Where(x => x.Id == currentId && x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate)
-                .Select(x => new { x.Slug, x.ParentId }).SingleOrDefaultAsync(ct);
+                .Select(x => new { x.Title, x.Slug, x.ParentId }).SingleOrDefaultAsync(ct);
             if (node is null) break;
             chain.Add(node.Slug);
+            nodes.Add((node.Title, node.Slug));
             cursor = node.ParentId;
         }
         chain.Reverse();
+        nodes.Reverse();
         var content = await GetPublishedAsync(ContentKind.Page, slug, ct);
-        return content is null ? null : new PagePathContent(content, [.. chain, slug]);
+        if (content is null) return null;
+        var crumbs = new List<BreadcrumbNode>();
+        var currentSegments = new List<string>();
+        foreach (var item in nodes)
+        {
+            currentSegments.Add(Uri.EscapeDataString(item.Slug));
+            crumbs.Add(new BreadcrumbNode(item.Title, "/pages/" + string.Join("/", currentSegments)));
+        }
+        currentSegments.Add(Uri.EscapeDataString(content.Slug));
+        crumbs.Add(new BreadcrumbNode(content.Title, "/pages/" + string.Join("/", currentSegments)));
+        return new PagePathContent(content, [.. chain, slug]) { Breadcrumbs = crumbs };
     }
 
     /// <summary>驗證保護密碼並回傳瀏覽器 cookie 所用的解鎖 token。</summary>
@@ -1355,5 +1422,74 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(g => new ArchiveMonth(g.Key.Year, g.Key.Month, g.Count()))
             .OrderByDescending(x => x.Year).ThenByDescending(x => x.Month)
             .ToList();
+    }
+
+    /// <summary>一鍵複製／克隆既有文章或頁面為新草稿，保留分類、標籤、自訂欄位、封面與層級設定。</summary>
+    public async Task<ContentEdit> DuplicateAsync(Guid id, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
+        var source = await GetEditAsync(id, ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var baseSlug = ContentRules.NormalizeSlug(source.Slug + "-copy");
+        var candidateSlug = baseSlug;
+        var suffix = 2;
+        while (await db.Contents.AsNoTracking().AnyAsync(x => x.Slug == candidateSlug, ct))
+        {
+            candidateSlug = ContentRules.NormalizeSlug($"{baseSlug}-{suffix++}");
+        }
+        var copyTitle = source.Title + " (副本)";
+        if (copyTitle.Length > Limits.Title) copyTitle = copyTitle[..Limits.Title];
+        var copy = new ContentEdit
+        {
+            Kind = source.Kind,
+            Title = copyTitle,
+            Slug = candidateSlug,
+            Markdown = source.Markdown,
+            Excerpt = source.Excerpt,
+            MetaDescription = source.MetaDescription,
+            NoIndex = source.NoIndex,
+            AllowComments = source.AllowComments,
+            MenuOrder = source.MenuOrder,
+            ParentId = source.ParentId,
+            CoverMediaId = source.CoverMediaId,
+            ContentTypeId = source.ContentTypeId,
+            Status = ContentStatus.Draft,
+            CategoryIds = [.. source.CategoryIds],
+            TagIds = [.. source.TagIds],
+            CustomTermIds = [.. source.CustomTermIds],
+            FieldValues = [.. source.FieldValues]
+        };
+        return await CreateAsync(source.Kind, copy, ct);
+    }
+
+    /// <summary>後台編輯器可選的本站作者名單（Editor 以上可用）。</summary>
+    public async Task<List<AuthorOption>> AuthorOptionsAsync(CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var members = await db.SiteMemberships.AsNoTracking()
+            .Where(x => !x.User.IsDisabled && x.Role >= SiteRole.Author)
+            .OrderBy(x => x.DisplayName).ThenBy(x => x.User.NormalizedUserName)
+            .Select(x => new AuthorOption(
+                x.UserId,
+                x.User.UserName ?? "",
+                x.DisplayName != "" ? x.DisplayName : (x.User.UserName ?? "")))
+            .ToListAsync(ct);
+        return members;
+    }
+
+    /// <summary>站點操作審計日誌列表（僅限站點管理員或全站管理者檢視）。</summary>
+    public async Task<PagedResult<AuditLogItem>> ListAuditLogsAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        var offset = ContentRules.Offset(page, pageSize);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var query = db.AuditLogs.AsNoTracking();
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            .Skip(offset).Take(pageSize)
+            .Select(x => new AuditLogItem(x.Id, x.UserId, x.UserName, x.Action, x.Target, x.CreatedAt))
+            .ToListAsync(ct);
+        return new(items, total, page, pageSize);
     }
 }

@@ -311,7 +311,7 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
     public sealed record TaxonomyTermsView(Guid TaxonomyId, string TaxonomyName, List<TermView> Terms);
 
     public sealed record FieldView(Guid Id, Guid ContentTypeId, string Name, string Key, string FieldType,
-        bool IsRequired, int Position, bool IsArchived)
+        bool IsRequired, int Position, bool IsArchived, string Options = "")
     {
         /// <summary>並發版本；刪除時須攜帶。</summary>
         public Guid Version { get; init; }
@@ -324,6 +324,7 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         [Required, StringLength(Limits.CustomFieldName)] public string Name { get; set; } = "";
         [Required, StringLength(Limits.CustomFieldName)] public string Key { get; set; } = "";
         [Required, StringLength(20)] public string FieldType { get; set; } = CustomFieldTypes.Text;
+        [StringLength(Limits.CustomFieldOptions)] public string Options { get; set; } = "";
         public bool IsRequired { get; set; }
         public int Position { get; set; }
         public bool IsArchived { get; set; }
@@ -338,7 +339,7 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         return await db.CustomFields.AsNoTracking().Where(x => x.ContentTypeId == contentTypeId)
             .OrderBy(x => x.Position).ThenBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new FieldView(x.Id, x.ContentTypeId, x.Name, x.Key, x.FieldType, x.IsRequired,
-                x.Position, x.IsArchived) { Version = x.Version })
+                x.Position, x.IsArchived, x.Options) { Version = x.Version })
             .ToListAsync(ct);
     }
 
@@ -347,6 +348,10 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         await admin.RequireAsync(ct);
         ContentRules.Validate(input);
         if (!CustomFieldTypes.IsValid(input.FieldType)) throw new CmsException("欄位種類無效。");
+        var normalizedType = input.FieldType.ToLowerInvariant();
+        var options = normalizedType == CustomFieldTypes.Select ? (input.Options ?? "").Trim() : "";
+        if (normalizedType == CustomFieldTypes.Select && CustomFieldRules.ParseOptions(options).Count == 0)
+            throw new CmsException("下拉選單欄位須提供至少一個選項（以逗號分隔）。");
         var key = ContentRules.NormalizeSlug(input.Key);
         await using var db = await factory.CreateDbContextAsync(ct);
         if (!await db.ContentTypes.AsNoTracking().AnyAsync(x => x.Id == input.ContentTypeId, ct))
@@ -371,7 +376,8 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         entity.ContentTypeId = input.ContentTypeId;
         entity.Name = input.Name.Trim();
         entity.Key = key;
-        entity.FieldType = input.FieldType.ToLowerInvariant();
+        entity.FieldType = normalizedType;
+        entity.Options = options;
         entity.IsRequired = input.IsRequired;
         entity.Position = input.Position;
         entity.IsArchived = input.IsArchived;
@@ -381,7 +387,7 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         input.Key = key;
         input.Version = version;
         return new(entity.Id, entity.ContentTypeId, entity.Name, entity.Key, entity.FieldType, entity.IsRequired,
-            entity.Position, entity.IsArchived) { Version = entity.Version };
+            entity.Position, entity.IsArchived, entity.Options) { Version = entity.Version };
     }
 
     public async Task DeleteFieldAsync(Guid id, Guid version, CancellationToken ct = default)

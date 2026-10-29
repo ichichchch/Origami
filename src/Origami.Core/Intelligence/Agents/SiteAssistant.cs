@@ -63,4 +63,54 @@ public sealed class SiteAssistant(
             throw new CmsException("助理暫時無法回覆，請稍後再試。");
         }
     }
+
+    /// <summary>
+    /// 編輯器寫作輔助：依據目前標題與 Markdown 正文，產生精簡摘要（Excerpt）與 SEO 描述（MetaDescription）。
+    /// 若 AI 供應商未設定或暫時無法回應，自動退回本地確定性純文字摘錄，確保編輯流程不中斷。
+    /// </summary>
+    public async Task<AiContentSuggestion> SuggestSummaryAsync(string? title, string? markdown, MarkdownService markdownService, CancellationToken ct = default)
+    {
+        await admin.RequireNonCredentialUserAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
+        var cleanTitle = (title ?? "").Trim();
+        var cleanBody = (markdown ?? "").Trim();
+        if (cleanTitle.Length == 0 && cleanBody.Length == 0)
+            throw new CmsException("請先輸入標題或正文內容，再產生摘要建議。");
+
+        var fallbackExcerpt = markdownService.Excerpt(cleanBody.Length > 0 ? cleanBody : cleanTitle);
+        var fallbackMeta = fallbackExcerpt.Length <= Limits.MetaDescription ? fallbackExcerpt : fallbackExcerpt[..(Limits.MetaDescription - 1)].TrimEnd() + "…";
+
+        try
+        {
+            var client = clients.Create();
+            var snippet = cleanBody.Length > 4000 ? cleanBody[..4000] : cleanBody;
+            var prompt = $"""
+                請根據以下文章標題與正文，分別撰寫：
+                1. 文章摘要（Excerpt，最多 160 字，吸引讀者閱讀）
+                2. SEO 描述（MetaDescription，最多 120 字，適合搜尋引擎結果摘要）
+                請只回傳兩行純文字，第一行為 Excerpt，第二行為 MetaDescription，不要包含標籤或編號。
+
+                標題：{cleanTitle}
+                正文：
+                {snippet}
+                """;
+            var response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, prompt)], cancellationToken: ct);
+            var lines = (response.Text ?? "")
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+            if (lines.Count >= 1)
+            {
+                var ex = lines[0];
+                if (ex.Length > Limits.Excerpt) ex = ex[..Limits.Excerpt];
+                var meta = lines.Count >= 2 ? lines[1] : ex;
+                if (meta.Length > Limits.MetaDescription) meta = meta[..Limits.MetaDescription];
+                return new AiContentSuggestion(ex, meta);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 未設定 AI 或呼叫失敗時退回本地摘要產生。
+        }
+        return new AiContentSuggestion(fallbackExcerpt, fallbackMeta);
+    }
 }

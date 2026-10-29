@@ -39,7 +39,10 @@ public sealed class SiteUpdateInput
     public Guid Version { get; set; }
 }
 
-public sealed record UserSummary(string Id, string UserName, bool IsDisabled, bool IsNetworkAdmin);
+public sealed record UserSummary(string Id, string UserName, bool IsDisabled, bool IsNetworkAdmin)
+{
+    public bool TwoFactorEnabled { get; init; }
+}
 public sealed class UserCreateInput
 {
     public string UserName { get; set; } = "";

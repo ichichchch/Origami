@@ -249,6 +249,11 @@ namespace Origami.Core.Data.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("RecoveryCodeHashes")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
@@ -349,6 +354,46 @@ namespace Origami.Core.Data.Migrations
 
                             t.HasCheckConstraint("CK_ApiCredential_SecurityStamp", "length(\"SecurityStamp\") > 0");
                         });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "CreatedAt", "Id");
+
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.Category", b =>
@@ -961,6 +1006,11 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<string>("Options")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("Position")
                         .HasColumnType("integer");
 
@@ -983,7 +1033,7 @@ namespace Origami.Core.Data.Migrations
 
                             t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
 
-                            t.HasCheckConstraint("CK_CustomField_Type", "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox')");
+                            t.HasCheckConstraint("CK_CustomField_Type", "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox', 'url', 'select', 'media')");
                         });
                 });
 
@@ -1287,8 +1337,21 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
 
+                    b.Property<string>("ColorScheme")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
                     b.Property<bool>("CommentAutoApprove")
                         .HasColumnType("boolean");
+
+                    b.Property<string>("CommentBlockedWords")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("CommentCloseDays")
+                        .HasColumnType("integer");
 
                     b.Property<bool>("CommentsEnabled")
                         .HasColumnType("boolean");
@@ -1307,11 +1370,24 @@ namespace Origami.Core.Data.Migrations
                     b.Property<bool?>("FeedShowFullText")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("FooterText")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<Guid?>("HomePageContentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("LogoMediaId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("MaintenanceMessage")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("MaintenanceMode")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1333,6 +1409,21 @@ namespace Origami.Core.Data.Migrations
                     b.Property<Guid?>("SiteIconMediaId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("SocialGithubUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("SocialMastodonUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("SocialXUrl")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.Property<string>("ThemePreset")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1341,6 +1432,16 @@ namespace Origami.Core.Data.Migrations
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
+
+                    b.Property<string>("WebhookSecret")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("WebhookUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("SiteId", "Id");
 
@@ -1367,16 +1468,27 @@ namespace Origami.Core.Data.Migrations
                             AccentColor = "#2f6f4e",
                             AuthorDisplayName = "",
                             CardStyle = "list",
+                            ColorScheme = "auto",
                             CommentAutoApprove = false,
+                            CommentBlockedWords = "",
+                            CommentCloseDays = 0,
                             CommentsEnabled = false,
                             CustomNavigationEnabled = false,
                             Description = "用文字，分享你的世界。",
+                            FooterText = "",
+                            MaintenanceMessage = "",
+                            MaintenanceMode = false,
                             Name = "Origami",
                             ReadingWidth = 68,
                             ShowByline = true,
                             ShowCover = true,
+                            SocialGithubUrl = "",
+                            SocialMastodonUrl = "",
+                            SocialXUrl = "",
                             ThemePreset = "reading",
-                            Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84")
+                            Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84"),
+                            WebhookSecret = "",
+                            WebhookUrl = ""
                         });
                 });
 
@@ -1531,6 +1643,15 @@ namespace Origami.Core.Data.Migrations
                     b.Navigation("Site");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.AuditLog", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Origami.Core.Models.Category", b =>

@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin)
+public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider? clock = null)
 {
     public async Task<SiteSettings> GetAsync(CancellationToken ct = default)
     {
@@ -11,6 +11,7 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
     public async Task<SiteSettings> SaveAsync(SiteSettings input, CancellationToken ct = default)
     {
         await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        var access = await admin.GetCurrentAccessAsync(ct);
         ContentRules.Validate(input);
         if (input.Id != 1) throw new CmsException("站點設定識別無效。");
         if (input.PostsPerPage is { } posts && (posts < 1 || posts > Limits.MaxPageSize))
@@ -23,6 +24,16 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         if (!ThemePresets.IsValidReadingWidth(input.ReadingWidth)) throw new CmsException("正文欄寬須為 48–96 字。");
         if (input.CardStyle is not (ThemePresets.CardStyleList or ThemePresets.CardStyleGrid))
             throw new CmsException("卡片樣式無效。");
+        var colorScheme = string.IsNullOrWhiteSpace(input.ColorScheme) ? ThemePresets.ColorSchemeAuto : input.ColorScheme.Trim().ToLowerInvariant();
+        if (!ThemePresets.IsValidColorScheme(colorScheme))
+            throw new CmsException("色彩模式無效（僅接受 auto、light 或 dark）。");
+        ValidateOptionalHttpUrl(input.SocialGithubUrl, "GitHub 連結");
+        ValidateOptionalHttpUrl(input.SocialXUrl, "X / Twitter 連結");
+        ValidateOptionalHttpUrl(input.SocialMastodonUrl, "Mastodon / 社群連結");
+        if (!WebhookService.IsAllowedWebhookUrl(input.WebhookUrl))
+            throw new CmsException("Webhook 網址必須是公開 https 絕對網址（不允許本機或內網位址）。");
+        if (input.CommentCloseDays is < 0 or > 3650)
+            throw new CmsException("自動關閉評論天數須為 0–3650 天（0 表示不自動關閉）。");
         await using var db = await factory.CreateDbContextAsync(ct);
         if (input.HomePageContentId is { } homeId)
         {
@@ -49,15 +60,44 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.CustomNavigationEnabled = input.CustomNavigationEnabled;
         entity.CommentsEnabled = input.CommentsEnabled;
         entity.CommentAutoApprove = input.CommentAutoApprove;
+        entity.CommentBlockedWords = (input.CommentBlockedWords ?? "").Trim();
+        entity.CommentCloseDays = input.CommentCloseDays;
         entity.ThemePreset = preset.Name;
         entity.AccentColor = input.AccentColor.Trim().ToLowerInvariant();
         entity.ReadingWidth = input.ReadingWidth;
         entity.ShowByline = input.ShowByline;
         entity.ShowCover = input.ShowCover;
         entity.CardStyle = input.CardStyle;
+        entity.ColorScheme = colorScheme;
+        entity.FooterText = (input.FooterText ?? "").Trim();
+        entity.SocialGithubUrl = (input.SocialGithubUrl ?? "").Trim();
+        entity.SocialXUrl = (input.SocialXUrl ?? "").Trim();
+        entity.SocialMastodonUrl = (input.SocialMastodonUrl ?? "").Trim();
+        entity.MaintenanceMode = input.MaintenanceMode;
+        entity.MaintenanceMessage = (input.MaintenanceMessage ?? "").Trim();
+        entity.WebhookUrl = (input.WebhookUrl ?? "").Trim();
+        entity.WebhookSecret = (input.WebhookSecret ?? "").Trim();
         entity.Version = Guid.NewGuid();
+        db.AuditLogs.Add(new AuditLog
+        {
+            SiteId = db.CurrentSiteId,
+            UserId = access.UserId ?? "",
+            UserName = access.UserName ?? "",
+            Action = "settings.updated",
+            Target = entity.Name + (entity.MaintenanceMode ? " (維護模式開啟)" : ""),
+            CreatedAt = (clock ?? TimeProvider.System).GetUtcNow()
+        });
         await ContentRules.SaveAsync(db, ct);
+        input.ColorScheme = entity.ColorScheme;
         input.Version = entity.Version;
         return input;
+    }
+
+    private static void ValidateOptionalHttpUrl(string? url, string label)
+    {
+        var clean = (url ?? "").Trim();
+        if (clean.Length == 0) return;
+        if (clean.Length > Limits.SocialUrl || !Uri.TryCreate(clean, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+            throw new CmsException($"{label}必須是 http 或 https 的絕對網址。");
     }
 }

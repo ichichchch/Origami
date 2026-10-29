@@ -5,12 +5,15 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
 {
     private static readonly SemaphoreSlim DecodeSlots = new(2);
 
-    public async Task<PagedResult<MediaItem>> ListAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, string? search = null)
+    public async Task<PagedResult<MediaItem>> ListAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default, string? search = null, MediaKind? kind = null)
     {
         await admin.RequireRoleAsync(SiteRole.Reader, ct);
         var offset = ContentRules.Offset(page, pageSize);
+        if (kind is { } filterKind && !Enum.IsDefined(filterKind)) throw new CmsException("媒體種類無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.MediaAssets.AsNoTracking();
+        if (kind is { } targetKind)
+            query = query.Where(x => x.Kind == targetKind);
         if (!string.IsNullOrWhiteSpace(search))
         {
             // 管理員以上傳名稱、替代文字或說明文字搜尋圖片。

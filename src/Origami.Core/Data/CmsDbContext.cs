@@ -27,6 +27,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public DbSet<SiteSettings> Settings => Set<SiteSettings>();
     public DbSet<ContentEmbedding> ContentEmbeddings => Set<ContentEmbedding>();
     public DbSet<EmbeddingJob> EmbeddingJobs => Set<EmbeddingJob>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -37,6 +38,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Bio).HasMaxLength(Limits.UserBio).IsRequired();
             e.Property(x => x.WebsiteUrl).HasMaxLength(Limits.UserUrl).IsRequired();
             e.Property(x => x.AvatarUrl).HasMaxLength(Limits.UserUrl).IsRequired();
+            e.Property(x => x.RecoveryCodeHashes).HasMaxLength(1024).IsRequired();
             e.HasIndex(x => x.SingletonKey).IsUnique().HasFilter("\"SingletonKey\" IS NOT NULL");
             e.ToTable("AspNetUsers", t => t.HasCheckConstraint("CK_Admin_Singleton", "\"SingletonKey\" IS NULL OR \"SingletonKey\" = 1"));
         });
@@ -291,6 +293,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Name).HasMaxLength(Limits.CustomFieldName).IsRequired();
             e.Property(x => x.Key).HasMaxLength(Limits.CustomFieldName).IsRequired();
             e.Property(x => x.FieldType).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Options).HasMaxLength(Limits.CustomFieldOptions).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => new { x.SiteId, x.ContentTypeId, x.Key }).IsUnique();
             e.HasOne(x => x.ContentType).WithMany()
@@ -301,7 +304,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
                 t.HasCheckConstraint("CK_CustomField_Key", "length(btrim(\"Key\")) > 0");
                 t.HasCheckConstraint("CK_CustomField_Type",
-                    "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox')");
+                    "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox', 'url', 'select', 'media')");
             });
         });
         builder.Entity<ContentFieldValue>(e =>
@@ -398,6 +401,15 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasOne<Content>().WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.SiteId, x.ContentId }).IsUnique();
+        });
+        builder.Entity<AuditLog>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.Property(x => x.UserId).HasMaxLength(128).IsRequired();
+            e.Property(x => x.UserName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Action).HasMaxLength(Limits.AuditAction).IsRequired();
+            e.Property(x => x.Target).HasMaxLength(Limits.AuditDetail).IsRequired();
+            e.HasIndex(x => new { x.SiteId, x.CreatedAt, x.Id });
         });
     }
 

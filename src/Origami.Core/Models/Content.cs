@@ -34,6 +34,17 @@ public static partial class Limits
     public const int ThemeColor = 7;
     /// <summary>卡片樣式名稱上限。</summary>
     public const int ThemeCardStyle = 10;
+    public const int ThemeColorScheme = 10;
+    public const int FooterText = 300;
+    public const int SocialUrl = 300;
+    public const int CommentBlockedWords = 2000;
+    public const int MaintenanceMessage = 500;
+    public const int CustomFieldOptions = 500;
+    public const int WebhookUrl = 500;
+    public const int WebhookSecret = 128;
+    public const int AuditAction = 64;
+    public const int AuditDetail = 500;
+    public const int RecoveryCodesCount = 8;
     public const int SiteName = 100;
     public const int SiteSlug = 80;
     /// <summary>導覽項目顯示文字上限。</summary>
@@ -94,6 +105,8 @@ public sealed class AdminUser : IdentityUser
     public bool IsDisabled { get; set; }
     /// <summary>Base32 編碼的 TOTP 共用密鑰；兩步驗證設定開始前為空。</summary>
     public string TwoFactorSecret { get; set; } = "";
+    /// <summary>以分號分隔的 SHA-256 備用恢復碼雜湊清單；每組恢復碼使用一次即移除。</summary>
+    [StringLength(1024)] public string RecoveryCodeHashes { get; set; } = "";
     // 兩步驗證的啟用重用繼承自 IdentityUser.TwoFactorEnabled 的欄位。
     /// <summary>作者公開個人簡介；顯示於作者彙整頁與文章作者欄。</summary>
     [StringLength(Limits.UserBio)] public string Bio { get; set; } = "";
@@ -305,5 +318,39 @@ public sealed class SiteSettings
     public bool ShowCover { get; set; } = true;
     /// <summary>文章卡片樣式：list 或 grid。</summary>
     [StringLength(Limits.ThemeCardStyle)] public string CardStyle { get; set; } = ThemePresets.CardStyleList;
+    /// <summary>外觀色彩模式：auto（跟隨系統）、light（淺色）或 dark（深色）。</summary>
+    [StringLength(Limits.ThemeColorScheme)] public string ColorScheme { get; set; } = ThemePresets.ColorSchemeAuto;
+    /// <summary>自訂頁尾版權或補充說明文字；空字串時顯示預設版權。</summary>
+    [StringLength(Limits.FooterText)] public string FooterText { get; set; } = "";
+    /// <summary>頁尾 GitHub 連結（僅 http／https）。</summary>
+    [StringLength(Limits.SocialUrl)] public string SocialGithubUrl { get; set; } = "";
+    /// <summary>頁尾 X / Twitter 連結（僅 http／https）。</summary>
+    [StringLength(Limits.SocialUrl)] public string SocialXUrl { get; set; } = "";
+    /// <summary>頁尾 Mastodon / 社群連結（僅 http／https）。</summary>
+    [StringLength(Limits.SocialUrl)] public string SocialMastodonUrl { get; set; } = "";
+    /// <summary>評論敏感詞清單（每行或逗號分隔）；命中時自動轉入垃圾佇列。</summary>
+    [StringLength(Limits.CommentBlockedWords)] public string CommentBlockedWords { get; set; } = "";
+    /// <summary>文章發布超過指定天數後自動關閉評論；0 表示不自動關閉。</summary>
+    public int CommentCloseDays { get; set; }
+    /// <summary>啟用維護模式；開啟時一般訪客看到 503 維護畫面，管理員仍可正常預覽。</summary>
+    public bool MaintenanceMode { get; set; }
+    /// <summary>維護模式自訂提示訊息。</summary>
+    [StringLength(Limits.MaintenanceMessage)] public string MaintenanceMessage { get; set; } = "";
+    /// <summary>出站 Webhook 接收網址（僅 https 或本機 http）；內容發布或新評論時觸發。</summary>
+    [StringLength(Limits.WebhookUrl)] public string WebhookUrl { get; set; } = "";
+    /// <summary>出站 Webhook HMAC-SHA256 簽章密鑰。</summary>
+    [StringLength(Limits.WebhookSecret)] public string WebhookSecret { get; set; } = "";
     public Guid Version { get; set; }
+}
+
+/// <summary>管理操作審計日誌：記錄站點重要變更與安全事件。</summary>
+public sealed class AuditLog
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
+    [StringLength(128)] public string UserId { get; set; } = "";
+    [StringLength(256)] public string UserName { get; set; } = "";
+    [Required, StringLength(Limits.AuditAction)] public string Action { get; set; } = "";
+    [StringLength(Limits.AuditDetail)] public string Target { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
 }

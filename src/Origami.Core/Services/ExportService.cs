@@ -54,6 +54,16 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (logoFile is not null) writer.WriteString("logoFileName", logoFile);
         }
         if (settings?.CustomNavigationEnabled == true) writer.WriteBoolean("customNavigationEnabled", true);
+        if (!string.IsNullOrEmpty(settings?.ColorScheme) && settings.ColorScheme != ThemePresets.ColorSchemeAuto)
+            writer.WriteString("colorScheme", settings.ColorScheme);
+        if (!string.IsNullOrEmpty(settings?.FooterText)) writer.WriteString("footerText", settings.FooterText);
+        if (!string.IsNullOrEmpty(settings?.SocialGithubUrl)) writer.WriteString("socialGithubUrl", settings.SocialGithubUrl);
+        if (!string.IsNullOrEmpty(settings?.SocialXUrl)) writer.WriteString("socialXUrl", settings.SocialXUrl);
+        if (!string.IsNullOrEmpty(settings?.SocialMastodonUrl)) writer.WriteString("socialMastodonUrl", settings.SocialMastodonUrl);
+        if (!string.IsNullOrEmpty(settings?.CommentBlockedWords)) writer.WriteString("commentBlockedWords", settings.CommentBlockedWords);
+        if (settings?.CommentCloseDays is > 0) writer.WriteNumber("commentCloseDays", settings.CommentCloseDays);
+        if (settings?.MaintenanceMode == true) writer.WriteBoolean("maintenanceMode", true);
+        if (!string.IsNullOrEmpty(settings?.MaintenanceMessage)) writer.WriteString("maintenanceMessage", settings.MaintenanceMessage);
         writer.WriteEndObject();
 
         writer.WriteStartArray("categories");
@@ -140,6 +150,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteString("name", field.Name);
             writer.WriteString("key", field.Key);
             writer.WriteString("fieldType", field.FieldType);
+            if (field.Options.Length > 0) writer.WriteString("options", field.Options);
             writer.WriteBoolean("isRequired", field.IsRequired);
             writer.WriteNumber("position", field.Position);
             writer.WriteString("contentType", typeSlugById.GetValueOrDefault(field.ContentTypeId, ""));

@@ -4,7 +4,7 @@ namespace Origami.Core.Services;
 /// 訪客評論：張貼預設待審（可設定自動核可），核可後才公開；蜜罐與連結數
 /// 過量者靜默標為垃圾。基礎反垃圾不依賴任何第三方雲端服務。
 /// </summary>
-public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
+public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null)
 {
     public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot, Guid? ParentId = null);
     public sealed record CommentView(Guid Id, Guid ContentId, string ContentTitle, string AuthorName, string Url,
@@ -14,7 +14,7 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
 
     /// <summary>
     /// 訪客張貼評論。僅限已發布、未受保護、非私密且允許評論的文章；成功一律回傳待審語意，
-    /// 蜜罐命中者靜默進入垃圾，不對呼叫端透露分類結果。
+    /// 蜜罐與敏感詞命中者靜默進入垃圾，不對呼叫端透露分類結果。
     /// </summary>
     public async Task PostAsync(Guid contentId, CommentPostInput input, CancellationToken ct = default)
     {
@@ -33,11 +33,15 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         var settings = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1, ct);
         if (!settings.CommentsEnabled) throw new CmsException("本站未開放評論。");
         var content = await db.Contents.AsNoTracking().Where(x => x.Id == contentId)
-            .Select(x => new { x.Kind, x.Status, x.IsProtected, x.IsPrivate, x.AllowComments }).SingleOrDefaultAsync(ct)
+            .Select(x => new { x.Kind, x.Status, x.IsProtected, x.IsPrivate, x.AllowComments, x.PublishedAt, x.Title, x.Slug }).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("內容不存在。");
         if (content.Kind != ContentKind.Post || content.Status != ContentStatus.Published
             || content.IsProtected || content.IsPrivate || !content.AllowComments)
             throw new CmsException("這篇內容不接受評論。");
+        var now = clock.GetUtcNow();
+        if (settings.CommentCloseDays > 0 && content.PublishedAt is { } publishedAt
+            && publishedAt.AddDays(settings.CommentCloseDays) < now)
+            throw new CmsException("這篇文章發布已超過評論開放期限，目前已關閉評論。");
         if (input.ParentId is { } parentId)
         {
             var parentOk = await db.Comments.AsNoTracking()
@@ -46,16 +50,45 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         }
 
         var status = settings.CommentAutoApprove ? CommentStatus.Approved : CommentStatus.Pending;
-        // 蜜罐欄位有值＝填表的是機器人；連結過量是常見垃圾特徵。兩者都靜默標為垃圾。
-        if (input.Honeypot || CountLinks(body) > Limits.CommentMaxLinks) status = CommentStatus.Spam;
+        // 蜜罐欄位有值＝填表的是機器人；連結過量或命中站點敏感詞黑名單者靜默標為垃圾。
+        if (input.Honeypot || CountLinks(body) > Limits.CommentMaxLinks || ContainsBlockedWords(settings.CommentBlockedWords, name, body, url))
+            status = CommentStatus.Spam;
 
-        db.Comments.Add(new ContentComment
+        var entity = new ContentComment
         {
             SiteId = db.CurrentSiteId, ContentId = contentId, ParentId = input.ParentId,
             AuthorName = name, Url = url, Markdown = body,
-            Status = status, CreatedAt = clock.GetUtcNow()
-        });
+            Status = status, CreatedAt = now
+        };
+        db.Comments.Add(entity);
         await ContentRules.SaveAsync(db, ct);
+        if (status != CommentStatus.Spam && webhooks is not null)
+        {
+            await webhooks.DispatchAsync("comment.created", new
+            {
+                id = entity.Id,
+                contentId,
+                contentTitle = content.Title,
+                contentSlug = content.Slug,
+                authorName = name,
+                status = status.ToString().ToLowerInvariant()
+            }, ct);
+        }
+    }
+
+    private static bool ContainsBlockedWords(string? blockedWordsRaw, string authorName, string markdown, string url)
+    {
+        if (string.IsNullOrWhiteSpace(blockedWordsRaw)) return false;
+        var words = blockedWordsRaw.Split([',', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var word in words)
+        {
+            if (word.Length == 0) continue;
+            if (authorName.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || markdown.Contains(word, StringComparison.OrdinalIgnoreCase)
+                || url.Contains(word, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>後台管理員／編輯者直接回覆評論；回覆自動為已核可狀態，若原評論尚待審則一併核可。</summary>
