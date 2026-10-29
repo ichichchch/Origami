@@ -67,6 +67,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<TestEmailSender>());
         services.AddScoped<WxrImportService>();
         services.AddScoped<SettingsService>();
+        services.AddScoped<WebhookService>();
         // 助理對共用的腳本化用戶端運作；完全不涉及供應商或金鑰。
         services.AddSingleton<FakeChatClient>();
         services.AddSingleton<IAssistantChatClientFactory>(provider =>
