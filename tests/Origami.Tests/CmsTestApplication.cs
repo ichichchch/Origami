@@ -68,6 +68,9 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<WxrImportService>();
         services.AddScoped<SettingsService>();
         services.AddScoped<WebhookService>();
+        services.AddScoped<SiteHealthService>();
+        services.AddOptions<BackupOptions>();
+        services.AddScoped<BackupService>();
         // 助理對共用的腳本化用戶端運作；完全不涉及供應商或金鑰。
         services.AddSingleton<FakeChatClient>();
         services.AddSingleton<IAssistantChatClientFactory>(provider =>
