@@ -45,6 +45,15 @@ else
             </figure>
         }
         <div class="prose">@((MarkupString)_html)</div>
+        @if (_content.CustomTerms.Count > 0)
+        {
+            <div class="chip-list" aria-label="自訂分類詞彙">
+                @foreach (var term in _content.CustomTerms)
+                {
+                    <a class="chip" href="@($"/t/{Uri.EscapeDataString(Slug ?? "")}/{Uri.EscapeDataString(term.TaxonomySlug)}/{Uri.EscapeDataString(term.TermSlug)}")">@term.TaxonomyName：@term.TermName</a>
+                }
+            </div>
+        }
         @if (_content.Fields.Count > 0)
         {
             <dl class="field-list" aria-label="@UiText.T("Public.TypeContent.Fields", "自訂欄位")">

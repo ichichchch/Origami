@@ -1,4 +1,7 @@
 @page "/posts/{Slug}"
+@page "/posts/{Year:int}/{Month:int}/{Slug}"
+@page "/posts/{Year:int}/{Month:int}/{Day:int}/{Slug}"
+@page "/archives/p/{PostId:guid}"
 @page "/pages/{*SlugPath}"
 @inject OrigamiClient Api
 @inject MarkdownService Markdown
@@ -261,6 +264,10 @@ else
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public int? Year { get; set; }
+    [Parameter] public int? Month { get; set; }
+    [Parameter] public int? Day { get; set; }
+    [Parameter] public Guid? PostId { get; set; }
     /// <summary>頁面的階層網址路徑（可能含多段）；文章路由使用 <see cref="Slug"/>。</summary>
     [Parameter] public string SlugPath { get; set; } = "";
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
@@ -339,7 +346,7 @@ else
     {
         var redirect = await Api.ResolveRedirectAsync(slug, ct);
         if (redirect is null) return false;
-        RedirectMovedPermanently("/" + (redirect.Kind == ContentKind.Page ? "pages/" : "posts/") + Uri.EscapeDataString(redirect.Slug));
+        RedirectMovedPermanently(redirect.PublicPath);
         return true;
     }
     private void RedirectMovedPermanently(string location)
@@ -528,13 +535,25 @@ else
             }
             else
             {
-                _content = await Api.GetPublishedDetailAsync(ContentKind.Post, Slug, ct);
-                if (_content is null)
+                if (PostId is { } postId && postId != Guid.Empty)
                 {
-                    // 已發布內容的汰換 slug 透過永久轉址持續可用。
-                    if (await ResolveRetiredSlugAsync(Slug, ct)) return;
-                    ServeNotFound();
-                    return;
+                    _content = await Api.GetPublishedPostByIdDetailAsync(postId, ct);
+                    if (_content is null)
+                    {
+                        ServeNotFound();
+                        return;
+                    }
+                }
+                else
+                {
+                    _content = await Api.GetPublishedDetailAsync(ContentKind.Post, Slug, ct);
+                    if (_content is null)
+                    {
+                        // 已發布內容的汰換 slug 透過永久轉址持續可用。
+                        if (await ResolveRetiredSlugAsync(Slug, ct)) return;
+                        ServeNotFound();
+                        return;
+                    }
                 }
             }
             _locked = _content.IsProtected

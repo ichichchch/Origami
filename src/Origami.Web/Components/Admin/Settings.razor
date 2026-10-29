@@ -37,6 +37,48 @@
                     </select>
                     <span class="field-help">@UiText.T("Admin.Settings.HomeDisplayHelp", "選擇已發布頁面作為首頁時，文章列表會改到 /posts；頁面撤回或轉為私密時自動退回文章列表。")</span>
                 </div>
+                <div class="field">
+                    <label for="privacy-page">隱私權政策頁（選填）</label>
+                    <select id="privacy-page" disabled="@Blocked" value="@(_model.PrivacyPageContentId?.ToString() ?? "")" @onchange="PrivacyChanged">
+                        <option value="">未指定</option>
+                        @foreach (var option in _homeOptions)
+                        {
+                            <option value="@option.Id">@option.Title</option>
+                        }
+                    </select>
+                    <span class="field-help">指定為本站隱私權政策的已發布獨立頁面，設定後會自動顯示於前台頁尾連結。</span>
+                </div>
+                <div class="field">
+                    <label for="permalink-scheme">文章永久連結結構（Permalinks）</label>
+                    <select id="permalink-scheme" disabled="@Blocked" @bind="_model.PermalinkScheme">
+                        @foreach (var scheme in PermalinkRules.Schemes)
+                        {
+                            <option value="@scheme.Key">@scheme.Label（@scheme.Example）</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="site-timezone">站點預設時區</label>
+                    <input id="site-timezone" @bind="_model.TimeZoneId" @bind:event="oninput" maxlength="@Limits.TimeZoneId" disabled="@Blocked" placeholder="UTC 或 Asia/Taipei" />
+                </div>
+                <div class="field">
+                    <label for="site-date-format">日期顯示格式</label>
+                    <select id="site-date-format" disabled="@Blocked" @bind="_model.DateFormat">
+                        @foreach (var fmt in PermalinkRules.AllowedDateFormats)
+                        {
+                            <option value="@fmt">@fmt</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="site-time-format">時間顯示格式</label>
+                    <select id="site-time-format" disabled="@Blocked" @bind="_model.TimeFormat">
+                        @foreach (var fmt in PermalinkRules.AllowedTimeFormats)
+                        {
+                            <option value="@fmt">@fmt</option>
+                        }
+                    </select>
+                </div>
                 <div class="field"><label for="posts-per-page">@UiText.T("Admin.Settings.PostsPerPage", "每頁文章數")</label><input id="posts-per-page" type="number" min="1" max="@Limits.MaxPageSize" @bind="_model.PostsPerPage" disabled="@Blocked" aria-describedby="posts-per-page-help" /><span id="posts-per-page-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.PostsPerPageHelp", "1–{0}；留空使用預設 {1} 篇。"), Limits.MaxPageSize, Limits.PageSize)</span></div>
                 <div class="field"><label for="feed-items">@UiText.T("Admin.Settings.FeedItems", "RSS Feed 條數")</label><input id="feed-items" type="number" min="1" max="@Limits.MaxFeedItems" @bind="_model.FeedItems" disabled="@Blocked" aria-describedby="feed-items-help" /><span id="feed-items-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.FeedItemsHelp", "1–{0}；留空使用預設 {1} 篇。"), Limits.MaxFeedItems, Limits.FeedItems)</span></div>
                 <div class="field checkbox-field">
@@ -47,6 +89,7 @@
                 <div class="field checkbox-field">
                     <label for="comments-enabled"><input id="comments-enabled" type="checkbox" @bind="_model.CommentsEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.EnableComments", "開放訪客評論")</label>
                     <label for="comments-auto"><input id="comments-auto" type="checkbox" @bind="_model.CommentAutoApprove" disabled="@Blocked" /> @UiText.T("Admin.Settings.AutoApproveComments", "評論自動核可")</label>
+                    <label for="email-notifications"><input id="email-notifications" type="checkbox" @bind="_model.EmailNotificationsEnabled" disabled="@Blocked" /> 啟用評論與審稿流程電子郵件通知</label>
                     <p class="field-help">@UiText.T("Admin.Settings.CommentsHelp", "開放後已發布文章顯示評論表單；未自動核可時，評論須在「評論」頁審核後才會公開。蜜罐與連結過量的評論會自動進入垃圾佇列。")</p>
                 </div>
                 <div class="field">
@@ -158,6 +201,7 @@
         <div class="button-row">
             <a class="button button-secondary" href="@ExportHref" download data-enhance-nav="false">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.DownloadExport", "下載資料匯出（JSON{0}）"), FilterSuffix)</a>
             <a class="button button-secondary" href="/admin/export-archive" download data-enhance-nav="false">@UiText.T("Admin.Settings.DownloadBackup", "下載完整備份（ZIP，含圖片）")</a>
+            <a class="button button-secondary" href="/admin/export-wxr" download data-enhance-nav="false">下載 WordPress WXR 匯出（XML）</a>
         </div>
     </section>
     <section class="panel settings-panel settings-width">
@@ -210,6 +254,19 @@
                     <ul>@foreach (var warning in _wxrPreview.Warnings) { <li>@warning</li> }</ul>
                 }
             </div>
+            @if (_wxrPreview.Attachments > 0)
+            {
+                <div class="field checkbox-field">
+                    <label for="wxr-download-attachments"><input id="wxr-download-attachments" type="checkbox" @bind="_wxrDownloadAttachments" disabled="@Blocked" /> 下載並遷移附件（限公開 HTTPS，最多 @Limits.WxrAttachmentMaxCount 筆）</label>
+                </div>
+                @if (_wxrDownloadAttachments)
+                {
+                    <div class="field">
+                        <label for="wxr-allowed-hosts">允許下載附件的網域白名單（選填，逗號分隔）</label>
+                        <input id="wxr-allowed-hosts" @bind="_wxrAllowedHosts" @bind:event="oninput" disabled="@Blocked" placeholder="example.com, cdn.example.com" />
+                    </div>
+                }
+            }
             <div class="button-row">
                 <button type="button" class="button" disabled="@AdministrationBlocked" @onclick="ApplyWxr">@UiText.T("Admin.Settings.StartImport", "開始匯入")</button>
                 <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelWxr">@UiText.T("Admin.Settings.Cancel", "取消")</button>
@@ -279,6 +336,11 @@
         if (_model is null) return;
         _model.HomePageContentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
     }
+    private void PrivacyChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        _model.PrivacyPageContentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
     private void IconChanged(ChangeEventArgs args)
     {
         if (_model is null) return;
@@ -319,6 +381,8 @@
     private WxrImportService.WxrResult? _wxrResult;
     private byte[]? _wxrFile;
     private string? _wxrError;
+    private bool _wxrDownloadAttachments;
+    private string _wxrAllowedHosts = "";
 
     private async Task ChooseWxr(InputFileChangeEventArgs args)
     {
@@ -347,7 +411,7 @@
     {
         if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.WxrImportDenied", "WXR 匯入僅限本站管理員。"));
         if (_wxrFile is null) return;
-        _wxrResult = await Api.ApplyWxrAsync(_wxrFile, ct);
+        _wxrResult = await Api.ApplyWxrAsync(_wxrFile, ct, _wxrDownloadAttachments, _wxrAllowedHosts);
         _wxrFile = null;
         _wxrPreview = null;
     }, UiText.T("Admin.Settings.WxrImported", "WXR 內容已匯入本站。"));

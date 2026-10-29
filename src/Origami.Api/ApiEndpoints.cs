@@ -29,21 +29,27 @@ public static class ApiEndpoints
         group.MapGet("/pages/{slug}", async (string slug, ContentService content, CancellationToken ct) =>
             PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Page, slug, ct)));
 
-        group.MapGet("/search", async (string? q, int? limit, int? page, PublicSearchService search, CancellationToken ct) =>
+        group.MapGet("/search", async (string? q, int? limit, int? page, bool? includePages, PublicSearchService search, CancellationToken ct) =>
         {
             var query = (q ?? "").Trim();
             if (query.Length == 0) return Results.BadRequest(new { message = "請輸入搜尋文字。" });
             if (query.Length > Limits.SearchQueryMax) return Results.BadRequest(new { message = "搜尋文字過長。" });
             if (page is < 1) return Results.BadRequest(new { message = "參數 page 無效。" });
             // 缺少嵌入供應商時關鍵字比對仍可運作，僅語意搜尋這一環降級。
-            return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, page ?? 1, ct));
+            return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, page ?? 1, ct, includePages == true));
         });
 
-        group.MapGet("/settings", async (SettingsService settings, MediaService media, CancellationToken ct) =>
+        group.MapGet("/settings", async (SettingsService settings, ContentService content, MediaService media, CancellationToken ct) =>
         {
             var value = await settings.GetAsync(ct);
             // 頁首標誌以檔名呈現；媒體網址由網站主機的 /media 提供。
             var logoFileName = await media.GetSiteLogoFileNameAsync(ct);
+            string privacySlug = "", privacyTitle = "";
+            if (value.PrivacyPageContentId is { } privId && await content.GetPublishedPageAsync(privId, ct) is { } privPage)
+            {
+                privacySlug = privPage.Slug;
+                privacyTitle = privPage.Title;
+            }
             return Results.Ok(new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
                 value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId, value.LogoMediaId)
             { LogoFileName = logoFileName ?? "", CommentsEnabled = value.CommentsEnabled,
@@ -52,7 +58,9 @@ public static class ApiEndpoints
                 ShowByline = value.ShowByline, ShowCover = value.ShowCover, CardStyle = value.CardStyle,
                 ColorScheme = value.ColorScheme, FooterText = value.FooterText,
                 SocialGithubUrl = value.SocialGithubUrl, SocialXUrl = value.SocialXUrl, SocialMastodonUrl = value.SocialMastodonUrl,
-                MaintenanceMode = value.MaintenanceMode, MaintenanceMessage = value.MaintenanceMessage });
+                MaintenanceMode = value.MaintenanceMode, MaintenanceMessage = value.MaintenanceMessage,
+                PrivacyPageContentId = value.PrivacyPageContentId, PrivacyPageSlug = privacySlug, PrivacyPageTitle = privacyTitle,
+                PermalinkScheme = value.PermalinkScheme, TimeZoneId = value.TimeZoneId, DateFormat = value.DateFormat, TimeFormat = value.TimeFormat });
         });
 
         group.MapGet("/navigation", async (NavigationService navigation, CancellationToken ct) =>
@@ -88,13 +96,24 @@ public static class ApiEndpoints
         {
             if (!TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
             if (!TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
-            var result = await content.ListByTypeAsync(slug, page ?? 1, pageSize ?? Limits.PageSize, ct);
+            string? taxonomy = http.Request.Query["taxonomy"].Count > 0 ? http.Request.Query["taxonomy"].ToString() : null;
+            string? term = http.Request.Query["term"].Count > 0 ? http.Request.Query["term"].ToString() : null;
+            var result = await content.ListByTypeAsync(slug, page ?? 1, pageSize ?? Limits.PageSize, ct, taxonomy, term);
             return result is null ? Results.NotFound() : Results.Ok(result);
         });
+
+        group.MapGet("/types/{slug}/taxonomies/{taxonomySlug}/terms/{termSlug}", async (
+            string slug, string taxonomySlug, string termSlug, ContentService content, CancellationToken ct) =>
+            await content.GetPublicCustomTermAsync(slug, taxonomySlug, termSlug, ct) is { } term
+                ? Results.Ok(term)
+                : Results.NotFound());
 
         group.MapGet("/types/{slug}/contents/{contentSlug}", async (string slug, string contentSlug,
             ContentService content, CancellationToken ct) =>
             PublishedOrNotFound(await content.GetPublishedByTypeAsync(slug, contentSlug, ct)));
+
+        group.MapGet("/posts/by-id/{id:guid}", async (Guid id, ContentService content, CancellationToken ct) =>
+            PublishedOrNotFound(await content.GetPublishedPostByIdAsync(id, ct)));
 
         group.MapGet("/categories/popular", async (ContentService content, CancellationToken ct) =>
             Results.Ok(await content.PopularCategoriesAsync(ct)));
@@ -133,9 +152,90 @@ public static class ApiEndpoints
             var count = Math.Clamp(configured.FeedItems ?? Limits.FeedItems, 1, Limits.MaxFeedItems);
             string? category = http.Request.Query["category"].Count > 0 ? http.Request.Query["category"].ToString() : null;
             string? tag = http.Request.Query["tag"].Count > 0 ? http.Request.Query["tag"].ToString() : null;
+            string? author = http.Request.Query["author"].Count > 0 ? http.Request.Query["author"].ToString() : null;
+            string? typeSlug = http.Request.Query["type"].Count > 0 ? http.Request.Query["type"].ToString() : null;
+            string? taxonomy = http.Request.Query["taxonomy"].Count > 0 ? http.Request.Query["taxonomy"].ToString() : null;
+            string? term = http.Request.Query["term"].Count > 0 ? http.Request.Query["term"].ToString() : null;
+            string? search = http.Request.Query["q"].Count > 0 ? http.Request.Query["q"].ToString() : null;
             // 不複用 BFF 完整呈現方法，避免保護文章的正文經匿名 JSON feed 外洩。
-            return Results.Ok(await content.FeedAsync(count, category, tag, ct));
+            return Results.Ok(await content.FeedAsync(count, category, tag, ct, author, typeSlug, taxonomy, term, search));
         });
+
+        group.MapGet("/feed/comments", async (CommentService comments, SettingsService settings, CancellationToken ct) =>
+        {
+            var configured = await settings.GetAsync(ct);
+            var count = Math.Clamp(configured.FeedItems ?? Limits.FeedItems, 1, Limits.MaxFeedItems);
+            return Results.Ok(await comments.FeedCommentsAsync(count, ct));
+        });
+
+        // OpenAPI v3 規格文件與端點探索索引。
+        group.MapGet("/openapi.json", (HttpContext http) => Results.Ok(BuildOpenApiDocument(http)));
+        app.MapGet("/openapi/v1.json", (HttpContext http) => Results.Ok(BuildOpenApiDocument(http))).AllowAnonymous();
+    }
+
+    private static object BuildOpenApiDocument(HttpContext http)
+    {
+        var serverUrl = $"{http.Request.Scheme}://{http.Request.Host.Value}";
+        return new
+        {
+            openapi = "3.1.0",
+            info = new
+            {
+                title = "Origami Publishing CMS API",
+                version = "v1",
+                description = "Origami API-first 雙層架構契約：提供公開唯讀端點（/api/v1）與受保護的管理端點（/api/v1/admin，支援 BFF 與個人 API 憑證 PAT）。"
+            },
+            servers = new[] { new { url = serverUrl } },
+            components = new
+            {
+                securitySchemes = new
+                {
+                    BearerAuth = new
+                    {
+                        type = "http",
+                        scheme = "bearer",
+                        description = "個人 API 憑證（PAT）或 BFF 服務通行證。"
+                    }
+                }
+            },
+            paths = new Dictionary<string, object>
+            {
+                ["/api/v1/posts"] = new { get = new { summary = "列出已發布文章（支援分頁、分類、標籤、作者、年月篩選）", tags = new[] { "Public" } } },
+                ["/api/v1/posts/{slug}"] = new { get = new { summary = "依代稱取得單篇已發布文章", tags = new[] { "Public" } } },
+                ["/api/v1/pages/{slug}"] = new { get = new { summary = "依代稱取得已發布獨立頁面", tags = new[] { "Public" } } },
+                ["/api/v1/types"] = new { get = new { summary = "列出公開自訂內容類型（CPT）", tags = new[] { "Public" } } },
+                ["/api/v1/types/{slug}/contents"] = new { get = new { summary = "列出指定自訂內容類型的已發布內容（支援自訂分類法與詞彙篩選）", tags = new[] { "Public" } } },
+                ["/api/v1/types/{slug}/contents/{contentSlug}"] = new { get = new { summary = "取得單篇自訂內容類型詳情", tags = new[] { "Public" } } },
+                ["/api/v1/search"] = new { get = new { summary = "混合式關鍵字與語意搜尋（type-aware，支援 includePages）", tags = new[] { "Public" } } },
+                ["/api/v1/settings"] = new { get = new { summary = "取得站點公開設定、版型、永久連結與時區格式", tags = new[] { "Public" } } },
+                ["/api/v1/feed"] = new { get = new { summary = "取得訂閱內容項目（支援分類、標籤、作者、搜尋、CPT 與自訂詞彙篩選）", tags = new[] { "Public" } } },
+                ["/api/v1/feed/comments"] = new { get = new { summary = "取得最新已核可評論訂閱項目", tags = new[] { "Public" } } },
+                ["/api/v1/sitemap"] = new { get = new { summary = "取得全站公開 Sitemap 項目", tags = new[] { "Public" } } },
+                ["/api/v1/admin/contents"] = new
+                {
+                    get = new { summary = "後台列出內容（支援狀態、關鍵字、作者、分類、標籤與日期區間篩選）", tags = new[] { "Admin" } },
+                    post = new { summary = "建立新內容（草稿、待審或直接發布）", tags = new[] { "Admin" } }
+                },
+                ["/api/v1/admin/contents/{id}"] = new
+                {
+                    get = new { summary = "讀取內容完整編輯模型", tags = new[] { "Admin" } },
+                    put = new { summary = "更新內容並建立完整修訂快照", tags = new[] { "Admin" } },
+                    delete = new { summary = "移入回收桶或永久刪除內容", tags = new[] { "Admin" } }
+                },
+                ["/api/v1/admin/contents/bulk"] = new { post = new { summary = "批次操作內容（回收桶、還原、刪除、改作者、加分類／標籤、開關評論）", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/contents/{id}/revisions"] = new { get = new { summary = "列出內容修訂版本", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/revisions/{id}"] = new { get = new { summary = "取得修訂版本完整快照（含 SEO、分類、自訂欄位等）", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/webhooks/deliveries"] = new { get = new { summary = "查詢持久化 Webhook 投遞紀錄與狀態", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/webhooks/deliveries/{id}/retry"] = new { post = new { summary = "手動重送指定的 Webhook 投遞", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/site-health"] = new { get = new { summary = "取得管理後台 Site Health 完整系統健康檢查報告", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/transfer/export-wxr"] = new { get = new { summary = "匯出站點內容為 WordPress WXR 1.2 XML", tags = new[] { "Admin" } } },
+                ["/api/v1/admin/profile/personal-data"] = new
+                {
+                    get = new { summary = "匯出目前帳號的個人資料套件（GDPR）", tags = new[] { "Privacy" } },
+                    delete = new { summary = "執行帳號個人資料抹除與內容匿名化", tags = new[] { "Privacy" } }
+                }
+            }
+        };
     }
 
     public sealed record PublicSiteSettings(string Name, string Description, int? PostsPerPage, int? FeedItems,
@@ -168,6 +268,13 @@ public static class ApiEndpoints
         public string SocialMastodonUrl { get; init; } = "";
         public bool MaintenanceMode { get; init; }
         public string MaintenanceMessage { get; init; } = "";
+        public Guid? PrivacyPageContentId { get; init; }
+        public string PrivacyPageSlug { get; init; } = "";
+        public string PrivacyPageTitle { get; init; } = "";
+        public string PermalinkScheme { get; init; } = PermalinkRules.PostName;
+        public string TimeZoneId { get; init; } = "UTC";
+        public string DateFormat { get; init; } = "yyyy.MM.dd";
+        public string TimeFormat { get; init; } = "HH:mm";
     }
 
     /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>

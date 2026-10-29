@@ -1,4 +1,5 @@
 @page "/t/{Slug}"
+@page "/t/{Slug}/{TaxonomySlug}/{TermSlug}"
 @inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
@@ -6,8 +7,9 @@
 
 <PageTitle>@UiText.T("Public.TypeArchive.PageTitle", "{0} · 內容專區")</PageTitle>
 <HeadContent>
+    <link rel="alternate" type="application/rss+xml" title="@_title" href="@FeedHref" />
     <meta name="description" content="@_settings.Description" />
-    <link rel="canonical" href="@(BaseUrl + "/t/" + Uri.EscapeDataString(Slug ?? ""))" />
+    <link rel="canonical" href="@(BaseUrl + ArchiveBasePath)" />
     <meta property="og:site_name" content="@_settings.Name" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="@_title" />
@@ -32,9 +34,10 @@ else if (_result!.Items.Count == 0)
 else
 {
     <section class="public-heading">
-        <p class="eyebrow">@UiText.T("Public.TypeArchive.Eyebrow", "內容專區")</p>
+        <p class="eyebrow">@(_termArchive is not null ? $"{_termArchive.TypeName} › {_termArchive.TaxonomyName}" : UiText.T("Public.TypeArchive.Eyebrow", "內容專區"))</p>
         <h1>@_title<span class="heading-dot">.</span></h1>
         @if (!string.IsNullOrEmpty(_description)) { <p>@_description</p> }
+        <p class="field-help"><a href="@FeedHref">訂閱此專區 RSS ↗</a></p>
     </section>
     <div class="post-list">
         @foreach (var item in _result.Items)
@@ -59,21 +62,29 @@ else
 
 @code {
     [Parameter] public string? Slug { get; set; }
+    [Parameter] public string? TaxonomySlug { get; set; }
+    [Parameter] public string? TermSlug { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public string? Page { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private PagedResult<ContentSummary>? _result;
+    private ContentService.PublicCustomTermArchive? _termArchive;
     private string? _error;
     private string _title = "";
     private string _description = "";
     private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
 
+    private string ArchiveBasePath => !string.IsNullOrWhiteSpace(TaxonomySlug) && !string.IsNullOrWhiteSpace(TermSlug)
+        ? $"/t/{Uri.EscapeDataString(Slug ?? "")}/{Uri.EscapeDataString(TaxonomySlug)}/{Uri.EscapeDataString(TermSlug)}"
+        : "/t/" + Uri.EscapeDataString(Slug ?? "");
+    private string FeedHref => ArchiveBasePath + "/feed";
     private string ItemUrl(string slug) => "/t/" + Uri.EscapeDataString(Slug ?? "") + "/" + Uri.EscapeDataString(slug);
-    private string PageUrl(int page) => "/t/" + Uri.EscapeDataString(Slug ?? "") + "?page=" + page;
+    private string PageUrl(int page) => ArchiveBasePath + "?page=" + page;
 
     protected override async Task OnParametersSetAsync()
     {
         _result = null;
+        _termArchive = null;
         _error = null;
         var page = 1;
         if (Page is not null && (!int.TryParse(Page, out page) || page < 1 || page > int.MaxValue / Limits.PageSize))
@@ -87,7 +98,14 @@ else
             if (type is null) { Missing(); return; }
             _title = type.Name;
             _description = type.Description;
-            _result = await Api.ListTypeContentsAsync(type.Slug, page, _settings.PostsPerPage ?? Limits.PageSize, ct);
+            if (!string.IsNullOrWhiteSpace(TaxonomySlug) && !string.IsNullOrWhiteSpace(TermSlug))
+            {
+                _termArchive = await Api.GetPublicCustomTermAsync(type.Slug, TaxonomySlug, TermSlug, ct);
+                if (_termArchive is null) { Missing(); return; }
+                _title = _termArchive.TermName;
+                _description = _termArchive.TermDescription;
+            }
+            _result = await Api.ListTypeContentsAsync(type.Slug, page, _settings.PostsPerPage ?? Limits.PageSize, ct, TaxonomySlug, TermSlug);
             if (_result is null || page > _result.TotalPages) { Missing(); return; }
         }
         catch (CmsException) { Missing(); }

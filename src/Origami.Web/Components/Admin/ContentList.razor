@@ -78,7 +78,38 @@
     <div class="content-search">
         <label class="sr-only" for="content-search">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentList.Search", "搜尋{0}"), Label)</label>
         <input id="content-search" type="search" placeholder="@UiText.T("Admin.ContentList.SearchPlaceholder", "搜尋標題或網址代稱…")" maxlength="200" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
-        @if (_search.Length > 0)
+        <label class="sr-only" for="filter-author">作者篩選</label>
+        <select id="filter-author" value="@_filterAuthorId" @onchange="AuthorFilterChanged" disabled="@Blocked">
+            <option value="">全部作者</option>
+            @foreach (var author in _authors)
+            {
+                <option value="@author.UserId">@author.DisplayName</option>
+            }
+        </select>
+        @if (Kind == ContentKind.Post)
+        {
+            <label class="sr-only" for="filter-category">分類篩選</label>
+            <select id="filter-category" value="@(_filterCategoryId?.ToString() ?? "")" @onchange="CategoryFilterChanged" disabled="@Blocked">
+                <option value="">全部分類</option>
+                @foreach (var cat in _categories)
+                {
+                    <option value="@cat.Id">@cat.Name</option>
+                }
+            </select>
+            <label class="sr-only" for="filter-tag">標籤篩選</label>
+            <select id="filter-tag" value="@(_filterTagId?.ToString() ?? "")" @onchange="TagFilterChanged" disabled="@Blocked">
+                <option value="">全部標籤</option>
+                @foreach (var tag in _tags)
+                {
+                    <option value="@tag.Id">#@tag.Name</option>
+                }
+            </select>
+        }
+        <label class="sr-only" for="filter-date-from">起始日期</label>
+        <input id="filter-date-from" type="date" value="@(_filterDateFrom?.ToString("yyyy-MM-dd") ?? "")" @onchange="DateFromChanged" disabled="@Blocked" title="起始日期" />
+        <label class="sr-only" for="filter-date-to">結束日期</label>
+        <input id="filter-date-to" type="date" value="@(_filterDateTo?.ToString("yyyy-MM-dd") ?? "")" @onchange="DateToChanged" disabled="@Blocked" title="結束日期" />
+        @if (HasActiveFilters)
         {
             <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">@UiText.T("Admin.ContentList.Clear", "清除")</button>
         }
@@ -98,6 +129,41 @@
                     else
                     {
                         <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Trash)">@UiText.T("Admin.ContentList.BulkTrash", "批次移入回收桶")</button>
+                        @if (_authors.Count > 0)
+                        {
+                            <select aria-label="批次指派作者" value="@_bulkAuthorId" @onchange="e => _bulkAuthorId = e.Value?.ToString() ?? string.Empty" disabled="@EditBlocked">
+                                <option value="">指派作者…</option>
+                                @foreach (var a in _authors)
+                                {
+                                    <option value="@a.UserId">@a.DisplayName</option>
+                                }
+                            </select>
+                            <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || string.IsNullOrEmpty(_bulkAuthorId))" @onclick="() => BulkAsync(BulkAction.SetAuthor, new BulkEditOptions(AuthorId: _bulkAuthorId))">批次改作者</button>
+                        }
+                        @if (Kind == ContentKind.Post && _categories.Count > 0)
+                        {
+                            <select aria-label="批次加入分類" value="@(_bulkCategoryId?.ToString() ?? "")" @onchange="e => _bulkCategoryId = Guid.TryParse(e.Value?.ToString(), out var cid) ? cid : null" disabled="@EditBlocked">
+                                <option value="">加入分類…</option>
+                                @foreach (var c in _categories)
+                                {
+                                    <option value="@c.Id">@c.Name</option>
+                                }
+                            </select>
+                            <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkCategoryId is null)" @onclick="() => BulkAsync(BulkAction.AddCategory, new BulkEditOptions(CategoryId: _bulkCategoryId))">批次加分類</button>
+                        }
+                        @if (Kind == ContentKind.Post && _tags.Count > 0)
+                        {
+                            <select aria-label="批次加入標籤" value="@(_bulkTagId?.ToString() ?? "")" @onchange="e => _bulkTagId = Guid.TryParse(e.Value?.ToString(), out var tid) ? tid : null" disabled="@EditBlocked">
+                                <option value="">加入標籤…</option>
+                                @foreach (var t in _tags)
+                                {
+                                    <option value="@t.Id">#@t.Name</option>
+                                }
+                            </select>
+                            <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkTagId is null)" @onclick="() => BulkAsync(BulkAction.AddTag, new BulkEditOptions(TagId: _bulkTagId))">批次加標籤</button>
+                        }
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.EnableComments)">開放評論</button>
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.DisableComments)">關閉評論</button>
                     }
                     <button type="button" class="text-button" disabled="@EditBlocked" @onclick="ClearSelection">@UiText.T("Admin.ContentList.ClearSelection", "取消選取")</button>
                 </div>
@@ -154,6 +220,19 @@
     private int _page = 1;
     private ContentStatus? _status;
     private string _search = "";
+    private string _filterAuthorId = "";
+    private Guid? _filterCategoryId;
+    private Guid? _filterTagId;
+    private DateOnly? _filterDateFrom;
+    private DateOnly? _filterDateTo;
+    private List<AuthorOption> _authors = [];
+    private List<TaxonomyItem> _categories = [];
+    private List<TaxonomyItem> _tags = [];
+    private string _bulkAuthorId = "";
+    private Guid? _bulkCategoryId;
+    private Guid? _bulkTagId;
+    private bool HasActiveFilters => _search.Length > 0 || _filterAuthorId.Length > 0 || _filterCategoryId is not null
+        || _filterTagId is not null || _filterDateFrom is not null || _filterDateTo is not null;
     private ContentCounts? _counts;
     private string FilterLabel => string.Format(CultureInfo.CurrentCulture, _status switch
     {
@@ -180,6 +259,11 @@
         Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
         _page = 1;
         _status = null;
+        _filterAuthorId = "";
+        _filterCategoryId = null;
+        _filterTagId = null;
+        _filterDateFrom = null;
+        _filterDateTo = null;
         _counts = null;
         _result = null;
         _pendingDelete = null;
@@ -192,11 +276,20 @@
     private async Task RefreshAsync(CancellationToken ct)
     {
         var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
-        var result = await Api.ListAdminAsync(Kind, _page, status: _status, search: search, ct: ct)
+        var authorId = string.IsNullOrWhiteSpace(_filterAuthorId) ? null : _filterAuthorId.Trim();
+        var result = await Api.ListAdminAsync(Kind, _page, status: _status, search: search, ct: ct,
+            authorId: authorId, categoryId: _filterCategoryId, tagId: _filterTagId, dateFrom: _filterDateFrom, dateTo: _filterDateTo)
             ?? throw new CmsException(UiText.T("Admin.ContentList.LoadFailed", "無法載入內容列表。"));
         if (_page > result.TotalPages)
-            result = await Api.ListAdminAsync(Kind, result.TotalPages, status: _status, search: search, ct: ct) ?? result;
+            result = await Api.ListAdminAsync(Kind, result.TotalPages, status: _status, search: search, ct: ct,
+                authorId: authorId, categoryId: _filterCategoryId, tagId: _filterTagId, dateFrom: _filterDateFrom, dateTo: _filterDateTo) ?? result;
         var counts = await Api.CountAdminAsync(Kind, ct) ?? new ContentCounts(0, 0);
+        _authors = await Api.AuthorOptionsAsync(ct) ?? [];
+        if (Kind == ContentKind.Post)
+        {
+            _categories = (await Api.ListTaxonomiesAsync(TaxonomyKind.Category, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
+            _tags = (await Api.ListTaxonomiesAsync(TaxonomyKind.Tag, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
+        }
         _result = result;
         _page = result.Page;
         _counts = counts;
@@ -210,10 +303,55 @@
         _quickEdit = null;
         await LoadAsync();
     }
+    private async Task AuthorFilterChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _filterAuthorId = args.Value?.ToString() ?? "";
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+    private async Task CategoryFilterChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _filterCategoryId = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+    private async Task TagFilterChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _filterTagId = Guid.TryParse(args.Value?.ToString(), out var id) ? id : null;
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+    private async Task DateFromChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _filterDateFrom = DateOnly.TryParse(args.Value?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+    private async Task DateToChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _filterDateTo = DateOnly.TryParse(args.Value?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
     private async Task ClearSearch()
     {
         if (Blocked) return;
         _search = "";
+        _filterAuthorId = "";
+        _filterCategoryId = null;
+        _filterTagId = null;
+        _filterDateFrom = null;
+        _filterDateTo = null;
         _page = 1;
         _selected.Clear();
         _quickEdit = null;
@@ -323,7 +461,7 @@
     {
         if (!Blocked && _selected.Count > 0) _pendingBulkDelete = true;
     }
-    private async Task BulkAsync(BulkAction action)
+    private async Task BulkAsync(BulkAction action, BulkEditOptions? options = null)
     {
         if (Blocked || _result is null) return;
         _pendingBulkDelete = false;
@@ -331,7 +469,7 @@
         if (targets.Count == 0) return;
         await RunEditAsync(async ct =>
         {
-            var results = await Api.BulkContentsAsync(action, targets, ct) ?? throw new CmsException(UiText.T("Admin.ContentList.BulkFailed", "批次操作無法執行，請重試。"));
+            var results = await Api.BulkContentsAsync(action, targets, ct, options) ?? throw new CmsException(UiText.T("Admin.ContentList.BulkFailed", "批次操作無法執行，請重試。"));
             _selected.Clear();
             await RefreshAsync(ct);
             var failed = results.Where(x => !x.Succeeded).ToList();
@@ -340,13 +478,15 @@
                 {
                     BulkAction.Trash => UiText.T("Admin.ContentList.BulkTrashPartial", "批次移入回收桶完成：成功 {0} 筆、失敗 {1} 筆。例：{2}"),
                     BulkAction.Restore => UiText.T("Admin.ContentList.BulkRestorePartial", "批次還原完成：成功 {0} 筆、失敗 {1} 筆。例：{2}"),
-                    _ => UiText.T("Admin.ContentList.BulkDeletePartial", "批次永久刪除完成：成功 {0} 筆、失敗 {1} 筆。例：{2}")
+                    BulkAction.Delete => UiText.T("Admin.ContentList.BulkDeletePartial", "批次永久刪除完成：成功 {0} 筆、失敗 {1} 筆。例：{2}"),
+                    _ => "批次更新完成：成功 {0} 筆、失敗 {1} 筆。例：{2}"
                 }, results.Count - failed.Count, failed.Count, failed[0].Message));
         }, string.Format(CultureInfo.CurrentCulture, action switch
         {
             BulkAction.Trash => UiText.T("Admin.ContentList.BulkTrashedNotice", "已批次移入回收桶 {0} 筆內容。"),
             BulkAction.Restore => UiText.T("Admin.ContentList.BulkRestoredNotice", "已批次還原 {0} 筆內容。"),
-            _ => UiText.T("Admin.ContentList.BulkDeletedNotice", "已批次永久刪除 {0} 筆內容。")
+            BulkAction.Delete => UiText.T("Admin.ContentList.BulkDeletedNotice", "已批次永久刪除 {0} 筆內容。"),
+            _ => "已批次更新 {0} 筆內容。"
         }, targets.Count));
     }
 }

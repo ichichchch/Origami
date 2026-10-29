@@ -1,0 +1,137 @@
+@page "/admin/site-health"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>系統健康檢查與 Webhook · 內容管理</PageTitle>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">維運診斷與整合監控</p>
+        <h1>系統健康檢查（Site Health）</h1>
+        <p>檢視資料庫、儲存目錄可寫性、排程、AI 嵌入佇列、SMTP、備份與出站 Webhook 投遞狀態（不含任何機密或連線字串）。</p>
+    </div>
+    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">重新檢查</button>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+
+@if (_report is not null)
+{
+    <section class="panel settings-panel settings-width">
+        <div class="panel-toolbar">
+            <h2>整體健康狀態：<span class="status-badge @(_report.OverallStatus == "good" ? "published" : "draft")">@StatusLabel(_report.OverallStatus)</span></h2>
+            <span class="muted">檢查時間：@_report.CheckedAt.ToString("yyyy.MM.dd HH:mm:ss") UTC</span>
+        </div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">類別</th>
+                        <th scope="col">檢查項目</th>
+                        <th scope="col">狀態</th>
+                        <th scope="col">診斷摘要</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _report.Items)
+                    {
+                        <tr @key="item.Key">
+                            <td>@item.Category</td>
+                            <td><strong>@item.Title</strong></td>
+                            <td><span class="status-badge @(item.Status == "good" ? "published" : "draft")">@StatusLabel(item.Status)</span></td>
+                            <td>@item.Summary</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (_deliveries is not null)
+{
+    <section class="panel settings-panel settings-width">
+        <div class="panel-toolbar">
+            <h2>出站 Webhook 投遞紀錄 <span class="count">@_deliveries.Total</span></h2>
+            <span class="muted">支援持久化、指數退避自動重試與人工重送</span>
+        </div>
+        @if (_deliveries.Items.Count == 0)
+        {
+            <p class="empty-state">尚無 Webhook 投遞紀錄。</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">事件</th>
+                            <th scope="col">目標網址</th>
+                            <th scope="col">狀態</th>
+                            <th scope="col">嘗試次數</th>
+                            <th scope="col">最後回應</th>
+                            <th scope="col">時間</th>
+                            <th scope="col">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in _deliveries.Items)
+                        {
+                            <tr @key="d.Id">
+                                <td><code>@d.Event</code></td>
+                                <td><code>@d.TargetUrl</code></td>
+                                <td><span class="status-badge @(d.Status == WebhookDeliveryStatus.Succeeded ? "published" : "draft")">@d.Status</span></td>
+                                <td>@d.Attempts</td>
+                                <td>@(d.LastStatusCode?.ToString() ?? "") @(string.IsNullOrEmpty(d.LastError) ? "" : $"({d.LastError})")</td>
+                                <td>@d.CreatedAt.ToString("MM.dd HH:mm:ss")</td>
+                                <td>
+                                    <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RetryAsync(d.Id)">立即重送</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+<section class="panel settings-panel settings-width">
+    <div class="panel-intro">
+        <h2>OpenAPI 與 API 探索契約</h2>
+        <p>Origami 為 API-first 架構，提供機器可讀的 OpenAPI 3.1 規格文件與端點清單。</p>
+    </div>
+    <div class="button-row">
+        <a class="button button-secondary" href="/api/v1/openapi.json" target="_blank" rel="noopener">檢視 OpenAPI 3.1 JSON 契約 ↗</a>
+    </div>
+</section>
+
+@code {
+    private SiteHealthReport? _report;
+    private PagedResult<WebhookService.WebhookDeliveryView>? _deliveries;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException("系統健康檢查僅限本站管理員檢視。");
+        _report = await Api.GetSiteHealthAsync(ct);
+        _deliveries = await Api.ListWebhookDeliveriesAsync(1, 20, ct);
+    });
+
+    private Task RetryAsync(Guid id) => RunAsync(async ct =>
+    {
+        await Api.RetryWebhookDeliveryAsync(id, ct);
+        _deliveries = await Api.ListWebhookDeliveriesAsync(1, 20, ct);
+        _report = await Api.GetSiteHealthAsync(ct);
+    }, "已觸發 Webhook 重送。");
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "good" => "良好",
+        "warning" => "注意",
+        "critical" => "異常",
+        _ => status
+    };
+}

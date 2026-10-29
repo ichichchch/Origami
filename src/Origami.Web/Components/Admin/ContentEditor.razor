@@ -361,7 +361,7 @@ else if (_model is not null)
                         <a class="public-preview-link" href="@PublicPath" target="_blank" rel="noopener" data-enhance-nav="false">@UiText.T("Admin.ContentEditor.ViewPublicVersion", "檢視公開版本 ↗")</a>
                     }
                     @if (ChildBusy) { <p class="field-help" role="status">@UiText.T("Admin.ContentEditor.ChildOperationInProgress", "分類、標籤或圖片操作尚未完成，請稍候再儲存；可繼續編輯本文。")</p> }
-                    <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.AutosaveHelp", "既有草稿每 {0} 秒自動儲存一次（僅草稿）。首次發布日期由系統保留，重新發布不會重設。"), Limits.AutosaveSeconds)</p>
+                    <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.AutosaveHelp", "草稿（含尚未首次儲存的新草稿）每 {0} 秒自動儲存一次。首次發布日期由系統保留，重新發布不會重設。"), Limits.AutosaveSeconds)</p>
                 </section>
                 @if (_model.Kind == ContentKind.Post)
                 {
@@ -380,9 +380,18 @@ else if (_model is not null)
                             {
                                 <div class="revision-view">
                                     <p><strong>@_revisionView.Title</strong> · @_revisionView.CreatedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
+                                    @if (_revisionView.Slug != "")
+                                    {
+                                        <p class="field-help">代稱：<code>@_revisionView.Slug</code>@(string.IsNullOrWhiteSpace(_revisionView.AuthorName) ? "" : $" · 作者：{_revisionView.AuthorName}")@(_revisionView.NoIndex ? " · NoIndex" : "")</p>
+                                    }
                                     <label class="sr-only" for="@("revision-body-" + _revisionView.Id)">@UiText.T("Admin.ContentEditor.RevisionMarkdown", "修訂內容（Markdown）")</label>
                                     <pre id="@("revision-body-" + _revisionView.Id)" class="revision-body">@_revisionView.Markdown</pre>
                                     @if (_revisionView.Excerpt != "") { <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.RevisionExcerpt", "摘要：{0}"), _revisionView.Excerpt)</p> }
+                                    @if (_revisionView.MetaDescription != "") { <p class="field-help">SEO 描述：@_revisionView.MetaDescription</p> }
+                                    @if (_revisionView.CategoryIds.Count > 0 || _revisionView.TagIds.Count > 0 || _revisionView.CustomTermIds.Count > 0 || _revisionView.FieldValues.Count > 0)
+                                    {
+                                        <p class="field-help">結構快照：分類 @_revisionView.CategoryIds.Count 項 · 標籤 @_revisionView.TagIds.Count 項 · 自訂詞彙 @_revisionView.CustomTermIds.Count 項 · 自訂欄位 @_revisionView.FieldValues.Count 項</p>
+                                    }
                                     <div class="button-row">
                                         <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RestoreRevision(_revisionView)">@UiText.T("Admin.ContentEditor.LoadIntoEditor", "載入至編輯器")</button>
                                         <button type="button" class="text-button" disabled="@Blocked" @onclick="() => _revisionView = null">@UiText.T("Admin.ContentEditor.Close", "關閉")</button>
@@ -554,9 +563,9 @@ else if (_model is not null)
     private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(new
     {
         model.Id, model.Kind, model.Title, model.Slug, model.Markdown, model.Excerpt, model.IsSticky,
-        model.AllowComments, model.MenuOrder, model.AuthorId,
+        model.AllowComments, model.MenuOrder, model.AuthorId, model.MetaDescription, model.NoIndex,
         model.IsProtected, model.IsPrivate, model.ParentId, model.CoverMediaId, model.PublishAt, model.Status, model.Version,
-        model.CategoryIds, model.TagIds
+        model.CategoryIds, model.TagIds, model.CustomTermIds, model.FieldValues
     });
 
     protected override async Task OnParametersSetAsync()
@@ -599,7 +608,7 @@ else if (_model is not null)
         catch (InvalidOperationException) { /* 預渲染期間沒有 JS 執行階段；保持 UTC。 */ }
         // 此時已得知時區：以訪客自己的牆上時間顯示已儲存的排程。
         if (_model is not null && !_scheduleTouched) _scheduleLocal = ToLocalOffset(_model.PublishAt);
-        if (_model?.Id is not null)
+        if (_model is not null && EditAllowed)
         {
             _autosaveCts = new CancellationTokenSource();
             _ = RunAutosaveLoopAsync(_autosaveCts.Token);
@@ -718,19 +727,23 @@ else if (_model is not null)
     }
     private async Task AutosaveTickAsync(CancellationToken cancellation)
     {
-        // 自動儲存只處理既有草稿；其餘情況一律維持手動流程。
+        // 自動儲存支援既有草稿與已填入標題的新草稿；其餘情況一律維持手動流程。
         if (_autosaveStopped || cancellation.IsCancellationRequested || Busy || SaveBlocked || ChildBusy
-            || _model is not { Id: not null, Status: ContentStatus.Draft } || !Dirty) return;
+            || _model is not { Status: ContentStatus.Draft } || !Dirty) return;
+        if (_model.Id is null && string.IsNullOrWhiteSpace(_model.Title)) return;
         try
         {
             var input = BuildInput(ContentStatus.Draft);
+            var isNewDraft = input.Id is null;
             var sent = Snapshot(input);
             var sentVersion = input.Version;
-            var saved = await Api.UpdateContentAsync(input.Id!.Value, input, cancellation);
+            var saved = isNewDraft
+                ? await Api.CreateContentAsync(input, cancellation)
+                : await Api.UpdateContentAsync(input.Id!.Value, input, cancellation);
             if (_model is null) return;
             // 內容已在其他分頁被刪除（API 回 404）：停止自動儲存循環，交由手動流程處理。
             if (saved is null) { _autosaveStopped = true; return; }
-            if (_model.Version != sentVersion)
+            if (!isNewDraft && _model.Version != sentVersion)
             {
                 // 這次儲存執行期間，另一筆儲存已取代編輯器模型；以那筆結果為準。
                 return;
@@ -738,14 +751,24 @@ else if (_model is not null)
             if (Snapshot(_model) != sent)
             {
                 // 儲存執行期間管理員仍在輸入：較新的文字留在編輯器裡
-                // 交由下次自動儲存送出；這裡只採用新的版本號。
+                // 交由下次自動儲存送出；這裡只採用新的識別與版本號。
+                _model.Id = saved.Id;
+                _model.Slug = string.IsNullOrWhiteSpace(_model.Slug) ? saved.Slug : _model.Slug;
                 _model.Version = saved.Version;
+                _loadedId = saved.Id;
                 _baseline = sent;
                 return;
             }
             _model = saved;
+            _loadedId = saved.Id;
             _baseline = Snapshot(saved);
             _autosaveAt = DateTimeOffset.Now;
+            if (isNewDraft && saved.Id is { } newId)
+            {
+                try { await JavaScript.InvokeVoidAsync("history.replaceState", null, "", "/admin/content/" + newId); }
+                catch (JSException) { }
+                catch (InvalidOperationException) { }
+            }
         }
         catch (CmsException)
         {
@@ -802,10 +825,29 @@ else if (_model is not null)
     });
     private void RestoreRevision(RevisionDetail revision)
     {
-        // 還原只是把快照載入編輯器；管理員儲存前不會寫入任何資料。
+        // 還原把完整快照載入編輯器（含標題、代稱、本文、摘要、SEO、封面、作者、分類標籤、自訂詞彙與自訂欄位）；管理員儲存前不會寫入任何資料。
         _model!.Title = revision.Title;
+        if (!string.IsNullOrWhiteSpace(revision.Slug)) _model.Slug = revision.Slug;
         _model.Markdown = revision.Markdown;
         _model.Excerpt = revision.Excerpt;
+        _model.MetaDescription = revision.MetaDescription;
+        _model.NoIndex = revision.NoIndex;
+        _model.IsSticky = revision.IsSticky;
+        _model.AllowComments = revision.AllowComments;
+        _model.MenuOrder = revision.MenuOrder;
+        _model.ParentId = revision.ParentId;
+        _model.CoverMediaId = revision.CoverMediaId;
+        _model.CoverFileName = revision.CoverFileName;
+        _model.CoverAltText = revision.CoverAltText;
+        _model.CoverCaption = revision.CoverCaption;
+        if (!string.IsNullOrWhiteSpace(revision.AuthorId)) _model.AuthorId = revision.AuthorId;
+        if (!string.IsNullOrWhiteSpace(revision.AuthorName)) _model.AuthorName = revision.AuthorName;
+        if (revision.CategoryIds.Count > 0 || _model.Kind == ContentKind.Post) _model.CategoryIds = [.. revision.CategoryIds];
+        if (revision.TagIds.Count > 0 || _model.Kind == ContentKind.Post) _model.TagIds = [.. revision.TagIds];
+        _selectedTermIds = [.. revision.CustomTermIds];
+        _model.CustomTermIds = [.. revision.CustomTermIds];
+        _fieldValues = revision.FieldValues.ToDictionary(x => x.FieldId, x => x.Value);
+        _model.FieldValues = [.. revision.FieldValues];
         _revisionView = null;
         _revisionDiff = null;
         _diffTooLarge = false;

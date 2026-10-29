@@ -52,6 +52,10 @@
     }
     <footer class="site-footer">
         <span>@(string.IsNullOrWhiteSpace(_settings.FooterText) ? $"© {DateTime.UtcNow.Year} {_settings.Name}" : _settings.FooterText)</span>
+        @if (!string.IsNullOrWhiteSpace(_settings.PrivacyPageSlug))
+        {
+            <a href="@("/pages/" + Uri.EscapeDataString(_settings.PrivacyPageSlug))">@(string.IsNullOrWhiteSpace(_settings.PrivacyPageTitle) ? "隱私權政策" : _settings.PrivacyPageTitle)</a>
+        }
         @if (!string.IsNullOrWhiteSpace(_settings.SocialGithubUrl) || !string.IsNullOrWhiteSpace(_settings.SocialXUrl) || !string.IsNullOrWhiteSpace(_settings.SocialMastodonUrl))
         {
             <span class="footer-socials">

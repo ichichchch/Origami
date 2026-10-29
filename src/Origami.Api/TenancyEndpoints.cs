@@ -82,6 +82,12 @@ public static class TenancyEndpoints
             return Results.NoContent();
         });
 
+        group.MapGet("/users/{id}/personal-data", async (string id, SiteAdministrationService sites, CancellationToken ct) =>
+            Results.Ok(await sites.ExportUserPersonalDataAsync(id, ct)));
+
+        group.MapDelete("/users/{id}/personal-data", async (string id, SiteAdministrationService sites, CancellationToken ct) =>
+            Results.Ok(await sites.EraseUserPersonalDataAsync(id, ct)));
+
         group.MapGet("/members", async (SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.ListMembersAsync(ct)));
 
@@ -125,6 +131,12 @@ public static class TenancyEndpoints
             await sites.ChangeMyPasswordAsync(input, ct);
             return Results.NoContent();
         });
+
+        group.MapGet("/profile/personal-data", async (SiteAdministrationService sites, CancellationToken ct) =>
+            Results.Ok(await sites.ExportMyPersonalDataAsync(ct)));
+
+        group.MapDelete("/profile/personal-data", async (SiteAdministrationService sites, CancellationToken ct) =>
+            Results.Ok(await sites.EraseMyPersonalDataAsync(ct)));
     }
 
     public sealed record NavigationOrderInput(List<NavigationOrderItem>? Items);

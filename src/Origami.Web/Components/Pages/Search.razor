@@ -15,6 +15,10 @@
             <input id="search-query" type="search" name="q" value="@Query" maxlength="@Limits.SearchQueryMax" aria-describedby="search-help" />
             <p id="search-help" class="field-help">@string.Format(UiText.T("Public.Search.QueryHelp", "最多 {0} 字。搜尋文字會傳送至外部嵌入模型，請勿輸入密碼或敏感資料。"), Limits.SearchQueryMax)</p>
         </div>
+        @if (IncludePagesParam is "true" or "1")
+        {
+            <input type="hidden" name="includePages" value="true" />
+        }
         <button type="submit" class="button">@UiText.T("Public.Search.05", "搜尋文章")</button>
     </form>
     @if (!_semanticAvailable && !string.IsNullOrWhiteSpace(Query))
@@ -43,7 +47,7 @@
                 {
                     <li>
                         <article>
-                            <h3><span class="chip search-source">@SearchSourceLabel(hit.Source)</span> <a href="@("/posts/" + Uri.EscapeDataString(hit.Slug))">@hit.Title</a></h3>
+                            <h3><span class="chip search-source">@SearchSourceLabel(hit.Source)</span> <a href="@hit.ResolvedPath">@hit.Title</a></h3>
                             <p class="search-snippet">@hit.Snippet</p>
                         </article>
                     </li>
@@ -64,16 +68,18 @@
 @code {
     [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public string? PageParam { get; set; }
+    [SupplyParameterFromQuery(Name = "includePages")] public string? IncludePagesParam { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private IReadOnlyList<PublicSearchHit> _hits = [];
     private string? _error;
     private bool _semanticAvailable = true;
     private int _page = 1;
     private int _total;
+    private bool IncludePages => IncludePagesParam is "true" or "1";
     /// <summary>語意補強只在第一頁出現，總數取關鍵字總數與本頁實際筆數的較大者，避免「共 0 篇」卻列出結果。</summary>
     private int DisplayTotal => Math.Max(_total, _hits.Count);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)DisplayTotal / Limits.PageSize));
-    private string PageUrl(int page) => "/search?q=" + Uri.EscapeDataString((Query ?? "").Trim()) + "&page=" + page;
+    private string PageUrl(int page) => "/search?q=" + Uri.EscapeDataString((Query ?? "").Trim()) + (IncludePages ? "&includePages=true" : "") + "&page=" + page;
     private static string SearchSourceLabel(string source) => source switch
     {
         "關鍵字" => UiText.T("Public.Search.KeywordSource", "關鍵字"),
@@ -115,7 +121,7 @@
         if (string.IsNullOrWhiteSpace(Query)) return;
         try
         {
-            var result = await Api.SearchAsync(Query, page: _page, ct: HttpContext?.RequestAborted ?? default)
+            var result = await Api.SearchAsync(Query, page: _page, ct: HttpContext?.RequestAborted ?? default, includePages: IncludePages)
                 ?? new PublicSearchService.Result([], false, 0);
             _hits = result.Hits;
             _semanticAvailable = result.SemanticAvailable;

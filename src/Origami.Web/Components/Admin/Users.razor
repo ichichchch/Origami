@@ -39,6 +39,10 @@
                             {
                                 <button type="button" class="text-danger" disabled="@Blocked" @onclick="() => Reset2FaAsync(user)">@UiText.T("Admin.Users.Reset2FA", "重設 2FA")</button>
                             }
+                            @if (!user.IsNetworkAdmin)
+                            {
+                                <button type="button" class="text-danger" disabled="@Blocked" @onclick="() => EraseUserDataAsync(user)">抹除個資</button>
+                            }
                         </div></td></tr>
                 }
                 </tbody></table></div>
@@ -107,6 +111,12 @@
         await Api.ResetUserTwoFactorAsync(user.Id, ct);
         _result = await Api.ListUsersAsync(_page, _search, ct);
     }, UiText.T("Admin.Users.Reset2FaNotice", "已重設該使用者的兩步驟驗證與恢復碼。"));
+    private Task EraseUserDataAsync(UserSummary user) => RunAsync(async ct =>
+    {
+        RequireNetwork();
+        await Api.EraseUserPersonalDataAsync(user.Id, ct);
+        _result = await Api.ListUsersAsync(_page, _search, ct);
+    }, "已抹除該使用者的個人資料並將其發表內容匿名化。");
     protected override void Dispose(bool disposing)
     {
         _create.Password = "";

@@ -26,8 +26,13 @@ public static class AdminEndpoints
                 status = parsed;
             }
             var search = http.Request.Query["search"].ToString();
+            var authorId = http.Request.Query["authorId"].ToString();
+            Guid? categoryId = Guid.TryParse(http.Request.Query["categoryId"].ToString(), out var cId) ? cId : null;
+            Guid? tagId = Guid.TryParse(http.Request.Query["tagId"].ToString(), out var tId) ? tId : null;
+            DateOnly? dateFrom = DateOnly.TryParse(http.Request.Query["dateFrom"].ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var df) ? df : null;
+            DateOnly? dateTo = DateOnly.TryParse(http.Request.Query["dateTo"].ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt) ? dt : null;
             return Results.Ok(await content.ListAdminAsync(kind!.Value, page ?? 1, pageSize ?? Limits.PageSize, ct,
-                status, search.Length == 0 ? null : search));
+                status, search.Length == 0 ? null : search, authorId.Length == 0 ? null : authorId, categoryId, tagId, dateFrom, dateTo));
         });
 
         group.MapGet("/contents/{id}", async (Guid id, ContentService content, CancellationToken ct) =>
@@ -182,9 +187,25 @@ public static class AdminEndpoints
                 return Results.BadRequest(new { message = "請先選擇要操作的內容。" });
             if (input.Items.Count > Limits.BulkMaxItems)
                 return Results.BadRequest(new { message = $"單次批次操作最多 {Limits.BulkMaxItems} 筆。" });
-            var results = await content.BulkAsync(action, [.. input.Items.Select(x => (x.Id, x.Version))], ct);
+            var options = new BulkEditOptions(input.AuthorId, input.CategoryId, input.TagId);
+            var results = await content.BulkAsync(action, [.. input.Items.Select(x => (x.Id, x.Version))], ct, options);
             return Results.Ok(results);
         });
+
+        // 持久化 Webhook 投遞紀錄與人工重送。
+        group.MapGet("/webhooks/deliveries", async (HttpContext http, WebhookService webhooks, CancellationToken ct) =>
+        {
+            if (!ApiEndpoints.TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
+            if (!ApiEndpoints.TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
+            return Results.Ok(await webhooks.ListAdminAsync(page ?? 1, pageSize ?? Limits.PageSize, ct));
+        });
+
+        group.MapPost("/webhooks/deliveries/{id:guid}/retry", async (Guid id, WebhookService webhooks, CancellationToken ct) =>
+            Results.Ok(await webhooks.RetryManualAsync(id, ct)));
+
+        // 管理後台 Site Health 完整診斷報告。
+        group.MapGet("/site-health", async (SiteHealthService health, CancellationToken ct) =>
+            Results.Ok(await health.GetReportAsync(ct)));
 
         group.MapGet("/contents/counts", async (HttpContext http, ContentService content, CancellationToken ct) =>
         {
@@ -223,6 +244,11 @@ public static class AdminEndpoints
                 : Results.NotFound();
         }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
+        group.MapGet("/contents/published-by-id/{id:guid}", async (Guid id, ContentService content, CancellationToken ct) =>
+            await content.GetPublishedPostByIdAsync(id, ct) is { } detail
+                ? Results.Ok(detail)
+                : Results.NotFound()).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
         // 層級頁面網址的解析：多段路徑一次驗證父鏈，回傳內容與完整路徑段供轉址判斷。
         group.MapGet("/contents/published-page/{**path}", async (string path, ContentService content, CancellationToken ct) =>
         {
@@ -251,7 +277,7 @@ public static class AdminEndpoints
 
     public sealed record ProtectionUnlockInput(string? Password);
     public sealed record QuickEditInput(string? Title, string? Slug, ContentStatus Status, Guid Version);
-    public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items);
+    public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items, string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null);
     public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot, Guid? ParentId = null);
     public sealed record CommentReplyInput(string? Markdown);
     public sealed record CommentModerateInput(string Status);

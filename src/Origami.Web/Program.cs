@@ -65,7 +65,10 @@ builder.Services.AddScoped<MediaService>();
 builder.Services.AddSingleton<MarkdownService>();
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
 builder.Services.AddHttpClient("OrigamiWebhook");
+builder.Services.AddHttpClient("OrigamiWxrAttachment")
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddScoped<WebhookService>();
+builder.Services.AddScoped<SiteHealthService>();
 builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
 builder.Services.AddScoped<SemanticSearchService>();
@@ -258,6 +261,15 @@ app.MapGet("/admin/export", async (OrigamiClient api, HttpContext http, Cancella
 app.MapGet("/admin/export-archive", async (OrigamiClient api, CancellationToken ct) =>
     Results.File(await api.ExportArchiveAsync(ct), "application/zip", "origami-export.zip"))
     .RequireAuthorization();
+app.MapGet("/admin/export-wxr", async (OrigamiClient api, CancellationToken ct) =>
+    Results.File(await api.ExportWxrAsync(ct), "application/xml", "origami-wxr-export.xml"))
+    .RequireAuthorization();
+app.MapGet("/admin/personal-data-export", async (OrigamiClient api, CancellationToken ct) =>
+{
+    var data = await api.ExportMyPersonalDataAsync(ct);
+    var json = JsonSerializer.SerializeToUtf8Bytes(data, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+    return Results.File(json, "application/json", "origami-personal-data.json");
+}).RequireAuthorization();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 await app.RunAsync();
 return 0;

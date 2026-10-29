@@ -30,6 +30,13 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public string SocialMastodonUrl { get; init; } = "";
     public bool MaintenanceMode { get; init; }
     public string MaintenanceMessage { get; init; } = "";
+    public Guid? PrivacyPageContentId { get; init; }
+    public string PrivacyPageSlug { get; init; } = "";
+    public string PrivacyPageTitle { get; init; } = "";
+    public string PermalinkScheme { get; init; } = PermalinkRules.PostName;
+    public string TimeZoneId { get; init; } = "UTC";
+    public string DateFormat { get; init; } = "yyyy.MM.dd";
+    public string TimeFormat { get; init; } = "HH:mm";
     /// <summary>Api 無法回應時的後備站名與說明；全站單一來源。</summary>
     public static PublicSiteSettings Default { get; } = new("Origami", "用文字，分享你的世界。", null, null, null, "", null, null);
 }
@@ -37,7 +44,14 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
 public sealed record ApiPreview(PublicContent Content, string? PublishedKind, string? PublishedSlug);
 
 public sealed record ApiFeedItem(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
-    string Excerpt, string Markdown, bool ExcerptIsManual, string AuthorName = "");
+    string Excerpt, string Markdown, bool ExcerptIsManual, string AuthorName = "")
+{
+    public ContentKind Kind { get; init; } = ContentKind.Post;
+    public string? ContentTypeSlug { get; init; }
+    public string PublicPath => ContentTypeSlug is { Length: > 0 } tSlug
+        ? $"/{ContentTypeService.PublicPrefix}/{Uri.EscapeDataString(tSlug)}/{Uri.EscapeDataString(Slug)}"
+        : Kind == ContentKind.Page ? $"/pages/{Uri.EscapeDataString(Slug)}" : $"/posts/{Uri.EscapeDataString(Slug)}";
+}
 
 /// <summary>
 /// BFF 資料通道：網站的頁面資料讀寫一律經此用戶端呼叫 Origami.Api；瀏覽器不持有任何 API 憑證。
@@ -136,16 +150,26 @@ public sealed class OrigamiClient
     public Task<List<SitemapItem>?> GetSitemapAsync(CancellationToken ct = default) =>
         GetAsync<List<SitemapItem>>("api/v1/sitemap", ct);
 
-    public async Task<List<ApiFeedItem>?> GetFeedItemsAsync(string? category = null, string? tag = null, CancellationToken ct = default)
+    public async Task<List<ApiFeedItem>?> GetFeedItemsAsync(string? category = null, string? tag = null, CancellationToken ct = default,
+        string? author = null, string? typeSlug = null, string? taxonomy = null, string? term = null, string? search = null)
     {
-        var query = "api/v1/feed";
-        if (category is not null) query += "?category=" + Uri.EscapeDataString(category);
-        if (tag is not null) query += (category is null ? "?" : "&") + "tag=" + Uri.EscapeDataString(tag);
+        var parts = new List<string>();
+        if (category is not null) parts.Add("category=" + Uri.EscapeDataString(category));
+        if (tag is not null) parts.Add("tag=" + Uri.EscapeDataString(tag));
+        if (author is not null) parts.Add("author=" + Uri.EscapeDataString(author));
+        if (typeSlug is not null) parts.Add("type=" + Uri.EscapeDataString(typeSlug));
+        if (taxonomy is not null) parts.Add("taxonomy=" + Uri.EscapeDataString(taxonomy));
+        if (term is not null) parts.Add("term=" + Uri.EscapeDataString(term));
+        if (search is not null) parts.Add("q=" + Uri.EscapeDataString(search));
+        var query = parts.Count == 0 ? "api/v1/feed" : "api/v1/feed?" + string.Join("&", parts);
         return await GetAsync<List<ApiFeedItem>>(query, ct);
     }
 
-    public Task<PublicSearchService.Result?> SearchAsync(string query, int limit = Limits.PageSize, int page = 1, CancellationToken ct = default) =>
-        GetAsync<PublicSearchService.Result>($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}&page={page}", ct);
+    public Task<List<CommentFeedEntry>?> GetCommentFeedItemsAsync(CancellationToken ct = default) =>
+        GetAsync<List<CommentFeedEntry>>("api/v1/feed/comments", ct);
+
+    public Task<PublicSearchService.Result?> SearchAsync(string query, int limit = Limits.PageSize, int page = 1, CancellationToken ct = default, bool includePages = false) =>
+        GetAsync<PublicSearchService.Result>($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}&page={page}" + (includePages ? "&includePages=true" : ""), ct);
 
     public async Task<PagedResult<ContentSummary>?> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
         string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null, CancellationToken ct = default)
@@ -225,8 +249,32 @@ public sealed class OrigamiClient
     public Task ChangeMyPasswordAsync(ChangePasswordInput input, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Post, "api/v1/admin/profile/password", input, ct);
 
+    public async Task<PersonalDataExport> ExportMyPersonalDataAsync(CancellationToken ct = default) =>
+        await GetAsync<PersonalDataExport>("api/v1/admin/profile/personal-data", ct) ?? throw new CmsException("無法匯出個人資料。");
+
+    public async Task<PersonalDataEraseResult> EraseMyPersonalDataAsync(CancellationToken ct = default) =>
+        await SendAsync<PersonalDataEraseResult>(new(HttpMethod.Delete, "api/v1/admin/profile/personal-data"), new { }, ct)
+        ?? throw new CmsException("無法執行個人資料抹除。");
+
+    public async Task<PersonalDataExport> ExportUserPersonalDataAsync(string id, CancellationToken ct = default) =>
+        await GetAsync<PersonalDataExport>($"api/v1/admin/users/{Uri.EscapeDataString(id)}/personal-data", ct)
+        ?? throw new CmsException("無法匯出個人資料。");
+
+    public async Task<PersonalDataEraseResult> EraseUserPersonalDataAsync(string id, CancellationToken ct = default) =>
+        await SendAsync<PersonalDataEraseResult>(new(HttpMethod.Delete, $"api/v1/admin/users/{Uri.EscapeDataString(id)}/personal-data"), new { }, ct)
+        ?? throw new CmsException("無法執行個人資料抹除。");
+
     public Task<DashboardSummary?> GetDashboardAsync(CancellationToken ct = default) =>
         GetAsync<DashboardSummary>("api/v1/admin/dashboard", ct);
+
+    public Task<SiteHealthReport?> GetSiteHealthAsync(CancellationToken ct = default) =>
+        GetAsync<SiteHealthReport>("api/v1/admin/site-health", ct);
+
+    public Task<PagedResult<WebhookService.WebhookDeliveryView>?> ListWebhookDeliveriesAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default) =>
+        GetAsync<PagedResult<WebhookService.WebhookDeliveryView>>($"api/v1/admin/webhooks/deliveries?page={page}&pageSize={pageSize}", ct);
+
+    public Task<WebhookService.WebhookDeliveryView?> RetryWebhookDeliveryAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<WebhookService.WebhookDeliveryView>(new(HttpMethod.Post, $"api/v1/admin/webhooks/deliveries/{id}/retry"), new { }, ct);
 
     public async Task<List<RedirectItem>> ListRedirectsAsync(CancellationToken ct = default) =>
         await GetAsync<List<RedirectItem>>("api/v1/admin/redirects", ct) ?? [];
@@ -241,11 +289,17 @@ public sealed class OrigamiClient
     // ---------- 管理面（BFF 通行證）----------
 
     public async Task<PagedResult<ContentSummary>?> ListAdminAsync(ContentKind kind, int page = 1,
-        int pageSize = Limits.PageSize, ContentStatus? status = null, string? search = null, CancellationToken ct = default)
+        int pageSize = Limits.PageSize, ContentStatus? status = null, string? search = null, CancellationToken ct = default,
+        string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null)
     {
         var query = $"api/v1/admin/contents?kind={kind}&page={page}&pageSize={pageSize}";
         if (status is { } value) query += "&status=" + value;
         if (!string.IsNullOrWhiteSpace(search)) query += "&search=" + Uri.EscapeDataString(search.Trim());
+        if (!string.IsNullOrWhiteSpace(authorId)) query += "&authorId=" + Uri.EscapeDataString(authorId.Trim());
+        if (categoryId is { } cId && cId != Guid.Empty) query += "&categoryId=" + cId;
+        if (tagId is { } tId && tId != Guid.Empty) query += "&tagId=" + tId;
+        if (dateFrom is { } df) query += "&dateFrom=" + df.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (dateTo is { } dt) query += "&dateTo=" + dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         return await GetAsync<PagedResult<ContentSummary>>(query, ct);
     }
 
@@ -258,6 +312,9 @@ public sealed class OrigamiClient
     /// <summary>網站渲染用的完整詳情：包含受保護與私密內容的旗標與本文（僅 BFF 通行證可達）。</summary>
     public Task<PublicContent?> GetPublishedDetailAsync(ContentKind kind, string slug, CancellationToken ct = default) =>
         GetAsync<PublicContent>($"api/v1/admin/contents/published/{kind.ToString().ToLowerInvariant()}/{Uri.EscapeDataString(slug)}", ct);
+
+    public Task<PublicContent?> GetPublishedPostByIdDetailAsync(Guid id, CancellationToken ct = default) =>
+        GetAsync<PublicContent>($"api/v1/admin/contents/published-by-id/{id}", ct);
 
     /// <summary>以路徑段解析已發布頁面（含父鏈驗證）；回傳內容與完整階層路徑段。</summary>
     public Task<PagePathContent?> ResolvePublishedPagePathAsync(IReadOnlyList<string> segments, CancellationToken ct = default) =>
@@ -377,11 +434,18 @@ public sealed class OrigamiClient
 
     /// <summary>清單批次操作；回傳逐筆結果，單筆失敗不影響其他項目。</summary>
     public async Task<List<BulkItemResult>?> BulkContentsAsync(BulkAction action,
-        IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default)
+        IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default, BulkEditOptions? options = null)
     {
         return await SendAsync<List<BulkItemResult>>(
             new(HttpMethod.Post, "api/v1/admin/contents/bulk"),
-            new { action = action.ToString().ToLowerInvariant(), items = items.Select(x => new { id = x.Id, version = x.Version }) }, ct);
+            new
+            {
+                action = action.ToString().ToLowerInvariant(),
+                items = items.Select(x => new { id = x.Id, version = x.Version }),
+                authorId = options?.AuthorId,
+                categoryId = options?.CategoryId,
+                tagId = options?.TagId
+            }, ct);
     }
 
     public async Task<PagedResult<TaxonomyItem>?> ListTaxonomiesAsync(TaxonomyKind kind, int page = 1,
@@ -481,13 +545,26 @@ public sealed class OrigamiClient
         return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
+    /// <summary>WordPress WXR 匯出：回傳 WXR 1.2 XML 位元組。</summary>
+    public async Task<byte[]> ExportWxrAsync(CancellationToken ct = default)
+    {
+        using var response = await http.GetAsync("api/v1/admin/transfer/export-wxr", ct);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadAsByteArrayAsync(ct);
+    }
+
     /// <summary>WordPress WXR 匯入：預覽可匯入的內容統計與警告。</summary>
     public async Task<WxrImportService.WxrPreview?> AnalyzeWxrAsync(byte[] data, CancellationToken ct = default) =>
         await SendWxrAsync<WxrImportService.WxrPreview>("api/v1/admin/transfer/import-wxr/analyze", data, ct);
 
-    /// <summary>WordPress WXR 匯入：套用（新增內容，不取代現有資料）。</summary>
-    public async Task<WxrImportService.WxrResult?> ApplyWxrAsync(byte[] data, CancellationToken ct = default) =>
-        await SendWxrAsync<WxrImportService.WxrResult>("api/v1/admin/transfer/import-wxr/apply", data, ct);
+    /// <summary>WordPress WXR 匯入：套用（新增內容，不取代現有資料；可選開啟附件下載遷移）。</summary>
+    public async Task<WxrImportService.WxrResult?> ApplyWxrAsync(byte[] data, CancellationToken ct = default, bool downloadAttachments = false, string? allowedHosts = null)
+    {
+        var query = downloadAttachments
+            ? "?downloadAttachments=true" + (string.IsNullOrWhiteSpace(allowedHosts) ? "" : "&allowedHosts=" + Uri.EscapeDataString(allowedHosts.Trim()))
+            : "";
+        return await SendWxrAsync<WxrImportService.WxrResult>("api/v1/admin/transfer/import-wxr/apply" + query, data, ct);
+    }
 
     private async Task<T?> SendWxrAsync<T>(string path, byte[] data, CancellationToken ct)
     {
@@ -591,9 +668,18 @@ public sealed class OrigamiClient
         await GetAsync<List<ContentTypeService.TypeView>>("api/v1/types", ct) ?? [];
 
     public async Task<PagedResult<ContentSummary>?> ListTypeContentsAsync(string typeSlug, int page = 1,
-        int pageSize = Limits.PageSize, CancellationToken ct = default) =>
-        await GetAsync<PagedResult<ContentSummary>>(
-            $"api/v1/types/{Uri.EscapeDataString(typeSlug)}/contents?page={page}&pageSize={pageSize}", ct);
+        int pageSize = Limits.PageSize, CancellationToken ct = default, string? taxonomySlug = null, string? termSlug = null)
+    {
+        var url = $"api/v1/types/{Uri.EscapeDataString(typeSlug)}/contents?page={page}&pageSize={pageSize}";
+        if (!string.IsNullOrWhiteSpace(taxonomySlug)) url += "&taxonomy=" + Uri.EscapeDataString(taxonomySlug);
+        if (!string.IsNullOrWhiteSpace(termSlug)) url += "&term=" + Uri.EscapeDataString(termSlug);
+        return await GetAsync<PagedResult<ContentSummary>>(url, ct);
+    }
+
+    public Task<ContentService.PublicCustomTermArchive?> GetPublicCustomTermAsync(
+        string typeSlug, string taxonomySlug, string termSlug, CancellationToken ct = default) =>
+        GetAsync<ContentService.PublicCustomTermArchive>(
+            $"api/v1/types/{Uri.EscapeDataString(typeSlug)}/taxonomies/{Uri.EscapeDataString(taxonomySlug)}/terms/{Uri.EscapeDataString(termSlug)}", ct);
 
     public Task<PublicContent?> GetTypeContentAsync(string typeSlug, string contentSlug, CancellationToken ct = default) =>
         GetAsync<PublicContent>(

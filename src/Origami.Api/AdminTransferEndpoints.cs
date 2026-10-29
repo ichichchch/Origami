@@ -46,7 +46,14 @@ public static class AdminTransferEndpoints
             return Results.Ok(await import.ApplyAsync(stream, confirmed: true, ct));
         }).DisableAntiforgery();
 
-        // WordPress WXR 匯入：先預覽再套用；套用是新增內容，不取代現有資料。
+        // WordPress WXR 匯出與匯入：先預覽再套用；套用是新增內容，不取代現有資料。支援選用附件下載遷移。
+        group.MapGet("/export-wxr", async (WxrImportService wxr, CancellationToken ct) =>
+        {
+            using var buffer = new MemoryStream();
+            await wxr.ExportAsync(buffer, ct);
+            return Results.File(buffer.ToArray(), "application/xml", "origami-wxr-export.xml");
+        });
+
         group.MapPost("/import-wxr/analyze", async (IFormFile file, WxrImportService wxr, CancellationToken ct) =>
         {
             if (file.Length is 0 or > WxrImportService.MaxBytes)
@@ -55,12 +62,14 @@ public static class AdminTransferEndpoints
             return Results.Ok(await wxr.AnalyzeAsync(stream, ct));
         }).DisableAntiforgery();
 
-        group.MapPost("/import-wxr/apply", async (IFormFile file, WxrImportService wxr, CancellationToken ct) =>
+        group.MapPost("/import-wxr/apply", async (IFormFile file, HttpContext http, WxrImportService wxr, CancellationToken ct) =>
         {
             if (file.Length is 0 or > WxrImportService.MaxBytes)
                 throw new CmsException($"WXR 檔案大小須為 1 位元組至 {WxrImportService.MaxBytes} 位元組。");
+            var downloadAttachments = http.Request.Query["downloadAttachments"].ToString() is "true" or "1";
+            var allowedHosts = http.Request.Query["allowedHosts"].ToString();
             using var stream = file.OpenReadStream();
-            return Results.Ok(await wxr.ImportAsync(stream, ct));
+            return Results.Ok(await wxr.ImportAsync(stream, ct, new WxrImportService.WxrAttachmentOptions(downloadAttachments, allowedHosts)));
         }).DisableAntiforgery();
     }
 
