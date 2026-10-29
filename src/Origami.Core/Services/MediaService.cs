@@ -20,7 +20,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.UploadedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize).Select(x => new MediaItem(x.Id, x.FileName, x.OriginalName, x.ContentType, x.Size, x.Width, x.Height, x.UploadedAt)
-            { AltText = x.AltText, Caption = x.Caption }).ToListAsync(ct);
+            { AltText = x.AltText, Caption = x.Caption, Kind = x.Kind }).ToListAsync(ct);
         return new(items, total, page, pageSize);
     }
 
@@ -37,7 +37,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         asset.Caption = cap;
         await ContentRules.SaveAsync(db, ct);
         return new(asset.Id, asset.FileName, asset.OriginalName, asset.ContentType, asset.Size, asset.Width, asset.Height, asset.UploadedAt)
-            { AltText = asset.AltText, Caption = asset.Caption };
+        { AltText = asset.AltText, Caption = asset.Caption, Kind = asset.Kind };
     }
 
     /// <summary>回應式寬度的變體檔名，例如 abc.png → abc_w480.png。</summary>
@@ -136,6 +136,119 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
 
     public sealed record SiteIconFile(string Path, string ContentType);
 
+    /// <summary>設定的網站標誌背後的儲存檔名；未設定時為 null（頁首僅顯示站名文字）。</summary>
+    public async Task<string?> GetSiteLogoFileNameAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var logo = await (from settings in db.Settings.AsNoTracking()
+                          join asset in db.MediaAssets.AsNoTracking() on settings.LogoMediaId equals asset.Id
+                          where settings.Id == 1
+                          select asset.FileName).SingleOrDefaultAsync(ct);
+        return logo is not null && ContentRules.IsSafeMediaFileName(logo) ? logo : null;
+    }
+
+    /// <summary>是否為圖片副檔名；圖片走重新編碼管線，其餘走原樣儲存管線。</summary>
+    public static bool IsImageFileName(string fileName) =>
+        Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".webp";
+
+    /// <summary>
+    /// 上傳非圖片媒體（PDF／音訊／影片）：以魔數判定實際格式，副檔名不符即拒絕；
+    /// 原樣儲存不重新編碼，檔名由伺服器產生，不含使用者提供的路徑。
+    /// </summary>
+    public async Task<MediaItem> UploadFileAsync(Stream stream, string originalName, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        var safeName = ValidateOriginalName(originalName);
+        var head = new byte[4096];
+        var read = await stream.ReadAsync(head, ct);
+        var detected = DetectFileKind(head.AsSpan(0, read));
+        if (detected is null)
+            throw new CmsException("不支援的檔案格式；僅接受 PDF、MP3、M4A、MP4、WebM、OGG、WAV。");
+        var (kind, extension, contentType) = detected.Value;
+        if (Path.GetExtension(safeName).ToLowerInvariant() != extension)
+            throw new CmsException("檔案副檔名與實際格式不符。");
+        if (stream.CanSeek && stream.Length > Limits.FileUploadBytes)
+            throw new CmsException($"檔案超過 {Limits.FileUploadBytes / 1024 / 1024} MB 上限。");
+
+        var id = Guid.NewGuid();
+        var fileName = id.ToString("N") + extension;
+        var path = Path.Combine(storage.Files, fileName);
+        try
+        {
+            await using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous))
+            {
+                await file.WriteAsync(head.AsMemory(0, read), ct);
+                // 有界複製：超過上限就立刻停止，不讓整個串流先寫進磁碟再事後判退。
+                var buffer = new byte[81920];
+                var written = read;
+                while (true)
+                {
+                    var count = await stream.ReadAsync(buffer, ct);
+                    if (count == 0) break;
+                    written += count;
+                    if (written > Limits.FileUploadBytes)
+                        throw new CmsException($"檔案超過 {Limits.FileUploadBytes / 1024 / 1024} MB 上限。");
+                    await file.WriteAsync(buffer.AsMemory(0, count), ct);
+                }
+                await file.FlushAsync(ct);
+            }
+            var size = new FileInfo(path).Length;
+            if (size is 0 or > Limits.FileUploadBytes)
+                throw new CmsException($"檔案大小須為 1 位元組至 {Limits.FileUploadBytes} 位元組。");
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var asset = new MediaAsset
+            {
+                Id = id, SiteId = db.CurrentSiteId, FileName = fileName, OriginalName = safeName,
+                ContentType = contentType, Kind = kind, Size = size,
+                UploadedAt = clock.GetUtcNow()
+            };
+            db.MediaAssets.Add(asset);
+            await ContentRules.SaveAsync(db, ct);
+            return new(asset.Id, asset.FileName, asset.OriginalName, asset.ContentType, asset.Size, 0, 0, asset.UploadedAt)
+            { Kind = kind };
+        }
+        catch
+        {
+            // 失敗時不得留下可公開讀取的半成品。
+            Cleanup(path);
+            throw;
+        }
+    }
+
+    /// <summary>以魔數判定非圖片媒體的種類；不认识的內容一律視為不支援。</summary>
+    private static (MediaKind Kind, string Extension, string ContentType)? DetectFileKind(ReadOnlySpan<byte> head)
+    {
+        if (head.Length >= 5 && head[..5].SequenceEqual("%PDF-"u8))
+            return (MediaKind.Document, ".pdf", "application/pdf");
+        if (head.Length >= 3 && head[..3].SequenceEqual("ID3"u8))
+            return (MediaKind.Audio, ".mp3", "audio/mpeg");
+        if (head.Length >= 2 && head[0] == 0xFF && (head[1] & 0xE0) == 0xE0)
+            return (MediaKind.Audio, ".mp3", "audio/mpeg");
+        if (head.Length >= 4 && head[..4].SequenceEqual("OggS"u8))
+            return (MediaKind.Audio, ".ogg", "audio/ogg");
+        if (head.Length >= 12 && head[..4].SequenceEqual("RIFF"u8) && head[8..12].SequenceEqual("WAVE"u8))
+            return (MediaKind.Audio, ".wav", "audio/wav");
+        if (head.Length >= 4 && head[..4].SequenceEqual(new byte[] { 0x1A, 0x45, 0xDF, 0xA3 }))
+            return (MediaKind.Video, ".webm", "video/webm");
+        if (head.Length >= 12 && head[4..8].SequenceEqual("ftyp"u8))
+        {
+            var brand = head[8..12];
+            if (brand.SequenceEqual("M4A "u8) || brand.SequenceEqual("M4B "u8))
+                return (MediaKind.Audio, ".m4a", "audio/mp4");
+            return (MediaKind.Video, ".mp4", "video/mp4");
+        }
+        return null;
+    }
+
+    /// <summary>只做檔名安全檢查（不含副檔名白名單）；上傳檔案的副檔名由魔數決定。</summary>
+    private static string ValidateOriginalName(string originalName)
+    {
+        if (string.IsNullOrWhiteSpace(originalName) || originalName.Length > 200 || originalName.IndexOfAny(['/', '\\', ':']) >= 0
+            || originalName.Any(char.IsControl) || originalName is "." or "..")
+            throw new CmsException("檔名不合法。");
+        return originalName;
+    }
+
     /// <summary>連同變體刪除未被引用的圖片；仍被引用的圖片予以拒絕。</summary>
     public async Task DeleteAsync(Guid mediaId, bool confirmed, CancellationToken ct = default)
     {
@@ -143,11 +256,11 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         if (!confirmed) throw new CmsException("請先確認刪除圖片。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var asset = await db.MediaAssets.SingleOrDefaultAsync(x => x.Id == mediaId, ct) ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
-        // 儲存檔名決定路徑，因此必須是圖片資料夾內的單純圖片檔。
-        if (!ContentRules.IsSafeMediaFileName(asset.FileName))
+        // 儲存檔名決定路徑，因此必須是媒體目錄內的單純檔案。
+        if (!ContentRules.IsSafeMediaFileNameAny(asset.FileName))
             throw new CmsException("媒體檔名不合法，無法刪除。");
-        if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.SiteIconMediaId == mediaId, ct))
-            throw new CmsException("此圖片是目前的網站圖示，請先在網站設定改用其他圖片或清除圖示後再刪除。");
+        if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && (s.SiteIconMediaId == mediaId || s.LogoMediaId == mediaId), ct))
+            throw new CmsException("此圖片是目前的網站圖示或標誌，請先在網站設定改用其他圖片或清除後再刪除。");
         var references = await QueryReferencesAsync(db, mediaId, asset.FileName, ct);
         if (references.Count > 0)
         {
@@ -158,9 +271,16 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         db.MediaAssets.Remove(asset);
         await ContentRules.SaveAsync(db, ct);
         // 資料列已刪除；檔案移除採盡力而為，絕不阻擋資料庫結果。
-        Cleanup(Path.Combine(storage.Images, asset.FileName));
-        foreach (var width in Limits.ImageVariantWidths)
-            Cleanup(Path.Combine(storage.Images, VariantName(asset.FileName, width)));
+        if (asset.Kind == MediaKind.Image)
+        {
+            Cleanup(Path.Combine(storage.Images, asset.FileName));
+            foreach (var width in Limits.ImageVariantWidths)
+                Cleanup(Path.Combine(storage.Images, VariantName(asset.FileName, width)));
+        }
+        else
+        {
+            Cleanup(Path.Combine(storage.Files, asset.FileName));
+        }
     }
 
     /// <summary>系統操作：為變體功能出現前上傳的圖片重新產生缺少的變體檔。</summary>

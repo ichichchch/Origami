@@ -16,7 +16,8 @@ public static class AccessClaims
 public sealed class AccessDeniedException(string message = "你沒有此站點的操作權限。") : Exception(message);
 
 public sealed record SiteSummary(Guid Id, string Name, string Slug, string? HostName, bool IsActive, Guid Version);
-public sealed record SiteAccessInfo(string UserId, string UserName, Guid SiteId, bool IsNetworkAdmin, SiteRole? Role)
+public sealed record SiteAccessInfo(string UserId, string UserName, Guid SiteId, bool IsNetworkAdmin, SiteRole? Role,
+    string DisplayName = "")
 {
     public bool CanRead => IsNetworkAdmin || Role is not null;
     public bool CanEdit => IsNetworkAdmin || Role is SiteRole.Editor or SiteRole.Administrator;
@@ -43,13 +44,18 @@ public sealed class UserCreateInput
 {
     public string UserName { get; set; } = "";
     public string Password { get; set; } = "";
+    /// <summary>電子郵件；供密碼重設與通知使用，可留空。</summary>
+    public string? Email { get; set; }
 }
 public sealed record UserStateInput(bool IsDisabled);
-public sealed record MemberSummary(string UserId, string UserName, SiteRole Role, Guid Version, bool IsDisabled);
+public sealed record MemberSummary(string UserId, string UserName, SiteRole Role, Guid Version, bool IsDisabled,
+    string DisplayName = "");
 public sealed class MemberEditInput
 {
     public string UserName { get; set; } = "";
     public SiteRole Role { get; set; } = SiteRole.Reader;
+    /// <summary>此站點內的公開顯示名稱；作為該成員建立內容時的作者署名，空字串退回站點設定。</summary>
+    public string DisplayName { get; set; } = "";
     public Guid? Version { get; set; }
 }
 

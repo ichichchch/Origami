@@ -7,10 +7,20 @@ public static class AdminTransferEndpoints
     {
         var group = app.MapGroup("/api/v1/admin/transfer").RequireAuthorization();
 
-        group.MapGet("/export", async (ExportService export, CancellationToken ct) =>
+        group.MapGet("/export", async (ExportService export, HttpContext http, CancellationToken ct) =>
         {
+            // 篩選匯出：kind=Post/Page，category 僅與 Post 合用；驗證由服務層統一把關。
+            ContentKind? kind = null;
+            var rawKind = http.Request.Query["kind"].ToString();
+            if (rawKind.Length > 0)
+            {
+                if (!Enum.TryParse<ContentKind>(rawKind, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                    return Results.BadRequest(new { message = "參數 kind 無效（Post 或 Page）。" });
+                kind = parsed;
+            }
+            var category = http.Request.Query["category"].ToString();
             using var buffer = new MemoryStream();
-            await export.WriteAsync(buffer, ct);
+            await export.WriteAsync(buffer, kind, category.Length == 0 ? null : category, ct);
             return Results.File(buffer.ToArray(), "application/json", "origami-export.json");
         });
 
@@ -34,6 +44,23 @@ public static class AdminTransferEndpoints
                 throw new CmsException($"匯入檔大小須為 1 位元組至 {Limits.ArchiveMaxBytes} 位元組。");
             using var stream = file.OpenReadStream();
             return Results.Ok(await import.ApplyAsync(stream, confirmed: true, ct));
+        }).DisableAntiforgery();
+
+        // WordPress WXR 匯入：先預覽再套用；套用是新增內容，不取代現有資料。
+        group.MapPost("/import-wxr/analyze", async (IFormFile file, WxrImportService wxr, CancellationToken ct) =>
+        {
+            if (file.Length is 0 or > WxrImportService.MaxBytes)
+                throw new CmsException($"WXR 檔案大小須為 1 位元組至 {WxrImportService.MaxBytes} 位元組。");
+            using var stream = file.OpenReadStream();
+            return Results.Ok(await wxr.AnalyzeAsync(stream, ct));
+        }).DisableAntiforgery();
+
+        group.MapPost("/import-wxr/apply", async (IFormFile file, WxrImportService wxr, CancellationToken ct) =>
+        {
+            if (file.Length is 0 or > WxrImportService.MaxBytes)
+                throw new CmsException($"WXR 檔案大小須為 1 位元組至 {WxrImportService.MaxBytes} 位元組。");
+            using var stream = file.OpenReadStream();
+            return Results.Ok(await wxr.ImportAsync(stream, ct));
         }).DisableAntiforgery();
     }
 

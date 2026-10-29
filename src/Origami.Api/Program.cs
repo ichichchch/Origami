@@ -51,7 +51,11 @@ builder.Services.AddScoped<AdminAccess>();
 builder.Services.AddScoped<SiteAdministrationService>();
 builder.Services.AddScoped<ApiCredentialService>();
 builder.Services.AddScoped<ContentService>();
+builder.Services.AddScoped<ContentTypeService>();
 builder.Services.AddScoped<TaxonomyService>();
+builder.Services.AddScoped<NavigationService>();
+builder.Services.AddScoped<WxrImportService>();
+builder.Services.AddScoped<CommentService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<ImportService>();
@@ -195,11 +199,16 @@ app.Use(async (context, next) =>
     }
     if (context.Request.Path.StartsWithSegments("/api/v1/admin/transfer/import", StringComparison.OrdinalIgnoreCase))
         context.Features.Get<IHttpMaxRequestBodySizeFeature>()!.MaxRequestBodySize = Limits.ArchiveMaxBytes;
+    // 批次媒體上傳一次可達多個單檔上限；逐端點放寬，其餘請求仍受主機上限保護。
+    if (context.Request.Path.StartsWithSegments("/api/v1/admin/media/batch", StringComparison.OrdinalIgnoreCase))
+        context.Features.Get<IHttpMaxRequestBodySizeFeature>()!.MaxRequestBodySize =
+            (long)Limits.MediaBatchMax * Limits.FileUploadBytes + 1_048_576;
     await next(context);
 });
 app.MapMcp("/mcp");
 app.MapApiV1();
 app.MapAdminApiV1();
+app.MapContentTypeApiV1();
 app.MapAdminTaxonomyApiV1();
 app.MapAdminMediaApiV1();
 app.MapAdminSettingsApiV1();

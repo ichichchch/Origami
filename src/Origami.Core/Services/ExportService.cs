@@ -8,14 +8,21 @@ namespace Origami.Core.Services;
 /// </summary>
 public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, StoragePaths storage)
 {
-    public async Task WriteAsync(Stream output, CancellationToken ct = default)
+    /// <summary>
+    /// 匯出站點資料；可依內容類型（僅文章／僅頁面）與分類篩選文章。篩選匯出內容不完整，
+    /// 僅供挑選性備份或搬運，不建議用於還原整站（完整遷移請用 ZIP 封裝）。
+    /// </summary>
+    public async Task WriteAsync(Stream output, ContentKind? kind = null, string? categorySlug = null, CancellationToken ct = default)
     {
         await admin.RequireRoleAsync(SiteRole.Administrator, ct);
-        await WriteCoreAsync(output, ct);
+        if (categorySlug is not null && kind != ContentKind.Post)
+            throw new CmsException("分類篩選僅適用於文章匯出。");
+        if (categorySlug is not null) categorySlug = ContentRules.NormalizeSlug(categorySlug);
+        await WriteCoreAsync(output, ct, kind, categorySlug);
     }
 
-    /// <summary>無授權檢查的 JSON 輸出核心；供背景備份這類系統操作複用。</summary>
-    private async Task WriteCoreAsync(Stream output, CancellationToken ct)
+    /// <summary>無授權檢查的 JSON 輸出核心；供背景備份這類系統操作複用（一律全站）。</summary>
+    private async Task WriteCoreAsync(Stream output, CancellationToken ct, ContentKind? kind = null, string? categorySlug = null)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var writer = new Utf8JsonWriter(output);
@@ -40,6 +47,13 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
                 .Select(x => x.FileName).SingleOrDefaultAsync(ct);
             if (iconFile is not null) writer.WriteString("siteIconFileName", iconFile);
         }
+        if (settings?.LogoMediaId is { } logoId)
+        {
+            var logoFile = await db.MediaAssets.AsNoTracking().Where(x => x.Id == logoId)
+                .Select(x => x.FileName).SingleOrDefaultAsync(ct);
+            if (logoFile is not null) writer.WriteString("logoFileName", logoFile);
+        }
+        if (settings?.CustomNavigationEnabled == true) writer.WriteBoolean("customNavigationEnabled", true);
         writer.WriteEndObject();
 
         writer.WriteStartArray("categories");
@@ -64,21 +78,97 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         }
         writer.WriteEndArray();
 
+        writer.WriteStartArray("contentTypes");
+        var typeSlugById = new Dictionary<Guid, string>();
+        await foreach (var type in db.ContentTypes.AsNoTracking().OrderBy(x => x.Slug).AsAsyncEnumerable().WithCancellation(ct))
+        {
+            typeSlugById[type.Id] = type.Slug;
+            writer.WriteStartObject();
+            writer.WriteString("name", type.Name);
+            writer.WriteString("slug", type.Slug);
+            writer.WriteString("description", type.Description);
+            writer.WriteBoolean("supportsCategories", type.SupportsCategories);
+            writer.WriteBoolean("supportsTags", type.SupportsTags);
+            writer.WriteBoolean("supportsHierarchy", type.SupportsHierarchy);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // 自訂分類法與詞彙以 slug 對應；詞彙另記錄所屬分類法與上層詞彙。
+        var taxonomySlugById = new Dictionary<Guid, string>();
+        writer.WriteStartArray("customTaxonomies");
+        await foreach (var taxonomy in db.CustomTaxonomies.AsNoTracking().OrderBy(x => x.Slug).AsAsyncEnumerable().WithCancellation(ct))
+        {
+            taxonomySlugById[taxonomy.Id] = taxonomy.Slug;
+            writer.WriteStartObject();
+            writer.WriteString("name", taxonomy.Name);
+            writer.WriteString("slug", taxonomy.Slug);
+            writer.WriteString("description", taxonomy.Description);
+            writer.WriteBoolean("isHierarchical", taxonomy.IsHierarchical);
+            writer.WriteString("contentType", typeSlugById.GetValueOrDefault(taxonomy.ContentTypeId, ""));
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        var termSlugById = new Dictionary<Guid, string>();
+        var termTaxonomyById = new Dictionary<Guid, Guid>();
+        var termParentById = new Dictionary<Guid, Guid>();
+        writer.WriteStartArray("customTerms");
+        await foreach (var term in db.CustomTaxonomyTerms.AsNoTracking().OrderBy(x => x.Slug).AsAsyncEnumerable().WithCancellation(ct))
+        {
+            termSlugById[term.Id] = term.Slug;
+            termTaxonomyById[term.Id] = term.TaxonomyId;
+            if (term.ParentId is { } parentId) termParentById[term.Id] = parentId;
+            writer.WriteStartObject();
+            writer.WriteString("name", term.Name);
+            writer.WriteString("slug", term.Slug);
+            writer.WriteString("description", term.Description);
+            writer.WriteString("taxonomy", taxonomySlugById.GetValueOrDefault(term.TaxonomyId, ""));
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteStartArray("customFields");
+        var fieldSlugById = new Dictionary<Guid, string>();
+        await foreach (var field in db.CustomFields.AsNoTracking().OrderBy(x => x.Key).AsAsyncEnumerable().WithCancellation(ct))
+        {
+            fieldSlugById[field.Id] = field.Key;
+            writer.WriteStartObject();
+            writer.WriteString("name", field.Name);
+            writer.WriteString("key", field.Key);
+            writer.WriteString("fieldType", field.FieldType);
+            writer.WriteBoolean("isRequired", field.IsRequired);
+            writer.WriteNumber("position", field.Position);
+            writer.WriteString("contentType", typeSlugById.GetValueOrDefault(field.ContentTypeId, ""));
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
         writer.WriteStartArray("contents");
         await foreach (var content in db.Contents.AsNoTracking().AsSplitQuery()
-            .Include(x => x.Categories).Include(x => x.Tags).OrderBy(x => x.Id).AsAsyncEnumerable().WithCancellation(ct))
+            .Include(x => x.Categories).Include(x => x.Tags).Include(x => x.CustomTerms).ThenInclude(x => x.Term)
+            .Include(x => x.FieldValues).ThenInclude(x => x.Field)
+            .OrderBy(x => x.Id).AsAsyncEnumerable().WithCancellation(ct))
         {
+            // 篩選匯出：類型不符或（文章模式下）不含指定分類者不進入檔案。
+            if (kind is { } kindFilter && content.Kind != kindFilter) continue;
+            if (categorySlug is { } category && !content.Categories.Any(x => x.Slug == category)) continue;
             writer.WriteStartObject();
             writer.WriteString("kind", content.Kind == ContentKind.Post ? "post" : "page");
             writer.WriteString("title", content.Title);
             writer.WriteString("slug", content.Slug);
+            // 帳號識別不離站；匯出署名快照，匯入後 byline 不因缺少帳號而消失。
+            if (content.AuthorName.Length > 0) writer.WriteString("authorName", content.AuthorName);
             writer.WriteString("excerpt", content.Excerpt);
             writer.WriteBoolean("isSticky", content.IsSticky);
+            if (content.MetaDescription.Length > 0) writer.WriteString("metaDescription", content.MetaDescription);
+            if (content.NoIndex) writer.WriteBoolean("noIndex", true);
             writer.WriteString("markdown", content.Markdown);
             writer.WriteString("status", content.Status switch
             {
                 ContentStatus.Published => "published",
                 ContentStatus.Trashed => "trashed",
+                ContentStatus.Pending => "pending",
                 _ => "draft",
             });
             if (content.IsProtected)
@@ -100,17 +190,70 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteStartArray("tags");
             foreach (var slug in content.Tags.Select(x => x.Slug).OrderBy(x => x, StringComparer.Ordinal)) writer.WriteStringValue(slug);
             writer.WriteEndArray();
+            // 自訂類型與詞彙以 slug 對應；匯入時依 slug 還原對應類型。
+            if (content.ContentTypeId is { } contentTypeId && typeSlugById.TryGetValue(contentTypeId, out var contentTypeSlug))
+                writer.WriteString("contentType", contentTypeSlug);
+            writer.WriteStartArray("terms");
+            foreach (var slug in content.CustomTerms.Select(x => x.Term.Slug).OrderBy(x => x, StringComparer.Ordinal)) writer.WriteStringValue(slug);
+            writer.WriteEndArray();
+            if (content.FieldValues.Count > 0)
+            {
+                writer.WriteStartObject("fieldValues");
+                foreach (var value in content.FieldValues.OrderBy(x => x.Field.Key, StringComparer.Ordinal))
+                    writer.WriteString(value.Field.Key, value.Value);
+                writer.WriteEndObject();
+            }
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
 
-        writer.WriteStartArray("media");
-        await foreach (var asset in db.MediaAssets.AsNoTracking().OrderBy(x => x.UploadedAt).ThenBy(x => x.Id).AsAsyncEnumerable().WithCancellation(ct))
+        writer.WriteStartArray("comments");
+        var slugByContentId = slugById;
+        await foreach (var comment in db.Comments.AsNoTracking().OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+            .AsAsyncEnumerable().WithCancellation(ct))
+        {
+            // 待審與垃圾評論不隨檔案搬遷；僅保留已核可的公開互動。
+            if (comment.Status != CommentStatus.Approved) continue;
+            if (!slugByContentId.TryGetValue(comment.ContentId, out var contentSlug)) continue;
+            writer.WriteStartObject();
+            writer.WriteString("contentSlug", contentSlug);
+            writer.WriteString("authorName", comment.AuthorName);
+            writer.WriteString("url", comment.Url);
+            writer.WriteString("markdown", comment.Markdown);
+            writer.WriteString("createdAt", comment.CreatedAt);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteStartArray("navigation");
+        await foreach (var item in db.SiteNavItems.AsNoTracking().OrderBy(x => x.Position).ThenBy(x => x.Id)
+            .AsAsyncEnumerable().WithCancellation(ct))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("title", item.Title);
+            writer.WriteString("url", item.Url);
+            writer.WriteBoolean("isVisible", item.IsVisible);
+            writer.WriteNumber("position", item.Position);
+            // 站內目標以頁面代稱表示，匯入時才解析成新的內容識別。
+            if (item.ContentId is { } target && slugById.TryGetValue(target, out var pageSlug))
+                writer.WriteString("pageSlug", pageSlug);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteStartArray("media");        await foreach (var asset in db.MediaAssets.AsNoTracking().OrderBy(x => x.UploadedAt).ThenBy(x => x.Id).AsAsyncEnumerable().WithCancellation(ct))
         {
             writer.WriteStartObject();
             writer.WriteString("fileName", asset.FileName);
             writer.WriteString("originalName", asset.OriginalName);
             writer.WriteString("contentType", asset.ContentType);
+            writer.WriteString("kind", asset.Kind switch
+            {
+                MediaKind.Document => "document",
+                MediaKind.Audio => "audio",
+                MediaKind.Video => "video",
+                _ => "image"
+            });
             writer.WriteString("altText", asset.AltText);
             writer.WriteNumber("size", asset.Size);
             writer.WriteNumber("width", asset.Width);
@@ -125,8 +268,8 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
     }
 
     /// <summary>
-    /// 「JSON＋媒體檔案」的 ZIP 封裝：origami-export.json 加上 media/ 目錄內的
-    /// 原圖與既有變體。總量超過上限時整體拒絕，改用 JSON 匯出並手動備份圖片目錄。
+    /// 「JSON＋媒體檔案」的 ZIP 封裝：origami-export.json 加上 media/（圖片與變體）
+    /// 與 files/（PDF／音訊／影片原檔）。總量超過上限時整體拒絕，改用 JSON 匯出並手動備份媒體目錄。
     /// </summary>
     public async Task WriteArchiveAsync(Stream output, CancellationToken ct = default)
     {
@@ -141,25 +284,32 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
     internal async Task WriteArchiveUncheckedAsync(Stream output, CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        var fileNames = await db.MediaAssets.AsNoTracking().OrderBy(x => x.UploadedAt).ThenBy(x => x.Id)
-            .Select(x => x.FileName).ToListAsync(ct);
-        var archiveEntries = new List<string>();
+        var assets = await db.MediaAssets.AsNoTracking().OrderBy(x => x.UploadedAt).ThenBy(x => x.Id)
+            .Select(x => new { x.FileName, x.Kind }).ToListAsync(ct);
+        var archiveEntries = new List<(string SourceDirectory, string Name, string EntryPath)>();
         long totalBytes = 0;
-        foreach (var fileName in fileNames)
+        void Add(string directory, string name, string entryPath)
+        {
+            var path = Path.Combine(directory, name);
+            if (!File.Exists(path)) return;
+            totalBytes += new FileInfo(path).Length;
+            if (totalBytes > Limits.ArchiveMaxBytes)
+                throw new CmsException($"媒體檔案總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB，無法打包成 ZIP；請改用 JSON 匯出，並手動備份媒體儲存目錄。");
+            archiveEntries.Add((directory, name, entryPath));
+        }
+        foreach (var asset in assets)
         {
             // 儲存檔名決定路徑；不安全的舊檔名直接略過，不讓它進入封裝。
-            if (!ContentRules.IsSafeMediaFileName(fileName)) continue;
-            var names = new List<string> { fileName };
-            foreach (var width in Limits.ImageVariantWidths) names.Add(MediaService.VariantName(fileName, width));
-            foreach (var name in names)
+            if (asset.Kind != MediaKind.Image)
             {
-                var path = Path.Combine(storage.Images, name);
-                if (!File.Exists(path)) continue;
-                totalBytes += new FileInfo(path).Length;
-                if (totalBytes > Limits.ArchiveMaxBytes)
-                    throw new CmsException($"媒體檔案總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB，無法打包成 ZIP；請改用 JSON 匯出，並手動備份圖片儲存目錄。");
-                archiveEntries.Add(name);
+                if (ContentRules.IsSafeMediaFileNameAny(asset.FileName))
+                    Add(storage.Files, asset.FileName, "files/" + asset.FileName);
+                continue;
             }
+            if (!ContentRules.IsSafeMediaFileName(asset.FileName)) continue;
+            var names = new List<string> { asset.FileName };
+            foreach (var width in Limits.ImageVariantWidths) names.Add(MediaService.VariantName(asset.FileName, width));
+            foreach (var name in names) Add(storage.Images, name, "media/" + name);
         }
         using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true);
         var jsonEntry = zip.CreateEntry("origami-export.json", CompressionLevel.Optimal);
@@ -167,11 +317,11 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         {
             await WriteCoreAsync(jsonStream, ct);
         }
-        foreach (var name in archiveEntries)
+        foreach (var (sourceDirectory, name, entryPath) in archiveEntries)
         {
-            // 圖片本身已是壓縮格式；最快等級避免無謂的 CPU 消耗。
-            var entry = zip.CreateEntry("media/" + name, CompressionLevel.Fastest);
-            await using var source = File.OpenRead(Path.Combine(storage.Images, name));
+            // 媒體檔本身多為已壓縮格式；最快等級避免無謂的 CPU 消耗。
+            var entry = zip.CreateEntry(entryPath, CompressionLevel.Fastest);
+            await using var source = File.OpenRead(Path.Combine(sourceDirectory, name));
             await using var target = entry.Open();
             await source.CopyToAsync(target, ct);
         }

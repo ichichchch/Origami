@@ -445,6 +445,22 @@ namespace Origami.Core.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AuthorId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AuthorName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("AuthorSlug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("ContentTypeId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("CoverMediaId")
                         .HasColumnType("uuid");
 
@@ -453,6 +469,17 @@ namespace Origami.Core.Data.Migrations
 
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("EditingAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EditingById")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EditingByName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
                     b.Property<string>("Excerpt")
                         .IsRequired()
@@ -475,6 +502,14 @@ namespace Origami.Core.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200000)
                         .HasColumnType("character varying(200000)");
+
+                    b.Property<string>("MetaDescription")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("NoIndex")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("uuid");
@@ -519,6 +554,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AuthorId");
+
                     b.HasIndex("PreviewToken")
                         .IsUnique();
 
@@ -530,6 +567,10 @@ namespace Origami.Core.Data.Migrations
                         .IsUnique();
 
                     b.HasIndex("SiteId", "Status");
+
+                    b.HasIndex("SiteId", "AuthorSlug", "Status");
+
+                    b.HasIndex("SiteId", "ContentTypeId", "Status", "PublishedAt", "Id");
 
                     b.HasIndex("SiteId", "Kind", "Status", "PublishedAt", "Id");
 
@@ -545,14 +586,96 @@ namespace Origami.Core.Data.Migrations
 
                             t.HasCheckConstraint("CK_Content_PublishAt", "\"Status\" = 0 OR \"PublishAt\" IS NULL");
 
-                            t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2) OR \"PublishedAt\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2, 3) OR \"PublishedAt\" IS NOT NULL");
 
                             t.HasCheckConstraint("CK_Content_Slug", "length(\"Slug\") > 0");
 
-                            t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2)");
+                            t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2, 3)");
 
                             t.HasCheckConstraint("CK_Content_Title", "length(btrim(\"Title\")) > 0");
                         });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Markdown")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Status", "CreatedAt");
+
+                    b.HasIndex("SiteId", "ContentId", "Status", "CreatedAt");
+
+                    b.ToTable("Comments", t =>
+                        {
+                            t.HasCheckConstraint("CK_Comment_Author", "length(btrim(\"AuthorName\")) > 0");
+
+                            t.HasCheckConstraint("CK_Comment_Body", "length(btrim(\"Markdown\")) > 0");
+
+                            t.HasCheckConstraint("CK_Comment_Status", "\"Status\" IN (0, 1, 2, 3)");
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentCustomTerm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TermId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentId");
+
+                    b.HasIndex("SiteId", "TermId");
+
+                    b.HasIndex("SiteId", "ContentId", "TermId")
+                        .IsUnique();
+
+                    b.ToTable("ContentCustomTerms");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentEmbedding", b =>
@@ -586,6 +709,39 @@ namespace Origami.Core.Data.Migrations
                     b.HasIndex("SiteId", "ContentId");
 
                     b.ToTable("ContentEmbeddings");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentFieldValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContentId");
+
+                    b.HasIndex("SiteId", "FieldId");
+
+                    b.HasIndex("SiteId", "ContentId", "FieldId")
+                        .IsUnique();
+
+                    b.ToTable("ContentFieldValues");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentRevision", b =>
@@ -657,6 +813,63 @@ namespace Origami.Core.Data.Migrations
                     b.ToTable("SlugRedirects");
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.ContentType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<bool>("SupportsCategories")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SupportsHierarchy")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("SupportsTags")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("ContentTypes", t =>
+                        {
+                            t.HasCheckConstraint("CK_ContentType_Name", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_ContentType_Slug", "length(btrim(\"Slug\")) > 0");
+                        });
+                });
+
             modelBuilder.Entity("Origami.Core.Models.ContentView", b =>
                 {
                     b.Property<Guid>("ContentId")
@@ -677,6 +890,165 @@ namespace Origami.Core.Data.Migrations
                     b.HasIndex("SiteId", "ContentId");
 
                     b.ToTable("ContentViews");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomField", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FieldType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ContentTypeId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("CustomFields", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomField_Key", "length(btrim(\"Key\")) > 0");
+
+                            t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_CustomField_Type", "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox')");
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomTaxonomy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContentTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHierarchical")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ContentTypeId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("CustomTaxonomies", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomTaxonomy_Name", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_CustomTaxonomy_Slug", "length(btrim(\"Slug\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomTaxonomyTerm", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("TaxonomyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ParentId");
+
+                    b.HasIndex("SiteId", "TaxonomyId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("CustomTaxonomyTerms", t =>
+                        {
+                            t.HasCheckConstraint("CK_CustomTerm_Name", "length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_CustomTerm_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
+
+                            t.HasCheckConstraint("CK_CustomTerm_Slug", "length(btrim(\"Slug\")) > 0");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.EmbeddingJob", b =>
@@ -738,6 +1110,9 @@ namespace Origami.Core.Data.Migrations
                     b.Property<int>("Height")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<string>("OriginalName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -763,7 +1138,10 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasIndex("SiteId", "UploadedAt", "Id");
 
-                    b.ToTable("MediaAssets");
+                    b.ToTable("MediaAssets", t =>
+                        {
+                            t.HasCheckConstraint("CK_MediaAsset_Kind", "\"Kind\" IN (0, 1, 2, 3)");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.SiteMembership", b =>
@@ -774,6 +1152,11 @@ namespace Origami.Core.Data.Migrations
 
                     b.Property<string>("UserId")
                         .HasColumnType("text");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
@@ -788,7 +1171,56 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("SiteMemberships", t =>
                         {
-                            t.HasCheckConstraint("CK_SiteMembership_Role", "\"Role\" IN (0, 1, 2)");
+                            t.HasCheckConstraint("CK_SiteMembership_DisplayName", "\"DisplayName\" = btrim(\"DisplayName\")");
+
+                            t.HasCheckConstraint("CK_SiteMembership_Role", "\"Role\" IN (0, 1, 2, 3)");
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.SiteNavItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ContentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ContentId");
+
+                    b.HasIndex("SiteId", "Position", "Id");
+
+                    b.ToTable("SiteNavItems", t =>
+                        {
+                            t.HasCheckConstraint("CK_SiteNavItem_Target", "(\"ContentId\" IS NOT NULL AND \"Url\" = '') OR (\"ContentId\" IS NULL AND \"Url\" <> '')");
+
+                            t.HasCheckConstraint("CK_SiteNavItem_Title", "length(btrim(\"Title\")) > 0");
                         });
                 });
 
@@ -801,10 +1233,29 @@ namespace Origami.Core.Data.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AccentColor")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
                     b.Property<string>("AuthorDisplayName")
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
+
+                    b.Property<string>("CardStyle")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<bool>("CommentAutoApprove")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CommentsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CustomNavigationEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -820,6 +1271,9 @@ namespace Origami.Core.Data.Migrations
                     b.Property<Guid?>("HomePageContentId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("LogoMediaId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -828,8 +1282,22 @@ namespace Origami.Core.Data.Migrations
                     b.Property<int?>("PostsPerPage")
                         .HasColumnType("integer");
 
+                    b.Property<int>("ReadingWidth")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("ShowByline")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ShowCover")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("SiteIconMediaId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ThemePreset")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
@@ -838,6 +1306,8 @@ namespace Origami.Core.Data.Migrations
                     b.HasKey("SiteId", "Id");
 
                     b.HasIndex("SiteId", "HomePageContentId");
+
+                    b.HasIndex("SiteId", "LogoMediaId");
 
                     b.HasIndex("SiteId", "SiteIconMediaId");
 
@@ -855,9 +1325,18 @@ namespace Origami.Core.Data.Migrations
                         {
                             SiteId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Id = 1,
+                            AccentColor = "#2f6f4e",
                             AuthorDisplayName = "",
+                            CardStyle = "list",
+                            CommentAutoApprove = false,
+                            CommentsEnabled = false,
+                            CustomNavigationEnabled = false,
                             Description = "用文字，分享你的世界。",
                             Name = "Origami",
+                            ReadingWidth = 68,
+                            ShowByline = true,
+                            ShowCover = true,
+                            ThemePreset = "reading",
                             Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84")
                         });
                 });
@@ -1026,11 +1505,22 @@ namespace Origami.Core.Data.Migrations
 
             modelBuilder.Entity("Origami.Core.Models.Content", b =>
                 {
+                    b.HasOne("Origami.Core.Models.AdminUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Origami.Core.Models.CmsSite", null)
                         .WithMany()
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.ContentType", "ContentType")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentTypeId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Origami.Core.Models.MediaAsset", "Cover")
                         .WithMany()
@@ -1044,9 +1534,66 @@ namespace Origami.Core.Data.Migrations
                         .HasPrincipalKey("SiteId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.Navigation("Author");
+
+                    b.Navigation("ContentType");
+
                     b.Navigation("Cover");
 
                     b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentComment", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.Content", "Content")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Content");
+
+                    b.Navigation("Site");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentCustomTerm", b =>
+                {
+                    b.HasOne("Origami.Core.Models.Content", null)
+                        .WithMany("CustomTerms")
+                        .HasForeignKey("ContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.Content", "Content")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.CustomTaxonomyTerm", "Term")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "TermId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Content");
+
+                    b.Navigation("Term");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentEmbedding", b =>
@@ -1063,6 +1610,39 @@ namespace Origami.Core.Data.Migrations
                         .HasPrincipalKey("SiteId", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentFieldValue", b =>
+                {
+                    b.HasOne("Origami.Core.Models.Content", null)
+                        .WithMany("FieldValues")
+                        .HasForeignKey("ContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.Content", "Content")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.CustomField", "Field")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "FieldId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Content");
+
+                    b.Navigation("Field");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentRevision", b =>
@@ -1101,6 +1681,15 @@ namespace Origami.Core.Data.Migrations
                     b.Navigation("Content");
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.ContentType", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Origami.Core.Models.ContentView", b =>
                 {
                     b.HasOne("Origami.Core.Models.CmsSite", null)
@@ -1117,6 +1706,68 @@ namespace Origami.Core.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Content");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomField", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.ContentType", "ContentType")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentTypeId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ContentType");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomTaxonomy", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.ContentType", "ContentType")
+                        .WithMany("Taxonomies")
+                        .HasForeignKey("SiteId", "ContentTypeId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ContentType");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomTaxonomyTerm", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.CustomTaxonomyTerm", "Parent")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ParentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Origami.Core.Models.CustomTaxonomy", "Taxonomy")
+                        .WithMany("Terms")
+                        .HasForeignKey("SiteId", "TaxonomyId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Parent");
+
+                    b.Navigation("Taxonomy");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.EmbeddingJob", b =>
@@ -1163,6 +1814,25 @@ namespace Origami.Core.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.SiteNavItem", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.Content", "Content")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Content");
+
+                    b.Navigation("Site");
+                });
+
             modelBuilder.Entity("Origami.Core.Models.SiteSettings", b =>
                 {
                     b.HasOne("Origami.Core.Models.CmsSite", null)
@@ -1174,6 +1844,12 @@ namespace Origami.Core.Data.Migrations
                     b.HasOne("Origami.Core.Models.Content", null)
                         .WithMany()
                         .HasForeignKey("SiteId", "HomePageContentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Origami.Core.Models.MediaAsset", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId", "LogoMediaId")
                         .HasPrincipalKey("SiteId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -1195,7 +1871,21 @@ namespace Origami.Core.Data.Migrations
 
             modelBuilder.Entity("Origami.Core.Models.Content", b =>
                 {
+                    b.Navigation("CustomTerms");
+
+                    b.Navigation("FieldValues");
+
                     b.Navigation("Views");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentType", b =>
+                {
+                    b.Navigation("Taxonomies");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.CustomTaxonomy", b =>
+                {
+                    b.Navigation("Terms");
                 });
 #pragma warning restore 612, 618
         }

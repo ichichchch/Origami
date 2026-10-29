@@ -48,9 +48,23 @@ public sealed class AdminAccess(
             throw new AccessDeniedException("此站點不存在或已停用。");
 
         var networkAdmin = session.User.SingletonKey == 1;
-        var role = networkAdmin ? SiteRole.Administrator : await db.SiteMemberships.AsNoTracking()
-            .Where(x => x.SiteId == session.SiteId && x.UserId == session.User.Id)
-            .Select(x => (SiteRole?)x.Role).SingleOrDefaultAsync(ct);
+        string displayName = "";
+        SiteRole? role = null;
+        if (networkAdmin)
+        {
+            role = SiteRole.Administrator;
+        }
+        else
+        {
+            var membership = await db.SiteMemberships.AsNoTracking()
+                .Where(x => x.SiteId == session.SiteId && x.UserId == session.User.Id)
+                .Select(x => new { x.Role, x.DisplayName }).SingleOrDefaultAsync(ct);
+            if (membership is not null)
+            {
+                role = membership.Role;
+                displayName = membership.DisplayName;
+            }
+        }
         if (role is not null && !Enum.IsDefined(role.Value)) role = null;
 
         if (session.CredentialScope is { } scope)
@@ -60,7 +74,7 @@ public sealed class AdminAccess(
             if (role is { } actual && actual > maximum) role = maximum;
             networkAdmin = false;
         }
-        return new(session.User.Id, session.User.UserName ?? "", session.SiteId, networkAdmin, role);
+        return new(session.User.Id, session.User.UserName ?? "", session.SiteId, networkAdmin, role, displayName);
     }
 
     /// <summary>只有當前站點的編輯者以上可以看私密內容；取消及資料庫故障不偽裝成未登入。</summary>
@@ -119,7 +133,7 @@ public sealed class AdminAccess(
 
         if (user.SingletonKey != 1 && !await db.SiteMemberships.AsNoTracking()
             .AnyAsync(x => x.SiteId == siteId && x.UserId == user.Id &&
-                (x.Role == SiteRole.Reader || x.Role == SiteRole.Editor || x.Role == SiteRole.Administrator), ct))
+                (x.Role == SiteRole.Reader || x.Role == SiteRole.Author || x.Role == SiteRole.Editor || x.Role == SiteRole.Administrator), ct))
             throw InvalidSession();
         return (user, scope, siteId);
     }

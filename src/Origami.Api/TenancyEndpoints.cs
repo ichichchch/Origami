@@ -14,6 +14,32 @@ public static class TenancyEndpoints
         // 服務負責各項操作的 network/site 角色檢查，GET 的 403 不降級為匿名結果。
         var group = app.MapGroup("/api/v1/admin").RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
+        // 受控導覽管理面：清單、建立／更新、刪除與排序。
+        group.MapGet("/navigation", async (NavigationService navigation, CancellationToken ct) =>
+            Results.Ok(await navigation.ListAsync(ct)));
+
+        group.MapPost("/navigation", async (NavigationService.NavItemInput input, NavigationService navigation, CancellationToken ct) =>
+        {
+            input.Id = null; // 建立絕不得指向既有資料列
+            return Results.Ok(await navigation.SaveAsync(input, ct));
+        });
+
+        group.MapPut("/navigation/{id}", async (Guid id, NavigationService.NavItemInput input, NavigationService navigation, CancellationToken ct) =>
+        {
+            input.Id = id; // 身分識別由路由決定
+            return Results.Ok(await navigation.SaveAsync(input, ct));
+        });
+
+        group.MapDelete("/navigation/{id}", async (Guid id, Guid version, NavigationService navigation, CancellationToken ct) =>
+        {
+            await navigation.DeleteAsync(id, version, ct);
+            return Results.NoContent();
+        });
+
+        // 排序：逐筆攜帶版本，依提交順序重新編號。
+        group.MapPut("/navigation/order", async (NavigationOrderInput input, NavigationService navigation, CancellationToken ct) =>
+            Results.Ok(await navigation.ReorderAsync([.. (input.Items ?? []).Select(x => (x.Id, x.Version))], ct)));
+
         group.MapGet("/access", async (SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.GetAccessAsync(ct)));
 
@@ -81,4 +107,7 @@ public static class TenancyEndpoints
             return Results.NoContent();
         });
     }
+
+    public sealed record NavigationOrderInput(List<NavigationOrderItem>? Items);
+    public sealed record NavigationOrderItem(Guid Id, Guid Version);
 }

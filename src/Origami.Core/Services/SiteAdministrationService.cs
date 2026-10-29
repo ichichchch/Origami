@@ -168,7 +168,14 @@ public sealed class SiteAdministrationService(
         return await WriteSafelyAsync(async () =>
         {
             ct.ThrowIfCancellationRequested();
-            var user = new AdminUser { UserName = name, SingletonKey = null, IsDisabled = false };
+            // 電子郵件供密碼重設與通知使用；可留空，但沒有郵件的帳號無法自助重設密碼。
+            var email = (input.Email ?? "").Trim();
+            if (email.Length > 0)
+            {
+                if (email.Length > 256 || !email.Contains('@') || email.Any(char.IsControl))
+                    throw new CmsException("電子郵件格式不正確。");
+            }
+            var user = new AdminUser { UserName = name, SingletonKey = null, IsDisabled = false, Email = email };
             var result = await userManager.CreateAsync(user, password);
             if (!result.Succeeded)
             {
@@ -223,7 +230,7 @@ public sealed class SiteAdministrationService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var members = await db.SiteMemberships.AsNoTracking().OrderBy(x => x.User.NormalizedUserName).ThenBy(x => x.UserId)
             .Take(MaximumMembers + 1)
-            .Select(x => new MemberSummary(x.UserId, x.User.UserName ?? "", x.Role, x.Version, x.User.IsDisabled)).ToListAsync(ct);
+            .Select(x => new MemberSummary(x.UserId, x.User.UserName ?? "", x.Role, x.Version, x.User.IsDisabled, x.DisplayName)).ToListAsync(ct);
         if (members.Count > MaximumMembers) throw new CmsException("站點成員超過 200 筆，無法完整列出。");
         return members;
     }
@@ -234,6 +241,9 @@ public sealed class SiteAdministrationService(
         ArgumentNullException.ThrowIfNull(input);
         if (!Enum.IsDefined(input.Role)) throw new CmsException("站點角色無效。");
         var name = ValidateName(input.UserName, MaximumUserName, "使用者名稱");
+        var displayName = (input.DisplayName ?? "").Trim();
+        if (displayName.Length > Limits.AuthorName || displayName.Any(char.IsControl))
+            throw new CmsException($"顯示名稱最多 {Limits.AuthorName} 字，且不得含控制字元。");
         var normalized = userManager.NormalizeName(name);
         await WriteSafelyAsync(async () =>
         {
@@ -252,15 +262,26 @@ public sealed class SiteAdministrationService(
                 if (member is not null) throw VersionConflict();
                 if (await db.SiteMemberships.CountAsync(ct) >= MaximumMembers)
                     throw new CmsException("每個站點最多只能有 200 位成員。");
-                db.SiteMemberships.Add(new SiteMembership { SiteId = db.CurrentSiteId, UserId = user.Id, Role = input.Role });
+                db.SiteMemberships.Add(new SiteMembership { SiteId = db.CurrentSiteId, UserId = user.Id, Role = input.Role, DisplayName = displayName });
             }
             else
             {
                 if (member is null || member.Version != input.Version.Value) throw VersionConflict();
                 if (member.Role == SiteRole.Administrator && input.Role != SiteRole.Administrator && !user.IsDisabled)
                     await EnsureAnotherAdministratorAsync(db, user.Id, ct);
+                var previousDisplayName = member.DisplayName;
                 member.Role = input.Role;
+                member.DisplayName = displayName;
                 member.Version = Guid.NewGuid();
+                // 顯示名稱是內容署名的來源；改名須同步該成員在本站全部內容的署名快照與彙整代稱。
+                // ExecuteUpdate 保留站點查詢過濾，不會波及其他站點的內容。
+                if (previousDisplayName != displayName)
+                {
+                    var displaySlug = displayName.Length == 0 ? "" : ContentRules.NormalizeSlug(displayName);
+                    await db.Contents.Where(x => x.AuthorId == user.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(x => x.AuthorName, displayName)
+                            .SetProperty(x => x.AuthorSlug, displaySlug), ct);
+                }
             }
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);

@@ -176,7 +176,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         // ExecuteUpdate／ExecuteDelete 均保留 query filters，不得清除其他站點的資料。
         await db.Settings.ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.HomePageContentId, (Guid?)null)
-            .SetProperty(x => x.SiteIconMediaId, (Guid?)null), ct);
+            .SetProperty(x => x.SiteIconMediaId, (Guid?)null)
+            .SetProperty(x => x.LogoMediaId, (Guid?)null), ct);
         await db.Contents.ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.ParentId, (Guid?)null)
             .SetProperty(x => x.CoverMediaId, (Guid?)null), ct);
@@ -184,7 +185,21 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await db.Contents.ExecuteDeleteAsync(ct);
         await db.Categories.ExecuteDeleteAsync(ct);
         await db.Tags.ExecuteDeleteAsync(ct);
+        // 內容類型只在匯入檔案本身帶有類型宣告時才取代，避免舊格式匯入遺失既有類型。
+        if (document.RootElement.TryGetProperty("contentTypes", out var exportedTypes) && exportedTypes.ValueKind == JsonValueKind.Array)
+        {
+            await db.ContentCustomTerms.ExecuteDeleteAsync(ct);
+            await db.ContentFieldValues.ExecuteDeleteAsync(ct);
+            await db.CustomFields.ExecuteDeleteAsync(ct);
+            await db.CustomTaxonomyTerms.ExecuteDeleteAsync(ct);
+            await db.CustomTaxonomies.ExecuteDeleteAsync(ct);
+            await db.ContentTypes.ExecuteDeleteAsync(ct);
+        }
         await db.MediaAssets.ExecuteDeleteAsync(ct);
+        // 導覽項目隨內容一併取代；舊項目引用的頁面已不存在，留著只會是死連結。
+        await db.SiteNavItems.ExecuteDeleteAsync(ct);
+        // 評論隨內容級聯刪除，此處明確清理以避免複合鍵殘留。
+        await db.Comments.ExecuteDeleteAsync(ct);
 
         var site = document.RootElement.GetProperty("site");
         Dictionary<string, Category> categoriesBySlug = [];
@@ -217,8 +232,104 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (!tagsBySlug.TryAdd(tag.Slug, tag)) throw new CmsException($"匯入的標籤代稱重複：{tag.Slug}。");
             db.Tags.Add(tag);
         }
-        Dictionary<string, MediaAsset> mediaByFileName = [];
-        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
+        // 自訂內容類型與自訂分類法：依 slug 還原；既有同名類型沿用現有資料。
+        Dictionary<string, ContentType> typesBySlug = [];
+        if (document.RootElement.TryGetProperty("contentTypes", out var typeNodes) && typeNodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in typeNodes.EnumerateArray())
+            {
+                var slug = Bounded(node, "slug", Limits.ContentTypeSlug, "內容類型代稱");
+                var existing = await db.ContentTypes.AsNoTracking().SingleOrDefaultAsync(x => x.Slug == slug, ct);
+                var type = existing ?? new ContentType
+                {
+                    Id = Guid.NewGuid(),
+                    SiteId = db.CurrentSiteId,
+                    Slug = slug,
+                    Version = Guid.NewGuid(),
+                };
+                type.Name = Bounded(node, "name", Limits.ContentTypeName, "內容類型名稱");
+                type.Description = Bounded(node, "description", Limits.Description, "內容類型描述", optional: true);
+                type.SupportsCategories = node.TryGetProperty("supportsCategories", out var categories) && categories.GetBoolean();
+                type.SupportsTags = node.TryGetProperty("supportsTags", out var tags) && tags.GetBoolean();
+                type.SupportsHierarchy = node.TryGetProperty("supportsHierarchy", out var supportsHierarchy) && supportsHierarchy.GetBoolean();
+                if (existing is null) db.ContentTypes.Add(type);
+                typesBySlug[slug] = type;
+            }
+        }
+        Dictionary<string, CustomTaxonomy> taxonomiesBySlug = [];
+        if (document.RootElement.TryGetProperty("customTaxonomies", out var taxonomyNodes) && taxonomyNodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in taxonomyNodes.EnumerateArray())
+            {
+                var slug = Bounded(node, "slug", Limits.Slug, "自訂分類法代稱");
+                var typeSlug = node.GetString("contentType") ?? "";
+                if (!typesBySlug.TryGetValue(typeSlug, out var owner))
+                    throw new CmsException($"自訂分類法「{slug}」所屬的內容類型不在匯入資料中：{typeSlug}。");
+                var taxonomy = new CustomTaxonomy
+                {
+                    Id = Guid.NewGuid(),
+                    SiteId = db.CurrentSiteId,
+                    ContentTypeId = owner.Id,
+                    Slug = slug,
+                    Version = Guid.NewGuid(),
+                };
+                taxonomy.Name = Bounded(node, "name", Limits.CustomTaxonomyName, "自訂分類法名稱");
+                taxonomy.Description = Bounded(node, "description", Limits.TaxonomyDescription, "自訂分類法描述", optional: true);
+                taxonomy.IsHierarchical = node.TryGetProperty("isHierarchical", out var hierarchical) && hierarchical.GetBoolean();
+                if (!taxonomiesBySlug.TryAdd(slug, taxonomy)) throw new CmsException($"匯入的自訂分類法代稱重複：{slug}。");
+                db.CustomTaxonomies.Add(taxonomy);
+            }
+        }
+        Dictionary<string, CustomTaxonomyTerm> termsBySlug = [];
+        if (document.RootElement.TryGetProperty("customTerms", out var termNodes) && termNodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in termNodes.EnumerateArray())
+            {
+                var slug = Bounded(node, "slug", Limits.Slug, "詞彙代稱");
+                var taxonomySlug = node.GetString("taxonomy") ?? "";
+                if (!taxonomiesBySlug.TryGetValue(taxonomySlug, out var taxonomy))
+                    throw new CmsException($"詞彙「{slug}」所屬的自訂分類法不在匯入資料中：{taxonomySlug}。");
+                var term = new CustomTaxonomyTerm
+                {
+                    Id = Guid.NewGuid(),
+                    SiteId = db.CurrentSiteId,
+                    TaxonomyId = taxonomy.Id,
+                    Slug = slug,
+                    Version = Guid.NewGuid(),
+                };
+                term.Name = Bounded(node, "name", Limits.CustomTaxonomyName, "詞彙名稱");
+                term.Description = Bounded(node, "description", Limits.TaxonomyDescription, "詞彙描述", optional: true);
+                if (!termsBySlug.TryAdd(slug, term)) throw new CmsException($"匯入的詞彙代稱重複：{slug}。");
+                db.CustomTaxonomyTerms.Add(term);
+            }
+        }
+        Dictionary<string, CustomField> fieldsByKey = [];
+        if (document.RootElement.TryGetProperty("customFields", out var fieldNodes) && fieldNodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in fieldNodes.EnumerateArray())
+            {
+                var key = Bounded(node, "key", Limits.CustomFieldName, "自訂欄位鍵值");
+                var typeSlug = node.GetString("contentType") ?? "";
+                if (!typesBySlug.TryGetValue(typeSlug, out var owner))
+                    throw new CmsException($"自訂欄位「{key}」所屬的內容類型不在匯入資料中：{typeSlug}。");
+                var field = new CustomField
+                {
+                    Id = Guid.NewGuid(),
+                    SiteId = db.CurrentSiteId,
+                    ContentTypeId = owner.Id,
+                    Key = key,
+                    Version = Guid.NewGuid(),
+                };
+                field.Name = Bounded(node, "name", Limits.CustomFieldName, "自訂欄位名稱");
+                field.FieldType = node.GetString("fieldType") ?? CustomFieldTypes.Text;
+                if (!CustomFieldTypes.IsValid(field.FieldType)) throw new CmsException($"自訂欄位「{key}」的種類無效。");
+                field.IsRequired = node.TryGetProperty("isRequired", out var required) && required.GetBoolean();
+                field.Position = node.TryGetProperty("position", out var position) && position.ValueKind == JsonValueKind.Number ? position.GetInt32() : 0;
+                if (!fieldsByKey.TryAdd(key, field)) throw new CmsException($"匯入的自訂欄位鍵值重複：{key}。");
+                db.CustomFields.Add(field);
+            }
+        }
+        Dictionary<string, MediaAsset> mediaByFileName = [];        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
         {
             var fileName = Bounded(node, "fileName", 80, "媒體檔名");
             // 儲存檔名稍後會變成檔案路徑；僅允許匯入單純的圖片檔名。
@@ -231,6 +342,13 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 FileName = fileName,
                 OriginalName = Bounded(node, "originalName", 200, "媒體原始名稱"),
                 ContentType = Bounded(node, "contentType", 40, "媒體類型"),
+                Kind = node.GetString("kind") switch
+                {
+                    "document" => MediaKind.Document,
+                    "audio" => MediaKind.Audio,
+                    "video" => MediaKind.Video,
+                    _ => MediaKind.Image
+                },
                 AltText = Bounded(node, "altText", Limits.AltText, "媒體替代文字", optional: true),
                 Size = node.TryGetProperty("size", out var size) && size.ValueKind == JsonValueKind.Number ? size.GetInt64() : 0,
                 Width = node.TryGetProperty("width", out var width) && width.ValueKind == JsonValueKind.Number ? width.GetInt32() : 0,
@@ -251,6 +369,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             {
                 "published" => ContentStatus.Published,
                 "trashed" => ContentStatus.Trashed,
+                "pending" => ContentStatus.Pending,
                 _ => ContentStatus.Draft,
             };
             var content = new Content
@@ -262,7 +381,10 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 Slug = Bounded(node, "slug", Limits.Slug, "內容代稱"),
                 Markdown = Bounded(node, "markdown", Limits.Body, "內容本文", optional: true),
                 Excerpt = Bounded(node, "excerpt", Limits.Excerpt, "內容摘要", optional: true),
-                IsSticky = node.TryGetProperty("isSticky", out var sticky) && sticky.GetBoolean(),
+                // 匯入內容沒有對應帳號；僅還原署名快照供前台 byline 使用。
+                AuthorName = Bounded(node, "authorName", Limits.AuthorName, "作者名稱", optional: true),                IsSticky = node.TryGetProperty("isSticky", out var sticky) && sticky.GetBoolean(),
+                MetaDescription = Bounded(node, "metaDescription", Limits.MetaDescription, "SEO 描述", optional: true),
+                NoIndex = node.TryGetProperty("noIndex", out var noIndex) && noIndex.GetBoolean(),
                 IsProtected = node.TryGetProperty("isProtected", out var isProtected) && isProtected.GetBoolean(),
                 IsPrivate = node.TryGetProperty("isPrivate", out var isPrivate) && isPrivate.GetBoolean(),
                 ProtectionHash = node.TryGetProperty("protectionHash", out var hash) ? hash.GetString() ?? "" : "",
@@ -278,6 +400,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 content.PublishedAt = now; // 資料庫檢查約束要求現行發布狀態必須有日期
             if (content.IsProtected && content.ProtectionHash == "")
                 throw new CmsException($"受保護內容「{content.Title}」缺少保護資料，無法還原。");
+            // 作者彙整代稱由署名快照重算；無法正規化的署名（如全符號）退回無代稱。
+            try { content.AuthorSlug = content.AuthorName.Length == 0 ? "" : ContentRules.NormalizeSlug(content.AuthorName); }
+            catch (CmsException) { content.AuthorSlug = ""; }
             if (!contentsBySlug.TryAdd(content.Slug, content)) throw new CmsException($"匯入的內容代稱重複：{content.Slug}。");
             if (content.Kind == ContentKind.Post && node.TryGetProperty("categories", out var categorySlugs))
                 content.Categories = [.. categorySlugs.EnumerateArray().Select(x => x.GetString() ?? "")
@@ -285,8 +410,40 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (content.Kind == ContentKind.Post && node.TryGetProperty("tags", out var tagSlugs))
                 content.Tags = [.. tagSlugs.EnumerateArray().Select(x => x.GetString() ?? "")
                     .Select(slug => tagsBySlug.GetValueOrDefault(slug) ?? throw new CmsException($"內容「{content.Title}」引用了不存在的標籤：{slug}。"))];
-            if (content.Kind == ContentKind.Page && node.TryGetProperty("parentSlug", out var parent) && parent.ValueKind == JsonValueKind.String)
+            // 自訂類型與詞彙以 slug 還原；缺少對應宣告時明確拒絕，不靜默降級為一般文章。
+            if (node.GetString("contentType") is { Length: > 0 } contentTypeSlug)
             {
+                if (!typesBySlug.TryGetValue(contentTypeSlug, out var contentType))
+                    throw new CmsException($"內容「{content.Title}」引用了不存在的內容類型：{contentTypeSlug}。");
+                content.ContentTypeId = contentType.Id;
+            }
+            if (node.TryGetProperty("fieldValues", out var fieldValues) && fieldValues.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var pair in fieldValues.EnumerateObject())
+                {
+                    if (!fieldsByKey.TryGetValue(pair.Name, out var field))
+                        throw new CmsException($"內容「{content.Title}」引用了不存在的自訂欄位：{pair.Name}。");
+                    CustomFieldRules.ValidateValue(field.FieldType, pair.Value.GetString(), field.IsRequired);
+                    content.FieldValues.Add(new ContentFieldValue
+                    {
+                        Id = Guid.NewGuid(), SiteId = db.CurrentSiteId, ContentId = content.Id,
+                        FieldId = field.Id, Value = (pair.Value.GetString() ?? "").Trim()
+                    });
+                }
+            }
+            if (node.TryGetProperty("terms", out var contentTermSlugs))
+            {
+                foreach (var termSlug in contentTermSlugs.EnumerateArray().Select(x => x.GetString() ?? ""))
+                {
+                    if (!termsBySlug.TryGetValue(termSlug, out var term))
+                        throw new CmsException($"內容「{content.Title}」引用了不存在的詞彙：{termSlug}。");
+                    content.CustomTerms.Add(new ContentCustomTerm
+                    {
+                        Id = Guid.NewGuid(), SiteId = db.CurrentSiteId, ContentId = content.Id, TermId = term.Id
+                    });
+                }
+            }
+            if (content.Kind == ContentKind.Page && node.TryGetProperty("parentSlug", out var parent) && parent.ValueKind == JsonValueKind.String)            {
                 var parentSlug = parent.GetString();
                 if (parentSlug == content.Slug) throw new CmsException($"頁面「{content.Title}」不可作為自己的上層。");
                 hierarchy.Add((content, parentSlug));
@@ -323,11 +480,58 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         if (site.GetString("siteIconFileName") is { } iconFile && mediaByFileName.TryGetValue(iconFile, out var icon))
             siteIconId = icon.Id;
         settings.SiteIconMediaId = siteIconId;
+        Guid? logoId = null;
+        if (site.GetString("logoFileName") is { } logoFile && mediaByFileName.TryGetValue(logoFile, out var logo))
+            logoId = logo.Id;
+        settings.LogoMediaId = logoId;
+        settings.CustomNavigationEnabled = site.TryGetProperty("customNavigationEnabled", out var customNav)
+            && customNav.ValueKind == JsonValueKind.True;
         settings.Version = Guid.NewGuid();
 
         // 已發布的公開內容與全新發布一樣，重新進入嵌入管道；站點僅由伺服器指定。
         foreach (var content in contentsBySlug.Values.Where(x => x.Status == ContentStatus.Published && !x.IsProtected && !x.IsPrivate))
             db.EmbeddingJobs.Add(new EmbeddingJob { SiteId = db.CurrentSiteId, ContentId = content.Id, EnqueuedAt = now, NextAttemptAt = now });
+
+        // 已核可評論隨內容還原（以內容代稱對應）；匯出檔本就只含已核可者。
+        if (document.RootElement.TryGetProperty("comments", out var commentsNode) && commentsNode.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in commentsNode.EnumerateArray())
+            {
+                var contentSlug = node.GetString("contentSlug");
+                if (contentSlug is null || !contentsBySlug.TryGetValue(contentSlug, out var target)) continue;
+                db.Comments.Add(new ContentComment
+                {
+                    SiteId = db.CurrentSiteId, ContentId = target.Id,
+                    AuthorName = Bounded(node, "authorName", Limits.CommentAuthor, "評論名稱"),
+                    Url = Bounded(node, "url", Limits.CommentUrl, "評論網址", optional: true),
+                    Markdown = Bounded(node, "markdown", Limits.CommentBody, "評論內容"),
+                    Status = CommentStatus.Approved,
+                    CreatedAt = Date(node, "createdAt") ?? now
+                });
+            }
+        }
+
+        // 受控導覽項目：站內目標以頁面代稱還原；找不到目標的項目略過，避免死連結。
+        if (document.RootElement.TryGetProperty("navigation", out var navigation) && navigation.ValueKind == JsonValueKind.Array)
+        {
+            var position = 0;
+            foreach (var node in navigation.EnumerateArray())
+            {
+                var title = Bounded(node, "title", Limits.NavTitle, "導覽文字");
+                var url = Bounded(node, "url", Limits.NavUrl, "導覽網址", optional: true);
+                var visible = !node.TryGetProperty("isVisible", out var visibleNode) || visibleNode.ValueKind != JsonValueKind.False;
+                Guid? contentId = null;
+                if (node.GetString("pageSlug") is { } pageSlug && contentsBySlug.TryGetValue(pageSlug, out var page)
+                    && page.Kind == ContentKind.Page)
+                    contentId = page.Id;
+                if (contentId is null && string.IsNullOrEmpty(url)) continue;
+                db.SiteNavItems.Add(new SiteNavItem
+                {
+                    SiteId = db.CurrentSiteId, Title = title, Url = contentId is null ? url : "",
+                    ContentId = contentId, IsVisible = visible, Position = position++
+                });
+            }
+        }
 
         await ContentRules.SaveAsync(db, ct);
         await transaction.CommitAsync(ct);

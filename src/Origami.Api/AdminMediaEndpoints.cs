@@ -25,12 +25,41 @@ public static class AdminMediaEndpoints
         group.MapPost("", async (IFormFile file, MediaService media, CancellationToken ct) =>
         {
             // 便宜的第一道閘門；服務端仍會重新驗證實際格式、大小與可解碼性。
-            if (file.Length is 0 or > Limits.UploadBytes)
-                return Results.BadRequest(new { message = $"圖片大小須為 1 位元組至 {Limits.UploadBytes} 位元組。" });
+            if (file.Length is 0 || file.Length > MediaSizeLimit(file.FileName))
+                return Results.BadRequest(new { message = "檔案大小超出允許範圍。" });
             using var stream = file.OpenReadStream();
-            var item = await media.UploadAsync(stream, file.FileName, ct);
+            // 圖片重新編碼並產生響應式變體；其餘檔型以魔數驗證後原樣儲存。
+            var item = MediaService.IsImageFileName(file.FileName)
+                ? await media.UploadAsync(stream, file.FileName, ct)
+                : await media.UploadFileAsync(stream, file.FileName, ct);
             return Results.Created($"/api/v1/admin/media/{item.Id}", item);
         }).DisableAntiforgery(); // BFF 通行證即認證；表單端點明確退出瀏覽器防偽機制
+
+        // 批次上傳：逐檔驗證與產生變體，逐檔回報結果；單檔失敗不影響其他檔案。
+        group.MapPost("/batch", async (IFormFileCollection files, MediaService media, CancellationToken ct) =>
+        {
+            if (files.Count is 0 or > Limits.MediaBatchMax)
+                return Results.BadRequest(new { message = $"批次上傳須為 1–{Limits.MediaBatchMax} 個檔案。" });
+            var results = new List<MediaBatchItem>(files.Count);
+            foreach (var file in files)
+            {
+                try
+                {
+                    if (file.Length is 0 || file.Length > MediaSizeLimit(file.FileName))
+                        throw new CmsException("檔案大小超出允許範圍。");
+                    using var stream = file.OpenReadStream();
+                    var item = MediaService.IsImageFileName(file.FileName)
+                        ? await media.UploadAsync(stream, file.FileName, ct)
+                        : await media.UploadFileAsync(stream, file.FileName, ct);
+                    results.Add(new MediaBatchItem(file.FileName, true, "", item));
+                }
+                catch (CmsException ex)
+                {
+                    results.Add(new MediaBatchItem(file.FileName, false, ex.Message, null));
+                }
+            }
+            return Results.Ok(results);
+        }).DisableAntiforgery();
 
         group.MapPut("/{id}/meta", async (Guid id, MediaMetaInput input, MediaService media, CancellationToken ct) =>
             Results.Ok(await media.UpdateMetaAsync(id, input.AltText, input.Caption, ct)));
@@ -48,4 +77,8 @@ public static class AdminMediaEndpoints
     }
 
     public sealed record MediaMetaInput(string? AltText, string? Caption);
+
+    /// <summary>依檔型決定大小上限：圖片 5 MiB，其餘 20 MiB。</summary>
+    private static long MediaSizeLimit(string fileName) =>
+        MediaService.IsImageFileName(fileName) ? Limits.UploadBytes : Limits.FileUploadBytes;
 }

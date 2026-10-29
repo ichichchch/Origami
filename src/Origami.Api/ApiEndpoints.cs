@@ -16,9 +16,11 @@ public static class ApiEndpoints
             if (!TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
             string? category = http.Request.Query["category"].Count > 0 ? http.Request.Query["category"].ToString() : null;
             string? tag = http.Request.Query["tag"].Count > 0 ? http.Request.Query["tag"].ToString() : null;
+            // 作者彙整篩選：以署名代稱（顯示名稱的正規化 slug）過濾已發布文章。
+            string? author = http.Request.Query["author"].Count > 0 ? http.Request.Query["author"].ToString() : null;
             if (!TryQueryInt(http, "year", null, minimum: 1, maximum: 9999, out var year, out error)) return error;
             if (!TryQueryInt(http, "month", null, minimum: 1, maximum: 12, out var month, out error)) return error;
-            return Results.Ok(await content.ListPublishedAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, category, tag, year, month));
+            return Results.Ok(await content.ListPublishedAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, category, tag, year, month, author));
         });
 
         group.MapGet("/posts/{slug}", async (string slug, ContentService content, CancellationToken ct) =>
@@ -37,15 +39,20 @@ public static class ApiEndpoints
             return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, page ?? 1, ct));
         });
 
-        group.MapGet("/settings", async (SettingsService settings, CancellationToken ct) =>
+        group.MapGet("/settings", async (SettingsService settings, MediaService media, CancellationToken ct) =>
         {
             var value = await settings.GetAsync(ct);
+            // 頁首標誌以檔名呈現；媒體網址由網站主機的 /media 提供。
+            var logoFileName = await media.GetSiteLogoFileNameAsync(ct);
             return Results.Ok(new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
-                value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId));
+                value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId, value.LogoMediaId)
+            { LogoFileName = logoFileName ?? "", CommentsEnabled = value.CommentsEnabled,
+                ThemePreset = value.ThemePreset, AccentColor = value.AccentColor, ReadingWidth = value.ReadingWidth,
+                ShowByline = value.ShowByline, ShowCover = value.ShowCover, CardStyle = value.CardStyle });
         });
 
-        group.MapGet("/navigation", async (ContentService content, CancellationToken ct) =>
-            Results.Ok(await content.NavigationAsync(ct)));
+        group.MapGet("/navigation", async (NavigationService navigation, CancellationToken ct) =>
+            Results.Ok(await navigation.PublicAsync(ct)));
 
         // 已設定為靜態首頁的頁面：以內容識別取得已發布頁面。
         group.MapGet("/contents/{id}/published", async (Guid id, ContentService content, CancellationToken ct) =>
@@ -55,6 +62,10 @@ public static class ApiEndpoints
         group.MapGet("/media/widths", async (MediaService media, CancellationToken ct) =>
             Results.Ok(await media.PublicImageWidthsAsync(ct)));
 
+        // 已核可評論的公開讀取；與內容詳情同一公開性規則。
+        group.MapGet("/contents/{id}/comments", async (Guid id, CommentService comments, CancellationToken ct) =>
+            Results.Ok(await comments.ListPublicAsync(id, ct)));
+
         group.MapGet("/contents/{id}/neighbors", async (Guid id, ContentService content, CancellationToken ct) =>
             Results.Ok(await content.NeighborsAsync(id, ct)));
 
@@ -63,6 +74,23 @@ public static class ApiEndpoints
 
         group.MapGet("/archives", async (ContentService content, CancellationToken ct) =>
             Results.Ok(await content.ArchiveMonthsAsync(ct)));
+
+        // 自訂內容類型的公開區塊：類型清單、該類型的已發布內容與單篇內容。
+        group.MapGet("/types", async (ContentTypeService types, CancellationToken ct) =>
+            Results.Ok(await types.ListPublicAsync(ct)));
+
+        group.MapGet("/types/{slug}/contents", async (string slug, ContentService content, HttpContext http,
+            CancellationToken ct) =>
+        {
+            if (!TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
+            if (!TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
+            var result = await content.ListByTypeAsync(slug, page ?? 1, pageSize ?? Limits.PageSize, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        });
+
+        group.MapGet("/types/{slug}/contents/{contentSlug}", async (string slug, string contentSlug,
+            ContentService content, CancellationToken ct) =>
+            PublishedOrNotFound(await content.GetPublishedByTypeAsync(slug, contentSlug, ct)));
 
         group.MapGet("/categories/popular", async (ContentService content, CancellationToken ct) =>
             Results.Ok(await content.PopularCategoriesAsync(ct)));
@@ -104,7 +132,25 @@ public static class ApiEndpoints
     }
 
     public sealed record PublicSiteSettings(string Name, string Description, int? PostsPerPage, int? FeedItems,
-        bool? FeedShowFullText, string AuthorDisplayName, Guid? HomePageContentId, Guid? SiteIconMediaId);
+        bool? FeedShowFullText, string AuthorDisplayName, Guid? HomePageContentId, Guid? SiteIconMediaId, Guid? LogoMediaId = null)
+    {
+        /// <summary>標誌的儲存檔名；未設定時為空字串，頁首僅顯示站名。</summary>
+        public string LogoFileName { get; init; } = "";
+        /// <summary>是否開放訪客評論。</summary>
+        public bool CommentsEnabled { get; init; }
+        /// <summary>受控版型預設名稱。</summary>
+        public string ThemePreset { get; init; } = "reading";
+        /// <summary>版型強調色（十六進位色碼）。</summary>
+        public string AccentColor { get; init; } = "#2f6f4e";
+        /// <summary>正文欄寬（字元）。</summary>
+        public int ReadingWidth { get; init; } = 68;
+        /// <summary>是否顯示文章署名。</summary>
+        public bool ShowByline { get; init; } = true;
+        /// <summary>是否顯示封面圖。</summary>
+        public bool ShowCover { get; init; } = true;
+        /// <summary>文章卡片樣式：list 或 grid。</summary>
+        public string CardStyle { get; init; } = "list";
+    }
 
     /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>
     public sealed record ApiPreview(PublicContent? Content, string? PublishedKind, string? PublishedSlug);

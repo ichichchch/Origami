@@ -65,12 +65,68 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
-        // 列表快速編輯：只改標題、代稱與草稿／發布狀態；並發版本檢查與完整儲存相同。
+        // 列表快速編輯：只改標題、代稱與草稿／待審／發布狀態；並發版本檢查與完整儲存相同。
         group.MapPut("/contents/{id}/quick", async (Guid id, QuickEditInput input, ContentService content, CancellationToken ct) =>
         {
-            if (input.Status is not (ContentStatus.Draft or ContentStatus.Published))
-                return Results.BadRequest(new { message = "快速編輯僅接受草稿或已發布狀態。" });
+            if (input.Status is not (ContentStatus.Draft or ContentStatus.Pending or ContentStatus.Published))
+                return Results.BadRequest(new { message = "快速編輯僅接受草稿、待審或已發布狀態。" });
             return Results.Ok(await content.QuickEditAsync(id, input.Title, input.Slug, input.Status, input.Version, ct));
+        });
+
+        // 訪客張貼評論：端點僅接受 BFF 通行證（瀏覽器不持有任何憑證），
+        // 服務層負責開關、內容可評性、蜜罐與基礎垃圾過濾；線上速率限制由網站主機補上。
+        group.MapPost("/contents/{id}/comments", async (Guid id, CommentPostEnvelope input, CommentService comments, CancellationToken ct) =>
+        {
+            await comments.PostAsync(id, new CommentService.CommentPostInput(
+                input.AuthorName ?? "", input.Url, input.Markdown ?? "", input.Honeypot == true), ct);
+            return Results.NoContent();
+        }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
+        // 評論審核佇列：狀態篩選、計數、審核與永久刪除。
+        group.MapGet("/comments", async (HttpContext http, CommentService comments, CancellationToken ct) =>
+        {
+            if (!ApiEndpoints.TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
+            if (!ApiEndpoints.TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
+            CommentStatus? status = null;
+            var rawStatus = http.Request.Query["status"].ToString();
+            if (rawStatus.Length > 0)
+            {
+                if (!Enum.TryParse<CommentStatus>(rawStatus, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                    return Results.BadRequest(new { message = "參數 status 無效。" });
+                status = parsed;
+            }
+            return Results.Ok(await comments.ListAdminAsync(status, page ?? 1, pageSize ?? Limits.PageSize, ct));
+        });
+
+        group.MapGet("/comments/counts", async (CommentService comments, CancellationToken ct) =>
+            Results.Ok(await comments.CountAdminAsync(ct)));
+
+        group.MapPost("/comments/{id}/moderate", async (Guid id, Guid version, CommentModerateInput input, CommentService comments, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<CommentStatus>(input.Status, ignoreCase: true, out var target) || !Enum.IsDefined(target))
+                return Results.BadRequest(new { message = "參數 status 無效。" });
+            await comments.ModerateAsync(id, target, version, ct);
+            return Results.NoContent();
+        });
+
+        group.MapDelete("/comments/{id}", async (Guid id, Guid version, CommentService comments, CancellationToken ct) =>
+        {
+            await comments.DeleteAsync(id, version, ct);
+            return Results.NoContent();
+        });
+
+        // 編輯占用心跳：提示性占用，不阻止開啟或儲存；takeOver=true 明確接管他人仍有效的占用。
+        group.MapPost("/contents/{id}/editing", async (Guid id, ContentService content, HttpContext http, CancellationToken ct) =>
+        {
+            var takeOver = http.Request.Query["takeOver"].ToString() is "true" or "1";
+            return Results.Ok(await content.TouchEditingAsync(id, takeOver, ct));
+        });
+
+        // 離開編輯器時釋放自己的占用。
+        group.MapDelete("/contents/{id}/editing", async (Guid id, ContentService content, CancellationToken ct) =>
+        {
+            await content.ReleaseEditingAsync(id, ct);
+            return Results.NoContent();
         });
 
         // 清單批次操作：逐筆攜帶並發版本，逐筆回報結果；確認契約與單筆端點相同（由 BFF 呼叫方滿足）。
@@ -152,6 +208,8 @@ public static class AdminEndpoints
     public sealed record ProtectionUnlockInput(string? Password);
     public sealed record QuickEditInput(string? Title, string? Slug, ContentStatus Status, Guid Version);
     public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items);
+    public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot);
+    public sealed record CommentModerateInput(string Status);
     public sealed record BulkContentItem(Guid Id, Guid Version);
 
     private static ContentKind? ParseKind(string raw, ContentKind fallback, out IResult? error)

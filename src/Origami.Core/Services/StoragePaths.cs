@@ -16,6 +16,8 @@ public sealed class StoragePaths
         }
     }
     public string Images => EnsureDirectory(Path.Combine(SiteRoot, "images"));
+    /// <summary>非圖片媒體（PDF／音訊／影片）專用目錄；與圖片分開存放，供提供時區隔行為。</summary>
+    public string Files => EnsureDirectory(Path.Combine(SiteRoot, "files"));
     public string Staging => EnsureDirectory(Path.Combine(SiteRoot, "staging"));
     public string Keys { get; }
 
@@ -36,6 +38,7 @@ public sealed class StoragePaths
         Keys = Path.Combine(Root, "keys");
         // 保留舊建構行為；屬性取用時也確保稍後切換的站點目錄存在。
         _ = Images;
+        _ = Files;
         _ = Staging;
         Directory.CreateDirectory(Keys);
     }

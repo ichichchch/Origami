@@ -43,6 +43,14 @@ public static class AdminTaxonomyEndpoints
             var moved = await taxonomy.MergeAsync(kind!.Value, id, input.TargetId, input.Version, ct);
             return Results.Ok(new { moved });
         });
+
+        // 批次刪除：逐筆攜帶並發版本、逐筆回報；確認契約與單筆刪除相同（由 BFF 呼叫方取得人工確認）。
+        group.MapPost("/bulk-delete", async (BulkTaxonomyDeleteInput input, TaxonomyService taxonomy, CancellationToken ct) =>
+        {
+            if (!Enum.IsDefined(input.Kind)) return Results.BadRequest(new { message = "參數 kind 無效（category 或 tag）。" });
+            var items = (input.Items ?? []).Where(x => x is not null).Select(x => (x.Id, x.Version)).ToList();
+            return Results.Ok(await taxonomy.BulkDeleteAsync(input.Kind, items, ct));
+        });
     }
 
     private static bool TryKind(HttpContext http, out TaxonomyKind? kind, out IResult? error)
@@ -60,4 +68,6 @@ public static class AdminTaxonomyEndpoints
     }
 
     public sealed record TaxonomyMergeInput(Guid TargetId, Guid Version);
+    public sealed record BulkTaxonomyDeleteInput(TaxonomyKind Kind, List<BulkVersionedItem>? Items);
+    public sealed record BulkVersionedItem(Guid Id, Guid Version);
 }

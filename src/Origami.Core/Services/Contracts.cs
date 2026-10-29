@@ -2,6 +2,12 @@ namespace Origami.Core.Services;
 
 public sealed class CmsException(string message) : Exception(message);
 
+/// <summary>自訂欄位的一組值；欄位識別由伺服器驗證屬於該內容類型。</summary>
+public sealed record FieldValueInput(Guid FieldId, string Value);
+
+/// <summary>公開呈現的自訂欄位值；欄位名稱與種類隨內容一併輸出。</summary>
+public sealed record PublicFieldValue(string Name, string Key, string Value, string FieldType);
+
 public sealed class ContentEdit
 {
     public Guid? Id { get; set; }
@@ -31,6 +37,18 @@ public sealed class ContentEdit
     public bool HasProtectPassword { get; set; }
     /// <summary>已儲存瀏覽總數的唯讀回報。</summary>
     public int Views { get; set; }
+    /// <summary>唯讀回報：作者顯示名稱快照；由伺服器於建立時寫入，更新不重寫。</summary>
+    public string AuthorName { get; set; } = "";
+    /// <summary>自訂 meta 描述；空字串時使用文章摘要。</summary>
+    [StringLength(Limits.MetaDescription)] public string MetaDescription { get; set; } = "";
+    /// <summary>是否排除搜尋引擎索引。</summary>
+    public bool NoIndex { get; set; }
+    /// <summary>唯讀回報：建立者的帳號識別；作者角色以此判斷能否編輯。</summary>
+    public string? AuthorId { get; set; }
+    /// <summary>唯讀回報：目前有其他成員占用編輯器（心跳仍在有效期內）。</summary>
+    public bool EditingByOther { get; set; }
+    /// <summary>唯讀回報：占用者的顯示名稱；無占用時為空字串。</summary>
+    public string EditingByName { get; set; } = "";
     /// <summary>未來的發布時間；僅在內容維持草稿時有意義。</summary>
     public DateTimeOffset? PublishAt { get; set; }
     public Guid? PreviewToken { get; set; }
@@ -38,6 +56,12 @@ public sealed class ContentEdit
     public DateTimeOffset? PublishedAt { get; set; }
     public ContentStatus Status { get; set; }
     public Guid Version { get; set; }
+    /// <summary>自訂內容類型；null 表示內建文章或頁面。既有內容的類型不可變更。</summary>
+    public Guid? ContentTypeId { get; set; }
+    /// <summary>指派的自訂詞彙；只接受屬於本內容類型之分類法的詞彙。</summary>
+    public List<Guid> CustomTermIds { get; set; } = [];
+    /// <summary>自訂欄位的值；欄位必須屬於本內容類型。</summary>
+    public List<FieldValueInput> FieldValues { get; set; } = [];
     public List<Guid> CategoryIds { get; set; } = [];
     public List<Guid> TagIds { get; set; } = [];
 }
@@ -74,10 +98,20 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public string CoverAltText { get; init; } = "";
     /// <summary>封面網址；未設定封面時為 null。</summary>
     public string? CoverUrl => CoverFileName.Length == 0 ? null : "/media/" + CoverFileName;
+    /// <summary>作者顯示名稱快照；空字串時前台退回站點設定的作者名稱。</summary>
+    public string AuthorName { get; init; } = "";
+    /// <summary>作者彙整頁的連結代稱；無署名時為空字串。</summary>
+    public string AuthorSlug { get; init; } = "";
+    /// <summary>自訂 meta 描述；空字串時使用文章摘要。</summary>
+    public string MetaDescription { get; init; } = "";
+    /// <summary>是否排除搜尋引擎索引。</summary>
+    public bool NoIndex { get; init; }
+    /// <summary>作者角色清單判斷編輯權限用的帳號識別。</summary>
+    public string? AuthorId { get; init; }
 }
-public sealed record ContentCounts(int Drafts, int Published, int Trashed = 0)
+public sealed record ContentCounts(int Drafts, int Published, int Pending = 0, int Trashed = 0)
 {
-    // 預設分頁列出草稿與已發布內容；回收桶另有專屬分頁。
+    // 預設分頁列出草稿與已發布內容；回收桶另有專屬分頁，待審由清單狀態篩選。
     public int Total => Drafts + Published;
 }
 /// <summary>修訂版本列表項目；本文於需要時載入。</summary>
@@ -101,12 +135,26 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public string CoverCaption { get; init; } = "";
     /// <summary>封面網址；未設定封面時為 null。</summary>
     public string? CoverUrl => CoverFileName.Length == 0 ? null : "/media/" + CoverFileName;
+    /// <summary>作者顯示名稱快照；空字串時前台退回站點設定的作者名稱。</summary>
+    public string AuthorName { get; init; } = "";
+    /// <summary>作者彙整頁的連結代稱；無署名時為空字串。</summary>
+    public string AuthorSlug { get; init; } = "";
+    /// <summary>自訂 meta 描述；空字串時使用文章摘要。</summary>
+    public string MetaDescription { get; init; } = "";
+    /// <summary>是否排除搜尋引擎索引。</summary>
+    public bool NoIndex { get; init; }
+    /// <summary>最後更新時間；供結構化資料使用。</summary>
+    public DateTimeOffset UpdatedAt { get; init; }
+    /// <summary>自訂欄位的公開值；依欄位宣告順序排列。</summary>
+    public IReadOnlyList<PublicFieldValue> Fields { get; init; } = [];
 }
 public sealed record NavigationItem(string Title, string Slug);
 /// <summary>以路徑解析的已發布頁面；Segments 為根到本頁的完整 slug 鏈（未含 /pages/ 前綴）。</summary>
 public sealed record PagePathContent(PublicContent Content, IReadOnlyList<string> Segments);
 /// <summary>公開導覽中的已發布頁面，附階層指標。</summary>
-public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId);
+public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId, string? Url = null, bool IsExternal = false);
+/// <summary>受控導覽項目的管理端檢視。</summary>
+public sealed record NavItemView(Guid Id, string Title, Guid? ContentId, string Url, bool IsVisible, int Position, Guid Version);
 /// <summary>編輯器與網站設定中選擇器的頁面候選。</summary>
 public sealed record PageOption(Guid Id, string Title, Guid? ParentId, ContentStatus Status,
     bool IsPrivate = false, bool IsProtected = false);
@@ -118,12 +166,18 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
     public string AltText { get; init; } = "";
     /// <summary>封面或圖片說明文字；顯示於前台封面下方。</summary>
     public string Caption { get; init; } = "";
+    /// <summary>媒體種類：圖片、文件、音訊或影片。</summary>
+    public MediaKind Kind { get; init; } = MediaKind.Image;
     /// <summary>由列表填入；有多少內容在任何狀態下內嵌此圖片。</summary>
     public int ReferenceCount { get; set; }
     public string Url => "/media/" + FileName;
     // 未設定替代文字時沿用歷史預留字；括號會被逸出，作者文字無法破壞語法。
-    public string Markdown => "![" + (AltText == "" ? "圖片" : AltText.Replace("[", "\\[").Replace("]", "\\]")) + "](" + Url + ")";
+    public string Markdown => Kind == MediaKind.Image
+        ? "![" + (AltText == "" ? "圖片" : AltText.Replace("[", "\\[").Replace("]", "\\]")) + "](" + Url + ")"
+        : "[" + (AltText == "" ? OriginalName : AltText.Replace("[", "\\[").Replace("]", "\\]")) + "](" + Url + ")";
 }
+/// <summary>批次上傳的單檔結果；失敗時附原因，單檔失敗不影響其他檔案。</summary>
+public sealed record MediaBatchItem(string FileName, bool Succeeded, string Message, MediaItem? Item);
 /// <summary>退役 slug 背後現行的公開目標，供永久轉址使用。</summary>
 public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
 /// <summary>公開時間軸上相鄰的文章；比目前這篇新或舊。</summary>
@@ -158,6 +212,15 @@ public static partial class ContentRules
         && fileName.IndexOfAny(['/', '\\', ':']) < 0
         && !fileName.Any(char.IsControl)
         && Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".webp";
+
+    /// <summary>非圖片媒體的儲存檔名檢查：同樣禁止路徑穿越，但允許文件／音訊／影片副檔名。</summary>
+    public static bool IsSafeMediaFileNameAny(string? fileName) =>
+        !string.IsNullOrWhiteSpace(fileName)
+        && fileName.Length <= 80
+        && fileName.IndexOfAny(['/', '\\', ':']) < 0
+        && !fileName.Any(char.IsControl)
+        && Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".webp" or ".pdf" or ".mp3" or ".m4a"
+            or ".mp4" or ".webm" or ".ogg" or ".wav";
 
     [GeneratedRegex(@"[^\p{L}\p{Nd}]+", RegexOptions.CultureInvariant)]
     private static partial Regex SlugSeparators();

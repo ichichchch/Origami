@@ -8,12 +8,20 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public Guid CurrentSiteId => siteContext?.SiteId ?? SiteDefaults.DefaultSiteId;
     public DbSet<CmsSite> Sites => Set<CmsSite>();
     public DbSet<SiteMembership> SiteMemberships => Set<SiteMembership>();
+    public DbSet<SiteNavItem> SiteNavItems => Set<SiteNavItem>();
     public DbSet<ApiCredential> ApiCredentials => Set<ApiCredential>();
     public DbSet<Content> Contents => Set<Content>();
+    public DbSet<ContentComment> Comments => Set<ContentComment>();
     public DbSet<ContentRevision> ContentRevisions => Set<ContentRevision>();
     public DbSet<ContentView> ContentViews => Set<ContentView>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<ContentType> ContentTypes => Set<ContentType>();
+    public DbSet<CustomTaxonomy> CustomTaxonomies => Set<CustomTaxonomy>();
+    public DbSet<CustomTaxonomyTerm> CustomTaxonomyTerms => Set<CustomTaxonomyTerm>();
+    public DbSet<ContentCustomTerm> ContentCustomTerms => Set<ContentCustomTerm>();
+    public DbSet<CustomField> CustomFields => Set<CustomField>();
+    public DbSet<ContentFieldValue> ContentFieldValues => Set<ContentFieldValue>();
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
     public DbSet<ContentSlugRedirect> SlugRedirects => Set<ContentSlugRedirect>();
     public DbSet<SiteSettings> Settings => Set<SiteSettings>();
@@ -57,12 +65,33 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         {
             ConfigureSiteEntity(e, nameof(SiteMembership.Site));
             e.HasKey(x => new { x.SiteId, x.UserId });
+            e.Property(x => x.DisplayName).HasMaxLength(Limits.AuthorName).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
-            e.ToTable(t => t.HasCheckConstraint("CK_SiteMembership_Role", "\"Role\" IN (0, 1, 2)"));
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SiteMembership_Role", "\"Role\" IN (0, 1, 2, 3)");
+                t.HasCheckConstraint("CK_SiteMembership_DisplayName", "\"DisplayName\" = btrim(\"DisplayName\")");
+            });
         });
-        builder.Entity<ApiCredential>(e =>
+        builder.Entity<SiteNavItem>(e =>
         {
+            ConfigureSiteEntity(e, nameof(SiteNavItem.Site));
+            e.Property(x => x.Title).HasMaxLength(Limits.NavTitle).IsRequired();
+            e.Property(x => x.Url).HasMaxLength(Limits.NavUrl).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            // 站內頁面項目：目標必須是本站的已發布頁面；頁面被永久刪除時連帶移除該導覽項目。
+            e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.SiteId, x.Position, x.Id });
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SiteNavItem_Title", "length(btrim(\"Title\")) > 0");
+                t.HasCheckConstraint("CK_SiteNavItem_Target",
+                    "(\"ContentId\" IS NOT NULL AND \"Url\" = '') OR (\"ContentId\" IS NULL AND \"Url\" <> '')");
+            });
+        });
+        builder.Entity<ApiCredential>(e =>        {
             ConfigureSiteEntity(e, nameof(ApiCredential.Site));
             e.Property(x => x.Name).HasMaxLength(Limits.CredentialName).IsRequired();
             e.Property(x => x.SecretHash).HasMaxLength(64).IsRequired();
@@ -92,11 +121,25 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasIndex(x => new { x.SiteId, x.Kind, x.Status, x.PublishedAt, x.Id });
             e.HasIndex(x => x.PreviewToken).IsUnique();
             e.HasIndex(x => new { x.SiteId, x.Status });
+            e.HasIndex(x => new { x.SiteId, x.AuthorSlug, x.Status });
             // 複合 FK 的 SiteId 不可清空；刪除前由服務明確清除 ParentId／CoverMediaId。
             e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => new { x.SiteId, x.ParentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Cover).WithMany().HasForeignKey(x => new { x.SiteId, x.CoverMediaId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            // 自訂內容類型以複合 FK 指向本站的類型宣告；類型封存不影響既有內容。
+            e.HasOne(x => x.ContentType).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentTypeId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SiteId, x.ContentTypeId, x.Status, x.PublishedAt, x.Id });
+            e.HasMany(x => x.CustomTerms).WithOne().HasForeignKey(x => new { x.SiteId, x.ContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            // 作者為全站帳號（不隨站點隔離）；帳號刪除時清空參照，署名快照 AuthorName 保留。
+            e.Property(x => x.AuthorName).HasMaxLength(Limits.AuthorName).IsRequired();
+            e.Property(x => x.AuthorSlug).HasMaxLength(Limits.Slug).IsRequired();
+            e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => x.AuthorId);
+            // 編輯占用鎖只是提示性心跳，不參與並發控制（並發仍由 Version 樂觀檢查把關）。
+            e.Property(x => x.EditingByName).HasMaxLength(Limits.AuthorName).IsRequired();
             e.HasMany(x => x.Categories).WithMany(x => x.Contents).UsingEntity<Dictionary<string, object>>(
                 "ContentCategories",
                 j => j.HasOne<Category>().WithMany().HasForeignKey("SiteId", "CategoriesId")
@@ -122,9 +165,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_Content_Kind", "\"Kind\" IN (0, 1)");
-                t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2)");
-                // 草稿與回收桶內容可為未發布；只有生效中的已發布狀態需要日期。
-                t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2) OR \"PublishedAt\" IS NOT NULL");
+                t.HasCheckConstraint("CK_Content_Status", "\"Status\" IN (0, 1, 2, 3)");
+                // 草稿、回收桶與待審內容可為未發布；只有生效中的已發布狀態需要日期。
+                t.HasCheckConstraint("CK_Content_PublishedAt", "\"Status\" IN (0, 2, 3) OR \"PublishedAt\" IS NOT NULL");
                 // 排程只在草稿上有意義；回收桶時間戳只在回收桶中。
                 t.HasCheckConstraint("CK_Content_PublishAt", "\"Status\" = 0 OR \"PublishAt\" IS NULL");
                 t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
@@ -172,6 +215,99 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => new { x.SiteId, x.Slug }).IsUnique();
         });
+        builder.Entity<ContentType>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.HasAlternateKey(x => new { x.SiteId, x.Id });
+            e.Property(x => x.Name).HasMaxLength(Limits.ContentTypeName).IsRequired();
+            e.Property(x => x.Slug).HasMaxLength(Limits.ContentTypeSlug).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(Limits.Description).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.SiteId, x.Slug }).IsUnique();
+            e.HasMany(x => x.Taxonomies).WithOne(x => x.ContentType)
+                .HasForeignKey(x => new { x.SiteId, x.ContentTypeId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_ContentType_Name", "length(btrim(\"Name\")) > 0");
+                t.HasCheckConstraint("CK_ContentType_Slug", "length(btrim(\"Slug\")) > 0");
+            });
+        });
+        builder.Entity<CustomTaxonomy>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.HasAlternateKey(x => new { x.SiteId, x.Id });
+            e.Property(x => x.Name).HasMaxLength(Limits.CustomTaxonomyName).IsRequired();
+            e.Property(x => x.Slug).HasMaxLength(Limits.Slug).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(Limits.TaxonomyDescription).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.SiteId, x.ContentTypeId, x.Slug }).IsUnique();
+            e.HasMany(x => x.Terms).WithOne(x => x.Taxonomy)
+                .HasForeignKey(x => new { x.SiteId, x.TaxonomyId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_CustomTaxonomy_Name", "length(btrim(\"Name\")) > 0");
+                t.HasCheckConstraint("CK_CustomTaxonomy_Slug", "length(btrim(\"Slug\")) > 0");
+            });
+        });
+        builder.Entity<CustomTaxonomyTerm>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.HasAlternateKey(x => new { x.SiteId, x.Id });
+            e.Property(x => x.Name).HasMaxLength(Limits.CustomTaxonomyName).IsRequired();
+            e.Property(x => x.Slug).HasMaxLength(Limits.Slug).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(Limits.TaxonomyDescription).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.SiteId, x.TaxonomyId, x.Slug }).IsUnique();
+            e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => new { x.SiteId, x.ParentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_CustomTerm_Name", "length(btrim(\"Name\")) > 0");
+                t.HasCheckConstraint("CK_CustomTerm_Slug", "length(btrim(\"Slug\")) > 0");
+                t.HasCheckConstraint("CK_CustomTerm_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
+            });
+        });
+        builder.Entity<ContentCustomTerm>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.HasIndex(x => new { x.SiteId, x.ContentId, x.TermId }).IsUnique();
+            e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Term).WithMany().HasForeignKey(x => new { x.SiteId, x.TermId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<CustomField>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.HasAlternateKey(x => new { x.SiteId, x.Id });
+            e.Property(x => x.Name).HasMaxLength(Limits.CustomFieldName).IsRequired();
+            e.Property(x => x.Key).HasMaxLength(Limits.CustomFieldName).IsRequired();
+            e.Property(x => x.FieldType).HasMaxLength(20).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.SiteId, x.ContentTypeId, x.Key }).IsUnique();
+            e.HasOne(x => x.ContentType).WithMany()
+                .HasForeignKey(x => new { x.SiteId, x.ContentTypeId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
+                t.HasCheckConstraint("CK_CustomField_Key", "length(btrim(\"Key\")) > 0");
+                t.HasCheckConstraint("CK_CustomField_Type",
+                    "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox')");
+            });
+        });
+        builder.Entity<ContentFieldValue>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.Property(x => x.Value).HasMaxLength(2000).IsRequired();
+            e.HasIndex(x => new { x.SiteId, x.ContentId, x.FieldId }).IsUnique();
+            e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Field).WithMany().HasForeignKey(x => new { x.SiteId, x.FieldId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+        });
         builder.Entity<MediaAsset>(e =>
         {
             ConfigureSiteEntity(e);
@@ -183,6 +319,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Caption).HasMaxLength(Limits.Caption).IsRequired();
             e.HasIndex(x => new { x.SiteId, x.FileName }).IsUnique();
             e.HasIndex(x => new { x.SiteId, x.UploadedAt, x.Id });
+            e.ToTable(t => t.HasCheckConstraint("CK_MediaAsset_Kind", "\"Kind\" IN (0, 1, 2, 3)"));
         });
         builder.Entity<ContentSlugRedirect>(e =>
         {
@@ -191,6 +328,25 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasIndex(x => new { x.SiteId, x.OldSlug }).IsUnique();
             e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<ContentComment>(e =>
+        {
+            ConfigureSiteEntity(e, nameof(ContentComment.Site));
+            e.Property(x => x.AuthorName).HasMaxLength(Limits.CommentAuthor).IsRequired();
+            e.Property(x => x.Url).HasMaxLength(Limits.CommentUrl).IsRequired();
+            e.Property(x => x.Markdown).HasMaxLength(Limits.CommentBody).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            // 評論隨內容刪除而移除；狀態與時間供審核佇列排序。
+            e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.SiteId, x.Status, x.CreatedAt });
+            e.HasIndex(x => new { x.SiteId, x.ContentId, x.Status, x.CreatedAt });
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_Comment_Status", "\"Status\" IN (0, 1, 2, 3)");
+                t.HasCheckConstraint("CK_Comment_Author", "length(btrim(\"AuthorName\")) > 0");
+                t.HasCheckConstraint("CK_Comment_Body", "length(btrim(\"Markdown\")) > 0");
+            });
         });
         builder.Entity<SiteSettings>(e =>
         {
@@ -202,6 +358,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasOne<Content>().WithMany().HasForeignKey(x => new { x.SiteId, x.HomePageContentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<MediaAsset>().WithMany().HasForeignKey(x => new { x.SiteId, x.SiteIconMediaId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<MediaAsset>().WithMany().HasForeignKey(x => new { x.SiteId, x.LogoMediaId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
             e.ToTable(t =>
             {

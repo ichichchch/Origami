@@ -29,6 +29,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 ParentId = x.ParentId, ParentTitle = x.Parent != null ? x.Parent.Title : "",
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "", CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                AuthorName = x.AuthorName, AuthorId = x.AuthorId,
                 Views = x.Views.Sum(v => (int?)v.Count) ?? 0
             }).ToListAsync(ct);
         return new(items, total, page, pageSize);
@@ -43,12 +44,16 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .GroupBy(x => x.Status).Select(x => new { Status = x.Key, Count = x.Count() }).ToListAsync(ct);
         return new(counts.Where(x => x.Status == ContentStatus.Draft).Sum(x => x.Count),
             counts.Where(x => x.Status == ContentStatus.Published).Sum(x => x.Count),
+            counts.Where(x => x.Status == ContentStatus.Pending).Sum(x => x.Count),
             counts.Where(x => x.Status == ContentStatus.Trashed).Sum(x => x.Count));
     }
 
     public async Task<ContentEdit> GetEditAsync(Guid id, CancellationToken ct = default)
     {
         await admin.RequireRoleAsync(SiteRole.Reader, ct);
+        // 占用判定以伺服器時間為準；讀取者與編輯者都會看到「誰正在編輯」的提示。
+        var access = await admin.GetCurrentAccessAsync(ct);
+        var activeBefore = clock.GetUtcNow().AddSeconds(-Limits.EditingLockSeconds);
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
@@ -60,8 +65,15 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             CoverCaption = x.Cover != null ? x.Cover.Caption : "",
             PublishAt = x.PublishAt, PreviewToken = x.PreviewToken, PublishedAt = x.PublishedAt,
             Status = x.Status, Version = x.Version,
+            MetaDescription = x.MetaDescription, NoIndex = x.NoIndex,
+            AuthorName = x.AuthorName, AuthorId = x.AuthorId,
+            EditingByOther = x.EditingById != null && x.EditingById != access.UserId && x.EditingAt > activeBefore,
+            EditingByName = x.EditingByName,
             Views = x.Views.Sum(v => (int?)v.Count) ?? 0,
-            CategoryIds = x.Categories.Select(c => c.Id).ToList(), TagIds = x.Tags.Select(t => t.Id).ToList()
+            ContentTypeId = x.ContentTypeId,
+            CategoryIds = x.Categories.Select(c => c.Id).ToList(), TagIds = x.Tags.Select(t => t.Id).ToList(),
+            CustomTermIds = x.CustomTerms.Select(t => t.TermId).ToList(),
+            FieldValues = x.FieldValues.Select(v => new FieldValueInput(v.FieldId, v.Value)).ToList()
         }).SingleOrDefaultAsync(ct) ?? throw new CmsException("內容不存在。");
     }
 
@@ -76,14 +88,15 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 
     public async Task<ContentEdit> CreateAsync(ContentKind kind, ContentEdit input, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        // 作者（含編輯者以上）都能建立內容；作者可用的狀態在儲存核心另有限制。
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
         if (input.Id is not null) throw new CmsException("既有內容請改用更新。");
         return await SaveCoreAsync(kind, input, null, ct);
     }
 
     public async Task<ContentEdit> UpdateAsync(ContentEdit input, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
         if (input.Id is not { } id) throw new CmsException("缺少內容識別。");
         return await SaveCoreAsync(null, input, id, ct);
     }
@@ -99,6 +112,57 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         var now = clock.GetUtcNow();
         var entity = await LoadOrCreateAsync(db, input, id, requestedKind, now, ct);
+        // 作者只能編輯本人未排程的草稿／待審；發布與排程仍由編輯者核准。
+        var access = await admin.GetCurrentAccessAsync(ct);
+        if (!access.CanEdit && access.Role != SiteRole.Author) throw new AccessDeniedException();
+        var isAuthorOnly = !access.CanEdit;
+        if (id is null)
+        {
+            entity.AuthorId = access.UserId;
+            entity.AuthorName = access.DisplayName;
+            entity.AuthorSlug = access.DisplayName.Length == 0 ? "" : ContentRules.NormalizeSlug(access.DisplayName);
+            entity.ContentTypeId = input.ContentTypeId;
+        }
+        else
+        {
+            RequireAuthorEditable(entity, access);
+        }
+        if (isAuthorOnly && input.Status is not (ContentStatus.Draft or ContentStatus.Pending))
+            throw new CmsException("作者只能儲存草稿或提交待審；發布由編輯者審核後執行。");
+        if (isAuthorOnly && input.PublishAt is not null)
+            throw new CmsException("作者不可設定排程；排程發布須由編輯者核准。");
+        // 自訂內容類型：建立時指定，既有內容不可變更類型；封存的類型不再接受新內容。
+        ContentType? contentType = null;
+        if (input.ContentTypeId is { } typeId)
+        {
+            contentType = await db.ContentTypes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == typeId, ct)
+                ?? throw new CmsException("內容類型不存在。");
+            if (id is null && contentType.IsArchived) throw new CmsException("此內容類型已封存，不再接受新內容。");
+            if (id is not null && entity.ContentTypeId != typeId) throw new CmsException("不可變更既有內容的類型。");
+            if (entity.Kind != ContentKind.Post) throw new CmsException("自訂內容類型僅適用於文章形式的內容。");
+        }
+        else if (id is not null && entity.ContentTypeId is not null)
+        {
+            throw new CmsException("不可變更既有內容的類型。");
+        }
+        if (contentType is not null)
+        {
+            if (!contentType.SupportsCategories && input.CategoryIds.Count != 0)
+                throw new CmsException("此內容類型不可指派分類。");
+            if (!contentType.SupportsTags && input.TagIds.Count != 0)
+                throw new CmsException("此內容類型不可指派標籤。");
+        }
+        // 階層只適用於頁面或支援階層的自訂類型；父層必須同類型。
+        if (input.ParentId is { } parentContentId)
+        {
+            var parentKind = await db.Contents.AsNoTracking().Where(x => x.Id == parentContentId)
+                .Select(x => new { x.Kind, x.ContentTypeId }).SingleOrDefaultAsync(ct)
+                ?? throw new CmsException("上層內容不存在。");
+            var hierarchical = entity.Kind == ContentKind.Page || (contentType?.SupportsHierarchy ?? false);
+            if (!hierarchical) throw new CmsException("此內容類型不可指定上層內容。");
+            if (contentType is not null && parentKind.ContentTypeId != contentType.Id)
+                throw new CmsException("上層內容必須屬於同一內容類型。");
+        }
         if (entity.Kind == ContentKind.Page && (input.CategoryIds.Count != 0 || input.TagIds.Count != 0))
             throw new CmsException("獨立頁面不可指派文章分類或標籤。");
         if (entity.Kind == ContentKind.Page && input.IsSticky)
@@ -158,11 +222,59 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var categories = await db.Categories.Where(x => categoryIds.Contains(x.Id)).ToListAsync(ct);
         var tags = await db.Tags.Where(x => tagIds.Contains(x.Id)).ToListAsync(ct);
         if (categories.Count != categoryIds.Count || tags.Count != tagIds.Count) throw new CmsException("所選分類或標籤不存在，請重新載入。");
+        // 自訂詞彙只接受屬於本內容類型之分類法的詞彙；內建文章與頁面沒有自訂詞彙。
+        var termIds = input.CustomTermIds.Distinct().ToList();
+        if (termIds.Count > 0)
+        {
+            if (contentType is null) throw new CmsException("內建文章與頁面不可指派自訂詞彙。");
+            var allowed = await db.CustomTaxonomyTerms.AsNoTracking()
+                .Where(term => termIds.Contains(term.Id)
+                    && db.CustomTaxonomies.Any(tax => tax.Id == term.TaxonomyId && tax.ContentTypeId == contentType.Id))
+                .Select(term => term.Id).ToListAsync(ct);
+            if (allowed.Count != termIds.Count) throw new CmsException("所選詞彙不存在或不屬於本內容類型。");
+        }
+        // 自訂欄位值：欄位必須屬於本內容類型，值依欄位種類驗證；必填欄位不可留空。
+        var fieldValues = input.FieldValues
+            .GroupBy(x => x.FieldId)
+            .Select(group => group.First())
+            .ToList();
+        if (fieldValues.Count > 0 || contentType is not null)
+        {
+            if (contentType is null) throw new CmsException("內建文章與頁面不可使用自訂欄位。");
+            var fields = await db.CustomFields.AsNoTracking()
+                .Where(field => field.ContentTypeId == contentType.Id)
+                .Select(field => new { field.Id, field.FieldType, field.IsRequired })
+                .ToListAsync(ct);
+            var supplied = fieldValues.Select(x => x.FieldId).ToHashSet();
+            if (supplied.Except(fields.Select(x => x.Id)).Any())
+                throw new CmsException("所選自訂欄位不存在或不屬於本內容類型。");
+            foreach (var value in fieldValues)
+            {
+                var field = fields.First(x => x.Id == value.FieldId);
+                CustomFieldRules.ValidateValue(field.FieldType, value.Value, field.IsRequired);
+            }
+            // 必填欄位若未送出值，等同留空，必須拒絕。
+            foreach (var field in fields.Where(x => x.IsRequired && !supplied.Contains(x.Id)))
+                CustomFieldRules.ValidateValue(field.FieldType, "", required: true);
+        }
+        var currentValues = await db.ContentFieldValues.Where(x => x.ContentId == entity.Id).ToListAsync(ct);
+        db.ContentFieldValues.RemoveRange(currentValues);
+        foreach (var value in fieldValues)
+            db.ContentFieldValues.Add(new ContentFieldValue
+            {
+                Id = Guid.NewGuid(), ContentId = entity.Id, FieldId = value.FieldId, Value = value.Value.Trim()
+            });
+        var currentTerms = await db.ContentCustomTerms.Where(x => x.ContentId == entity.Id).ToListAsync(ct);
+        db.ContentCustomTerms.RemoveRange(currentTerms);
+        foreach (var termId in termIds)
+            db.ContentCustomTerms.Add(new ContentCustomTerm { Id = Guid.NewGuid(), ContentId = entity.Id, TermId = termId });
         entity.Title = input.Title.Trim();
         entity.Slug = slug;
         entity.Markdown = input.Markdown ?? "";
         entity.Excerpt = (input.Excerpt ?? "").Trim();
         entity.IsSticky = input.IsSticky;
+        entity.MetaDescription = (input.MetaDescription ?? "").Trim();
+        entity.NoIndex = input.NoIndex;
         entity.Status = input.Status;
         if (entity.Status == ContentStatus.Published)
         {
@@ -211,7 +323,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>
-    /// 列表快速編輯：只更新標題、網址代稱與草稿／發布狀態，其餘欄位
+    /// 列表快速編輯：只更新標題、網址代稱與狀態，其餘欄位
     /// 一律不動。規則與完整儲存一致：slug 變更時退役舊網址為永久轉址、
     /// 發布放棄排程、狀態變更同步嵌入生命週期，並留下修訂版本。
     /// </summary>
@@ -219,8 +331,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         Guid version, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
-        if (status is not (ContentStatus.Draft or ContentStatus.Published))
-            throw new CmsException("快速編輯僅接受草稿或已發布狀態；回收桶請使用還原流程。");
+        if (status is not (ContentStatus.Draft or ContentStatus.Published or ContentStatus.Pending))
+            throw new CmsException("快速編輯僅接受草稿、待審或已發布狀態；回收桶請使用還原流程。");
         var cleanTitle = (title ?? "").Trim();
         if (cleanTitle.Length is 0 or > Limits.Title) throw new CmsException($"標題須為 1–{Limits.Title} 字。");
         var normalized = ContentRules.NormalizeSlug(slug);
@@ -323,9 +435,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
             { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
+                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
-                CoverCaption = x.Cover != null ? x.Cover.Caption : "" }).SingleOrDefaultAsync(ct);
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "",
+                Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
+                    .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList() })
+            .SingleOrDefaultAsync(ct);
     }
 
     private static void ValidateSaveInput(ContentEdit input, ContentKind? requestedKind)
@@ -333,8 +450,78 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         ContentRules.Validate(input);
         if (!Enum.IsDefined(input.Status)) throw new CmsException("內容狀態無效。");
         if (requestedKind is { } kind && !Enum.IsDefined(kind)) throw new CmsException("內容類型無效。");
+        // 回收桶有專屬的刪除／還原流程；直接以儲存進出回收桶會破壞 DeletedAt 約束。
+        if (input.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯，不能以儲存直接設定。");
         if (input.CategoryIds is null || input.TagIds is null || input.CategoryIds.Count > Limits.MaxTaxonomiesPerKind || input.TagIds.Count > Limits.MaxTaxonomiesPerKind)
             throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個分類與標籤。");
+    }
+
+    /// <summary>編輯占用鎖的現況回報；占用僅供提示，不阻止開啟或儲存（並發由版本檢查把關）。</summary>
+    public sealed record EditingLockState(string? UserId, string DisplayName, DateTimeOffset? At, bool HeldByOther);
+
+    /// <summary>
+    /// 編輯器心跳：刷新或取得占用。占用逾期時可直接取得；他人占用中除非明確接管，
+    /// 否則不改動並回報現況。心跳不參與並發控制，與內容版本檢查互不影響。
+    /// </summary>
+    public async Task<EditingLockState> TouchEditingAsync(Guid id, bool takeOver = false, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
+        var access = await admin.GetCurrentAccessAsync(ct);
+        var now = clock.GetUtcNow();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
+        RequireAuthorEditable(entity, access);
+        var activeBefore = now.AddSeconds(-Limits.EditingLockSeconds);
+        var heldByOther = entity.EditingById is not null && entity.EditingById != access.UserId
+            && entity.EditingAt is { } at && at > activeBefore;
+        if (heldByOther && !takeOver)
+            return new(entity.EditingById, entity.EditingByName, entity.EditingAt, HeldByOther: true);
+        var changed = await db.Contents.Where(x => x.Id == id && x.Version == entity.Version
+                && x.EditingById == entity.EditingById && x.EditingByName == entity.EditingByName && x.EditingAt == entity.EditingAt
+                && (access.CanEdit || (x.AuthorId == access.UserId
+                    && (x.Status == ContentStatus.Draft || x.Status == ContentStatus.Pending) && x.PublishAt == null))
+                && (takeOver || x.EditingById == null || x.EditingById == access.UserId || x.EditingAt == null || x.EditingAt <= activeBefore))
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.EditingById, access.UserId)
+                .SetProperty(x => x.EditingByName, access.DisplayName).SetProperty(x => x.EditingAt, now), ct);
+        if (changed == 1)
+            return new(access.UserId, access.DisplayName, now, HeldByOther: false);
+        entity = await db.Contents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("內容不存在。");
+        RequireAuthorEditable(entity, access);
+        heldByOther = entity.EditingById is not null && entity.EditingById != access.UserId
+            && entity.EditingAt > clock.GetUtcNow().AddSeconds(-Limits.EditingLockSeconds);
+        return new(entity.EditingById, entity.EditingByName, entity.EditingAt, heldByOther);
+    }
+
+    /// <summary>離開編輯器時釋放自己的占用；他人占用一律不動。</summary>
+    public async Task ReleaseEditingAsync(Guid id, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
+        var access = await admin.GetCurrentAccessAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return;
+        RequireAuthorEditable(entity, access, releasing: true);
+        if (entity.EditingById != access.UserId) return;
+        var changed = await db.Contents.Where(x => x.Id == id && x.Version == entity.Version
+                && (access.CanEdit || x.AuthorId == access.UserId)
+                && x.EditingById == access.UserId && x.EditingByName == entity.EditingByName && x.EditingAt == entity.EditingAt)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.EditingById, (string?)null)
+                .SetProperty(x => x.EditingByName, "").SetProperty(x => x.EditingAt, (DateTimeOffset?)null), ct);
+        if (changed == 0)
+        {
+            entity = await db.Contents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (entity is not null) RequireAuthorEditable(entity, access, releasing: true);
+        }
+    }
+
+    private static void RequireAuthorEditable(Content entity, SiteAccessInfo access, bool releasing = false)
+    {
+        if (entity.SiteId != access.SiteId) throw new AccessDeniedException();
+        if (access.CanEdit) return;
+        if (access.Role != SiteRole.Author || entity.AuthorId != access.UserId)
+            throw new AccessDeniedException("作者只能編輯自己的內容。");
+        if (!releasing && (entity.Status is not (ContentStatus.Draft or ContentStatus.Pending) || entity.PublishAt is not null))
+            throw new AccessDeniedException("作者只能編輯未排程的草稿或待審內容。");
     }
 
     private static async Task<Content> LoadOrCreateAsync(CmsDbContext db, ContentEdit input, Guid? id, ContentKind? requestedKind, DateTimeOffset now, CancellationToken ct)
@@ -576,21 +763,23 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     /// <summary>替換分享 token；舊連結立即失效。</summary>
     public async Task<Guid> CyclePreviewTokenAsync(Guid contentId, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
         return (await ModifyPreviewTokenAsync(contentId, Guid.NewGuid(), ct))!.Value;
     }
 
     /// <summary>移除分享 token；預覽連結立即失效。</summary>
     public async Task RevokePreviewTokenAsync(Guid contentId, CancellationToken ct = default)
     {
-        await admin.RequireAsync(ct);
+        await admin.RequireRoleAsync(SiteRole.Author, ct);
         await ModifyPreviewTokenAsync(contentId, null, ct);
     }
 
     private async Task<Guid?> ModifyPreviewTokenAsync(Guid contentId, Guid? token, CancellationToken ct)
     {
+        var access = await admin.GetCurrentAccessAsync(ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contents.SingleOrDefaultAsync(x => x.Id == contentId, ct) ?? throw new CmsException("內容不存在。");
+        RequireAuthorEditable(entity, access);
         if (entity.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容不可建立預覽連結。");
         var now = clock.GetUtcNow();
         entity.PreviewToken = token;
@@ -601,16 +790,18 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return entity.PreviewToken;
     }
 
-    /// <summary>透過分享 token 可讀取的草稿；回收桶與已發布內容不會在此渲染。</summary>
+    /// <summary>透過分享 token 可讀取的草稿與待審內容；回收桶與已發布內容不會在此渲染。</summary>
     public async Task<PublicContent?> GetPreviewAsync(Guid token, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().AsSplitQuery()
-            .Where(x => x.PreviewToken == token && x.Status == ContentStatus.Draft)
+            .Where(x => x.PreviewToken == token && (x.Status == ContentStatus.Draft || x.Status == ContentStatus.Pending))
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
             { Excerpt = x.Excerpt,
+                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
+                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 CoverCaption = x.Cover != null ? x.Cover.Caption : "" }).SingleOrDefaultAsync(ct);
@@ -626,16 +817,19 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     public async Task<PagedResult<ContentSummary>> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
-        CancellationToken ct = default, string? category = null, string? tag = null, int? year = null, int? month = null)
+        CancellationToken ct = default, string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null)
     {
         var offset = ContentRules.Offset(page, pageSize);
         if (category is not null) category = ContentRules.NormalizeSlug(category);
         if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
+        if (author is not null) author = ContentRules.NormalizeSlug(author);
         if (month is { } m && m is < 1 or > 12) throw new CmsException("月份無效。");
         await using var db = await factory.CreateDbContextAsync(ct);
-        var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate);
+        var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published
+            && !x.IsPrivate && x.ContentTypeId == null);
         if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
+        if (author is not null) query = query.Where(x => x.AuthorSlug == author);
         if (year is { } filterYear) query = query.Where(x => x.PublishedAt!.Value.Year == filterYear);
         if (month is { } filterMonth) query = query.Where(x => x.PublishedAt!.Value.Month == filterMonth);
         var total = await query.CountAsync(ct);
@@ -661,23 +855,23 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post &&
-            x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected);
+            x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected && x.ContentTypeId == null);
         if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
         return await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
             .Take(count).Select(x => new FeedEntry(x.Id, x.Title, x.Slug, x.PublishedAt,
                 x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
-                x.Markdown, x.Excerpt != "")).ToListAsync(ct);
+                x.Markdown, x.Excerpt != "", x.AuthorName)).ToListAsync(ct);
     }
 
     public sealed record FeedEntry(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
-        string Excerpt, string Markdown, bool ExcerptIsManual);
+        string Excerpt, string Markdown, bool ExcerptIsManual, string AuthorName = "");
 
     public async Task<List<PublicTaxonomy>> PopularCategoriesAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Categories.AsNoTracking()
-            .Select(x => new { x.Name, x.Slug, Count = x.Contents.Count(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate) })
+            .Select(x => new { x.Name, x.Slug, Count = x.Contents.Count(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null) })
             .Where(x => x.Count > 0).OrderByDescending(x => x.Count).ThenBy(x => x.Slug)
             .Take(Limits.MaxTaxonomiesPerKind).Select(x => new PublicTaxonomy(x.Name, x.Slug, x.Count)).ToListAsync(ct);
     }
@@ -689,23 +883,88 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         // 僅被草稿使用的分類或標籤不屬於公開網站。
         return kind == TaxonomyKind.Category
-            ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
+            ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null))
                 .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct)
-            : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate))
+            : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null))
                 .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct);
     }
 
     public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Kind == kind && x.Status == ContentStatus.Published && x.Slug == slug)
+        return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Kind == kind && x.Status == ContentStatus.Published
+                && x.Slug == slug && x.ContentTypeId == null)
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
             { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
+                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
-                CoverCaption = x.Cover != null ? x.Cover.Caption : "" }).SingleOrDefaultAsync(ct);
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "",
+                Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
+                    .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList() })
+            .SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// 某個自訂內容類型的已發布內容清單；類型不存在或已封存時回傳 null。
+    /// 自訂類型內容不混入內建文章列表，僅在自己的公開區塊出現。
+    /// </summary>
+    public async Task<PagedResult<ContentSummary>?> ListByTypeAsync(string? typeSlug, int page = 1,
+        int pageSize = Limits.PageSize, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(typeSlug)) return null;
+        var normalized = ContentRules.NormalizeSlug(typeSlug);
+        var offset = ContentRules.Offset(page, pageSize);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var type = await db.ContentTypes.AsNoTracking().Where(x => x.Slug == normalized && !x.IsArchived)
+            .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct);
+        if (!type.HasValue) return null;
+        var query = db.Contents.AsNoTracking().Where(x => x.ContentTypeId == type
+            && x.Status == ContentStatus.Published && !x.IsPrivate);
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
+            .Skip(offset).Take(pageSize)
+            .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+            {
+                Excerpt = x.IsProtected ? "此內容受密碼保護。" : x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
+                ExcerptIsManual = x.IsProtected || x.Excerpt != "",
+                IsProtected = x.IsProtected,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
+                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex,
+                ParentId = x.ParentId
+            }).ToListAsync(ct);
+        return new(items, total, page, pageSize);
+    }
+
+    /// <summary>某個自訂內容類型下的已發布內容；類型、網址代稱或狀態不符時回傳 null。</summary>
+    public async Task<PublicContent?> GetPublishedByTypeAsync(string? typeSlug, string? slug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(typeSlug) || string.IsNullOrWhiteSpace(slug)) return null;
+        var normalizedType = ContentRules.NormalizeSlug(typeSlug);
+        var normalizedSlug = ContentRules.NormalizeSlug(slug);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var type = await db.ContentTypes.AsNoTracking().Where(x => x.Slug == normalizedType && !x.IsArchived)
+            .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct);
+        if (!type.HasValue) return null;
+        return await db.Contents.AsNoTracking().AsSplitQuery()
+            .Where(x => x.ContentTypeId == type && x.Status == ContentStatus.Published && x.Slug == normalizedSlug)
+            .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
+                x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
+                x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
+            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
+                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
+                CoverFileName = x.Cover != null ? x.Cover.FileName : "",
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                CoverCaption = x.Cover != null ? x.Cover.Caption : "",
+                Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
+                    .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList() })
+            .SingleOrDefaultAsync(ct);
     }
 
     /// <summary>
@@ -825,8 +1084,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         // 一次投影足夠的欄位：文章平面路徑、頁面階層路徑與各自的更新時間。
         var rows = await db.Contents.AsNoTracking()
-            .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate)
-            .Select(x => new { x.Id, x.Kind, x.Slug, x.ParentId, x.UpdatedAt }).ToListAsync(ct);
+            .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.NoIndex)
+            .Select(x => new { x.Id, x.Kind, x.Slug, x.ParentId, x.UpdatedAt, x.ContentTypeId }).ToListAsync(ct);
+        var typeSlugs = await db.ContentTypes.AsNoTracking().Where(x => !x.IsArchived)
+            .Select(x => new { x.Id, x.Slug }).ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         var pages = rows.Where(x => x.Kind == ContentKind.Page).ToDictionary(x => x.Id);
         // 頁面公開路徑走訪已發布且非私密的祖先；未發布或私密祖先使子頁回退為平面路徑（與公開路由一致）。
         string PagePath(Guid id)
@@ -848,7 +1109,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Where(x => x.Latest != null).ToListAsync(ct);
         var homeLastModified = rows.Count == 0 ? null : (DateTimeOffset?)rows.Max(x => x.UpdatedAt);
         List<SitemapItem> items = [new("/", homeLastModified), new("/archives", homeLastModified)];
-        items.AddRange(rows.Where(x => x.Kind == ContentKind.Post).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(rows.Where(x => x.Kind == ContentKind.Post && x.ContentTypeId == null).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(rows.Where(x => x.Kind == ContentKind.Post && x.ContentTypeId is { } typeId && typeSlugs.ContainsKey(typeId))
+            .Select(x => new SitemapItem("/" + ContentTypeService.PublicPrefix + "/" + typeSlugs[x.ContentTypeId!.Value] + "/" + x.Slug, x.UpdatedAt)));
         items.AddRange(pages.Values.Select(x => new SitemapItem("/pages/" + PagePath(x.Id), x.UpdatedAt)));
         items.AddRange(categories.Select(x => new SitemapItem("/?category=" + x.Slug, x.Latest)));
         return items;

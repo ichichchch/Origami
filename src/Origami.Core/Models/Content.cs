@@ -1,10 +1,13 @@
 namespace Origami.Core.Models;
 
 public enum ContentKind { Post, Page }
-public enum ContentStatus { Draft, Published, Trashed }
+/// <summary>Draft 草稿；Pending 已提交待審（僅 Editor 以上可發布或退回）；Trashed 回收桶。</summary>
+public enum ContentStatus { Draft, Published, Trashed, Pending }
 public enum TaxonomyKind { Category, Tag }
+/// <summary>媒體種類：圖片會重新編碼並產生響應式變體，其餘以原樣儲存並按種類提供。</summary>
+public enum MediaKind { Image = 0, Document = 1, Audio = 2, Video = 3 }
 
-public static class Limits
+public static partial class Limits
 {
     public const int Title = 200;
     public const int Slug = 160;
@@ -12,9 +15,33 @@ public static class Limits
     public const int Excerpt = 500;
     public const int AltText = 300;
     public const int Caption = 300;
+    /// <summary>非圖片媒體的單檔大小上限（PDF／音訊／影片）。</summary>
+    public const long FileUploadBytes = 20 * 1024 * 1024;
+    /// <summary>單次批次上傳的檔案數上限；單檔大小上限仍由 UploadBytes 把關。</summary>
+    public const int MediaBatchMax = 20;
     public const int TaxonomyName = 80;
+    /// <summary>自訂內容類型的名稱上限。</summary>
+    public const int ContentTypeName = 80;
+    /// <summary>自訂欄位的名稱與鍵值上限。</summary>
+    public const int CustomFieldName = 80;
+    /// <summary>自訂內容類型的路由代稱上限。</summary>
+    public const int ContentTypeSlug = 80;
+    /// <summary>自訂分類法的名稱上限。</summary>
+    public const int CustomTaxonomyName = 80;
+    /// <summary>版型預設名稱上限。</summary>
+    public const int ThemePreset = 20;
+    /// <summary>版型色碼長度上限（# 加六位數）。</summary>
+    public const int ThemeColor = 7;
+    /// <summary>卡片樣式名稱上限。</summary>
+    public const int ThemeCardStyle = 10;
     public const int SiteName = 100;
     public const int SiteSlug = 80;
+    /// <summary>導覽項目顯示文字上限。</summary>
+    public const int NavTitle = 80;
+    /// <summary>自訂 meta 描述長度上限。</summary>
+    public const int MetaDescription = 300;
+    /// <summary>導覽外部連結網址長度上限。</summary>
+    public const int NavUrl = 500;
     public const int HostName = 253;
     public const int CredentialName = 100;
     public const int SitePageSize = 50;
@@ -43,6 +70,10 @@ public static class Limits
     public const int FeedItems = 20;
     public const int RevisionKeep = 20;
     public const int AutosaveSeconds = 60;
+    /// <summary>編輯占用鎖的心跳有效期；逾期的占用可被他人接管，不阻止開啟編輯器。</summary>
+    public const int EditingLockSeconds = 90;
+    /// <summary>編輯器的心跳間隔；在占用期限內至少送出兩次才有容錯。</summary>
+    public const int EditingHeartbeatSeconds = 30;
     public const int TrashRetentionDays = 30;
     // 單次批次操作的項目上限；版本逐筆攜帶，因此一次清單操作必須有界。
     public const int BulkMaxItems = 50;
@@ -73,6 +104,10 @@ public sealed class Content
     public string Slug { get; set; } = "";
     public string Markdown { get; set; } = "";
     public string Excerpt { get; set; } = "";
+    /// <summary>自訂 meta 描述（社群分享與搜尋結果摘要）；空字串時退回文章摘要。</summary>
+    [StringLength(Limits.MetaDescription)] public string MetaDescription { get; set; } = "";
+    /// <summary>為 true 時不納入搜尋引擎索引，也不列入 sitemap。</summary>
+    public bool NoIndex { get; set; }
     public ContentStatus Status { get; set; }
     // 置頂文章排在公開文章列表最前；頁面忽略此旗標。
     public bool IsSticky { get; set; }
@@ -94,13 +129,31 @@ public sealed class Content
     /// <summary>階層導覽用的父頁面；最上層頁面為 null，文章則一律為 null。</summary>
     public Guid? ParentId { get; set; }
     public Content? Parent { get; set; }
+    /// <summary>自訂內容類型；null 表示內建文章或頁面。</summary>
+    public Guid? ContentTypeId { get; set; }
+    public ContentType? ContentType { get; set; }
     /// <summary>內容的封面圖（Featured Image）；未設定時為 null。僅引用媒體資產，本文內嵌與否不影響此欄位。</summary>
     public Guid? CoverMediaId { get; set; }
     public MediaAsset? Cover { get; set; }
+    /// <summary>建立者的帳號識別；帳號刪除或匯入內容時為 null，署名改由快照欄位呈現。</summary>
+    public string? AuthorId { get; set; }
+    public AdminUser? Author { get; set; }
+    /// <summary>建立當下的作者顯示名稱快照（成員在本站的顯示名稱）；空字串時前台退回站點設定的作者名稱。</summary>
+    [StringLength(Limits.AuthorName)] public string AuthorName { get; set; } = "";
+    /// <summary>作者顯示名稱的正規化代稱（供作者彙整頁）；無署名時為空字串。</summary>
+    [StringLength(Limits.Slug)] public string AuthorSlug { get; set; } = "";
+    /// <summary>目前占用編輯器的成員帳號；無人占用或占用逾期時為 null（逾期後可被接管）。</summary>
+    public string? EditingById { get; set; }
+    /// <summary>占用者的顯示名稱快照；供其他編輯者的提示訊息使用。</summary>
+    [StringLength(Limits.AuthorName)] public string EditingByName { get; set; } = "";
+    /// <summary>占用者最近一次心跳時間；超過 Limits.EditingLockSeconds 視同無人占用。</summary>
+    public DateTimeOffset? EditingAt { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Category> Categories { get; set; } = new List<Category>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();
     public ICollection<ContentView> Views { get; set; } = new List<ContentView>();
+    public ICollection<ContentCustomTerm> CustomTerms { get; set; } = new List<ContentCustomTerm>();
+    public ICollection<ContentFieldValue> FieldValues { get; set; } = new List<ContentFieldValue>();
 }
 
 /// <summary>內容儲存前的快照；還原時載回編輯器。</summary>
@@ -152,6 +205,9 @@ public sealed class MediaAsset
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
+    /// <summary>媒體種類；圖片為 0，其餘為文件／音訊／影片。</summary>
+    public MediaKind Kind { get; set; } = MediaKind.Image;
+    /// <summary>媒體存放檔名的副檔名（決定提供時的內容類型）。</summary>
     public string FileName { get; set; } = "";
     public string OriginalName { get; set; } = "";
     public string ContentType { get; set; } = "";
@@ -212,7 +268,27 @@ public sealed class SiteSettings
     [StringLength(Limits.AuthorName)] public string AuthorDisplayName { get; set; } = "";
     /// <summary>渲染為首頁的已發布頁面；null 時首頁維持為文章列表。</summary>
     public Guid? HomePageContentId { get; set; }
+    /// <summary>啟用受控導覽；關閉時沿用「已發布頁面自動排序」的預設導覽。</summary>
+    public bool CustomNavigationEnabled { get; set; }
+    /// <summary>啟用訪客評論；關閉時前台不出現評論表單也不接受張貼。</summary>
+    public bool CommentsEnabled { get; set; }
+    /// <summary>評論自動核可；關閉時全部進入待審佇列。</summary>
+    public bool CommentAutoApprove { get; set; }
     /// <summary>用作網站圖示的媒體資產；null 時不提供 favicon。</summary>
     public Guid? SiteIconMediaId { get; set; }
+    /// <summary>顯示於前台頁首的網站標誌；null 時僅顯示站名文字。</summary>
+    public Guid? LogoMediaId { get; set; }
+    /// <summary>版型預設名稱；僅接受 <see cref="ThemePresets"/> 內建的受控預設。</summary>
+    [StringLength(Limits.ThemePreset)] public string ThemePreset { get; set; } = "reading";
+    /// <summary>版型強調色（十六進位色碼）。</summary>
+    [StringLength(Limits.ThemeColor)] public string AccentColor { get; set; } = "#2f6f4e";
+    /// <summary>正文欄寬（字元），限於可讀範圍。</summary>
+    public int ReadingWidth { get; set; } = 68;
+    /// <summary>是否顯示文章署名。</summary>
+    public bool ShowByline { get; set; } = true;
+    /// <summary>是否顯示封面圖。</summary>
+    public bool ShowCover { get; set; } = true;
+    /// <summary>文章卡片樣式：list 或 grid。</summary>
+    [StringLength(Limits.ThemeCardStyle)] public string CardStyle { get; set; } = ThemePresets.CardStyleList;
     public Guid Version { get; set; }
 }

@@ -147,6 +147,29 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         await ContentRules.SaveAsync(db, ct);
     }
 
+    /// <summary>批次刪除分類或標籤：逐筆攜帶並發版本、逐筆回報結果；刪除只移除關聯，不刪文章。</summary>
+    public async Task<List<BulkItemResult>> BulkDeleteAsync(TaxonomyKind kind, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        ValidateKind(kind);
+        if (items.Count == 0) throw new CmsException("請先選擇要刪除的項目。");
+        if (items.Count > Limits.BulkMaxItems) throw new CmsException($"單次批次操作最多 {Limits.BulkMaxItems} 筆。");
+        List<BulkItemResult> results = new(items.Count);
+        foreach (var (id, version) in items)
+        {
+            try
+            {
+                await DeleteAsync(kind, id, version, ct);
+                results.Add(new BulkItemResult(id, true, ""));
+            }
+            catch (CmsException error)
+            {
+                results.Add(new BulkItemResult(id, false, error.Message));
+            }
+        }
+        return results;
+    }
+
     private static void ValidateKind(TaxonomyKind kind)
     {
         if (!Enum.IsDefined(kind)) throw new CmsException("分類類型無效。");
