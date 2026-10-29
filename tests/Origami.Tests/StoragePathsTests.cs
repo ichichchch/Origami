@@ -77,10 +77,11 @@ public sealed class StoragePathsTests
         var storage = directory.CreateWithRoot(Path.Combine(directory.Root, "unused", ".."));
         Assert.Equal(Path.GetFullPath(directory.Root), storage.Root);
         Assert.Equal(Path.Combine(storage.Root, "images"), storage.Images);
+        Assert.Equal(Path.Combine(storage.Root, "files"), storage.Files);
         Assert.Equal(Path.Combine(storage.Root, "staging"), storage.Staging);
         Assert.Equal(Path.Combine(storage.Root, "keys"), storage.Keys);
-        Assert.Equal(3, Directory.GetDirectories(storage.Root).Length);
-        var paths = new[] { storage.Images, storage.Staging, storage.Keys };
+        Assert.Equal(4, Directory.GetDirectories(storage.Root).Length);
+        var paths = new[] { storage.Images, storage.Files, storage.Staging, storage.Keys };
         foreach (var path in paths)
         {
             Assert.True(Directory.Exists(path));
@@ -90,9 +91,10 @@ public sealed class StoragePathsTests
         var recreated = directory.Create();
         Assert.Equal(storage.Root, recreated.Root);
         Assert.Equal(storage.Images, recreated.Images);
+        Assert.Equal(storage.Files, recreated.Files);
         Assert.Equal(storage.Staging, recreated.Staging);
         Assert.Equal(storage.Keys, recreated.Keys);
-        Assert.Equal(3, Directory.GetFiles(storage.Root, "*", SearchOption.AllDirectories).Length);
+        Assert.Equal(4, Directory.GetFiles(storage.Root, "*", SearchOption.AllDirectories).Length);
         foreach (var path in paths)
             Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(Path.Combine(path, "existing.bin")));
         Assert.Empty(Directory.GetFileSystemEntries(directory.ApplicationRoot));

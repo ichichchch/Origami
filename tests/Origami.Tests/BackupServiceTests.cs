@@ -35,6 +35,30 @@ public sealed class BackupServiceTests(IsolatedPostgres postgres) : ServiceTestB
     }
 
     [PostgresFact]
+    public async Task Backup_archives_non_image_media_alongside_images()
+    {
+        using var admin = await App.AdministratorAsync();
+        var media = new MediaService(
+            admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            admin.Services.GetRequiredService<AdminAccess>(), admin.Storage, TimeProvider.System,
+            NullLogger<MediaService>.Instance);
+        using (var stream = new MemoryStream("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray()))
+            await media.UploadFileAsync(stream, "manual.pdf");
+
+        var backup = new BackupService(
+            admin.Services.GetRequiredService<ExportService>(), admin.Storage, TimeProvider.System,
+            NullLogger<BackupService>.Instance);
+        var result = await backup.RunAsync(new BackupOptions { Enabled = true, Keep = 1 });
+
+        using var zip = new ZipArchive(File.OpenRead(result.Path));
+        var entry = Assert.Single(zip.Entries, x => x.FullName.StartsWith("files/", StringComparison.Ordinal));
+        Assert.EndsWith(".pdf", entry.FullName, StringComparison.Ordinal);
+        using var reader = new StreamReader(entry.Open());
+        // 備份內是原始位元組，解壓回 files/ 後即可由 /media 端點提供。
+        Assert.StartsWith("%PDF-1.7", await reader.ReadToEndAsync(), StringComparison.Ordinal);
+    }
+
+    [PostgresFact]
     public async Task Backup_writes_only_the_current_sites_data_into_its_own_directory()
     {
         var site = await CreateSiteAsync("third");

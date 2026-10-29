@@ -55,10 +55,17 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<AiStatusService>();
         services.AddScoped<AdminAccess>();
         services.AddScoped<ContentService>();
+        services.AddScoped<ContentTypeService>();
         services.AddScoped<ExportService>();
         services.AddScoped<ImportService>();
         services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
+        services.AddScoped<NavigationService>();
+        services.AddScoped<PasswordResetService>();
+        services.AddScoped<CommentService>();
+        services.AddSingleton<TestEmailSender>();
+        services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<TestEmailSender>());
+        services.AddScoped<WxrImportService>();
         services.AddScoped<SettingsService>();
         // 助理對共用的腳本化用戶端運作；完全不涉及供應商或金鑰。
         services.AddSingleton<FakeChatClient>();

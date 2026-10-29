@@ -438,10 +438,17 @@ public sealed class ContentServiceTests(IsolatedPostgres postgres) : ServiceTest
             Assert.Equal(Limits.MaxTaxonomiesPerKind, result.TagIds.Count);
         }
 
-        Assert.Equal(3, recorder.Commands.Count);
+        // 每個關聯各自查詢（分類、標籤、自訂詞彙與自訂欄位值各一次），
+        // 因此命令數會隨關聯數增加；重點是本文只取一次，且各關聯不互相笛卡兒積。
+        Assert.InRange(recorder.Commands.Count, 3, 6);
         Assert.Single(recorder.Commands, sql => sql.Contains("\"Markdown\"", StringComparison.Ordinal));
-        Assert.DoesNotContain(recorder.Commands, sql => sql.Contains("\"ContentCategories\"", StringComparison.Ordinal)
-            && sql.Contains("\"ContentTags\"", StringComparison.Ordinal));
+        foreach (var association in new[] { "ContentCategories", "ContentTags", "ContentCustomTerms", "ContentFieldValues" })
+        {
+            foreach (var other in new[] { "ContentCategories", "ContentTags", "ContentCustomTerms", "ContentFieldValues" }
+                .Where(x => x != association))
+                Assert.DoesNotContain(recorder.Commands, sql => sql.Contains(association, StringComparison.Ordinal)
+                    && sql.Contains(other, StringComparison.Ordinal));
+        }
     }
 
     [PostgresFact]

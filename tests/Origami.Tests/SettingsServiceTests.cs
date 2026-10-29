@@ -119,8 +119,16 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
     /// <summary>僅替換 OrigamiClient 一項服務，其餘全部沿用測試應用本身的供應器。</summary>
     private sealed class StubApiProvider(IServiceProvider inner, OrigamiClient api) : IServiceProvider
     {
-        public object? GetService(Type serviceType) =>
-            serviceType == typeof(OrigamiClient) ? api : inner.GetService(serviceType);
+        private readonly NavigationManager navigation = new LayoutNavigation();
+
+        public object? GetService(Type serviceType) => serviceType == typeof(OrigamiClient) ? api
+            : serviceType == typeof(NavigationManager) ? navigation : inner.GetService(serviceType);
+    }
+
+    private sealed class LayoutNavigation : NavigationManager
+    {
+        public LayoutNavigation() => Initialize("http://stub/", "http://stub/");
+        protected override void NavigateToCore(string uri, bool forceLoad) => throw new NotSupportedException();
     }
 
     /// <summary>一律回報匿名訪客；隔離渲染場景沒有可用的工作階段。</summary>
