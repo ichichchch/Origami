@@ -69,6 +69,13 @@
 }
 <section class="panel media-library" aria-busy="@Busy.ToString().ToLowerInvariant()">
     <div class="panel-toolbar"><h2>@UiText.T("Admin.Media.AllImages", "所有圖片") <span class="count">@(_result?.Total ?? 0)</span></h2><span class="muted">@UiText.T("Admin.Media.SortOrder", "依上傳時間排序")</span></div>
+    <div class="section-tabs content-filters" role="group" aria-label="@UiText.T("Admin.Media.KindFilter", "媒體類型篩選")">
+        <button type="button" class="tab-button @(_kind is null ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(null)">@UiText.T("Admin.Media.AllKinds", "全部")</button>
+        <button type="button" class="tab-button @(_kind == MediaKind.Image ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Image)">@UiText.T("Admin.Media.Image", "圖片")</button>
+        <button type="button" class="tab-button @(_kind == MediaKind.Document ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Document)">@UiText.T("Admin.Media.Document", "文件（PDF）")</button>
+        <button type="button" class="tab-button @(_kind == MediaKind.Audio ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Audio)">@UiText.T("Admin.Media.Audio", "音訊")</button>
+        <button type="button" class="tab-button @(_kind == MediaKind.Video ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Video)">@UiText.T("Admin.Media.Video", "影片")</button>
+    </div>
     <div class="content-search">
         <label class="sr-only" for="media-search">@UiText.T("Admin.Media.Search", "搜尋圖片")</label>
         <input id="media-search" type="search" placeholder="@UiText.T("Admin.Media.SearchPlaceholder", "搜尋檔名、替代或說明文字…")" maxlength="300" value="@_search" @onchange="SearchChanged" disabled="@Blocked" />
@@ -91,7 +98,19 @@
                 <article class="media-card" @key="item.Id"><a href="@item.Url" target="_blank" rel="noopener" aria-label="@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.OpenOriginal", "開啟原圖：{0}"), item.OriginalName)">@if (item.Kind == MediaKind.Image) { <img src="@item.Url" alt="@item.AltText" loading="lazy" /> } else { <span class="media-kind">@KindLabel(item.Kind)</span> }</a><div class="media-details"><h3>@item.OriginalName</h3><p>@(item.Kind == MediaKind.Image ? $"{item.Width} × {item.Height} · " : "")@Size(item.Size)</p><p>@item.UploadedAt.ToString("yyyy.MM.dd HH:mm") UTC</p>
 @if (item.ReferenceCount > 0)
 {
-    <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.ReferenceCount", "被 {0} 篇內容引用"), item.ReferenceCount)</p>
+    <p class="field-help">
+        @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.ReferenceCount", "被 {0} 篇內容引用"), item.ReferenceCount)
+        · <button type="button" class="text-button" disabled="@Blocked" @onclick="() => ToggleReferencesAsync(item.Id)">@(_inspectedReferences.ContainsKey(item.Id) ? UiText.T("Admin.Media.HideReferences", "收起") : UiText.T("Admin.Media.ShowReferences", "查看引用"))</button>
+    </p>
+    @if (_inspectedReferences.TryGetValue(item.Id, out var refs) && refs.Count > 0)
+    {
+        <ul class="plain-list">
+            @foreach (var r in refs)
+            {
+                <li><a href="@("/admin/content/" + r.ContentId)">@r.Title</a> <span class="muted">(@r.Status)</span></li>
+            }
+        </ul>
+    }
 }<label for="@("media-alt-" + item.Id)">@UiText.T("Admin.Media.AltText", "替代文字（alt）")</label><input id="@("media-alt-" + item.Id)" value="@AltValue(item)" maxlength="@Limits.AltText" @oninput="@(e => _altEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-alt-help-" + item.Id)" /><p id="@("media-alt-help-" + item.Id)" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.AltTextHelp", "最多 {0} 字；插入文章時自動作為圖片 alt，改善無障礙與 SEO。"), Limits.AltText)</p>
 <label for="@("media-caption-" + item.Id)">@UiText.T("Admin.Media.Caption", "說明文字（caption）")</label><input id="@("media-caption-" + item.Id)" value="@CaptionValue(item)" maxlength="@Limits.Caption" @oninput="@(e => _captionEdits[item.Id] = e.Value?.ToString() ?? "")" disabled="@EditBlocked" aria-describedby="@("media-caption-help-" + item.Id)" /><p id="@("media-caption-help-" + item.Id)" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.CaptionHelp", "最多 {0} 字；圖片作為封面時顯示於圖片下方。"), Limits.Caption)</p><button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || (!_altEdits.ContainsKey(item.Id) && !_captionEdits.ContainsKey(item.Id)))" @onclick="() => SaveMeta(item.Id)">@UiText.T("Admin.Media.SaveMetadata", "儲存圖片資訊")</button>
 <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => RequestDelete(item)">@UiText.T("Admin.Media.DeleteImage", "刪除圖片")<span class="sr-only"> @item.OriginalName</span></button><label for="@("media-code-" + item.Id)">@UiText.T("Admin.Media.CopyMarkdown", "複製 Markdown")</label><input id="@("media-code-" + item.Id)" class="code-input" value="@item.Markdown" readonly /></div></article>
@@ -105,6 +124,7 @@
 @code {
     private int _page = 1;
     private string _search = "";
+    private MediaKind? _kind;
     private PagedResult<MediaItem>? _result;
     private MediaItem? _uploaded;
     private string? _uploadName;
@@ -112,6 +132,7 @@
     private IJSObjectReference? _dropModule;
     private readonly Dictionary<Guid, string> _altEdits = [];
     private readonly Dictionary<Guid, string> _captionEdits = [];
+    private readonly Dictionary<Guid, List<MediaService.MediaReference>> _inspectedReferences = [];
     private MediaItem? _pendingDelete;
     private List<MediaService.MediaReference> _pendingReferences = [];
     protected override Task OnInitializedAsync() => Load();
@@ -149,8 +170,24 @@
 
     // 引用數已由列表端點一次填入 MediaItem.ReferenceCount。
     private async Task<PagedResult<MediaItem>> ListWithCountsAsync(CancellationToken ct) =>
-        await Api.ListMediaAsync(_page, search: ListSearch(), ct: ct)
+        await Api.ListMediaAsync(_page, search: ListSearch(), kind: _kind, ct: ct)
             ?? new PagedResult<MediaItem>([], 0, _page, Limits.PageSize);
+    private async Task ChangeKind(MediaKind? kind)
+    {
+        if (Blocked) return;
+        _kind = kind;
+        _page = 1;
+        await Load();
+    }
+    private async Task ToggleReferencesAsync(Guid mediaId)
+    {
+        if (Blocked) return;
+        if (_inspectedReferences.Remove(mediaId)) return;
+        await RunAsync(async ct =>
+        {
+            _inspectedReferences[mediaId] = await Api.ListMediaReferencesAsync(mediaId, ct) ?? [];
+        });
+    }
     private async Task SearchChanged(ChangeEventArgs args)
     {
         if (Blocked) return;

@@ -24,6 +24,7 @@
             @if (_access?.CanAdminister == true)
             {
                 <NavLink href="/admin/members">@UiText.T("Layout.Admin.Members", "站點成員")</NavLink>
+                <NavLink href="/admin/audit">@UiText.T("Layout.Admin.AuditLogs", "審計日誌")</NavLink>
             }
             @if (_access?.CanRead == true)
             {

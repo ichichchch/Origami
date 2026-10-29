@@ -63,11 +63,15 @@ builder.Services.AddScoped<ImportService>();
 builder.Services.AddScoped<StoragePaths>();
 builder.Services.AddScoped<MediaService>();
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
+builder.Services.AddHttpClient("OrigamiWebhook");
+builder.Services.AddScoped<WebhookService>();
 builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
 builder.Services.AddScoped<SemanticSearchService>();
 builder.Services.AddScoped<PublicSearchService>();
 builder.Services.AddScoped<McpReadTools>();
+builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFactory>();
+builder.Services.AddScoped<SiteAssistant>();
 builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
 // 機器流量（/api、/mcp）沿用網站主機的做法，依來源 IP 共用同一個供應商成本預算。
 builder.Services.AddRateLimiter(options =>

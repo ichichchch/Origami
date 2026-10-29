@@ -113,8 +113,15 @@
                         <option value="@CustomFieldTypes.Number">@UiText.T("Admin.ContentTypes.FieldTypeNumber", "數字")</option>
                         <option value="@CustomFieldTypes.Date">@UiText.T("Admin.ContentTypes.FieldTypeDate", "日期")</option>
                         <option value="@CustomFieldTypes.Checkbox">@UiText.T("Admin.ContentTypes.FieldTypeCheckbox", "核取方塊")</option>
+                        <option value="@CustomFieldTypes.Url">@UiText.T("Admin.ContentTypes.FieldTypeUrl", "網址（URL）")</option>
+                        <option value="@CustomFieldTypes.Select">@UiText.T("Admin.ContentTypes.FieldTypeSelect", "下拉選單（Select）")</option>
+                        <option value="@CustomFieldTypes.Media">@UiText.T("Admin.ContentTypes.FieldTypeMedia", "站內媒體（Media）")</option>
                     </select>
                 </div>
+                @if (_field.FieldType == CustomFieldTypes.Select)
+                {
+                    <div class="field"><label for="field-options">@UiText.T("Admin.ContentTypes.FieldOptions", "選單候選值（以逗號分隔）") <span class="required">@UiText.T("Admin.ContentTypes.Required", "必填")</span></label><input id="field-options" @bind="_field.Options" @bind:event="oninput" maxlength="@Limits.CustomFieldOptions" placeholder="例如：入門, 進階, 專家" required /></div>
+                }
                 <div class="field"><label for="field-position">@UiText.T("Admin.ContentTypes.FieldPosition", "顯示順序")</label><input id="field-position" type="number" min="0" max="999" @bind="_field.Position" disabled="@EditBlocked" /></div>
                 <div class="field checkbox-field"><label for="field-required"><input id="field-required" type="checkbox" @bind="_field.IsRequired" disabled="@EditBlocked" /> @UiText.T("Admin.ContentTypes.FieldRequired", "必填")</label></div>
                 <div class="button-row"><button type="submit" class="button">@UiText.T("Admin.ContentTypes.SaveField", "儲存欄位")</button></div>
@@ -132,7 +139,7 @@
                     @foreach (var field in _fields)
                     {
                         <li @key="field.Id"><strong>@field.Name</strong> <code>@field.Key</code>
-                            <span class="slug-text">@field.FieldType@(field.IsRequired ? " · " + UiText.T("Admin.ContentTypes.Required", "必填") : "")</span>
+                            <span class="slug-text">@field.FieldType@(field.Options != "" ? $" ({field.Options})" : "")@(field.IsRequired ? " · " + UiText.T("Admin.ContentTypes.Required", "必填") : "")</span>
                             <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDeleteField = field">@UiText.T("Admin.ContentTypes.DeleteField", "刪除欄位")<span class="sr-only"> @field.Name</span></button>
                         </li>
                     }

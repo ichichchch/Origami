@@ -17,14 +17,14 @@
 
     @if (awaitingCode)
     {
-        <p class="field-help">@UiText.T("Account.Login.CodeHelp", "帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼。")</p>
+        <p class="field-help">@UiText.T("Account.Login.CodeHelp", "帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼，或輸入 8 碼一次性備用恢復碼。")</p>
         @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證。 *@
         <EditForm Model="CodeForm" method="post" OnValidSubmit="CodeAsync" OnInvalidSubmit="ClearCode" FormName="account-code" Enhance="false">
             <DataAnnotationsValidator />
             <ValidationSummary />
             <div class="field">
-                <label for="code">@UiText.T("Account.Login.Code", "動態驗證碼")</label>
-                <input id="code" name="CodeForm.Code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+                <label for="code">@UiText.T("Account.Login.Code", "動態驗證碼或備用恢復碼")</label>
+                <input id="code" name="CodeForm.Code" autocomplete="one-time-code" maxlength="10" required />
             </div>
             <button type="submit" class="button full-width">@UiText.T("Account.Login.Verify", "驗證並登入")</button>
             <p class="field-help"><a href="/account/login">@UiText.T("Account.Login.Restart", "改用帳號密碼重新登入")</a></p>
@@ -206,7 +206,9 @@
             errorMessage = LockedMessage;
             return;
         }
-        if (!Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System))
+        var totpOk = Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System);
+        var recoveryOk = !totpOk && TwoFactorService.TryRedeemRecoveryCode(user, submittedCode);
+        if (!totpOk && !recoveryOk)
         {
             await userManager.AccessFailedAsync(user);
             // 不揭露是哪個因子失敗；待驗證 cookie 隨該次嘗試期間一同失效。
@@ -214,6 +216,7 @@
             errorMessage = CodeFailure;
             return;
         }
+        if (recoveryOk) await userManager.UpdateAsync(user);
         await userManager.ResetAccessFailedCountAsync(user);
         context.Response.Cookies.Delete(PendingCookie);
         await signInManager.SignInAsync(user, isPersistent: pending.Remember);
@@ -273,7 +276,7 @@
     public sealed class CodeInput
     {
         [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeRequired))]
-        [StringLength(6, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
+        [StringLength(10, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
         public string Code { get; set; } = string.Empty;
     }
 }

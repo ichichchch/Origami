@@ -1,0 +1,85 @@
+@page "/admin/audit"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Audit.PageTitle", "操作審計日誌 · 內容管理")</PageTitle>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">@UiText.T("Admin.Audit.Eyebrow", "安全與治理")</p>
+        <h1>@UiText.T("Admin.Audit.Title", "操作審計日誌")</h1>
+        <p>@UiText.T("Admin.Audit.Introduction", "檢視本站重要內容發布、編輯、設定變更與安全操作紀錄（僅限管理員）。")</p>
+    </div>
+    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">@UiText.T("Common.Reload", "重新載入")</button>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+
+@if (_result is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar">
+            <h2>@UiText.T("Admin.Audit.LogsHeading", "近期紀錄") <span class="count">@_result.Total</span></h2>
+        </div>
+        @if (_result.Items.Count == 0)
+        {
+            <div class="empty-state">
+                <h2>@UiText.T("Admin.Audit.EmptyTitle", "尚無審計紀錄")</h2>
+                <p>@UiText.T("Admin.Audit.EmptyHelp", "站點的內容變更、設定儲存與安全操作會自動記錄於此。")</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@UiText.T("Admin.Audit.Time", "時間 (UTC)")</th>
+                            <th scope="col">@UiText.T("Admin.Audit.Actor", "操作者")</th>
+                            <th scope="col">@UiText.T("Admin.Audit.Action", "事件")</th>
+                            <th scope="col">@UiText.T("Admin.Audit.Target", "目標說明")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _result.Items)
+                        {
+                            <tr @key="item.Id">
+                                <td class="date-cell">@item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td>@(string.IsNullOrEmpty(item.UserName) ? "—" : item.UserName)</td>
+                                <td><code>@item.Action</code></td>
+                                <td>@item.Target</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <nav class="pagination" aria-label="@UiText.T("Admin.Audit.Pagination", "審計日誌分頁")">
+                <button class="button button-secondary" disabled="@(Blocked || _page <= 1)" @onclick="() => MoveAsync(-1)">@UiText.T("Common.PreviousPage", "上一頁")</button>
+                <span>@_result.Page / @_result.TotalPages</span>
+                <button class="button button-secondary" disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => MoveAsync(1)">@UiText.T("Common.NextPage", "下一頁")</button>
+            </nav>
+        }
+    </section>
+}
+
+@code {
+    private int _page = 1;
+    private PagedResult<AuditLogItem>? _result;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task<bool> LoadAsync() => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Audit.AdminOnly", "審計日誌僅限站點管理員檢視。"));
+        _result = await Api.ListAuditLogsAsync(_page, Limits.PageSize, ct);
+    });
+
+    private async Task MoveAsync(int delta)
+    {
+        if (Blocked) return;
+        var prev = _page;
+        _page += delta;
+        if (!await LoadAsync()) _page = prev;
+    }
+}

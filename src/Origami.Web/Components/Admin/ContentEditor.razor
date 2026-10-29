@@ -61,7 +61,7 @@ else if (_model is not null)
                 <section class="panel editor-fields">
                     <div class="field"><label for="content-title">@UiText.T("Admin.ContentEditor.Title", "標題") <span class="required">@UiText.T("Admin.ContentEditor.Required", "必填")</span></label><input id="content-title" class="title-input" @bind="_model.Title" @bind:event="oninput" maxlength="@Limits.Title" required placeholder="@UiText.T("Admin.ContentEditor.TitlePlaceholder", "給這個想法一個標題")" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.TitleHelp", "最多 {0} 字。"), Limits.Title)</span></div>
                     <div class="field"><label for="content-slug">@UiText.T("Admin.ContentEditor.Slug", "網址代稱")</label><div class="input-prefix"><span>/@(_model.Kind == ContentKind.Post ? "posts" : "pages")/</span><input id="content-slug" @bind="_model.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_model.Id is not null)" aria-describedby="slug-help" placeholder="@UiText.T("Admin.ContentEditor.SlugPlaceholder", "首次儲存可留空，自標題產生")" /></div><span id="slug-help" class="field-help">@UiText.T("Admin.ContentEditor.SlugHelp", "代稱須全站唯一；修改後舊網址不會自動轉址。")</span></div>
-                    <div class="field"><label for="content-excerpt">@UiText.T("Admin.ContentEditor.Excerpt", "摘要")</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="@UiText.T("Admin.ContentEditor.ExcerptPlaceholder", "用一兩句話介紹這篇內容；留空則自動使用開頭文字")"></textarea><div class="excerpt-actions"><button type="button" class="text-button" disabled="@Blocked" @onclick="ExcerptFromSelection">@UiText.T("Admin.ContentEditor.ExcerptFromSelection", "以本文選取文字填入")</button><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ExcerptHelp", "純文字，最多 {0} 字；顯示於文章列表、搜尋結果與社群分享描述。"), Limits.Excerpt)</span></div></div>
+                    <div class="field"><label for="content-excerpt">@UiText.T("Admin.ContentEditor.Excerpt", "摘要")</label><textarea id="content-excerpt" @bind="_model.Excerpt" @bind:event="oninput" maxlength="@Limits.Excerpt" rows="3" aria-describedby="excerpt-help" placeholder="@UiText.T("Admin.ContentEditor.ExcerptPlaceholder", "用一兩句話介紹這篇內容；留空則自動使用開頭文字")"></textarea><div class="excerpt-actions"><button type="button" class="text-button" disabled="@Blocked" @onclick="ExcerptFromSelection">@UiText.T("Admin.ContentEditor.ExcerptFromSelection", "以本文選取文字填入")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="SuggestSummaryWithAiAsync">@UiText.T("Admin.ContentEditor.AiSuggestSummary", "✨ AI 自動產生摘要與 SEO 描述")</button><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ExcerptHelp", "純文字，最多 {0} 字；顯示於文章列表、搜尋結果與社群分享描述。"), Limits.Excerpt)</span></div></div>
                     <div class="field"><label for="content-meta-description">@UiText.T("Admin.ContentEditor.MetaDescription", "SEO 描述（選填）")</label><textarea id="content-meta-description" @bind="_model.MetaDescription" @bind:event="oninput" maxlength="@Limits.MetaDescription" rows="2" aria-describedby="content-meta-help" placeholder="@UiText.T("Admin.ContentEditor.MetaDescriptionPlaceholder", "搜尋結果與社群分享的摘要文字")"></textarea><span id="content-meta-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.MetaDescriptionHelp", "最多 {0} 字；留空時使用上方的摘要。設定後會用於社群分享描述與結構化資料。"), Limits.MetaDescription)</span></div>
                     <div class="field checkbox-field">
                         <label for="content-noindex"><input id="content-noindex" type="checkbox" @bind="_model.NoIndex" disabled="@Blocked" /> @UiText.T("Admin.ContentEditor.NoIndex", "不列入搜尋引擎索引")</label>
@@ -147,6 +147,21 @@ else if (_model is not null)
                                 case CustomFieldTypes.Checkbox:
                                     <input id="field-@field.Id" type="checkbox" checked="@(value == "true")" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
                                     break;
+                                case CustomFieldTypes.Url:
+                                    <input id="field-@field.Id" type="url" placeholder="https://" maxlength="@CustomFieldTypes.MaxLength(field.FieldType)" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                                case CustomFieldTypes.Select:
+                                    <select id="field-@field.Id" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked">
+                                        <option value="">@UiText.T("Common.PleaseSelect", "請選擇…")</option>
+                                        @foreach (var opt in CustomFieldRules.ParseOptions(field.Options))
+                                        {
+                                            <option value="@opt">@opt</option>
+                                        }
+                                    </select>
+                                    break;
+                                case CustomFieldTypes.Media:
+                                    <input id="field-@field.Id" type="text" placeholder="/media/..." maxlength="@CustomFieldTypes.MaxLength(field.FieldType)" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
                                 default:
                                     <input id="field-@field.Id" type="text" maxlength="@CustomFieldTypes.MaxLength(field.FieldType)" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
                                     break;
@@ -180,6 +195,7 @@ else if (_model is not null)
                         <div class="button-row">
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertToc">@UiText.T("Admin.ContentEditor.InsertToc", "插入目錄 [toc]")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertCallout">@UiText.T("Admin.ContentEditor.InsertCallout", "插入提示框")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertDetails">@UiText.T("Admin.ContentEditor.InsertDetails", "插入摺疊塊")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="ToggleInternalLinks">@UiText.T("Admin.ContentEditor.InsertInternalLink", "站內連結")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">@UiText.T("Admin.ContentEditor.InsertImage", "插入圖片")</button>
                         </div>
@@ -219,7 +235,7 @@ else if (_model is not null)
                     {
                         <label class="sr-only" for="content-markdown">@UiText.T("Admin.ContentEditor.MarkdownBody", "Markdown 本文")</label><textarea id="content-markdown" class="markdown-input" @bind="_model.Markdown" @bind:event="oninput" maxlength="@Limits.Body" rows="22" placeholder="@UiText.T("Admin.ContentEditor.BodyPlaceholder", "從這裡開始寫作…")" aria-describedby="markdown-help"></textarea>
                         <p id="markdown-help" class="field-help">@((MarkupString)string.Format(CultureInfo.CurrentCulture, WebUtility.HtmlEncode(UiText.T("Admin.ContentEditor.PageBreakHelp", "長文可在獨立一行輸入 {0} 分頁，訪客以「下一頁」閱讀；RSS 與搜尋仍以全文為準。")), "<code>&lt;!--nextpage--&gt;</code>"))</p>
-                        <div class="editor-footnote"><span id="markdown-help">@UiText.T("Admin.ContentEditor.MarkdownHelp", "支援 Markdown；不執行原始 HTML。")</span><span>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.CharacterCount", "{0:N0} / {1:N0} 字"), _model.Markdown?.Length ?? 0, Limits.Body)</span></div>
+                        <div class="editor-footnote"><span id="markdown-help">@UiText.T("Admin.ContentEditor.MarkdownHelp", "支援 Markdown；不執行原始 HTML。")</span><span>@ReadingStatsText · @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.CharacterCount", "{0:N0} / {1:N0} 字"), _model.Markdown?.Length ?? 0, Limits.Body)</span></div>
                     }
                 </section>
                 @if (_mediaOpen || _coverPickerOpen)
@@ -230,6 +246,19 @@ else if (_model is not null)
             <aside class="editor-aside">
                 <section class="panel publish-panel">
                     <h2>@UiText.T("Admin.ContentEditor.PublishSettings", "發布設定")</h2><div class="status-line"><span>@UiText.T("Admin.ContentEditor.CurrentStatus", "目前狀態")</span><span class="status-badge @(_model.Status == ContentStatus.Published ? "published" : "draft")">@(_model.Status == ContentStatus.Published ? UiText.T("Admin.ContentEditor.Published", "已發布") : UiText.T("Admin.ContentEditor.Draft", "草稿"))</span></div>
+                    @if (CanEdit && _authors.Count > 0)
+                    {
+                        <div class="field">
+                            <label for="content-author">@UiText.T("Admin.ContentEditor.Author", "署名作者")</label>
+                            <select id="content-author" value="@(_model.AuthorId ?? "")" @onchange="AuthorChanged" disabled="@Blocked">
+                                <option value="">@(_model.AuthorName != "" ? _model.AuthorName : UiText.T("Admin.ContentEditor.DefaultAuthor", "目前登入者"))</option>
+                                @foreach (var author in _authors)
+                                {
+                                    <option value="@author.UserId">@author.DisplayName (@author.UserName)</option>
+                                }
+                            </select>
+                        </div>
+                    }
                     @if (_model.Kind == ContentKind.Post)
                     {
                         <div class="field checkbox-field">
@@ -396,7 +425,13 @@ else if (_model is not null)
                     </section>
                 }
                 <p class="privacy-note">@UiText.T("Admin.ContentEditor.PublicImagesNotice", "所有上傳圖片均為公開資源，草稿中的圖片也不例外。撤回文章不會隱藏圖片網址。")</p>
-                @if (_model.Id is not null) { <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RequestReload">@UiText.T("Admin.ContentEditor.ReloadSaved", "重新載入儲存版本")</button> }
+                @if (_model.Id is not null)
+                {
+                    <div class="button-row">
+                        <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="DuplicateCurrentAsync">@UiText.T("Admin.ContentEditor.DuplicateAsDraft", "複製為新草稿")</button>
+                        <button type="button" class="text-button" disabled="@SaveBlocked" @onclick="RequestReload">@UiText.T("Admin.ContentEditor.ReloadSaved", "重新載入儲存版本")</button>
+                    </div>
+                }
             </aside>
         </fieldset>
     </EditForm>
@@ -441,6 +476,7 @@ else if (_model is not null)
     private List<Guid> _selectedTermIds = [];
     private List<ContentTypeService.FieldView> _fields = [];
     private Dictionary<Guid, string> _fieldValues = [];
+    private List<AuthorOption> _authors = [];
     private bool _linkPickerOpen;
     private string _linkQuery = "";
     private List<ContentSummary> _linkResults = [];
@@ -462,6 +498,14 @@ else if (_model is not null)
             await action(ct);
         }, success);
     private string KindLabel => _model?.Kind == ContentKind.Page ? UiText.T("Admin.ContentEditor.Page", "頁面") : UiText.T("Admin.ContentEditor.Post", "文章");
+    private string ReadingStatsText
+    {
+        get
+        {
+            var (words, minutes) = MarkdownRenderer.WordCountAndReadingTime(_model?.Markdown);
+            return string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ReadingStats", "{0:N0} 詞 · 約 {1} 分鐘讀完"), words, minutes);
+        }
+    }
     private string ListPath => _model?.Kind == ContentKind.Page ? "/admin/pages" : "/admin/posts";
     private string PublicPath => (_model?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(_model?.Slug ?? "");
     private bool Dirty => _model is not null && (Snapshot(_model) != _baseline || ScheduleChanged);
@@ -510,7 +554,7 @@ else if (_model is not null)
     private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(new
     {
         model.Id, model.Kind, model.Title, model.Slug, model.Markdown, model.Excerpt, model.IsSticky,
-        model.AllowComments, model.MenuOrder,
+        model.AllowComments, model.MenuOrder, model.AuthorId,
         model.IsProtected, model.IsPrivate, model.ParentId, model.CoverMediaId, model.PublishAt, model.Status, model.Version,
         model.CategoryIds, model.TagIds
     });
@@ -803,6 +847,7 @@ else if (_model is not null)
         _fieldValues = loaded.FieldValues.ToDictionary(x => x.FieldId, x => x.Value);
         _editingHeldByOther = loaded.EditingByOther;
         _editingHolderName = loaded.EditingByName;
+        if (CanEdit) _authors = await Api.AuthorOptionsAsync(ct) ?? [];
         if (loaded.Kind == ContentKind.Page) _pageOptions = await Api.PageOptionsAsync(ct) ?? [];
         _baseline = Snapshot(loaded);
         // 已儲存的排程應填入選擇器；此時時區可能還無法得知，
@@ -816,6 +861,13 @@ else if (_model is not null)
     {
         if (_model is null) return;
         _model.ParentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+
+    private void AuthorChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        var val = args.Value?.ToString();
+        _model.AuthorId = string.IsNullOrWhiteSpace(val) ? null : val;
     }
 
     /// <summary>選擇自訂內容類型；切換類型會清空原本選取的詞彙。</summary>
@@ -916,6 +968,7 @@ else if (_model is not null)
         Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
         AllowComments = _model.AllowComments, MenuOrder = _model.Kind == ContentKind.Page ? _model.MenuOrder : 0,
+        AuthorId = _model.AuthorId,
         MetaDescription = _model.MetaDescription, NoIndex = _model.NoIndex,
         IsProtected = _model.IsProtected, IsPrivate = _model.IsPrivate, NewProtectPassword = _protectPassword,
         ParentId = _model.Kind == ContentKind.Page ? _model.ParentId : null,
@@ -988,6 +1041,33 @@ else if (_model is not null)
         _model.Markdown = (_model.Markdown ?? "").TrimEnd() + snippet;
         _preview = false;
     }
+
+    private void InsertDetails()
+    {
+        if (_model is null || Blocked) return;
+        const string snippet = "\n\n::: details 點擊展開詳細說明\n隱藏的補充內容寫在這裡。\n:::\n\n";
+        if ((_model.Markdown?.Length ?? 0) + snippet.Length > Limits.Body) return;
+        _model.Markdown = (_model.Markdown ?? "").TrimEnd() + snippet;
+        _preview = false;
+    }
+
+    private Task SuggestSummaryWithAiAsync() => RunSaveAsync(async ct =>
+    {
+        if (_model is null) return;
+        var suggestion = await Api.SuggestSummaryAsync(_model.Title, _model.Markdown, ct)
+            ?? throw new CmsException(UiText.T("Admin.ContentEditor.AiSuggestFailed", "無法產生摘要建議，請稍後再試。"));
+        _model.Excerpt = suggestion.Excerpt;
+        if (string.IsNullOrWhiteSpace(_model.MetaDescription))
+            _model.MetaDescription = suggestion.MetaDescription;
+    }, UiText.T("Admin.ContentEditor.AiSuggestedNotice", "已根據標題與正文填入摘要與 SEO 描述建議。"));
+
+    private Task DuplicateCurrentAsync() => RunSaveAsync(async ct =>
+    {
+        if (_model?.Id is not { } id) return;
+        var copy = await Api.DuplicateContentAsync(id, ct)
+            ?? throw new CmsException(UiText.T("Admin.ContentEditor.DuplicateFailed", "無法複製內容，請重試。"));
+        Navigation.NavigateTo("/admin/content/" + copy.Id + "?saved=draft", forceLoad: true);
+    });
 
     private async Task ToggleInternalLinks()
     {

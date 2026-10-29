@@ -15,7 +15,15 @@ public static class AdminMediaEndpoints
             if (!ApiEndpoints.TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
             if (!ApiEndpoints.TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
             var search = http.Request.Query["search"].ToString();
-            var result = await media.ListAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, search.Length == 0 ? null : search);
+            MediaKind? kind = null;
+            var rawKind = http.Request.Query["kind"].ToString();
+            if (rawKind.Length > 0)
+            {
+                if (!Enum.TryParse<MediaKind>(rawKind, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                    return Results.BadRequest(new { message = "參數 kind 無效。" });
+                kind = parsed;
+            }
+            var result = await media.ListAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, search.Length == 0 ? null : search, kind);
             // 引用數隨列表一次填入，呼叫端不必逐筆再問。
             var counts = await media.ReferenceCountsAsync([.. result.Items.Select(x => x.Id)], ct);
             foreach (var item in result.Items) item.ReferenceCount = counts.GetValueOrDefault(item.Id);

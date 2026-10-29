@@ -385,3 +385,19 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .prose .note, .prose .warning, .prose .tip { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: .8rem 1rem; border-radius: var(--radius); margin: 1.1rem 0; }
 .prose .warning { border-left-color: #c25b3f; }
 .link-picker { margin-bottom: 1rem; padding: .9rem 1rem; }
+
+/* 麵包屑、可摺疊區塊、原生音視訊卡片、深色模式與社交頁尾 */
+.breadcrumbs { font-size: .82rem; color: var(--muted); margin-bottom: 1.2rem; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.breadcrumbs a { color: var(--muted); text-decoration: none; }
+.breadcrumbs a:hover { color: var(--accent); text-decoration: underline; }
+.prose .details-block { border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; margin: 1.1rem 0; background: var(--surface); }
+.prose .details-block summary { font-weight: 650; cursor: pointer; color: var(--ink); }
+.prose .media-embed { margin: 1.2rem 0; padding: .9rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.prose .media-embed audio, .prose .media-embed video { width: 100%; display: block; border-radius: 8px; }
+.prose .media-embed figcaption { margin-top: .45rem; font-size: .8rem; color: var(--muted); }
+.prose .file-download-link { font-weight: 600; text-decoration: none; }
+.footer-socials { display: inline-flex; gap: .8rem; margin: 0 .8rem; }
+.site-shell[data-color-scheme="dark"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --accent-soft: color-mix(in srgb, var(--accent) 22%, #141916); background: var(--paper); color: var(--ink); min-height: 100vh; }
+@media (prefers-color-scheme: dark) {
+    .site-shell[data-color-scheme="auto"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --accent-soft: color-mix(in srgb, var(--accent) 22%, #141916); background: var(--paper); color: var(--ink); min-height: 100vh; }
+}

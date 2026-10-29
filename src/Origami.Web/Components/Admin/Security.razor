@@ -121,6 +121,23 @@
         }
         else
         {
+            @if (_recoveryCodes is { Count: > 0 })
+            {
+                <div class="notice notice-success" role="status">
+                    <p><strong>@UiText.T("Admin.Security.RecoveryCodesTitle", "請立即妥善保存以下一次性備用恢復碼（僅顯示這一次）：")</strong></p>
+                    <p class="field-help">@UiText.T("Admin.Security.RecoveryCodesHelp", "當手機遺失或驗證器無法使用時，可在登入時輸入任一組恢復碼（每組僅能使用一次）。")</p>
+                    <ul class="plain-list">
+                        @foreach (var itemCode in _recoveryCodes)
+                        {
+                            <li><code>@itemCode</code></li>
+                        }
+                    </ul>
+                </div>
+            }
+            <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Security.RecoveryCodesRemaining", "目前剩餘可用備用恢復碼：{0} 組。"), _status.RecoveryCodesLeft)</p>
+            <div class="button-row" style="margin-bottom: 1.2rem;">
+                <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="RegenerateRecoveryCodesAsync">@UiText.T("Admin.Security.RegenerateRecoveryCodes", "重新產生備用恢復碼")</button>
+            </div>
             <EditForm Model="_disable" OnValidSubmit="Disable" FormName="totp-disable">
                 <DataAnnotationsValidator />
                 <div class="field">
@@ -128,8 +145,8 @@
                     <input id="disable-password" type="password" maxlength="1024" @bind="_disable.Password" required disabled="@Blocked" autocomplete="current-password" />
                 </div>
                 <div class="field">
-                    <label for="disable-code">@UiText.T("Admin.Security.Code", "動態驗證碼")</label>
-                    <input id="disable-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" @bind="_disable.Code" @bind:event="oninput" required disabled="@Blocked" />
+                    <label for="disable-code">@UiText.T("Admin.Security.Code", "動態驗證碼或備用恢復碼")</label>
+                    <input id="disable-code" autocomplete="one-time-code" maxlength="10" @bind="_disable.Code" @bind:event="oninput" required disabled="@Blocked" />
                 </div>
                 <button type="submit" class="button button-danger" disabled="@Blocked">@UiText.T("Admin.Security.Disable", "停用兩步驟驗證")</button>
             </EditForm>
@@ -144,6 +161,7 @@
     private AccountProfileEdit? _profile;
     private ChangePasswordInput _passwordForm = new();
     private (string Secret, string Uri)? _setup;
+    private IReadOnlyList<string>? _recoveryCodes;
     private CodeInput _confirm = new();
     private PasswordAndCodeInput _disable = new();
     public static class ValidationText
@@ -165,7 +183,7 @@
         [StringLength(1024, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordTooLong))]
         public string Password { get; set; } = "";
         [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeRequired))]
-        [StringLength(6, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
+        [StringLength(10, MinimumLength = 6, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.CodeLength))]
         public string Code { get; set; } = "";
     }
     protected override Task OnInitializedAsync() => Load();
@@ -201,11 +219,16 @@
     });
     private Task ConfirmSetup() => RunAsync(async ct =>
     {
-        await TwoFactor.EnableAsync(_confirm.Code, ct);
+        _recoveryCodes = await TwoFactor.EnableAsync(_confirm.Code, ct);
         _setup = null;
         _confirm.Code = "";
         _status = await TwoFactor.GetStatusAsync(ct);
-    }, UiText.T("Admin.Security.Enabled", "兩步驟驗證已啟用，下次登入即需輸入動態驗證碼。"));
+    }, UiText.T("Admin.Security.Enabled", "兩步驟驗證已啟用，請保存下方的一次性備用恢復碼。"));
+    private Task RegenerateRecoveryCodesAsync() => RunAsync(async ct =>
+    {
+        _recoveryCodes = await TwoFactor.RegenerateRecoveryCodesAsync(ct);
+        _status = await TwoFactor.GetStatusAsync(ct);
+    }, UiText.T("Admin.Security.RecoveryCodesRegenerated", "已重新產生備用恢復碼，舊恢復碼已失效。"));
     private async Task Disable()
     {
         if (Blocked) return;
@@ -214,6 +237,7 @@
             await RunAsync(async ct =>
             {
                 await TwoFactor.DisableAsync(_disable.Password, _disable.Code, ct);
+                _recoveryCodes = null;
                 _status = await TwoFactor.GetStatusAsync(ct);
             }, UiText.T("Admin.Security.Disabled", "兩步驟驗證已停用。"));
         }

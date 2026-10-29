@@ -7,6 +7,8 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public string LogoFileName { get; init; } = "";
     /// <summary>是否開放訪客評論。</summary>
     public bool CommentsEnabled { get; init; }
+    /// <summary>文章發布超過指定天數後自動關閉評論。</summary>
+    public int CommentCloseDays { get; init; }
     /// <summary>受控版型預設名稱。</summary>
     public string ThemePreset { get; init; } = "reading";
     /// <summary>版型強調色（十六進位色碼）。</summary>
@@ -19,6 +21,15 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public bool ShowCover { get; init; } = true;
     /// <summary>文章卡片樣式：list 或 grid。</summary>
     public string CardStyle { get; init; } = "list";
+    /// <summary>色彩模式：auto、light 或 dark。</summary>
+    public string ColorScheme { get; init; } = "auto";
+    /// <summary>自訂頁尾文字。</summary>
+    public string FooterText { get; init; } = "";
+    public string SocialGithubUrl { get; init; } = "";
+    public string SocialXUrl { get; init; } = "";
+    public string SocialMastodonUrl { get; init; } = "";
+    public bool MaintenanceMode { get; init; }
+    public string MaintenanceMessage { get; init; } = "";
     /// <summary>Api 無法回應時的後備站名與說明；全站單一來源。</summary>
     public static PublicSiteSettings Default { get; } = new("Origami", "用文字，分享你的世界。", null, null, null, "", null, null);
 }
@@ -182,6 +193,9 @@ public sealed class OrigamiClient
     public Task SetUserDisabledAsync(string id, bool disabled, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Put, $"api/v1/admin/users/{Uri.EscapeDataString(id)}/state", new UserStateInput(disabled), ct);
 
+    public Task ResetUserTwoFactorAsync(string id, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/users/{Uri.EscapeDataString(id)}/reset-2fa", null, ct);
+
     public async Task<List<MemberSummary>> ListMembersAsync(CancellationToken ct = default) =>
         await GetAsync<List<MemberSummary>>("api/v1/admin/members", ct) ?? throw new CmsException("無法載入站點成員。");
 
@@ -333,6 +347,18 @@ public sealed class OrigamiClient
         await EnsureSuccessAsync(response);
     }
 
+    public Task<ContentEdit?> DuplicateContentAsync(Guid id, CancellationToken ct = default) =>
+        SendAsync<ContentEdit>(new(HttpMethod.Post, $"api/v1/admin/contents/{id}/duplicate"), new { }, ct);
+
+    public Task<List<AuthorOption>?> AuthorOptionsAsync(CancellationToken ct = default) =>
+        GetAsync<List<AuthorOption>>("api/v1/admin/authors/options", ct);
+
+    public Task<PagedResult<AuditLogItem>?> ListAuditLogsAsync(int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default) =>
+        GetAsync<PagedResult<AuditLogItem>>($"api/v1/admin/audit-logs?page={page}&pageSize={pageSize}", ct);
+
+    public Task<AiContentSuggestion?> SuggestSummaryAsync(string? title, string? markdown, CancellationToken ct = default) =>
+        SendAsync<AiContentSuggestion>(new(HttpMethod.Post, "api/v1/admin/ai/suggest-summary"), new { title, markdown }, ct);
+
     // ---------- 編輯占用鎖（提示性心跳） ----------
 
     public async Task<ContentService.EditingLockState?> TouchEditingAsync(Guid contentId, bool takeOver = false, CancellationToken ct = default)
@@ -392,10 +418,11 @@ public sealed class OrigamiClient
     private sealed record MergeTaxonomyResult(int Moved);
 
     public async Task<PagedResult<MediaItem>?> ListMediaAsync(int page = 1, int pageSize = Limits.PageSize,
-        string? search = null, CancellationToken ct = default) =>
+        string? search = null, MediaKind? kind = null, CancellationToken ct = default) =>
         await GetAsync<PagedResult<MediaItem>>(
             $"api/v1/admin/media?page={page}&pageSize={pageSize}" +
-            (string.IsNullOrWhiteSpace(search) ? "" : "&search=" + Uri.EscapeDataString(search.Trim())), ct);
+            (string.IsNullOrWhiteSpace(search) ? "" : "&search=" + Uri.EscapeDataString(search.Trim())) +
+            (kind is null ? "" : "&kind=" + kind.Value), ct);
 
     public async Task<MediaItem?> UploadMediaAsync(byte[] bytes, string fileName, CancellationToken ct = default)
     {

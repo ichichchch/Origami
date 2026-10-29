@@ -64,6 +64,8 @@ builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddSingleton<MarkdownService>();
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
+builder.Services.AddHttpClient("OrigamiWebhook");
+builder.Services.AddScoped<WebhookService>();
 builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
 builder.Services.AddScoped<SemanticSearchService>();

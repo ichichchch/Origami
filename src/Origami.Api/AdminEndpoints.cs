@@ -65,6 +65,30 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
+        // 一鍵複製／克隆內容為新草稿。
+        group.MapPost("/contents/{id}/duplicate", async (Guid id, ContentService content, CancellationToken ct) =>
+        {
+            var copy = await content.DuplicateAsync(id, ct);
+            return Results.Created($"/api/v1/admin/contents/{copy.Id}", copy);
+        });
+
+        // 編輯器可指派的作者候選清單。
+        group.MapGet("/authors/options", async (ContentService content, CancellationToken ct) =>
+            Results.Ok(await content.AuthorOptionsAsync(ct)));
+
+        // 管理操作審計日誌。
+        group.MapGet("/audit-logs", async (HttpContext http, ContentService content, CancellationToken ct) =>
+        {
+            if (!ApiEndpoints.TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
+            if (!ApiEndpoints.TryQueryInt(http, "pageSize", Limits.PageSize, minimum: 1, maximum: Limits.MaxPageSize, out var pageSize, out error)) return error;
+            return Results.Ok(await content.ListAuditLogsAsync(page ?? 1, pageSize ?? Limits.PageSize, ct));
+        }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
+        // AI 寫作輔助：一鍵產生摘要與 SEO 描述建議（僅 BFF）。
+        group.MapPost("/ai/suggest-summary", async (AiSummaryInput input, SiteAssistant assistant, MarkdownService markdown, CancellationToken ct) =>
+            Results.Ok(await assistant.SuggestSummaryAsync(input.Title, input.Markdown, markdown, ct)))
+            .RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
         // 列表快速編輯：只改標題、代稱與草稿／待審／發布狀態；並發版本檢查與完整儲存相同。
         group.MapPut("/contents/{id}/quick", async (Guid id, QuickEditInput input, ContentService content, CancellationToken ct) =>
         {
@@ -232,6 +256,7 @@ public static class AdminEndpoints
     public sealed record CommentReplyInput(string? Markdown);
     public sealed record CommentModerateInput(string Status);
     public sealed record BulkContentItem(Guid Id, Guid Version);
+    public sealed record AiSummaryInput(string? Title, string? Markdown);
 
     private static ContentKind? ParseKind(string raw, ContentKind fallback, out IResult? error)
     {

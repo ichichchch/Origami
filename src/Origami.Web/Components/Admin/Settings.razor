@@ -49,6 +49,16 @@
                     <label for="comments-auto"><input id="comments-auto" type="checkbox" @bind="_model.CommentAutoApprove" disabled="@Blocked" /> @UiText.T("Admin.Settings.AutoApproveComments", "評論自動核可")</label>
                     <p class="field-help">@UiText.T("Admin.Settings.CommentsHelp", "開放後已發布文章顯示評論表單；未自動核可時，評論須在「評論」頁審核後才會公開。蜜罐與連結過量的評論會自動進入垃圾佇列。")</p>
                 </div>
+                <div class="field">
+                    <label for="comment-close-days">@UiText.T("Admin.Settings.CommentCloseDays", "舊文章自動關閉評論（天數）")</label>
+                    <input id="comment-close-days" type="number" min="0" max="3650" @bind="_model.CommentCloseDays" disabled="@Blocked" />
+                    <span class="field-help">@UiText.T("Admin.Settings.CommentCloseDaysHelp", "文章發布超過指定天數後自動關閉評論；0 表示不自動關閉。")</span>
+                </div>
+                <div class="field">
+                    <label for="comment-blocked-words">@UiText.T("Admin.Settings.CommentBlockedWords", "評論敏感詞黑名單（選填）")</label>
+                    <textarea id="comment-blocked-words" rows="2" maxlength="@Limits.CommentBlockedWords" @bind="_model.CommentBlockedWords" @bind:event="oninput" disabled="@Blocked" placeholder="@UiText.T("Admin.Settings.CommentBlockedWordsPlaceholder", "以逗號或換行分隔關鍵字…")"></textarea>
+                    <span class="field-help">@UiText.T("Admin.Settings.CommentBlockedWordsHelp", "訪客評論的名稱、網址或內容命中任一詞彙時，將靜默標記為垃圾評論。")</span>
+                </div>
                 <div class="field checkbox-field">
                     <label for="custom-navigation"><input id="custom-navigation" type="checkbox" @bind="_model.CustomNavigationEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.CustomNavigation", "使用自訂網站導覽")</label>
                     <p class="field-help">@UiText.T("Admin.Settings.CustomNavigationHelp", "開啟後前台導覽改由「網站導覽」頁維護的項目決定（可排序、隱藏或連到外部網址）；關閉時沿用已發布頁面自動排序。")</p>
@@ -74,6 +84,25 @@
                         <option value="@ThemePresets.CardStyleGrid">@UiText.T("Admin.Settings.ThemeCardGrid", "格狀")</option>
                     </select>
                 </div>
+                <div class="field"><label for="theme-color-scheme">@UiText.T("Admin.Settings.ThemeColorScheme", "外觀色彩模式（深淺色）")</label>
+                    <select id="theme-color-scheme" disabled="@Blocked" value="@_model.ColorScheme" @onchange="ColorSchemeChanged">
+                        <option value="@ThemePresets.ColorSchemeAuto">@UiText.T("Admin.Settings.ColorSchemeAuto", "自動（跟隨訪客系統設定）")</option>
+                        <option value="@ThemePresets.ColorSchemeLight">@UiText.T("Admin.Settings.ColorSchemeLight", "淺色模式（Light）")</option>
+                        <option value="@ThemePresets.ColorSchemeDark">@UiText.T("Admin.Settings.ColorSchemeDark", "深色模式（Dark）")</option>
+                    </select>
+                </div>
+                <div class="field"><label for="footer-text">@UiText.T("Admin.Settings.FooterText", "頁尾版權與補充文字（選填）")</label><input id="footer-text" @bind="_model.FooterText" @bind:event="oninput" maxlength="@Limits.FooterText" disabled="@Blocked" placeholder="@UiText.T("Admin.Settings.FooterTextPlaceholder", "留空顯示預設 © 年份 站名")" /></div>
+                <div class="field"><label for="social-github">@UiText.T("Admin.Settings.SocialGithub", "頁尾 GitHub 連結（選填）")</label><input id="social-github" type="url" @bind="_model.SocialGithubUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://github.com/..." /></div>
+                <div class="field"><label for="social-x">@UiText.T("Admin.Settings.SocialX", "頁尾 X / Twitter 連結（選填）")</label><input id="social-x" type="url" @bind="_model.SocialXUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://x.com/..." /></div>
+                <div class="field"><label for="social-mastodon">@UiText.T("Admin.Settings.SocialMastodon", "頁尾 Mastodon / 社群連結（選填）")</label><input id="social-mastodon" type="url" @bind="_model.SocialMastodonUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://..." /></div>
+                <div class="panel-intro reading-intro"><h2>@UiText.T("Admin.Settings.MaintenanceAndWebhook", "維護模式與出站 Webhook")</h2><p>@UiText.T("Admin.Settings.MaintenanceAndWebhookHelp", "控制全站公開維護提示，以及內容發布與新評論的外部通知鉤子。")</p></div>
+                <div class="field checkbox-field">
+                    <label for="maintenance-mode"><input id="maintenance-mode" type="checkbox" @bind="_model.MaintenanceMode" disabled="@Blocked" /> @UiText.T("Admin.Settings.MaintenanceMode", "啟用站點維護模式")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.MaintenanceModeHelp", "開啟後一般訪客造訪公開頁面會看到維護中畫面（HTTP 503），已登入的站點成員仍可正常瀏覽。")</p>
+                </div>
+                <div class="field"><label for="maintenance-msg">@UiText.T("Admin.Settings.MaintenanceMessage", "維護提示訊息（選填）")</label><input id="maintenance-msg" @bind="_model.MaintenanceMessage" @bind:event="oninput" maxlength="@Limits.MaintenanceMessage" disabled="@Blocked" placeholder="@UiText.T("Admin.Settings.MaintenancePlaceholder", "網站正在進行例行維護，請稍後再訪。")" /></div>
+                <div class="field"><label for="webhook-url">@UiText.T("Admin.Settings.WebhookUrl", "出站 Webhook 接收網址（選填）")</label><input id="webhook-url" type="url" @bind="_model.WebhookUrl" @bind:event="oninput" maxlength="@Limits.WebhookUrl" disabled="@Blocked" placeholder="https://example.com/webhook" /><span class="field-help">@UiText.T("Admin.Settings.WebhookUrlHelp", "當文章發布（content.published）或收到新評論（comment.created）時以 POST 傳送 JSON。")</span></div>
+                <div class="field"><label for="webhook-secret">@UiText.T("Admin.Settings.WebhookSecret", "Webhook HMAC 簽章密鑰（選填）")</label><input id="webhook-secret" type="password" autocomplete="new-password" @bind="_model.WebhookSecret" @bind:event="oninput" maxlength="@Limits.WebhookSecret" disabled="@Blocked" /><span class="field-help">@UiText.T("Admin.Settings.WebhookSecretHelp", "設定後會在 X-Origami-Signature 標頭附上 sha256=... 簽章。")</span></div>
                 <div class="field"><label for="site-icon">@UiText.T("Admin.Settings.SiteIcon", "網站圖示（favicon）")</label>
                     <select id="site-icon" disabled="@Blocked" value="@(_model.SiteIconMediaId?.ToString() ?? "")" @onchange="IconChanged">
                         <option value="">@UiText.T("Admin.Settings.NoIcon", "無（瀏覽器顯示預設圖示）")</option>
@@ -277,6 +306,11 @@
     {
         if (_model is null) return;
         _model.CardStyle = args.Value?.ToString() ?? ThemePresets.CardStyleList;
+    }
+    private void ColorSchemeChanged(ChangeEventArgs args)
+    {
+        if (_model is null) return;
+        _model.ColorScheme = args.Value?.ToString() ?? ThemePresets.ColorSchemeAuto;
     }
     private ImportService.ImportPreview? _importPreview;
     private byte[]? _importFile;

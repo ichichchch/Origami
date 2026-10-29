@@ -32,8 +32,14 @@
                 <thead><tr><th>@UiText.T("Admin.Users.Account", "帳號")</th><th>@UiText.T("Admin.Users.Status", "狀態")</th><th>@UiText.T("Admin.Users.Actions", "操作")</th></tr></thead><tbody>
                 @foreach (var user in _result.Items)
                 {
-                    <tr @key="user.Id"><td>@user.UserName @if (user.IsNetworkAdmin) { <span>@UiText.T("Admin.Users.NetworkAdministrator", "（全站管理者）")</span> }</td><td>@(user.IsDisabled ? UiText.T("Admin.Users.Disabled", "停用") : UiText.T("Admin.Users.Enabled", "啟用"))</td>
-                        <td><button disabled="@(Blocked || user.IsNetworkAdmin)" @onclick="() => _pending = user">@(user.IsDisabled ? UiText.T("Admin.Users.Reenable", "重新啟用") : UiText.T("Admin.Users.DisableAccount", "停用帳號"))</button></td></tr>
+                    <tr @key="user.Id"><td>@user.UserName @if (user.IsNetworkAdmin) { <span>@UiText.T("Admin.Users.NetworkAdministrator", "（全站管理者）")</span> }</td><td>@(user.IsDisabled ? UiText.T("Admin.Users.Disabled", "停用") : UiText.T("Admin.Users.Enabled", "啟用"))@(user.TwoFactorEnabled ? " · 2FA" : "")</td>
+                        <td><div class="table-actions">
+                            <button disabled="@(Blocked || user.IsNetworkAdmin)" @onclick="() => _pending = user">@(user.IsDisabled ? UiText.T("Admin.Users.Reenable", "重新啟用") : UiText.T("Admin.Users.DisableAccount", "停用帳號"))</button>
+                            @if (user.TwoFactorEnabled && !user.IsNetworkAdmin)
+                            {
+                                <button type="button" class="text-danger" disabled="@Blocked" @onclick="() => Reset2FaAsync(user)">@UiText.T("Admin.Users.Reset2FA", "重設 2FA")</button>
+                            }
+                        </div></td></tr>
                 }
                 </tbody></table></div>
             <nav class="pagination" aria-label="@UiText.T("Admin.Users.Pagination", "使用者分頁")"><button disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">@UiText.T("Admin.Users.PreviousPage", "上一頁")</button><span>@_result.Page / @_result.TotalPages</span><button disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">@UiText.T("Admin.Users.NextPage", "下一頁")</button></nav>
@@ -95,6 +101,12 @@
         _pending = null;
         _result = await Api.ListUsersAsync(_page, _search, ct);
     }, UiText.T("Admin.Users.StateChanged", "帳號狀態已更新，舊登入與 API 憑證已失效。"));
+    private Task Reset2FaAsync(UserSummary user) => RunAsync(async ct =>
+    {
+        RequireNetwork();
+        await Api.ResetUserTwoFactorAsync(user.Id, ct);
+        _result = await Api.ListUsersAsync(_page, _search, ct);
+    }, UiText.T("Admin.Users.Reset2FaNotice", "已重設該使用者的兩步驟驗證與恢復碼。"));
     protected override void Dispose(bool disposing)
     {
         _create.Password = "";

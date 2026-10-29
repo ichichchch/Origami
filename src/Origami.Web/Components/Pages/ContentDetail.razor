@@ -67,7 +67,24 @@
 else if (_content is not null)
 {
     <article class="reading-column">
-        <a class="back-link" href="/">@UiText.T("Public.ContentDetail.03", "← 回到首頁")</a>
+        <nav class="breadcrumbs" aria-label="@UiText.T("Public.ContentDetail.Breadcrumbs", "麵包屑導覽")">
+            <a href="/">@UiText.T("Layout.Main.02", "首頁")</a>
+            @if (_content.Kind == ContentKind.Post && _content.Categories.Count > 0)
+            {
+                <span aria-hidden="true"> › </span>
+                <a href="@("/?category=" + Uri.EscapeDataString(_content.Categories[0].Slug))">@_content.Categories[0].Title</a>
+            }
+            else if (_content.Kind == ContentKind.Page && _breadcrumbs.Count > 1)
+            {
+                @foreach (var crumb in _breadcrumbs.Take(_breadcrumbs.Count - 1))
+                {
+                    <span aria-hidden="true"> › </span>
+                    <a href="@crumb.Path">@crumb.Title</a>
+                }
+            }
+            <span aria-hidden="true"> › </span>
+            <span aria-current="page">@_content.Title</span>
+        </nav>
         <header class="article-heading">
             <p class="eyebrow">@ContentLabel</p>
             <h1>@_content.Title</h1>
@@ -89,7 +106,9 @@ else if (_content is not null)
             }
             @if (!_locked && _content.Kind == ContentKind.Post)
             {
+                var (_, readingMins) = Markdown.WordCountAndReadingTime(_content.Markdown);
                 <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString(UiText.T("Public.ContentDetail.PublishedDateFormat", "yyyy 年 MM 月 dd 日"), CultureInfo.CurrentUICulture) <span class="sr-only">UTC</span></time>
+                <span class="muted"> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Public.ContentDetail.ReadingTime", "約 {0} 分鐘讀完"), readingMins)</span>
                 @if (_content.Categories.Count > 0)
                 {
                     <div class="chip-list" aria-label="@UiText.T("Public.ContentDetail.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
@@ -257,6 +276,7 @@ else
     private bool _isPrivate;
     private bool _readable;
     private List<string> _canonicalSegments = [];
+    private List<BreadcrumbNode> _breadcrumbs = [];
     private List<ContentNeighbor> _neighbors = [];
     private IReadOnlyList<SemanticHit> _related = [];
     private List<CommentService.CommentView> _comments = [];
@@ -473,6 +493,7 @@ else
         _pageIndex = 1;
         _pageTotal = 1;
         _canonicalSegments = [];
+        _breadcrumbs = [];
         _unlockError = null;
         try
         {
@@ -493,6 +514,7 @@ else
                 }
                 _content = resolved.Content;
                 _canonicalSegments = [.. resolved.Segments];
+                _breadcrumbs = [.. resolved.Breadcrumbs];
                 if (!segments.SequenceEqual(_canonicalSegments, StringComparer.Ordinal))
                 {
                     if (segments.Length == 1 && _canonicalSegments.Count > 1)
@@ -622,6 +644,7 @@ else
         "本站未開放評論。" => UiText.T("Public.ContentDetail.CommentsDisabled", "本站未開放評論。"),
         "內容不存在。" => UiText.T("Public.ContentDetail.ContentMissing", "內容不存在。"),
         "這篇內容不接受評論。" => UiText.T("Public.ContentDetail.CommentsNotAccepted", "這篇內容不接受評論。"),
+        "這篇文章發布已超過評論開放期限，目前已關閉評論。" => UiText.T("Public.ContentDetail.CommentsClosedByAge", "這篇文章發布已超過評論開放期限，目前已關閉評論。"),
         _ => UiText.T("Public.ContentDetail.CommentFailed", "評論送出失敗，請稍後再試。")
     };
 

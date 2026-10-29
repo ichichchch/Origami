@@ -1,9 +1,11 @@
 @inherits LayoutComponentBase
 @inject OrigamiClient Api
+@inject AdminAccess Admin
 @inject ILogger<MainLayout> Logger
 
 <a class="skip-link" href="#main-content">@UiText.T("Layout.Main.01", "跳至主要內容")</a>
 <div class="site-shell" style="@ThemeStyle" data-card-style="@_settings.CardStyle"
+     data-color-scheme="@_settings.ColorScheme"
      data-show-cover="@(_settings.ShowCover ? "true" : "false")"
      data-show-byline="@(_settings.ShowByline ? "true" : "false")">
     <header class="site-header">
@@ -31,9 +33,42 @@
     {
         <p class="site-description">@_settings.Description</p>
     }
-    <main id="main-content" class="public-main" tabindex="-1">@Body</main>
+    @if (_settings.MaintenanceMode && !_isMember)
+    {
+        <main id="main-content" class="public-main" tabindex="-1">
+            <section class="empty-state panel" role="status" aria-labelledby="maintenance-title">
+                <h1 id="maintenance-title">@UiText.T("Layout.Main.MaintenanceTitle", "網站正在維護中")</h1>
+                <p>@(string.IsNullOrWhiteSpace(_settings.MaintenanceMessage) ? UiText.T("Layout.Main.MaintenanceDefault", "我們正在進行例行維護，請稍後再回來造訪。") : _settings.MaintenanceMessage)</p>
+            </section>
+        </main>
+    }
+    else
+    {
+        @if (_settings.MaintenanceMode && _isMember)
+        {
+            <p class="notice" role="status">@UiText.T("Layout.Main.MaintenanceAdminNotice", "維護模式目前已開啟：一般訪客會看到維護中畫面，你因具備站點權限仍可正常預覽。")</p>
+        }
+        <main id="main-content" class="public-main" tabindex="-1">@Body</main>
+    }
     <footer class="site-footer">
-        <span>© @DateTime.UtcNow.Year @_settings.Name</span>
+        <span>@(string.IsNullOrWhiteSpace(_settings.FooterText) ? $"© {DateTime.UtcNow.Year} {_settings.Name}" : _settings.FooterText)</span>
+        @if (!string.IsNullOrWhiteSpace(_settings.SocialGithubUrl) || !string.IsNullOrWhiteSpace(_settings.SocialXUrl) || !string.IsNullOrWhiteSpace(_settings.SocialMastodonUrl))
+        {
+            <span class="footer-socials">
+                @if (!string.IsNullOrWhiteSpace(_settings.SocialGithubUrl))
+                {
+                    <a href="@_settings.SocialGithubUrl" target="_blank" rel="noopener">GitHub</a>
+                }
+                @if (!string.IsNullOrWhiteSpace(_settings.SocialXUrl))
+                {
+                    <a href="@_settings.SocialXUrl" target="_blank" rel="noopener">X</a>
+                }
+                @if (!string.IsNullOrWhiteSpace(_settings.SocialMastodonUrl))
+                {
+                    <a href="@_settings.SocialMastodonUrl" target="_blank" rel="noopener">Mastodon</a>
+                }
+            </span>
+        }
         <a href="/account/login" data-enhance-nav="false">@UiText.T("Layout.Main.06", "網站管理")</a>
         <LanguageSwitcher />
     </footer>
@@ -43,6 +78,7 @@
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private List<PageNavItem> _pages = [];
+    private bool _isMember;
 
     /// <summary>帶深度的平面排序：子頁面跟在父頁面之後；若父頁面不在已發布集合內，
     /// 子頁面改以頂層呈現而不會直接消失。</summary>
@@ -95,6 +131,12 @@
             var ct = HttpContext?.RequestAborted ?? default;
             _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
             _pages = await Api.GetNavigationAsync(ct) ?? [];
+            if (_settings.MaintenanceMode)
+            {
+                _isMember = await Admin.IsAdminAsync(ct);
+                if (!_isMember && HttpContext?.Response.HasStarted == false)
+                    HttpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            }
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex) { Logger.LogError(ex, "Public navigation unavailable"); }

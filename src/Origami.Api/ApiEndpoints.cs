@@ -47,8 +47,12 @@ public static class ApiEndpoints
             return Results.Ok(new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
                 value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId, value.LogoMediaId)
             { LogoFileName = logoFileName ?? "", CommentsEnabled = value.CommentsEnabled,
+                CommentCloseDays = value.CommentCloseDays,
                 ThemePreset = value.ThemePreset, AccentColor = value.AccentColor, ReadingWidth = value.ReadingWidth,
-                ShowByline = value.ShowByline, ShowCover = value.ShowCover, CardStyle = value.CardStyle });
+                ShowByline = value.ShowByline, ShowCover = value.ShowCover, CardStyle = value.CardStyle,
+                ColorScheme = value.ColorScheme, FooterText = value.FooterText,
+                SocialGithubUrl = value.SocialGithubUrl, SocialXUrl = value.SocialXUrl, SocialMastodonUrl = value.SocialMastodonUrl,
+                MaintenanceMode = value.MaintenanceMode, MaintenanceMessage = value.MaintenanceMessage });
         });
 
         group.MapGet("/navigation", async (NavigationService navigation, CancellationToken ct) =>
@@ -141,6 +145,8 @@ public static class ApiEndpoints
         public string LogoFileName { get; init; } = "";
         /// <summary>是否開放訪客評論。</summary>
         public bool CommentsEnabled { get; init; }
+        /// <summary>文章發布超過指定天數後自動關閉評論。</summary>
+        public int CommentCloseDays { get; init; }
         /// <summary>受控版型預設名稱。</summary>
         public string ThemePreset { get; init; } = "reading";
         /// <summary>版型強調色（十六進位色碼）。</summary>
@@ -153,6 +159,15 @@ public static class ApiEndpoints
         public bool ShowCover { get; init; } = true;
         /// <summary>文章卡片樣式：list 或 grid。</summary>
         public string CardStyle { get; init; } = "list";
+        /// <summary>色彩模式：auto、light 或 dark。</summary>
+        public string ColorScheme { get; init; } = "auto";
+        /// <summary>自訂頁尾文字。</summary>
+        public string FooterText { get; init; } = "";
+        public string SocialGithubUrl { get; init; } = "";
+        public string SocialXUrl { get; init; } = "";
+        public string SocialMastodonUrl { get; init; } = "";
+        public bool MaintenanceMode { get; init; }
+        public string MaintenanceMessage { get; init; } = "";
     }
 
     /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>

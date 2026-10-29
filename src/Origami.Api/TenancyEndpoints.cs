@@ -76,6 +76,12 @@ public static class TenancyEndpoints
             return Results.NoContent();
         });
 
+        group.MapPost("/users/{id}/reset-2fa", async (string id, SiteAdministrationService sites, CancellationToken ct) =>
+        {
+            await sites.ResetUserTwoFactorAsync(id, ct);
+            return Results.NoContent();
+        });
+
         group.MapGet("/members", async (SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.ListMembersAsync(ct)));
 
