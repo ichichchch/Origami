@@ -78,9 +78,29 @@ public static class AdminEndpoints
         group.MapPost("/contents/{id}/comments", async (Guid id, CommentPostEnvelope input, CommentService comments, CancellationToken ct) =>
         {
             await comments.PostAsync(id, new CommentService.CommentPostInput(
-                input.AuthorName ?? "", input.Url, input.Markdown ?? "", input.Honeypot == true), ct);
+                input.AuthorName ?? "", input.Url, input.Markdown ?? "", input.Honeypot == true, input.ParentId), ct);
             return Results.NoContent();
         }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
+        // 後台管理員／編輯者直接回覆評論。
+        group.MapPost("/comments/{id}/reply", async (Guid id, CommentReplyInput input, CommentService comments, CancellationToken ct) =>
+            Results.Ok(await comments.ReplyAdminAsync(id, input.Markdown ?? "", ct)));
+
+        // 後台總覽儀表板與 301 重定向管理。
+        group.MapGet("/dashboard", async (ContentService content, CancellationToken ct) =>
+            Results.Ok(await content.GetDashboardAsync(ct)));
+
+        group.MapGet("/redirects", async (ContentService content, CancellationToken ct) =>
+            Results.Ok(await content.ListRedirectsAsync(ct)));
+
+        group.MapPost("/redirects", async (RedirectCreateInput input, ContentService content, CancellationToken ct) =>
+            Results.Ok(await content.CreateRedirectAsync(input, ct)));
+
+        group.MapDelete("/redirects/{id}", async (Guid id, ContentService content, CancellationToken ct) =>
+        {
+            await content.DeleteRedirectAsync(id, ct);
+            return Results.NoContent();
+        });
 
         // 評論審核佇列：狀態篩選、計數、審核與永久刪除。
         group.MapGet("/comments", async (HttpContext http, CommentService comments, CancellationToken ct) =>
@@ -208,7 +228,8 @@ public static class AdminEndpoints
     public sealed record ProtectionUnlockInput(string? Password);
     public sealed record QuickEditInput(string? Title, string? Slug, ContentStatus Status, Guid Version);
     public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items);
-    public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot);
+    public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot, Guid? ParentId = null);
+    public sealed record CommentReplyInput(string? Markdown);
     public sealed record CommentModerateInput(string Status);
     public sealed record BulkContentItem(Guid Id, Guid Version);
 

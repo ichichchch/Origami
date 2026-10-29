@@ -2,13 +2,24 @@ namespace Origami.Core.Services;
 
 public sealed partial class MarkdownService
 {
-    private readonly MarkdownPipeline pipeline = new MarkdownPipelineBuilder().DisableHtml().Build();
+    private readonly MarkdownPipeline pipeline = new MarkdownPipelineBuilder()
+        .DisableHtml()
+        .UseAutoIdentifiers(Markdig.Extensions.AutoIdentifiers.AutoIdentifierOptions.AutoLink)
+        .UseFootnotes()
+        .UseCustomContainers()
+        .UseEmphasisExtras()
+        .UsePipeTables()
+        .UseTaskLists()
+        .Build();
 
     public string Render(string markdown, IReadOnlyDictionary<string, int>? mediaWidths = null)
     {
         if (markdown.Length > Limits.Body) throw new CmsException("本文超過長度上限。");
         // 分頁分隔符只是作者標記：全文渲染（feed 全文、嵌入等）一律剝除，不得變成可見文字。
         markdown = NextPageSeparator().Replace(markdown, "");
+        var hasToc = TocMarker().IsMatch(markdown);
+        if (hasToc)
+            markdown = TocMarker().Replace(markdown, "\n\nTOC-ORIGAMI-MARKER\n\n");
         // 白名單影片連結（獨立一行）先換成自製佔位段落；渲染後以同樣由本服務
         // 構造的 iframe 取代。佔位與 iframe 都不含作者輸入的原始字串，無法偽造任意網域。
         var embeds = new List<string>();
@@ -23,9 +34,10 @@ public sealed partial class MarkdownService
         var sanitizer = new HtmlSanitizer();
         sanitizer.AllowedTags.Clear();
         sanitizer.AllowedTags.UnionWith(["p", "h1", "h2", "h3", "h4", "h5", "h6", "a", "img", "pre", "code",
-            "blockquote", "ul", "ol", "li", "em", "strong", "br", "hr"]);
+            "blockquote", "ul", "ol", "li", "em", "strong", "del", "sup", "sub", "mark", "br", "hr",
+            "div", "section", "aside", "nav", "table", "thead", "tbody", "tr", "th", "td", "input"]);
         sanitizer.AllowedAttributes.Clear();
-        sanitizer.AllowedAttributes.UnionWith(["href", "src", "alt", "title"]);
+        sanitizer.AllowedAttributes.UnionWith(["href", "src", "alt", "title", "id", "class", "role", "aria-label", "type", "checked", "disabled"]);
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.UnionWith(["http", "https"]);
         sanitizer.FilterUrl += (_, e) =>
@@ -33,6 +45,11 @@ public sealed partial class MarkdownService
             if (!IsAllowedUrl(e.SanitizedUrl)) e.SanitizedUrl = null;
         };
         var html = sanitizer.Sanitize(Markdown.ToHtml(markdown, pipeline));
+        if (hasToc)
+        {
+            var tocHtml = BuildTocHtml(html);
+            html = html.Replace("<p>TOC-ORIGAMI-MARKER</p>", tocHtml, StringComparison.Ordinal);
+        }
         for (var i = 0; i < embeds.Count; i++)
         {
             var marker = "<p>EMBED-ORIGAMI-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "</p>";
@@ -43,6 +60,34 @@ public sealed partial class MarkdownService
         html = html.Replace("<img ", "<img loading=\"lazy\" decoding=\"async\" ", StringComparison.Ordinal);
         return mediaWidths is { Count: > 0 } ? AddResponsiveSources(html, mediaWidths) : html;
     }
+
+    private static string BuildTocHtml(string html)
+    {
+        var matches = HeadingTag().Matches(html);
+        if (matches.Count == 0) return "";
+        var sb = new StringBuilder("<nav class=\"toc\" aria-label=\"目錄\"><ul>");
+        foreach (Match match in matches)
+        {
+            var level = match.Groups[1].Value;
+            var id = match.Groups[2].Value;
+            var inner = StripHtmlTags().Replace(match.Groups[3].Value, "").Trim();
+            if (inner.Length == 0 || id.Length == 0) continue;
+            sb.Append("<li class=\"toc-h").Append(level).Append("\"><a href=\"#")
+              .Append(WebUtility.HtmlEncode(id)).Append("\">")
+              .Append(WebUtility.HtmlEncode(inner)).Append("</a></li>");
+        }
+        sb.Append("</ul></nav>");
+        return sb.ToString();
+    }
+
+    [GeneratedRegex(@"(?im)^[\t ]*\[toc\][\t ]*(?:\r?\n|$)", RegexOptions.CultureInvariant)]
+    private static partial Regex TocMarker();
+
+    [GeneratedRegex(@"<h([2-4])\s+[^>]*?id=""([^""]+)""[^>]*>(.*?)</h\1>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    private static partial Regex HeadingTag();
+
+    [GeneratedRegex(@"<[^>]+>", RegexOptions.CultureInvariant)]
+    private static partial Regex StripHtmlTags();
 
     /// <summary>為磁碟上已知存在變體的 /media 圖片加上 srcset 候選。</summary>
     private static string AddResponsiveSources(string html, IReadOnlyDictionary<string, int> mediaWidths)

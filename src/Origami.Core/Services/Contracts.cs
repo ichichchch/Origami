@@ -17,6 +17,10 @@ public sealed class ContentEdit
     [StringLength(Limits.Body)] public string? Markdown { get; set; }
     [StringLength(Limits.Excerpt)] public string? Excerpt { get; set; }
     public bool IsSticky { get; set; }
+    /// <summary>單篇內容是否允許訪客評論（預設為 true）。</summary>
+    public bool AllowComments { get; set; } = true;
+    /// <summary>獨立頁面的同層排序權重（數字越小越靠前）。</summary>
+    public int MenuOrder { get; set; }
     /// <summary>公開頁面渲染本文前須先輸入密碼。</summary>
     public bool IsProtected { get; set; }
     /// <summary>公開網址僅限已登入管理員；其他人一律得到 404。</summary>
@@ -72,6 +76,8 @@ public sealed record TaxonomyEdit
     [Required, StringLength(Limits.TaxonomyName)] public string Name { get; set; } = "";
     [StringLength(Limits.Slug)] public string Slug { get; set; } = "";
     [StringLength(Limits.TaxonomyDescription)] public string? Description { get; set; }
+    /// <summary>父分類識別；標籤固定為 null。</summary>
+    public Guid? ParentId { get; set; }
     public Guid Version { get; set; }
 }
 
@@ -91,6 +97,8 @@ public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, str
     public DateTimeOffset? DeletedAt { get; init; }
     public bool IsProtected { get; init; }
     public bool IsPrivate { get; init; }
+    public bool AllowComments { get; init; } = true;
+    public int MenuOrder { get; init; }
     public Guid? ParentId { get; init; }
     public string ParentTitle { get; init; } = "";
     public int Views { get; init; }
@@ -120,9 +128,16 @@ public sealed record RevisionDetail(Guid Id, Guid ContentId, string Title, strin
 public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Version)
 {
     public string Description { get; init; } = "";
+    public Guid? ParentId { get; init; }
+    public string ParentName { get; init; } = "";
 }
 /// <summary>帶作者描述的公開分類或標籤，供篩選列表使用。</summary>
-public sealed record TaxonomyView(string Title, string Slug, string Description = "");
+public sealed record TaxonomyView(string Title, string Slug, string Description = "")
+{
+    public Guid? ParentId { get; init; }
+    public string? ParentSlug { get; init; }
+    public string? ParentTitle { get; init; }
+}
 public sealed record PublicTaxonomy(string Name, string Slug, int Count);
 public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, string Slug, string Markdown,
     DateTimeOffset? PublishedAt, IReadOnlyList<NavigationItem> Categories, IReadOnlyList<NavigationItem> Tags)
@@ -130,6 +145,8 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public string Excerpt { get; init; } = "";
     public bool IsProtected { get; init; }
     public bool IsPrivate { get; init; }
+    public bool AllowComments { get; init; } = true;
+    public int MenuOrder { get; init; }
     public string CoverFileName { get; init; } = "";
     public string CoverAltText { get; init; } = "";
     public string CoverCaption { get; init; } = "";
@@ -180,6 +197,43 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
 public sealed record MediaBatchItem(string FileName, bool Succeeded, string Message, MediaItem? Item);
 /// <summary>退役 slug 背後現行的公開目標，供永久轉址使用。</summary>
 public sealed record SlugRedirectTarget(string Slug, ContentKind Kind);
+/// <summary>後台重定向規則檢視。</summary>
+public sealed record RedirectItem(Guid Id, string OldSlug, Guid ContentId, string ContentTitle, string ContentSlug, ContentKind ContentKind, DateTimeOffset CreatedAt);
+/// <summary>新增自訂重定向規則輸入。</summary>
+public sealed record RedirectCreateInput(string OldSlug, Guid ContentId);
+/// <summary>作者公開個人資料。</summary>
+public sealed record PublicAuthorProfile(string DisplayName, string Slug, string Bio, string WebsiteUrl, string AvatarUrl);
+/// <summary>帳號自助個人資料與顯示名稱。</summary>
+public sealed class AccountProfileEdit
+{
+    [StringLength(Limits.AuthorName)] public string DisplayName { get; set; } = "";
+    [StringLength(Limits.UserBio)] public string Bio { get; set; } = "";
+    [StringLength(Limits.UserUrl)] public string WebsiteUrl { get; set; } = "";
+    [StringLength(Limits.UserUrl)] public string AvatarUrl { get; set; } = "";
+    [StringLength(256)] public string Email { get; set; } = "";
+    public string UserName { get; set; } = "";
+}
+/// <summary>帳號自助修改密碼輸入。</summary>
+public sealed class ChangePasswordInput
+{
+    [Required, StringLength(1024)] public string CurrentPassword { get; set; } = "";
+    [Required, StringLength(1024)] public string NewPassword { get; set; } = "";
+}
+/// <summary>後台總覽儀表板與瀏覽趨勢。</summary>
+public sealed record DashboardSummary(
+    ContentCounts Posts,
+    ContentCounts Pages,
+    CommentService.CommentCounts Comments,
+    int MediaCount,
+    int RedirectCount,
+    int TotalViews7Days,
+    int TotalViews30Days,
+    IReadOnlyList<DailyViewPoint> DailyViews,
+    IReadOnlyList<TopContentItem> TopContents,
+    IReadOnlyList<ContentSummary> RecentDrafts,
+    IReadOnlyList<CommentService.CommentView> RecentComments);
+public sealed record DailyViewPoint(DateOnly Date, int Views);
+public sealed record TopContentItem(Guid Id, ContentKind Kind, string Title, string Slug, int ViewsPeriod, int ViewsTotal);
 /// <summary>公開時間軸上相鄰的文章；比目前這篇新或舊。</summary>
 public sealed record ContentNeighbor(Guid Id, string Slug, string Title, bool IsNewer);
 /// <summary>公開彙整的單一月份與已發布文章數。</summary>

@@ -54,6 +54,8 @@ public static partial class Limits
     public const int TaxonomyDescription = 500;
     public const int MaxTaxonomiesPerKind = 30;
     public const int AuthorName = 80;
+    public const int UserBio = 500;
+    public const int UserUrl = 500;
     public const long UploadBytes = 5 * 1024 * 1024;
     /// <summary>匯出／匯入封裝（JSON 或 ZIP）的大小上限。</summary>
     public const long ArchiveMaxBytes = 256 * 1024 * 1024;
@@ -93,6 +95,12 @@ public sealed class AdminUser : IdentityUser
     /// <summary>Base32 編碼的 TOTP 共用密鑰；兩步驗證設定開始前為空。</summary>
     public string TwoFactorSecret { get; set; } = "";
     // 兩步驗證的啟用重用繼承自 IdentityUser.TwoFactorEnabled 的欄位。
+    /// <summary>作者公開個人簡介；顯示於作者彙整頁與文章作者欄。</summary>
+    [StringLength(Limits.UserBio)] public string Bio { get; set; } = "";
+    /// <summary>作者公開網站（僅 http／https）。</summary>
+    [StringLength(Limits.UserUrl)] public string WebsiteUrl { get; set; } = "";
+    /// <summary>作者頭像網址（僅 http／https 或站內 /media/ 圖片）。</summary>
+    [StringLength(Limits.UserUrl)] public string AvatarUrl { get; set; } = "";
 }
 
 public sealed class Content
@@ -111,6 +119,10 @@ public sealed class Content
     public ContentStatus Status { get; set; }
     // 置頂文章排在公開文章列表最前；頁面忽略此旗標。
     public bool IsSticky { get; set; }
+    /// <summary>單篇內容是否允許訪客評論；須同時滿足全站開啟評論才會顯示與接受張貼。</summary>
+    public bool AllowComments { get; set; } = true;
+    /// <summary>獨立頁面的同層排序權重（數字越小越靠前）；文章預設為 0。</summary>
+    public int MenuOrder { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
@@ -186,6 +198,9 @@ public sealed class Category
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Description { get; set; } = "";
+    /// <summary>父分類識別；最上層分類為 null。</summary>
+    public Guid? ParentId { get; set; }
+    public Category? Parent { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Content> Contents { get; set; } = new List<Content>();
 }

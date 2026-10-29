@@ -203,6 +203,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
 
         var site = document.RootElement.GetProperty("site");
         Dictionary<string, Category> categoriesBySlug = [];
+        List<(Category Entity, string ParentSlug)> categoryHierarchy = [];
         foreach (var node in document.RootElement.GetProperty("categories").EnumerateArray())
         {
             var category = new Category
@@ -215,7 +216,14 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 Version = Guid.NewGuid(),
             };
             if (!categoriesBySlug.TryAdd(category.Slug, category)) throw new CmsException($"匯入的分類代稱重複：{category.Slug}。");
+            if (node.GetString("parentSlug") is { Length: > 0 } parentCatSlug)
+                categoryHierarchy.Add((category, parentCatSlug));
             db.Categories.Add(category);
+        }
+        foreach (var (category, parentCatSlug) in categoryHierarchy)
+        {
+            if (categoriesBySlug.TryGetValue(parentCatSlug, out var parentCat) && parentCat.Id != category.Id)
+                category.ParentId = parentCat.Id;
         }
         Dictionary<string, Tag> tagsBySlug = [];
         foreach (var node in document.RootElement.GetProperty("tags").EnumerateArray())
@@ -382,7 +390,10 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 Markdown = Bounded(node, "markdown", Limits.Body, "內容本文", optional: true),
                 Excerpt = Bounded(node, "excerpt", Limits.Excerpt, "內容摘要", optional: true),
                 // 匯入內容沒有對應帳號；僅還原署名快照供前台 byline 使用。
-                AuthorName = Bounded(node, "authorName", Limits.AuthorName, "作者名稱", optional: true),                IsSticky = node.TryGetProperty("isSticky", out var sticky) && sticky.GetBoolean(),
+                AuthorName = Bounded(node, "authorName", Limits.AuthorName, "作者名稱", optional: true),
+                IsSticky = node.TryGetProperty("isSticky", out var sticky) && sticky.GetBoolean(),
+                AllowComments = !node.TryGetProperty("allowComments", out var allowCommentsNode) || allowCommentsNode.ValueKind != JsonValueKind.False,
+                MenuOrder = node.TryGetProperty("menuOrder", out var menuOrderNode) && menuOrderNode.ValueKind == JsonValueKind.Number ? Math.Clamp(menuOrderNode.GetInt32(), -10000, 10000) : 0,
                 MetaDescription = Bounded(node, "metaDescription", Limits.MetaDescription, "SEO 描述", optional: true),
                 NoIndex = node.TryGetProperty("noIndex", out var noIndex) && noIndex.GetBoolean(),
                 IsProtected = node.TryGetProperty("isProtected", out var isProtected) && isProtected.GetBoolean(),

@@ -106,6 +106,19 @@ public static class TenancyEndpoints
             await credentials.RevokeAsync(id, ct);
             return Results.NoContent();
         });
+
+        // 帳號自助個人資料與密碼修改（僅 BFF）。
+        group.MapGet("/profile", async (SiteAdministrationService sites, CancellationToken ct) =>
+            Results.Ok(await sites.GetMyProfileAsync(ct)));
+
+        group.MapPut("/profile", async (AccountProfileEdit input, SiteAdministrationService sites, CancellationToken ct) =>
+            Results.Ok(await sites.UpdateMyProfileAsync(input, ct)));
+
+        group.MapPost("/profile/password", async (ChangePasswordInput input, SiteAdministrationService sites, CancellationToken ct) =>
+        {
+            await sites.ChangeMyPasswordAsync(input, ct);
+            return Results.NoContent();
+        });
     }
 
     public sealed record NavigationOrderInput(List<NavigationOrderItem>? Items);

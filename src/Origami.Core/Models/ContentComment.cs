@@ -14,6 +14,11 @@ public sealed class ContentComment
     /// <summary>訪客網址（選填，僅 http／https）。</summary>
     [StringLength(Limits.CommentUrl)] public string Url { get; set; } = "";
     [Required, StringLength(Limits.CommentBody)] public string Markdown { get; set; } = "";
+    /// <summary>父評論識別（樓中樓回覆）；最上層評論為 null。</summary>
+    public Guid? ParentId { get; set; }
+    public ContentComment? Parent { get; set; }
+    /// <summary>是否為後台管理員／編輯者的官方回覆。</summary>
+    public bool IsAdminReply { get; set; }
     public CommentStatus Status { get; set; } = CommentStatus.Pending;
     /// <summary>審核並發版本；兩個後台分頁同時處理同一則評論時，較舊的版本不得覆寫。</summary>
     public Guid Version { get; set; } = Guid.NewGuid();

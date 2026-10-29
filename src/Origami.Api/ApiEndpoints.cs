@@ -107,6 +107,9 @@ public static class ApiEndpoints
         group.MapGet("/redirects/{slug}", async (string slug, ContentService content, CancellationToken ct) =>
             await content.RedirectTargetAsync(slug, ct) is { } target ? Results.Ok(target) : Results.NotFound());
 
+        group.MapGet("/authors/{slug}", async (string slug, ContentService content, CancellationToken ct) =>
+            await content.GetPublicAuthorAsync(slug, ct) is { } author ? Results.Ok(author) : Results.NotFound());
+
         // 草稿分享預覽：內容本體，加上已發布時應轉址前往的公開位置。
         group.MapGet("/preview/{token}", async (Guid token, ContentService content, CancellationToken ct) =>
         {

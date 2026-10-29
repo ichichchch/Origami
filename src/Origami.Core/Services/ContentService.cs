@@ -23,10 +23,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             query = query.Where(x => EF.Functions.ILike(x.Title, pattern) || EF.Functions.ILike(x.Slug, pattern));
         }
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
+        var ordered = kind == ContentKind.Page
+            ? query.OrderBy(x => x.MenuOrder).ThenByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
+            : query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id);
+        var items = await ordered
             .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
                 PublishAt = x.PublishAt, DeletedAt = x.DeletedAt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
                 ParentId = x.ParentId, ParentTitle = x.Parent != null ? x.Parent.Title : "",
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "", CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 AuthorName = x.AuthorName, AuthorId = x.AuthorId,
@@ -58,7 +62,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Id == id).Select(x => new ContentEdit
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
-            IsSticky = x.IsSticky, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate, HasProtectPassword = x.ProtectionHash != "",
+            IsSticky = x.IsSticky, AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
+            IsProtected = x.IsProtected, IsPrivate = x.IsPrivate, HasProtectPassword = x.ProtectionHash != "",
             ParentId = x.ParentId, CoverMediaId = x.CoverMediaId,
             CoverFileName = x.Cover != null ? x.Cover.FileName : "",
             CoverAltText = x.Cover != null ? x.Cover.AltText : "",
@@ -273,6 +278,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         entity.Markdown = input.Markdown ?? "";
         entity.Excerpt = (input.Excerpt ?? "").Trim();
         entity.IsSticky = input.IsSticky;
+        entity.AllowComments = input.AllowComments;
+        entity.MenuOrder = entity.Kind == ContentKind.Page ? Math.Clamp(input.MenuOrder, -10000, 10000) : 0;
         entity.MetaDescription = (input.MetaDescription ?? "").Trim();
         entity.NoIndex = input.NoIndex;
         entity.Status = input.Status;
@@ -435,6 +442,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
             { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
@@ -827,7 +835,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published
             && !x.IsPrivate && x.ContentTypeId == null);
-        if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
+        if (category is not null)
+        {
+            var catIds = await CategorySubtreeIdsAsync(db, category, ct);
+            query = query.Where(x => x.Categories.Any(c => catIds.Contains(c.Id)));
+        }
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
         if (author is not null) query = query.Where(x => x.AuthorSlug == author);
         if (year is { } filterYear) query = query.Where(x => x.PublishedAt!.Value.Year == filterYear);
@@ -856,7 +868,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post &&
             x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected && x.ContentTypeId == null);
-        if (category is not null) query = query.Where(x => x.Categories.Any(c => c.Slug == category));
+        if (category is not null)
+        {
+            var catIds = await CategorySubtreeIdsAsync(db, category, ct);
+            query = query.Where(x => x.Categories.Any(c => catIds.Contains(c.Id)));
+        }
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
         return await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
             .Take(count).Select(x => new FeedEntry(x.Id, x.Title, x.Slug, x.PublishedAt,
@@ -881,12 +897,42 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (!Enum.IsDefined(kind)) throw new CmsException("分類類型無效。");
         slug = ContentRules.NormalizeSlug(slug);
         await using var db = await factory.CreateDbContextAsync(ct);
-        // 僅被草稿使用的分類或標籤不屬於公開網站。
-        return kind == TaxonomyKind.Category
-            ? await db.Categories.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null))
-                .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct)
-            : await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null))
-                .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct);
+        // 僅被草稿使用的分類或標籤不屬於公開網站；父分類若其子分類下有已發布文章也視為有效公開分類。
+        if (kind == TaxonomyKind.Category)
+        {
+            var catIds = await CategorySubtreeIdsAsync(db, slug, ct);
+            if (catIds.Count == 0) return null;
+            var hasPublished = await db.Contents.AsNoTracking().AnyAsync(c => c.Kind == ContentKind.Post
+                && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null
+                && c.Categories.Any(cat => catIds.Contains(cat.Id)), ct);
+            if (!hasPublished) return null;
+            return await db.Categories.AsNoTracking().Where(x => x.Slug == slug)
+                .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)
+                {
+                    ParentId = x.ParentId,
+                    ParentSlug = x.Parent != null ? x.Parent.Slug : null,
+                    ParentTitle = x.Parent != null ? x.Parent.Name : null
+                }).SingleOrDefaultAsync(ct);
+        }
+        return await db.Tags.AsNoTracking().Where(x => x.Slug == slug && x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate && c.ContentTypeId == null))
+            .Select(x => new TaxonomyView(x.Name, x.Slug, x.Description)).SingleOrDefaultAsync(ct);
+    }
+
+    private static async Task<HashSet<Guid>> CategorySubtreeIdsAsync(CmsDbContext db, string rootSlug, CancellationToken ct)
+    {
+        var all = await db.Categories.AsNoTracking().Select(x => new { x.Id, x.Slug, x.ParentId }).ToListAsync(ct);
+        var root = all.FirstOrDefault(x => x.Slug == rootSlug);
+        if (root is null) return [];
+        var children = all.Where(x => x.ParentId is not null).ToLookup(x => x.ParentId!.Value);
+        var result = new HashSet<Guid> { root.Id };
+        var stack = new Stack<Guid>();
+        stack.Push(root.Id);
+        while (stack.Count > 0)
+        {
+            foreach (var child in children[stack.Pop()])
+                if (result.Add(child.Id)) stack.Push(child.Id);
+        }
+        return result;
     }
 
     public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, CancellationToken ct = default)
@@ -898,6 +944,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
             { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+                AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
@@ -1121,8 +1168,152 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate)
-            .OrderBy(x => x.Title).ThenBy(x => x.Id)
+            .OrderBy(x => x.MenuOrder).ThenBy(x => x.Title).ThenBy(x => x.Id)
             .Select(x => new PageNavItem(x.Id, x.Title, x.Slug, x.ParentId)).ToListAsync(ct);
+    }
+
+    /// <summary>後台重定向規則列表（依建立時間倒序）。</summary>
+    public async Task<List<RedirectItem>> ListRedirectsAsync(CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.SlugRedirects.AsNoTracking()
+            .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            .Select(x => new RedirectItem(x.Id, x.OldSlug, x.ContentId, x.Content.Title, x.Content.Slug, x.Content.Kind, x.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    /// <summary>新增或覆寫自訂 301 重定向規則。</summary>
+    public async Task<RedirectItem> CreateRedirectAsync(RedirectCreateInput input, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        var oldSlug = ContentRules.NormalizeSlug(input.OldSlug);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var target = await db.Contents.AsNoTracking().Where(x => x.Id == input.ContentId && x.Status != ContentStatus.Trashed)
+            .Select(x => new { x.Id, x.Title, x.Slug, x.Kind }).SingleOrDefaultAsync(ct)
+            ?? throw new CmsException("目標內容不存在。");
+        if (await db.Contents.AsNoTracking().AnyAsync(x => x.Slug == oldSlug, ct))
+            throw new CmsException("此舊代稱目前正被某篇內容使用，無需建立重定向。");
+        var now = clock.GetUtcNow();
+        var entity = await db.SlugRedirects.SingleOrDefaultAsync(x => x.OldSlug == oldSlug, ct);
+        if (entity is null)
+        {
+            entity = new ContentSlugRedirect { OldSlug = oldSlug, ContentId = target.Id, CreatedAt = now };
+            db.SlugRedirects.Add(entity);
+        }
+        else
+        {
+            entity.ContentId = target.Id;
+            entity.CreatedAt = now;
+        }
+        await ContentRules.SaveAsync(db, ct);
+        return new RedirectItem(entity.Id, entity.OldSlug, target.Id, target.Title, target.Slug, target.Kind, entity.CreatedAt);
+    }
+
+    /// <summary>刪除一條 301 重定向規則。</summary>
+    public async Task DeleteRedirectAsync(Guid id, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.SlugRedirects.SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new CmsException("重定向規則不存在。");
+        db.SlugRedirects.Remove(entity);
+        await ContentRules.SaveAsync(db, ct);
+    }
+
+    /// <summary>公開作者資料：依作者彙整代稱（AuthorSlug）查詢對應作者的公開簡介、網站與頭像。</summary>
+    public async Task<PublicAuthorProfile?> GetPublicAuthorAsync(string? authorSlug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(authorSlug)) return null;
+        string normalized;
+        try { normalized = ContentRules.NormalizeSlug(authorSlug); }
+        catch (CmsException) { return null; }
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var latest = await db.Contents.AsNoTracking()
+            .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate && x.AuthorSlug == normalized)
+            .OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
+            .Select(x => new { x.AuthorId, x.AuthorName })
+            .FirstOrDefaultAsync(ct);
+        if (latest is null) return null;
+        if (latest.AuthorId is { } userId)
+        {
+            var user = await db.Users.AsNoTracking().Where(x => x.Id == userId)
+                .Select(x => new { x.Bio, x.WebsiteUrl, x.AvatarUrl }).SingleOrDefaultAsync(ct);
+            if (user is not null)
+                return new PublicAuthorProfile(latest.AuthorName, normalized, user.Bio, user.WebsiteUrl, user.AvatarUrl);
+        }
+        return new PublicAuthorProfile(latest.AuthorName, normalized, "", "", "");
+    }
+
+    /// <summary>後台總覽儀表板：統計卡片、7／30 日瀏覽趨勢、熱門內容、最近草稿與近期評論。</summary>
+    public async Task<DashboardSummary> GetDashboardAsync(CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var postCounts = await CountAdminAsync(ContentKind.Post, ct);
+        var pageCounts = await CountAdminAsync(ContentKind.Page, ct);
+        var commentCountsRaw = await db.Comments.AsNoTracking()
+            .GroupBy(x => x.Status).Select(x => new { Status = x.Key, Count = x.Count() }).ToListAsync(ct);
+        var commentCounts = new CommentService.CommentCounts(
+            commentCountsRaw.Where(x => x.Status == CommentStatus.Pending).Sum(x => x.Count),
+            commentCountsRaw.Where(x => x.Status == CommentStatus.Approved).Sum(x => x.Count),
+            commentCountsRaw.Where(x => x.Status == CommentStatus.Spam).Sum(x => x.Count),
+            commentCountsRaw.Where(x => x.Status == CommentStatus.Trashed).Sum(x => x.Count));
+        var mediaCount = await db.MediaAssets.AsNoTracking().CountAsync(ct);
+        var redirectCount = await db.SlugRedirects.AsNoTracking().CountAsync(ct);
+
+        var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        var start30 = today.AddDays(-29);
+        var start7 = today.AddDays(-6);
+        var rawViews = await db.ContentViews.AsNoTracking()
+            .Where(x => x.Date >= start30 && x.Date <= today)
+            .GroupBy(x => x.Date)
+            .Select(g => new { Date = g.Key, Views = g.Sum(v => v.Count) })
+            .ToListAsync(ct);
+        var viewsByDate = rawViews.ToDictionary(x => x.Date, x => x.Views);
+        var dailyPoints = new List<DailyViewPoint>(30);
+        for (var i = 0; i < 30; i++)
+        {
+            var d = start30.AddDays(i);
+            dailyPoints.Add(new DailyViewPoint(d, viewsByDate.GetValueOrDefault(d, 0)));
+        }
+        var total7 = dailyPoints.Where(x => x.Date >= start7).Sum(x => x.Views);
+        var total30 = dailyPoints.Sum(x => x.Views);
+
+        var topContents = await db.Contents.AsNoTracking()
+            .Where(x => x.Status == ContentStatus.Published)
+            .Select(x => new
+            {
+                x.Id, x.Kind, x.Title, x.Slug,
+                ViewsPeriod = x.Views.Where(v => v.Date >= start30).Sum(v => (int?)v.Count) ?? 0,
+                ViewsTotal = x.Views.Sum(v => (int?)v.Count) ?? 0
+            })
+            .Where(x => x.ViewsTotal > 0)
+            .OrderByDescending(x => x.ViewsPeriod).ThenByDescending(x => x.ViewsTotal).ThenBy(x => x.Title)
+            .Take(10)
+            .Select(x => new TopContentItem(x.Id, x.Kind, x.Title, x.Slug, x.ViewsPeriod, x.ViewsTotal))
+            .ToListAsync(ct);
+
+        var recentDrafts = await db.Contents.AsNoTracking()
+            .Where(x => x.Status == ContentStatus.Draft || x.Status == ContentStatus.Pending)
+            .OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
+            .Take(5)
+            .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+            {
+                AuthorName = x.AuthorName
+            })
+            .ToListAsync(ct);
+
+        var recentComments = await db.Comments.AsNoTracking()
+            .OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+            .Take(5)
+            .Select(x => new CommentService.CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url,
+                x.Markdown, x.Status, x.CreatedAt, x.Version, x.ParentId, x.IsAdminReply,
+                x.Parent != null ? x.Parent.AuthorName : ""))
+            .ToListAsync(ct);
+
+        return new DashboardSummary(postCounts, pageCounts, commentCounts, mediaCount, redirectCount,
+            total7, total30, dailyPoints, topContents, recentDrafts, recentComments);
     }
 
     /// <summary>

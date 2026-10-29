@@ -57,12 +57,15 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         writer.WriteEndObject();
 
         writer.WriteStartArray("categories");
+        var catSlugById = await db.Categories.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         await foreach (var category in db.Categories.AsNoTracking().OrderBy(x => x.Slug).AsAsyncEnumerable().WithCancellation(ct))
         {
             writer.WriteStartObject();
             writer.WriteString("name", category.Name);
             writer.WriteString("slug", category.Slug);
             writer.WriteString("description", category.Description);
+            if (category.ParentId is { } parentCatId && catSlugById.TryGetValue(parentCatId, out var parentCatSlug))
+                writer.WriteString("parentSlug", parentCatSlug);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
@@ -161,6 +164,8 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (content.AuthorName.Length > 0) writer.WriteString("authorName", content.AuthorName);
             writer.WriteString("excerpt", content.Excerpt);
             writer.WriteBoolean("isSticky", content.IsSticky);
+            if (!content.AllowComments) writer.WriteBoolean("allowComments", false);
+            if (content.MenuOrder != 0) writer.WriteNumber("menuOrder", content.MenuOrder);
             if (content.MetaDescription.Length > 0) writer.WriteString("metaDescription", content.MetaDescription);
             if (content.NoIndex) writer.WriteBoolean("noIndex", true);
             writer.WriteString("markdown", content.Markdown);

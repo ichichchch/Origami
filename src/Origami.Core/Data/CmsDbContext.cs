@@ -34,6 +34,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         builder.HasPostgresExtension("vector");
         builder.Entity<AdminUser>(e =>
         {
+            e.Property(x => x.Bio).HasMaxLength(Limits.UserBio).IsRequired();
+            e.Property(x => x.WebsiteUrl).HasMaxLength(Limits.UserUrl).IsRequired();
+            e.Property(x => x.AvatarUrl).HasMaxLength(Limits.UserUrl).IsRequired();
             e.HasIndex(x => x.SingletonKey).IsUnique().HasFilter("\"SingletonKey\" IS NOT NULL");
             e.ToTable("AspNetUsers", t => t.HasCheckConstraint("CK_Admin_Singleton", "\"SingletonKey\" IS NULL OR \"SingletonKey\" = 1"));
         });
@@ -204,6 +207,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Description).HasMaxLength(Limits.TaxonomyDescription).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => new { x.SiteId, x.Slug }).IsUnique();
+            e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => new { x.SiteId, x.ParentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.ToTable(t => t.HasCheckConstraint("CK_Category_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\""));
         });
         builder.Entity<Tag>(e =>
         {
@@ -332,12 +338,15 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         builder.Entity<ContentComment>(e =>
         {
             ConfigureSiteEntity(e, nameof(ContentComment.Site));
+            e.HasAlternateKey(x => new { x.SiteId, x.Id });
             e.Property(x => x.AuthorName).HasMaxLength(Limits.CommentAuthor).IsRequired();
             e.Property(x => x.Url).HasMaxLength(Limits.CommentUrl).IsRequired();
             e.Property(x => x.Markdown).HasMaxLength(Limits.CommentBody).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             // 評論隨內容刪除而移除；狀態與時間供審核佇列排序。
             e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => new { x.SiteId, x.ParentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(x => new { x.SiteId, x.Status, x.CreatedAt });
             e.HasIndex(x => new { x.SiteId, x.ContentId, x.Status, x.CreatedAt });
@@ -346,6 +355,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 t.HasCheckConstraint("CK_Comment_Status", "\"Status\" IN (0, 1, 2, 3)");
                 t.HasCheckConstraint("CK_Comment_Author", "length(btrim(\"AuthorName\")) > 0");
                 t.HasCheckConstraint("CK_Comment_Body", "length(btrim(\"Markdown\")) > 0");
+                t.HasCheckConstraint("CK_Comment_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
             });
         });
         builder.Entity<SiteSettings>(e =>

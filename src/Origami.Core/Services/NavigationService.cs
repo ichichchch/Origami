@@ -105,11 +105,11 @@ public sealed class NavigationService(IDbContextFactory<CmsDbContext> factory, A
         var settings = await db.Settings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct);
         var pages = await db.Contents.AsNoTracking()
             .Where(x => x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate)
-            .Select(x => new PageRow(x.Id, x.Title, x.Slug, x.ParentId))
+            .Select(x => new PageRow(x.Id, x.Title, x.Slug, x.ParentId, x.MenuOrder))
             .ToListAsync(ct);
         if (settings?.CustomNavigationEnabled != true)
         {
-            return [.. pages.OrderBy(x => x.Title).ThenBy(x => x.Id)
+            return [.. pages.OrderBy(x => x.MenuOrder).ThenBy(x => x.Title).ThenBy(x => x.Id)
                 .Select(x => new PageNavItem(x.Id, x.Title, x.Slug, x.ParentId))];
         }
 
@@ -147,7 +147,7 @@ public sealed class NavigationService(IDbContextFactory<CmsDbContext> factory, A
         return "/pages/" + string.Join("/", parts.Select(Uri.EscapeDataString));
     }
 
-    private sealed record PageRow(Guid Id, string Title, string Slug, Guid? ParentId);
+    private sealed record PageRow(Guid Id, string Title, string Slug, Guid? ParentId, int MenuOrder = 0);
 
     public sealed class NavItemInput
     {

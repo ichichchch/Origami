@@ -6,13 +6,14 @@ namespace Origami.Core.Services;
 /// </summary>
 public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock)
 {
-    public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot);
+    public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot, Guid? ParentId = null);
     public sealed record CommentView(Guid Id, Guid ContentId, string ContentTitle, string AuthorName, string Url,
-        string Markdown, CommentStatus Status, DateTimeOffset CreatedAt, Guid Version);
+        string Markdown, CommentStatus Status, DateTimeOffset CreatedAt, Guid Version,
+        Guid? ParentId = null, bool IsAdminReply = false, string ParentAuthorName = "");
     public sealed record CommentCounts(int Pending, int Approved, int Spam, int Trashed);
 
     /// <summary>
-    /// 訪客張貼評論。僅限已發布、未受保護且非私密的文章；成功一律回傳待審語意，
+    /// 訪客張貼評論。僅限已發布、未受保護、非私密且允許評論的文章；成功一律回傳待審語意，
     /// 蜜罐命中者靜默進入垃圾，不對呼叫端透露分類結果。
     /// </summary>
     public async Task PostAsync(Guid contentId, CommentPostInput input, CancellationToken ct = default)
@@ -32,11 +33,17 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         var settings = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1, ct);
         if (!settings.CommentsEnabled) throw new CmsException("本站未開放評論。");
         var content = await db.Contents.AsNoTracking().Where(x => x.Id == contentId)
-            .Select(x => new { x.Kind, x.Status, x.IsProtected, x.IsPrivate }).SingleOrDefaultAsync(ct)
+            .Select(x => new { x.Kind, x.Status, x.IsProtected, x.IsPrivate, x.AllowComments }).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("內容不存在。");
         if (content.Kind != ContentKind.Post || content.Status != ContentStatus.Published
-            || content.IsProtected || content.IsPrivate)
+            || content.IsProtected || content.IsPrivate || !content.AllowComments)
             throw new CmsException("這篇內容不接受評論。");
+        if (input.ParentId is { } parentId)
+        {
+            var parentOk = await db.Comments.AsNoTracking()
+                .AnyAsync(x => x.Id == parentId && x.ContentId == contentId && x.Status == CommentStatus.Approved, ct);
+            if (!parentOk) throw new CmsException("回覆的評論不存在或尚未核可。");
+        }
 
         var status = settings.CommentAutoApprove ? CommentStatus.Approved : CommentStatus.Pending;
         // 蜜罐欄位有值＝填表的是機器人；連結過量是常見垃圾特徵。兩者都靜默標為垃圾。
@@ -44,11 +51,49 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
 
         db.Comments.Add(new ContentComment
         {
-            SiteId = db.CurrentSiteId, ContentId = contentId,
+            SiteId = db.CurrentSiteId, ContentId = contentId, ParentId = input.ParentId,
             AuthorName = name, Url = url, Markdown = body,
             Status = status, CreatedAt = clock.GetUtcNow()
         });
         await ContentRules.SaveAsync(db, ct);
+    }
+
+    /// <summary>後台管理員／編輯者直接回覆評論；回覆自動為已核可狀態，若原評論尚待審則一併核可。</summary>
+    public async Task<CommentView> ReplyAdminAsync(Guid parentCommentId, string markdown, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        var access = await admin.GetCurrentAccessAsync(ct);
+        var body = (markdown ?? "").Trim();
+        if (body.Length is 0 or > Limits.CommentBody)
+            throw new CmsException($"回覆內容須為 1–{Limits.CommentBody} 字。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var parent = await db.Comments.Include(x => x.Content).SingleOrDefaultAsync(x => x.Id == parentCommentId, ct)
+            ?? throw new CmsException("要回覆的評論不存在。");
+        if (parent.Status == CommentStatus.Pending)
+        {
+            parent.Status = CommentStatus.Approved;
+            parent.Version = Guid.NewGuid();
+        }
+        var settings = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1, ct);
+        var authorName = !string.IsNullOrWhiteSpace(access.DisplayName) ? access.DisplayName
+            : !string.IsNullOrWhiteSpace(settings.AuthorDisplayName) ? settings.AuthorDisplayName
+            : access.UserName;
+        var reply = new ContentComment
+        {
+            SiteId = db.CurrentSiteId,
+            ContentId = parent.ContentId,
+            ParentId = parent.Id,
+            AuthorName = authorName,
+            Url = "",
+            Markdown = body,
+            IsAdminReply = true,
+            Status = CommentStatus.Approved,
+            CreatedAt = clock.GetUtcNow()
+        };
+        db.Comments.Add(reply);
+        await ContentRules.SaveAsync(db, ct);
+        return new CommentView(reply.Id, reply.ContentId, parent.Content.Title, reply.AuthorName, reply.Url,
+            reply.Markdown, reply.Status, reply.CreatedAt, reply.Version, reply.ParentId, reply.IsAdminReply, parent.AuthorName);
     }
 
     /// <summary>已核可的公開評論（閱讀順序：舊到新）；每次讀取重驗內容可評性與本站開關。</summary>
@@ -57,7 +102,8 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         await using var db = await factory.CreateDbContextAsync(ct);
         return await PublicComments(db, contentId)
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
-            .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version))
+            .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version,
+                x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : ""))
             .Take(Limits.CommentsPageSize)
             .ToListAsync(ct);
     }
@@ -72,7 +118,8 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
     private static IQueryable<ContentComment> PublicComments(CmsDbContext db, Guid contentId) =>
         db.Comments.AsNoTracking().Where(x => x.ContentId == contentId && x.Status == CommentStatus.Approved
             && x.Content.Kind == ContentKind.Post && x.Content.Status == ContentStatus.Published
-            && !x.Content.IsProtected && !x.Content.IsPrivate
+            && !x.Content.IsProtected && !x.Content.IsPrivate && x.Content.AllowComments
+            && (x.ParentId == null || x.Parent!.Status == CommentStatus.Approved)
             && db.Settings.Any(settings => settings.Id == 1 && settings.CommentsEnabled));
 
     public async Task<PagedResult<CommentView>> ListAdminAsync(CommentStatus? status, int page = 1,
@@ -87,7 +134,8 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize)
-            .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version))
+            .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version,
+                x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : ""))
             .ToListAsync(ct);
         return new(items, total, page, pageSize);
     }

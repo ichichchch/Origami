@@ -12,7 +12,12 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         {
             var total = await db.Categories.CountAsync(ct);
             var items = await db.Categories.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
-                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version) { Description = x.Description }).ToListAsync(ct);
+                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version)
+                {
+                    Description = x.Description,
+                    ParentId = x.ParentId,
+                    ParentName = x.Parent != null ? x.Parent.Name : ""
+                }).ToListAsync(ct);
             return new(items, total, page, pageSize);
         }
         else
@@ -40,14 +45,31 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
                 : new Category();
             if (input.Id is null) db.Categories.Add(entity);
             else db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
+            if (input.ParentId is { } parentId)
+            {
+                if (parentId == entity.Id) throw new CmsException("分類不可設為自己的上層。");
+                var all = await db.Categories.AsNoTracking().Select(x => new { x.Id, x.ParentId }).ToListAsync(ct);
+                var byId = all.ToDictionary(x => x.Id);
+                if (!byId.ContainsKey(parentId)) throw new CmsException("上層分類不存在，請重新選擇。");
+                var guard = 0;
+                Guid? cursor = parentId;
+                while (cursor is not null)
+                {
+                    if (cursor == entity.Id) throw new CmsException("不可將分類設為其子孫的下層，這會形成循環階層。");
+                    if (++guard > 100) throw new CmsException("分類階層過深，請檢查上層設定。");
+                    cursor = byId.TryGetValue(cursor.Value, out var node) ? node.ParentId : null;
+                }
+            }
             entity.Name = input.Name.Trim();
             entity.Slug = slug;
             entity.Description = (input.Description ?? "").Trim();
+            entity.ParentId = input.ParentId;
             entity.Version = version;
             id = entity.Id;
         }
         else
         {
+            if (input.ParentId is not null) throw new CmsException("標籤不支援上層階層。");
             var entity = input.Id is { } existingId
                 ? await db.Tags.SingleOrDefaultAsync(x => x.Id == existingId, ct) ?? throw new CmsException("標籤不存在。")
                 : new Tag();
@@ -86,6 +108,10 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             var target = await db.Categories.SingleOrDefaultAsync(x => x.Id == targetId, ct)
                 ?? throw new CmsException("目標分類不存在。");
             db.Entry(source).Property(x => x.Version).OriginalValue = version;
+            // 若目標分類原本位於來源分類的子樹下，先把來源的直屬子分類提升到來源的父層，避免循環與外鍵阻擋。
+            await db.Categories.Where(x => x.ParentId == sourceId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ParentId, source.ParentId)
+                    .SetProperty(x => x.Version, Guid.NewGuid()), ct);
             sourceIds = await db.Categories.Where(x => x.Id == sourceId).SelectMany(x => x.Contents)
                 .Select(x => x.Id).ToListAsync(ct);
             targetIds = new HashSet<Guid>(await db.Categories.Where(x => x.Id == targetId).SelectMany(x => x.Contents)
@@ -136,6 +162,10 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         {
             var entity = await db.Categories.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("分類不存在。");
             db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+            // 刪除父分類時，子分類自動提升到被刪分類的上層（WordPress 慣例）。
+            await db.Categories.Where(x => x.ParentId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ParentId, entity.ParentId)
+                    .SetProperty(x => x.Version, Guid.NewGuid()), ct);
             db.Categories.Remove(entity);
         }
         else

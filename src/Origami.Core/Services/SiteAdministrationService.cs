@@ -322,6 +322,113 @@ public sealed class SiteAdministrationService(
         await db.Sites.FromSqlInterpolated($"SELECT * FROM \"Sites\" WHERE \"Id\" = {siteId} FOR UPDATE")
             .SingleOrDefaultAsync(ct) ?? throw new CmsException("站點不存在。");
 
+    /// <summary>讀取目前登入者的自助個人資料與當前站點顯示名稱。</summary>
+    public async Task<AccountProfileEdit> GetMyProfileAsync(CancellationToken ct = default)
+    {
+        var user = await admin.RequireNonCredentialUserAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var displayName = await db.SiteMemberships.AsNoTracking()
+            .Where(x => x.UserId == user.Id)
+            .Select(x => x.DisplayName)
+            .SingleOrDefaultAsync(ct) ?? "";
+        return new AccountProfileEdit
+        {
+            UserName = user.UserName ?? "",
+            Email = user.Email ?? "",
+            DisplayName = displayName,
+            Bio = user.Bio,
+            WebsiteUrl = user.WebsiteUrl,
+            AvatarUrl = user.AvatarUrl
+        };
+    }
+
+    /// <summary>更新目前登入者的個人資料與當前站點顯示名稱（同步更新本站內容署名快照）。</summary>
+    public async Task<AccountProfileEdit> UpdateMyProfileAsync(AccountProfileEdit input, CancellationToken ct = default)
+    {
+        var sessionUser = await admin.RequireNonCredentialUserAsync(ct);
+        ArgumentNullException.ThrowIfNull(input);
+        var displayName = (input.DisplayName ?? "").Trim();
+        if (displayName.Length > Limits.AuthorName || displayName.Any(char.IsControl))
+            throw new CmsException($"顯示名稱最多 {Limits.AuthorName} 字，且不得含控制字元。");
+        var bio = (input.Bio ?? "").Trim();
+        if (bio.Length > Limits.UserBio)
+            throw new CmsException($"個人簡介最多 {Limits.UserBio} 字。");
+        var website = (input.WebsiteUrl ?? "").Trim();
+        if (website.Length > Limits.UserUrl)
+            throw new CmsException($"網站網址最多 {Limits.UserUrl} 字。");
+        if (website.Length > 0 && (!Uri.TryCreate(website, UriKind.Absolute, out var webUri) || webUri.Scheme is not ("http" or "https")))
+            throw new CmsException("網站網址必須是 http 或 https 的絕對網址。");
+        var avatar = (input.AvatarUrl ?? "").Trim();
+        if (avatar.Length > Limits.UserUrl)
+            throw new CmsException($"頭像網址最多 {Limits.UserUrl} 字。");
+        if (avatar.Length > 0)
+        {
+            var isLocalMedia = avatar.StartsWith("/media/", StringComparison.Ordinal) &&
+                ContentRules.IsSafeMediaFileName(avatar["/media/".Length..]);
+            var isHttpUrl = Uri.TryCreate(avatar, UriKind.Absolute, out var avatarUri) && avatarUri.Scheme is "http" or "https";
+            if (!isLocalMedia && !isHttpUrl)
+                throw new CmsException("頭像網址必須是 http／https 絕對網址或站內 /media/ 圖片路徑。");
+        }
+        var email = (input.Email ?? "").Trim();
+        if (email.Length > 0 && (email.Length > 256 || !email.Contains('@') || email.Any(char.IsControl)))
+            throw new CmsException("電子郵件格式不正確。");
+
+        return await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var user = await db.Users.SingleOrDefaultAsync(x => x.Id == sessionUser.Id, ct)
+                ?? throw new CmsException("帳號不存在。");
+            user.Bio = bio;
+            user.WebsiteUrl = website;
+            user.AvatarUrl = avatar;
+            user.Email = email;
+            user.NormalizedEmail = email.Length == 0 ? null : userManager.NormalizeEmail(email);
+
+            var member = await db.SiteMemberships.SingleOrDefaultAsync(x => x.UserId == user.Id, ct);
+            if (member is not null && member.DisplayName != displayName)
+            {
+                member.DisplayName = displayName;
+                member.Version = Guid.NewGuid();
+            }
+            var displaySlug = displayName.Length == 0 ? "" : ContentRules.NormalizeSlug(displayName);
+            await db.Contents.Where(x => x.AuthorId == user.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.AuthorName, displayName)
+                    .SetProperty(x => x.AuthorSlug, displaySlug), ct);
+
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return new AccountProfileEdit
+            {
+                UserName = user.UserName ?? "",
+                Email = user.Email ?? "",
+                DisplayName = displayName,
+                Bio = user.Bio,
+                WebsiteUrl = user.WebsiteUrl,
+                AvatarUrl = user.AvatarUrl
+            };
+        });
+    }
+
+    /// <summary>自助修改目前登入者的密碼。</summary>
+    public async Task ChangeMyPasswordAsync(ChangePasswordInput input, CancellationToken ct = default)
+    {
+        var sessionUser = await admin.RequireNonCredentialUserAsync(ct);
+        ArgumentNullException.ThrowIfNull(input);
+        var newPassword = input.NewPassword;
+        if (string.IsNullOrEmpty(newPassword) || newPassword.Length is < 8 or > 1024 ||
+            newPassword.Distinct().Count() < 4 || !newPassword.Any(char.IsAsciiDigit) ||
+            !newPassword.Any(char.IsAsciiLetterLower) || !newPassword.Any(char.IsAsciiLetterUpper) ||
+            !newPassword.Any(c => !char.IsAsciiLetterOrDigit(c)))
+            throw new CmsException("新密碼須為 8–1024 字，包含大小寫英文字母、數字、符號與至少 4 種不同字元。");
+
+        var user = await userManager.FindByIdAsync(sessionUser.Id)
+            ?? throw new CmsException("帳號不存在。");
+        var result = await userManager.ChangePasswordAsync(user, input.CurrentPassword ?? "", newPassword);
+        if (!result.Succeeded)
+            throw new CmsException("目前密碼不正確，或新密碼不符合規則。");
+    }
+
     private static SiteSummary Summary(CmsSite site) =>
         new(site.Id, site.Name, site.Slug, site.HostName, site.IsActive, site.Version);
 

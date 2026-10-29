@@ -202,6 +202,16 @@ namespace Origami.Core.Data.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("AvatarUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Bio")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("text");
@@ -255,6 +265,11 @@ namespace Origami.Core.Data.Migrations
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<string>("WebsiteUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 
@@ -352,6 +367,9 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
@@ -367,10 +385,15 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SiteId", "ParentId");
+
                     b.HasIndex("SiteId", "Slug")
                         .IsUnique();
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", t =>
+                        {
+                            t.HasCheckConstraint("CK_Category_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.CmsSite", b =>
@@ -445,6 +468,9 @@ namespace Origami.Core.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowComments")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("AuthorId")
                         .HasColumnType("text");
 
@@ -502,6 +528,9 @@ namespace Origami.Core.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200000)
                         .HasColumnType("character varying(200000)");
+
+                    b.Property<int>("MenuOrder")
+                        .HasColumnType("integer");
 
                     b.Property<string>("MetaDescription")
                         .IsRequired()
@@ -613,10 +642,16 @@ namespace Origami.Core.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsAdminReply")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Markdown")
                         .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
@@ -636,6 +671,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SiteId", "ParentId");
+
                     b.HasIndex("SiteId", "Status", "CreatedAt");
 
                     b.HasIndex("SiteId", "ContentId", "Status", "CreatedAt");
@@ -645,6 +682,8 @@ namespace Origami.Core.Data.Migrations
                             t.HasCheckConstraint("CK_Comment_Author", "length(btrim(\"AuthorName\")) > 0");
 
                             t.HasCheckConstraint("CK_Comment_Body", "length(btrim(\"Markdown\")) > 0");
+
+                            t.HasCheckConstraint("CK_Comment_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
 
                             t.HasCheckConstraint("CK_Comment_Status", "\"Status\" IN (0, 1, 2, 3)");
                         });
@@ -1501,6 +1540,14 @@ namespace Origami.Core.Data.Migrations
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.Category", "Parent")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ParentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.Content", b =>
@@ -1558,7 +1605,15 @@ namespace Origami.Core.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Origami.Core.Models.ContentComment", "Parent")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ParentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.Navigation("Content");
+
+                    b.Navigation("Parent");
 
                     b.Navigation("Site");
                 });
