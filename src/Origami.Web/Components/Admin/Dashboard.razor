@@ -1,0 +1,162 @@
+@page "/admin"
+@page "/admin/dashboard"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Dashboard.PageTitle", "總覽儀表板 · 內容管理")</PageTitle>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">@UiText.T("Admin.Dashboard.Eyebrow", "站點營運概況")</p>
+        <h1>@UiText.T("Admin.Dashboard.Title", "總覽儀表板")</h1>
+        <p>@UiText.T("Admin.Dashboard.Introduction", "快速檢視文章、頁面、評論審核、近 30 日瀏覽趨勢與熱門內容。")</p>
+    </div>
+    @if (CanEdit)
+    {
+        <div class="button-row">
+            <a class="button" href="/admin/posts/new">@UiText.T("Admin.Dashboard.NewPost", "撰寫新文章")</a>
+            <a class="button button-secondary" href="/admin/pages/new">@UiText.T("Admin.Dashboard.NewPage", "新增頁面")</a>
+        </div>
+    }
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+
+@if (_summary is null)
+{
+    @if (Error is null)
+    {
+        <p role="status">@UiText.T("Admin.Dashboard.Loading", "正在載入儀表板資料…")</p>
+    }
+    else
+    {
+        <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">@UiText.T("Common.Reload", "重新載入")</button>
+    }
+}
+else
+{
+    <section class="dashboard-metrics" aria-label="@UiText.T("Admin.Dashboard.Metrics", "核心指標")">
+        <div class="panel metric-card">
+            <span class="eyebrow">@UiText.T("Admin.Dashboard.PublishedPosts", "已發布文章")</span>
+            <strong class="metric-value">@_summary.Posts.Published</strong>
+            <p class="field-help">
+                <a href="/admin/posts">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Dashboard.DraftsAndPending", "草稿 {0} · 待審 {1}"), _summary.Posts.Drafts, _summary.Posts.Pending)</a>
+            </p>
+        </div>
+        <div class="panel metric-card">
+            <span class="eyebrow">@UiText.T("Admin.Dashboard.PublishedPages", "獨立頁面")</span>
+            <strong class="metric-value">@_summary.Pages.Published</strong>
+            <p class="field-help">
+                <a href="/admin/pages">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Dashboard.PageDrafts", "草稿 {0}"), _summary.Pages.Drafts)</a>
+            </p>
+        </div>
+        <div class="panel metric-card">
+            <span class="eyebrow">@UiText.T("Admin.Dashboard.PendingComments", "待審評論")</span>
+            <strong class="metric-value">@_summary.Comments.Pending</strong>
+            <p class="field-help">
+                <a href="/admin/comments">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Dashboard.ApprovedComments", "已核可 {0} · 垃圾 {1}"), _summary.Comments.Approved, _summary.Comments.Spam)</a>
+            </p>
+        </div>
+        <div class="panel metric-card">
+            <span class="eyebrow">@UiText.T("Admin.Dashboard.Views30Days", "近 30 日瀏覽")</span>
+            <strong class="metric-value">@_summary.TotalViews30Days.ToString("N0")</strong>
+            <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Dashboard.Views7Days", "近 7 日 {0:N0} 次 · 媒體 {1} 件"), _summary.TotalViews7Days, _summary.MediaCount)</p>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="trend-heading">
+        <div class="panel-toolbar">
+            <h2 id="trend-heading">@UiText.T("Admin.Dashboard.TrendTitle", "近 30 日每日瀏覽趨勢")</h2>
+            <span class="muted">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Dashboard.TrendTotal", "共 {0:N0} 次瀏覽"), _summary.TotalViews30Days)</span>
+        </div>
+        @if (_summary.DailyViews.All(x => x.Views == 0))
+        {
+            <p class="muted">@UiText.T("Admin.Dashboard.NoViewsYet", "近期尚無公開瀏覽紀錄。")</p>
+        }
+        else
+        {
+            var maxView = Math.Max(1, _summary.DailyViews.Max(x => x.Views));
+            <div class="trend-bars" role="list" aria-label="@UiText.T("Admin.Dashboard.TrendList", "每日瀏覽量")">
+                @foreach (var point in _summary.DailyViews.TakeLast(14))
+                {
+                    var pct = (int)Math.Round(point.Views * 100.0 / maxView);
+                    <div class="trend-row" role="listitem">
+                        <span class="trend-date">@point.Date.ToString("MM-dd")</span>
+                        <div class="trend-track"><div class="trend-fill" style="width: @(Math.Max(2, pct))%;"></div></div>
+                        <span class="trend-count">@point.Views.ToString("N0")</span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <div class="management-grid">
+        <section class="panel" aria-labelledby="top-content-heading">
+            <div class="panel-toolbar">
+                <h2 id="top-content-heading">@UiText.T("Admin.Dashboard.TopContents", "熱門內容排行")</h2>
+            </div>
+            @if (_summary.TopContents.Count == 0)
+            {
+                <p class="muted">@UiText.T("Admin.Dashboard.NoTopContents", "尚無熱門內容。")</p>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th scope="col">@UiText.T("Admin.Dashboard.ContentTitle", "標題")</th>
+                                <th scope="col">@UiText.T("Admin.Dashboard.Views30d", "30 日")</th>
+                                <th scope="col">@UiText.T("Admin.Dashboard.ViewsAll", "累計")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _summary.TopContents)
+                            {
+                                <tr @key="item.Id">
+                                    <td><a href="@("/admin/content/" + item.Id)">@item.Title</a></td>
+                                    <td>@item.ViewsPeriod.ToString("N0")</td>
+                                    <td>@item.ViewsTotal.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="panel" aria-labelledby="recent-drafts-heading">
+            <div class="panel-toolbar">
+                <h2 id="recent-drafts-heading">@UiText.T("Admin.Dashboard.RecentDrafts", "近期草稿與待審")</h2>
+            </div>
+            @if (_summary.RecentDrafts.Count == 0)
+            {
+                <p class="muted">@UiText.T("Admin.Dashboard.NoRecentDrafts", "目前沒有進行中的草稿或待審稿件。")</p>
+            }
+            else
+            {
+                <ul class="dashboard-list">
+                    @foreach (var draft in _summary.RecentDrafts)
+                    {
+                        <li @key="draft.Id">
+                            <a href="@("/admin/content/" + draft.Id)"><strong>@draft.Title</strong></a>
+                            <span class="muted"> · @(draft.Status == ContentStatus.Pending ? UiText.T("Admin.ContentList.Pending", "待審") : UiText.T("Admin.ContentList.Draft", "草稿")) · @draft.UpdatedAt.ToString("MM-dd HH:mm")</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private DashboardSummary? _summary;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => RunAsync(async ct =>
+    {
+        _summary = await Api.GetDashboardAsync(ct);
+    });
+}

@@ -101,6 +101,11 @@ else if (_model is not null)
                             </select>
                             <span class="field-help">@UiText.T("Admin.ContentEditor.ParentHelp", "設定後此頁面會排列於該頁面之下（導覽與列表）；網址仍是獨立的 /pages/代稱，不會改變。")</span>
                         </div>
+                        <div class="field">
+                            <label for="content-menu-order">@UiText.T("Admin.ContentEditor.MenuOrder", "頁面排序權重（Menu Order）")</label>
+                            <input id="content-menu-order" type="number" min="-10000" max="10000" @bind="_model.MenuOrder" disabled="@Blocked" />
+                            <span class="field-help">@UiText.T("Admin.ContentEditor.MenuOrderHelp", "數字越小越靠前（預設 0）；用於預設頁面導覽與後台頁面列表排序。")</span>
+                        </div>
                     }
                     @if (_model.Id is null)
                     {
@@ -167,7 +172,44 @@ else if (_model is not null)
                     }
                 </section>
                 <section class="panel markdown-panel">
-                    <div class="panel-toolbar"><div class="button-row"><button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@((!_preview).ToString().ToLowerInvariant())" @onclick="() => _preview = false">Markdown</button><button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview.ToString().ToLowerInvariant()" disabled="@ChildBusy" @onclick="Preview">@UiText.T("Admin.ContentEditor.Preview", "預覽")</button></div><button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">@UiText.T("Admin.ContentEditor.InsertImage", "插入圖片")</button></div>
+                    <div class="panel-toolbar">
+                        <div class="button-row">
+                            <button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@((!_preview).ToString().ToLowerInvariant())" @onclick="() => _preview = false">Markdown</button>
+                            <button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview.ToString().ToLowerInvariant()" disabled="@ChildBusy" @onclick="Preview">@UiText.T("Admin.ContentEditor.Preview", "預覽")</button>
+                        </div>
+                        <div class="button-row">
+                            <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertToc">@UiText.T("Admin.ContentEditor.InsertToc", "插入目錄 [toc]")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertCallout">@UiText.T("Admin.ContentEditor.InsertCallout", "插入提示框")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="ToggleInternalLinks">@UiText.T("Admin.ContentEditor.InsertInternalLink", "站內連結")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">@UiText.T("Admin.ContentEditor.InsertImage", "插入圖片")</button>
+                        </div>
+                    </div>
+                    <InputFile id="editor-inline-upload" OnChange="UploadInlineFilesAsync" additionalAttributes="@(new Dictionary<string, object> { ["multiple"] = true, ["class"] = "sr-only" })" disabled="@Blocked" />
+                    @if (_linkPickerOpen)
+                    {
+                        <div class="panel link-picker" role="region" aria-label="@UiText.T("Admin.ContentEditor.InternalLinkPicker", "搜尋並插入站內連結")">
+                            <div class="field">
+                                <label for="internal-link-search">@UiText.T("Admin.ContentEditor.SearchInternalContent", "搜尋站內文章或頁面")</label>
+                                <div class="button-row">
+                                    <input id="internal-link-search" type="search" maxlength="100" @bind="_linkQuery" @bind:event="oninput" placeholder="@UiText.T("Admin.ContentEditor.SearchLinkPlaceholder", "輸入標題關鍵字…")" />
+                                    <button type="button" class="button button-secondary button-small" @onclick="SearchInternalLinksAsync">@UiText.T("Common.Search", "搜尋")</button>
+                                    <button type="button" class="text-button" @onclick="() => _linkPickerOpen = false">@UiText.T("Admin.ContentEditor.Close", "關閉")</button>
+                                </div>
+                            </div>
+                            @if (_linkResults.Count > 0)
+                            {
+                                <ul class="revision-list">
+                                    @foreach (var target in _linkResults)
+                                    {
+                                        <li>
+                                            <span>[@(target.Kind == ContentKind.Page ? "頁面" : "文章")] @target.Title (<code>/@(target.Kind == ContentKind.Page ? "pages" : "posts")/@target.Slug</code>)</span>
+                                            <button type="button" class="text-button" @onclick="() => InsertInternalLink(target)">@UiText.T("Admin.ContentEditor.InsertLinkAction", "插入連結")</button>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    }
                     @if (_preview)
                     {
                         <div class="prose editor-preview" aria-label="@UiText.T("Admin.ContentEditor.UnsavedPreview", "尚未儲存的內容預覽")">@((MarkupString)_previewHtml)</div>
@@ -193,6 +235,10 @@ else if (_model is not null)
                         <div class="field checkbox-field">
                             <label for="content-sticky"><input id="content-sticky" type="checkbox" @bind="_model.IsSticky" disabled="@Blocked" /> @UiText.T("Admin.ContentEditor.Sticky", "置頂文章")</label>
                             <p class="field-help">@UiText.T("Admin.ContentEditor.StickyHelp", "置頂文章固定排在文章列表最前面。")</p>
+                        </div>
+                        <div class="field checkbox-field">
+                            <label for="content-allow-comments"><input id="content-allow-comments" type="checkbox" @bind="_model.AllowComments" disabled="@Blocked" /> @UiText.T("Admin.ContentEditor.AllowComments", "允許訪客評論")</label>
+                            <p class="field-help">@UiText.T("Admin.ContentEditor.AllowCommentsHelp", "取消勾選後，這篇文章將關閉評論表單（需同時開啟全站評論設定）。")</p>
                         </div>
                     }
                     @if (_model.Id is not null)
@@ -395,6 +441,10 @@ else if (_model is not null)
     private List<Guid> _selectedTermIds = [];
     private List<ContentTypeService.FieldView> _fields = [];
     private Dictionary<Guid, string> _fieldValues = [];
+    private bool _linkPickerOpen;
+    private string _linkQuery = "";
+    private List<ContentSummary> _linkResults = [];
+    private IJSObjectReference? _editorUploadModule;
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
     // 不要把 ChildBusy 串入外層 fieldset 或子元件的 Disabled 參數：
     // 每個子元件都必須能完成自己的操作與回呼，不能被父層連帶停用。
@@ -460,6 +510,7 @@ else if (_model is not null)
     private static string Snapshot(ContentEdit model) => System.Text.Json.JsonSerializer.Serialize(new
     {
         model.Id, model.Kind, model.Title, model.Slug, model.Markdown, model.Excerpt, model.IsSticky,
+        model.AllowComments, model.MenuOrder,
         model.IsProtected, model.IsPrivate, model.ParentId, model.CoverMediaId, model.PublishAt, model.Status, model.Version,
         model.CategoryIds, model.TagIds
     });
@@ -515,6 +566,17 @@ else if (_model is not null)
             _editingCts = new CancellationTokenSource();
             _ = RunEditingHeartbeatAsync(editingId, _editingCts.Token);
         }
+        if (EditAllowed)
+        {
+            try
+            {
+                _editorUploadModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Admin/ContentEditor.razor.js");
+                await _editorUploadModule.InvokeVoidAsync("wireEditorUpload", "content-markdown", "editor-inline-upload");
+            }
+            catch (JSException) { }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
+        }
         if (Saved is not null)
         {
             // 把結果標記移出網址列，重新載入時才不會重複出現。
@@ -533,6 +595,11 @@ else if (_model is not null)
         _editingCts?.Cancel();
         _editingCts?.Dispose();
         _editingCts = null;
+        if (_editorUploadModule is not null)
+        {
+            try { _ = _editorUploadModule.DisposeAsync(); } catch { }
+            _editorUploadModule = null;
+        }
         // 離開編輯器時盡力釋放占用；釋放失敗時占用會在期限後自然逾期。
         if (_model?.Id is { } releasedId) _ = ReleaseEditingBestEffortAsync(releasedId);
     }
@@ -848,6 +915,7 @@ else if (_model is not null)
     {
         Id = _model!.Id, Kind = _model.Kind, Title = _model.Title, Slug = _model.Slug,
         Markdown = _model.Markdown, Excerpt = _model.Excerpt, IsSticky = _model.IsSticky,
+        AllowComments = _model.AllowComments, MenuOrder = _model.Kind == ContentKind.Page ? _model.MenuOrder : 0,
         MetaDescription = _model.MetaDescription, NoIndex = _model.NoIndex,
         IsProtected = _model.IsProtected, IsPrivate = _model.IsPrivate, NewProtectPassword = _protectPassword,
         ParentId = _model.Kind == ContentKind.Page ? _model.ParentId : null,
@@ -903,6 +971,65 @@ else if (_model is not null)
         _model.Markdown = (_model.Markdown ?? "").TrimEnd() + "\n\n" + item.Markdown + "\n\n";
         _preview = false;
         _mediaOpen = false;
+    }
+
+    private void InsertToc()
+    {
+        if (_model is null || Blocked) return;
+        _model.Markdown = "[toc]\n\n" + (_model.Markdown ?? "").TrimStart();
+        _preview = false;
+    }
+
+    private void InsertCallout()
+    {
+        if (_model is null || Blocked) return;
+        const string snippet = "\n\n::: note\n提示內容寫在這裡。\n:::\n\n";
+        if ((_model.Markdown?.Length ?? 0) + snippet.Length > Limits.Body) return;
+        _model.Markdown = (_model.Markdown ?? "").TrimEnd() + snippet;
+        _preview = false;
+    }
+
+    private async Task ToggleInternalLinks()
+    {
+        _linkPickerOpen = !_linkPickerOpen;
+        if (_linkPickerOpen && _linkResults.Count == 0)
+            await SearchInternalLinksAsync();
+    }
+
+    private Task SearchInternalLinksAsync() => RunAsync(async ct =>
+    {
+        var q = string.IsNullOrWhiteSpace(_linkQuery) ? null : _linkQuery.Trim();
+        var posts = await Api.ListAdminAsync(ContentKind.Post, 1, 10, ContentStatus.Published, q, ct);
+        var pages = await Api.ListAdminAsync(ContentKind.Page, 1, 10, ContentStatus.Published, q, ct);
+        _linkResults = [.. (posts?.Items ?? []), .. (pages?.Items ?? [])];
+    });
+
+    private void InsertInternalLink(ContentSummary target)
+    {
+        if (_model is null || Blocked) return;
+        var prefix = target.Kind == ContentKind.Page ? "/pages/" : "/posts/";
+        var md = $"[{target.Title}]({prefix}{target.Slug})";
+        if ((_model.Markdown?.Length ?? 0) + md.Length + 2 > Limits.Body) return;
+        _model.Markdown = (_model.Markdown ?? "").TrimEnd() + " " + md;
+        _linkPickerOpen = false;
+        _preview = false;
+    }
+
+    private async Task UploadInlineFilesAsync(InputFileChangeEventArgs args)
+    {
+        if (_model is null || SaveBlocked) return;
+        var files = args.GetMultipleFiles(Limits.MediaBatchMax);
+        if (files.Count == 0) return;
+        await RunSaveAsync(async ct =>
+        {
+            var results = await Api.UploadMediaBatchAsync(files, ct)
+                ?? throw new CmsException(UiText.T("Admin.Media.BatchUploadFailed", "批次上傳失敗，請重新嘗試。"));
+            var uploaded = results.Where(x => x.Succeeded && x.Item is not null).Select(x => x.Item!).ToList();
+            if (uploaded.Count == 0)
+                throw new CmsException(results.FirstOrDefault()?.Message ?? "檔案上傳失敗。");
+            foreach (var item in uploaded)
+                InsertMedia(item);
+        }, UiText.T("Admin.ContentEditor.InlineUploadSuccess", "已上傳並插入媒體語法。"));
     }
     /// <summary>
     /// 以本文目前的選取範圍作為手寫摘要（WP「more 切點」的在地化形式）：

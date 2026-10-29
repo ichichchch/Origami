@@ -363,3 +363,25 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: #
 .field-list dt { color: var(--muted); font-size: .85rem; }
 .field-list dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .field-list-row { grid-template-columns: 1fr; gap: .2rem; } }
+
+/* 總覽儀表板、評論樓中樓、目錄與提示框、作者頭像 */
+.dashboard-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.metric-card { display: grid; gap: .35rem; padding: 1.1rem 1.25rem; }
+.metric-value { font-size: 1.75rem; line-height: 1.15; font-weight: 700; color: var(--ink); }
+.trend-bars { display: grid; gap: .45rem; margin-top: .75rem; }
+.trend-row { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) 3.5rem; align-items: center; gap: .75rem; font-size: .8rem; }
+.trend-date { color: var(--muted); }
+.trend-track { height: .6rem; background: var(--accent-soft); border-radius: 999px; overflow: hidden; }
+.trend-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+.trend-count { text-align: right; font-variant-numeric: tabular-nums; }
+.dashboard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.comment-reply { margin-left: 1.6rem; padding-left: .9rem; border-left: 2px solid var(--border); }
+.reply-box { margin-top: .6rem; display: grid; gap: .5rem; }
+.author-avatar { width: 4rem; height: 4rem; border-radius: 999px; object-fit: cover; margin-bottom: .5rem; border: 1px solid var(--border); }
+.prose .toc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .9rem 1.1rem; margin: 1.2rem 0; }
+.prose .toc ul { margin: 0; padding-left: 1.2rem; display: grid; gap: .3rem; }
+.prose .toc .toc-h3 { margin-left: 1rem; }
+.prose .toc .toc-h4 { margin-left: 2rem; }
+.prose .note, .prose .warning, .prose .tip { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: .8rem 1rem; border-radius: var(--radius); margin: 1.1rem 0; }
+.prose .warning { border-left-color: #c25b3f; }
+.link-picker { margin-bottom: 1rem; padding: .9rem 1rem; }

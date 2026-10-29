@@ -3,7 +3,15 @@
 @inject NavigationManager Navigation
 @inject ILogger<PostList> Logger
 
-<section class="public-heading"><p class="eyebrow">@UiText.T("Public.PostList.01", "文字・觀點・日常")</p><h1>@Heading<span class="heading-dot">.</span></h1><p>@(_taxonomyDescription ?? (HasFilter ? UiText.T("Public.PostList.FilteredIntro", "探索這個主題的已發布文章。") : UiText.T("Public.PostList.Intro", "記錄想法，也分享值得留意的事。")))</p></section>
+<section class="public-heading">
+    <p class="eyebrow">@UiText.T("Public.PostList.01", "文字・觀點・日常")</p>
+    @if (!string.IsNullOrEmpty(_category?.ParentSlug) && !string.IsNullOrEmpty(_category?.ParentTitle))
+    {
+        <p class="field-help"><a href="@(BasePath + (BasePath.Contains('?') ? "&" : "?") + "category=" + Uri.EscapeDataString(_category.ParentSlug))">@_category.ParentTitle</a> › @_category.Title</p>
+    }
+    <h1>@Heading<span class="heading-dot">.</span></h1>
+    <p>@(_taxonomyDescription ?? (HasFilter ? UiText.T("Public.PostList.FilteredIntro", "探索這個主題的已發布文章。") : UiText.T("Public.PostList.Intro", "記錄想法，也分享值得留意的事。")))</p>
+</section>
 @if (_categories.Count > 0)
 {
     <nav class="category-nav" aria-label="@UiText.T("Public.PostList.PopularCategories", "常用分類")">

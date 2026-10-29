@@ -7,9 +7,10 @@
    後台採整份文件導覽，讓 NavigationLock 得以保護未儲存的輸入。 *@
 <div class="admin-shell" data-enhance-nav="false">
     <aside class="admin-sidebar">
-        <a class="admin-brand" href="/admin/posts"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>@UiText.T("Layout.Admin.ContentManagement", "內容管理")</small></span></a>
+        <a class="admin-brand" href="/admin"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>@UiText.T("Layout.Admin.ContentManagement", "內容管理")</small></span></a>
         <nav class="admin-nav" aria-label="@UiText.T("Layout.Admin.Navigation", "後台導覽")">
             <span class="nav-label">@UiText.T("Layout.Admin.Workspace", "工作空間")</span>
+            <NavLink href="/admin" Match="NavLinkMatch.All">@UiText.T("Layout.Admin.Dashboard", "總覽儀表板")<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/posts">@UiText.T("Layout.Admin.Posts", "文章")<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/pages">@UiText.T("Layout.Admin.Pages", "獨立頁面")<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/taxonomies">@UiText.T("Layout.Admin.Taxonomies", "分類與標籤")<span aria-hidden="true">↗</span></NavLink>
@@ -17,6 +18,7 @@
             <NavLink href="/admin/navigation">@UiText.T("Layout.Main.Navigation", "網站導覽")<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/comments">@UiText.T("Layout.Admin.Comments", "評論")<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/media">@UiText.T("Layout.Admin.Media", "媒體庫")<span aria-hidden="true">↗</span></NavLink>
+            <NavLink href="/admin/redirects">@UiText.T("Layout.Admin.Redirects", "301 重定向")<span aria-hidden="true">↗</span></NavLink>
             <NavLink href="/admin/settings">@UiText.T("Layout.Admin.Settings", "網站設定")<span aria-hidden="true">↗</span></NavLink>
             @* 連結顯示只是導覽體驗；各頁與 API 仍逐一重驗角色。 *@
             @if (_access?.CanAdminister == true)

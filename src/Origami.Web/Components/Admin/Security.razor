@@ -4,11 +4,75 @@
 @layout AdminLayout
 @inherits AdminComponentBase
 @inject TwoFactorService TwoFactor
+@inject OrigamiClient Api
 
-<PageTitle>@UiText.T("Admin.Security.PageTitle", "安全設定 · 內容管理")</PageTitle>
+<PageTitle>@UiText.T("Admin.Security.PageTitle", "個人資料與安全 · 內容管理")</PageTitle>
 <UnsavedGuard Busy="Busy" />
-<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Security.Eyebrow", "帳號的第三道鎖")</p><h1>@UiText.T("Admin.Security.Title", "安全設定")</h1><p>@UiText.T("Admin.Security.Introduction", "為你目前登入的帳號加上兩步驟驗證（TOTP），不影響其他使用者。")</p></div></div>
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Security.Eyebrow", "帳號與作者名片")</p><h1>@UiText.T("Admin.Security.Title", "個人資料與安全設定")</h1><p>@UiText.T("Admin.Security.Introduction", "管理你的公開作者介紹、修改登入密碼，或啟用兩步驟驗證（TOTP）。")</p></div></div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (_profile is not null)
+{
+    <div class="management-grid">
+        <section class="panel settings-panel">
+            <div class="panel-intro">
+                <h2>@UiText.T("Admin.Security.ProfileTitle", "公開作者資料")</h2>
+                <p>@UiText.T("Admin.Security.ProfileHelp", "顯示於你的文章署名與作者彙整頁（/author/代稱）。")</p>
+            </div>
+            <EditForm Model="_profile" OnValidSubmit="SaveProfileAsync" FormName="account-profile">
+                <DataAnnotationsValidator />
+                <fieldset disabled="@Blocked">
+                    <div class="field">
+                        <label for="profile-username">@UiText.T("Admin.Security.UserName", "登入帳號")</label>
+                        <input id="profile-username" value="@_profile.UserName" readonly disabled />
+                    </div>
+                    <div class="field">
+                        <label for="profile-display-name">@UiText.T("Admin.Security.DisplayName", "本站公開顯示名稱")</label>
+                        <input id="profile-display-name" maxlength="@Limits.AuthorName" @bind="_profile.DisplayName" @bind:event="oninput" />
+                        <span class="field-help">@UiText.T("Admin.Security.DisplayNameHelp", "更改後會同步更新你在本站已發表文章的署名與作者頁代稱。")</span>
+                    </div>
+                    <div class="field">
+                        <label for="profile-email">@UiText.T("Admin.Security.Email", "電子郵件（供密碼重設）")</label>
+                        <input id="profile-email" type="email" maxlength="256" @bind="_profile.Email" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <label for="profile-website">@UiText.T("Admin.Security.WebsiteUrl", "個人網站（選填）")</label>
+                        <input id="profile-website" type="url" maxlength="@Limits.UserUrl" @bind="_profile.WebsiteUrl" @bind:event="oninput" placeholder="https://" />
+                    </div>
+                    <div class="field">
+                        <label for="profile-avatar">@UiText.T("Admin.Security.AvatarUrl", "頭像網址（選填）")</label>
+                        <input id="profile-avatar" maxlength="@Limits.UserUrl" @bind="_profile.AvatarUrl" @bind:event="oninput" placeholder="/media/... 或 https://..." />
+                    </div>
+                    <div class="field">
+                        <label for="profile-bio">@UiText.T("Admin.Security.Bio", "作者簡介（Bio）")</label>
+                        <textarea id="profile-bio" rows="3" maxlength="@Limits.UserBio" @bind="_profile.Bio" @bind:event="oninput"></textarea>
+                    </div>
+                    <button type="submit" class="button" disabled="@Blocked">@UiText.T("Admin.Security.SaveProfile", "儲存個人資料")</button>
+                </fieldset>
+            </EditForm>
+        </section>
+
+        <section class="panel settings-panel">
+            <div class="panel-intro">
+                <h2>@UiText.T("Admin.Security.ChangePasswordTitle", "修改登入密碼")</h2>
+                <p>@UiText.T("Admin.Security.ChangePasswordHelp", "至少 8 字元，需包含大小寫字母、數字、符號及至少 4 種不同字元。")</p>
+            </div>
+            <EditForm Model="_passwordForm" OnValidSubmit="ChangePasswordAsync" FormName="account-password">
+                <DataAnnotationsValidator />
+                <fieldset disabled="@Blocked">
+                    <div class="field">
+                        <label for="pwd-current">@UiText.T("Admin.Security.CurrentPassword", "目前密碼")</label>
+                        <input id="pwd-current" type="password" maxlength="1024" @bind="_passwordForm.CurrentPassword" required autocomplete="current-password" />
+                    </div>
+                    <div class="field">
+                        <label for="pwd-new">@UiText.T("Admin.Security.NewPassword", "新密碼")</label>
+                        <input id="pwd-new" type="password" maxlength="1024" @bind="_passwordForm.NewPassword" required autocomplete="new-password" />
+                    </div>
+                    <button type="submit" class="button" disabled="@Blocked">@UiText.T("Admin.Security.UpdatePassword", "更新密碼")</button>
+                </fieldset>
+            </EditForm>
+        </section>
+    </div>
+}
 @if (_status is not null)
 {
     <section class="panel settings-panel settings-width">
@@ -77,6 +141,8 @@
     // 個人安全設定只需全域有效登入，不要求本站成員資格。
     protected override bool UsesSiteAccess => false;
     private TwoFactorStatus? _status;
+    private AccountProfileEdit? _profile;
+    private ChangePasswordInput _passwordForm = new();
     private (string Secret, string Uri)? _setup;
     private CodeInput _confirm = new();
     private PasswordAndCodeInput _disable = new();
@@ -103,7 +169,31 @@
         public string Code { get; set; } = "";
     }
     protected override Task OnInitializedAsync() => Load();
-    private Task<bool> Load() => RunAsync(async ct => { _status = await TwoFactor.GetStatusAsync(ct); });
+    private Task<bool> Load() => RunAsync(async ct =>
+    {
+        _status = await TwoFactor.GetStatusAsync(ct);
+        _profile = await Api.GetMyProfileAsync(ct);
+    });
+    private Task SaveProfileAsync() => RunAsync(async ct =>
+    {
+        if (_profile is null) return;
+        _profile = await Api.UpdateMyProfileAsync(_profile, ct);
+    }, UiText.T("Admin.Security.ProfileSaved", "個人資料已更新。"));
+    private async Task ChangePasswordAsync()
+    {
+        if (Blocked) return;
+        try
+        {
+            await RunAsync(async ct =>
+            {
+                await Api.ChangeMyPasswordAsync(_passwordForm, ct);
+            }, UiText.T("Admin.Security.PasswordUpdated", "密碼已更新。"));
+        }
+        finally
+        {
+            _passwordForm = new();
+        }
+    }
     private Task BeginSetup() => RunAsync(async ct =>
     {
         _setup = await TwoFactor.BeginSetupAsync(ct);

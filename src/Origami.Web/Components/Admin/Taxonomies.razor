@@ -77,6 +77,20 @@
             <fieldset disabled="@EditBlocked">
                 <div class="field"><label for="taxonomy-name">@UiText.T("Admin.Taxonomies.Name", "名稱") <span class="required">@UiText.T("Admin.Taxonomies.Required", "必填")</span></label><input id="taxonomy-name" @bind="_edit.Name" @bind:event="oninput" required maxlength="@Limits.TaxonomyName" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.NameHelp", "最多 {0} 字。"), Limits.TaxonomyName)</span></div>
                 <div class="field"><label for="taxonomy-slug">@UiText.T("Admin.Taxonomies.Slug", "網址代稱")</label><input id="taxonomy-slug" @bind="_edit.Slug" @bind:event="oninput" maxlength="@Limits.Slug" required="@(_edit.Id is not null)" /><span class="field-help">@UiText.T("Admin.Taxonomies.SlugHelp", "首次儲存可留空，由名稱產生。")</span></div>
+                @if (_kind == TaxonomyKind.Category)
+                {
+                    <div class="field">
+                        <label for="taxonomy-parent">@UiText.T("Admin.Taxonomies.ParentCategory", "上層分類（選填）")</label>
+                        <select id="taxonomy-parent" value="@(_edit.ParentId?.ToString() ?? "")" @onchange="ParentCategoryChanged">
+                            <option value="">@UiText.T("Admin.Taxonomies.NoParent", "無（最上層）")</option>
+                            @foreach (var choice in ParentCategoryChoices())
+                            {
+                                <option value="@choice.Id">@choice.Label</option>
+                            }
+                        </select>
+                        <span class="field-help">@UiText.T("Admin.Taxonomies.ParentCategoryHelp", "設定父分類後，篩選父分類時會一併列出子分類下的文章。")</span>
+                    </div>
+                }
                 <div class="field"><label for="taxonomy-description">@UiText.T("Admin.Taxonomies.Description", "描述")</label><textarea id="taxonomy-description" @bind="_edit.Description" @bind:event="oninput" rows="3" maxlength="@Limits.TaxonomyDescription" aria-describedby="taxonomy-description-help"></textarea><span id="taxonomy-description-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.DescriptionHelp", "顯示於前台分類或標籤篩選頁的說明文字，最多 {0} 字。"), Limits.TaxonomyDescription)</span></div>
                 <div class="button-row"><button type="submit" class="button">@(Busy ? UiText.T("Admin.Taxonomies.Processing", "處理中…") : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Save", "儲存{0}"), Label))</button>@if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => RequestChange(NewEdit)">@UiText.T("Admin.Taxonomies.AddAnother", "新增另一個")</button> }</div>
                 <p class="field-help">@(Dirty ? UiText.T("Admin.Taxonomies.UnsavedChanges", "有未儲存的變更。") : UiText.T("Admin.Taxonomies.ManualSaveHelp", "修改後請按儲存，不會自動儲存。"))</p>
@@ -93,7 +107,7 @@
                 <div class="table-scroll"><table><caption class="sr-only">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.ListCaption", "{0} 列表"), Label)</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="taxonomy-bulk-select-all">@UiText.T("Admin.Taxonomies.SelectPage", "全選本頁")</label><input id="taxonomy-bulk-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@EditBlocked" /></th><th scope="col">@UiText.T("Admin.Taxonomies.NameAndSlug", "名稱 / 代稱")</th><th scope="col">@UiText.T("Admin.Taxonomies.Actions", "操作")</th></tr></thead><tbody>
                 @foreach (var item in _result.Items)
                 {
-                    <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("taxonomy-bulk-" + item.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.SelectItem", "選擇 {0}"), item.Name)</label><input id="@("taxonomy-bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Taxonomies.Edit", "編輯")<span class="sr-only"> @item.Name</span></button><button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">@UiText.T("Admin.Taxonomies.Merge", "合併")<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">@UiText.T("Admin.Taxonomies.Delete", "刪除")<span class="sr-only"> @item.Name</span></button></div></td></tr>
+                    <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("taxonomy-bulk-" + item.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.SelectItem", "選擇 {0}"), item.Name)</label><input id="@("taxonomy-bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug@if (!string.IsNullOrEmpty(item.ParentName)) { <text> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.ParentLabel", "上層：{0}"), item.ParentName)</text> }</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Taxonomies.Edit", "編輯")<span class="sr-only"> @item.Name</span></button><button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">@UiText.T("Admin.Taxonomies.Merge", "合併")<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">@UiText.T("Admin.Taxonomies.Delete", "刪除")<span class="sr-only"> @item.Name</span></button></div></td></tr>
                 }
                 </tbody></table></div>
                 @if (CanEdit)
@@ -186,11 +200,36 @@
     });
     private Task Edit(TaxonomyItem item) => RequestChange(() =>
     {
-        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Description = item.Description, Version = item.Version };
+        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Description = item.Description, ParentId = item.ParentId, Version = item.Version };
         _baseline = Snapshot();
         _delete = null;
         return Task.CompletedTask;
     });
+
+    private void ParentCategoryChanged(ChangeEventArgs e)
+    {
+        _edit = _edit with { ParentId = Guid.TryParse(e.Value?.ToString(), out var parsed) ? parsed : null };
+    }
+
+    private List<(Guid Id, string Label)> ParentCategoryChoices()
+    {
+        var items = _result?.Items ?? [];
+        if (items.Count == 0) return [];
+        var byId = items.ToDictionary(x => x.Id);
+        var children = items.Where(x => x.ParentId is not null && byId.ContainsKey(x.ParentId.Value))
+            .ToLookup(x => x.ParentId!.Value);
+        HashSet<Guid> excluded = [];
+        if (_edit.Id is { } self)
+        {
+            var stack = new Stack<Guid>();
+            stack.Push(self);
+            excluded.Add(self);
+            while (stack.Count > 0)
+                foreach (var child in children[stack.Pop()])
+                    if (excluded.Add(child.Id)) stack.Push(child.Id);
+        }
+        return [.. items.Where(x => !excluded.Contains(x.Id)).Select(x => (x.Id, string.IsNullOrEmpty(x.ParentName) ? x.Name : $"{x.ParentName} › {x.Name}"))];
+    }
     private async Task Move(int delta)
     {
         if (Blocked) return;

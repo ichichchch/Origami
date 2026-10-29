@@ -170,13 +170,13 @@ else if (_content is not null)
                 </ul>
             </aside>
         }
-        @if (_settings.CommentsEnabled && !_locked && !_isPrivate && !_content.IsProtected && _content.Kind == ContentKind.Post)
+        @if (_settings.CommentsEnabled && _content.AllowComments && !_locked && !_isPrivate && !_content.IsProtected && _content.Kind == ContentKind.Post)
         {
             <section class="comments" aria-labelledby="comments-title">
                 <h2 id="comments-title">@string.Format(UiText.T("Public.ContentDetail.CommentCount", "評論（{0}）"), _comments.Count)</h2>
                 @foreach (var comment in _comments)
                 {
-                    <article class="comment">
+                    <article class="comment @(comment.ParentId is not null ? "comment-reply" : "")">
                         <p class="comment-meta">
                             @if (Uri.TryCreate(comment.Url, UriKind.Absolute, out var website) && website.Scheme is "https" or "http")
                             {
@@ -186,7 +186,16 @@ else if (_content is not null)
                             {
                                 @comment.AuthorName
                             }
+                            @if (comment.IsAdminReply)
+                            {
+                                <span class="status-badge published">@UiText.T("Public.ContentDetail.OfficialReply", "作者／管理員")</span>
+                            }
+                            @if (!string.IsNullOrEmpty(comment.ParentAuthorName))
+                            {
+                                <span class="muted"> · @string.Format(UiText.T("Public.ContentDetail.InReplyTo", "回覆 {0}"), comment.ParentAuthorName)</span>
+                            }
                             · @comment.CreatedAt.ToString("yyyy.MM.dd HH:mm") <span class="sr-only">UTC</span>
+                            · <a class="text-button" href="@(DetailPath + "?replyTo=" + comment.Id + "#comment-name")">@UiText.T("Public.ContentDetail.ReplyLink", "回覆")</a>
                         </p>
                         @* 訪客評論與內容走同一條 Markdown 安全渲染管線（停用 HTML、過濾危險協定）。 *@
                         <div class="comment-body">@((MarkupString)Markdown.Render(comment.Markdown))</div>
@@ -212,6 +221,14 @@ else if (_content is not null)
                     @* 蜜罐欄位對正常訪客隱藏；機器人填寫後該則評論靜默進入垃圾佇列。 *@
                     <div class="hp-field" aria-hidden="true"><label for="comment-website">@UiText.T("Public.ContentDetail.LeaveBlank", "請留空")</label><input id="comment-website" name="CommentForm.Honeypot" tabindex="-1" autocomplete="off" /></div>
                     <div class="field"><label for="comment-body">@UiText.T("Public.ContentDetail.CommentBody", "評論") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><textarea id="comment-body" name="CommentForm.Body" rows="4" maxlength="@Limits.CommentBody" required></textarea></div>
+                    @if (ReplyToCommentId is { } replyToId && _comments.FirstOrDefault(x => x.Id == replyToId) is { } replyTarget)
+                    {
+                        <input type="hidden" name="CommentForm.ParentId" value="@replyTarget.Id" />
+                        <p class="notice" role="status">
+                            @string.Format(UiText.T("Public.ContentDetail.ReplyingTo", "正在回覆 {0} 的評論"), replyTarget.AuthorName)
+                            · <a href="@(DetailPath + "#comments-title")">@UiText.T("Public.ContentDetail.CancelReply", "取消回覆")</a>
+                        </p>
+                    }
                     <button type="submit" class="button">@UiText.T("Public.ContentDetail.SubmitComment", "送出評論")</button>
                 </EditForm>
             </section>
@@ -249,6 +266,7 @@ else
     private int _pageIndex = 1;
     private int _pageTotal = 1;
     [SupplyParameterFromQuery(Name = "page")] private int? RequestedPage { get; set; }
+    [SupplyParameterFromQuery(Name = "replyTo")] private Guid? ReplyToCommentId { get; set; }
     [SupplyParameterFromForm(FormName = "content-comment")]
     private CommentFormInput CommentForm { get; set; } = default!;
     private sealed class CommentFormInput
@@ -265,6 +283,7 @@ else
         [StringLength(Limits.CommentUrl, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(UrlTooLong))]
         public string? Url { get; set; }
         public string? Honeypot { get; set; }
+        public Guid? ParentId { get; set; }
         [Required(ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyRequired))]
         [StringLength(Limits.CommentBody, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyTooLong))]
         public string Body { get; set; } = "";
@@ -333,25 +352,80 @@ else
 
     private string BuildStructuredData()
     {
-        var data = new System.Text.Json.Nodes.JsonObject
+        var article = new System.Text.Json.Nodes.JsonObject
         {
-            ["@context"] = "https://schema.org",
-            ["@type"] = _content!.Kind == ContentKind.Post ? "Article" : "WebPage",
+            ["@type"] = _content!.Kind == ContentKind.Post ? "BlogPosting" : "WebPage",
             ["headline"] = _content.Title,
             ["description"] = MetaDescription,
             ["url"] = Canonical,
             ["inLanguage"] = "zh-Hant",
+            ["mainEntityOfPage"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "WebPage", ["@id"] = Canonical },
+            ["publisher"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "Organization", ["name"] = _settings.Name }
         };
         if (_content.PublishedAt is { } published)
         {
-            data["datePublished"] = published.ToString("O");
-            data["dateModified"] = (_content.UpdatedAt == default ? published : _content.UpdatedAt).ToString("O");
+            article["datePublished"] = published.ToString("O");
+            article["dateModified"] = (_content.UpdatedAt == default ? published : _content.UpdatedAt).ToString("O");
         }
         if (!string.IsNullOrWhiteSpace(_content.AuthorName))
-            data["author"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "Person", ["name"] = _content.AuthorName };
-        if (_firstImage is not null) data["image"] = AbsoluteImage;
-        if (_content.Kind == ContentKind.Page) data["isPartOf"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "WebSite", ["name"] = _settings.Name };
-        return data.ToJsonString();
+        {
+            var authorNode = new System.Text.Json.Nodes.JsonObject { ["@type"] = "Person", ["name"] = _content.AuthorName };
+            if (!string.IsNullOrWhiteSpace(_content.AuthorSlug))
+                authorNode["url"] = BaseUrl + "/author/" + Uri.EscapeDataString(_content.AuthorSlug);
+            article["author"] = authorNode;
+        }
+        if (_firstImage is not null) article["image"] = AbsoluteImage;
+        if (_content.Kind == ContentKind.Page) article["isPartOf"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "WebSite", ["name"] = _settings.Name };
+
+        var breadcrumbItems = new System.Text.Json.Nodes.JsonArray
+        {
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["@type"] = "ListItem",
+                ["position"] = 1,
+                ["name"] = _settings.Name,
+                ["item"] = BaseUrl + "/"
+            }
+        };
+        if (_content.Kind == ContentKind.Post && _content.Categories.Count > 0)
+        {
+            var firstCat = _content.Categories[0];
+            breadcrumbItems.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["@type"] = "ListItem",
+                ["position"] = 2,
+                ["name"] = firstCat.Title,
+                ["item"] = BaseUrl + "/?category=" + Uri.EscapeDataString(firstCat.Slug)
+            });
+            breadcrumbItems.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["@type"] = "ListItem",
+                ["position"] = 3,
+                ["name"] = _content.Title,
+                ["item"] = Canonical
+            });
+        }
+        else
+        {
+            breadcrumbItems.Add(new System.Text.Json.Nodes.JsonObject
+            {
+                ["@type"] = "ListItem",
+                ["position"] = 2,
+                ["name"] = _content.Title,
+                ["item"] = Canonical
+            });
+        }
+        var breadcrumb = new System.Text.Json.Nodes.JsonObject
+        {
+            ["@type"] = "BreadcrumbList",
+            ["itemListElement"] = breadcrumbItems
+        };
+        var root = new System.Text.Json.Nodes.JsonObject
+        {
+            ["@context"] = "https://schema.org",
+            ["@graph"] = new System.Text.Json.Nodes.JsonArray { article, breadcrumb }
+        };
+        return root.ToJsonString();
     }
     private string AbsoluteImage => _firstImage![0] == '/' ? BaseUrl + _firstImage : _firstImage!;
     /// <summary>封面圖的回應式屬性；僅在媒體寬度已知時提供 srcset 候選（與本文圖片同一組變體）。</summary>
@@ -523,7 +597,7 @@ else
         try
         {
             await Api.PostCommentAsync(_content.Id, CommentForm.AuthorName.Trim(), CommentForm.Url?.Trim(),
-                CommentForm.Body.Trim(), !string.IsNullOrEmpty(CommentForm.Honeypot), HttpContext.RequestAborted);
+                CommentForm.Body.Trim(), !string.IsNullOrEmpty(CommentForm.Honeypot), CommentForm.ParentId, HttpContext.RequestAborted);
             _commentPosted = true;
             _commentError = null;
             CommentForm = new CommentFormInput();
@@ -567,7 +641,7 @@ else
         }
         _pageIndex = Math.Clamp(RequestedPage ?? 1, 1, _pageTotal);
         _html = Markdown.Render(_pageSections[_pageIndex - 1], _imageWidths);
-        if (_content.Kind == ContentKind.Post && _settings.CommentsEnabled && !_isPrivate && !_content.IsProtected)
+        if (_content.Kind == ContentKind.Post && _settings.CommentsEnabled && _content.AllowComments && !_isPrivate && !_content.IsProtected)
         {
             try { _comments = await Api.GetPublicCommentsAsync(_content.Id, ct) ?? []; }
             catch (Exception error) { Logger.LogWarning(error, "評論載入失敗"); }

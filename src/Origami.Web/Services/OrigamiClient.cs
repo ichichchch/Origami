@@ -74,9 +74,12 @@ public sealed class OrigamiClient
     public Task<List<CommentService.CommentView>?> GetPublicCommentsAsync(Guid contentId, CancellationToken ct = default) =>
         GetAsync<List<CommentService.CommentView>>($"api/v1/contents/{contentId}/comments", ct);
 
-    public Task PostCommentAsync(Guid contentId, string authorName, string? url, string markdown, bool honeypot, CancellationToken ct = default) =>
+    public Task PostCommentAsync(Guid contentId, string authorName, string? url, string markdown, bool honeypot, Guid? parentId = null, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/contents/{contentId}/comments",
-            new { authorName, url, markdown, honeypot }, ct);
+            new { authorName, url, markdown, honeypot, parentId }, ct);
+
+    public Task<CommentService.CommentView?> ReplyCommentAsync(Guid id, string markdown, CancellationToken ct = default) =>
+        SendAsync<CommentService.CommentView>(new(HttpMethod.Post, $"api/v1/admin/comments/{id}/reply"), new { markdown }, ct);
 
     public Task<PagedResult<CommentService.CommentView>?> ListCommentsAsync(CommentStatus? status, int page = 1, CancellationToken ct = default) =>
         GetAsync<PagedResult<CommentService.CommentView>>($"api/v1/admin/comments?page={page}" +
@@ -112,6 +115,9 @@ public sealed class OrigamiClient
 
     public Task<SlugRedirectTarget?> ResolveRedirectAsync(string slug, CancellationToken ct = default) =>
         GetAsync<SlugRedirectTarget>($"api/v1/redirects/{Uri.EscapeDataString(slug)}", ct);
+
+    public Task<PublicAuthorProfile?> GetPublicAuthorAsync(string slug, CancellationToken ct = default) =>
+        GetAsync<PublicAuthorProfile>($"api/v1/authors/{Uri.EscapeDataString(slug)}", ct);
 
     public Task<ApiPreview?> GetPreviewAsync(Guid token, CancellationToken ct = default) =>
         GetAsync<ApiPreview>($"api/v1/preview/{token}", ct);
@@ -194,6 +200,29 @@ public sealed class OrigamiClient
 
     public Task RevokeCredentialAsync(Guid id, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/credentials/{id}", null, ct);
+
+    public async Task<AccountProfileEdit> GetMyProfileAsync(CancellationToken ct = default) =>
+        await GetAsync<AccountProfileEdit>("api/v1/admin/profile", ct) ?? throw new CmsException("無法載入個人資料。");
+
+    public async Task<AccountProfileEdit> UpdateMyProfileAsync(AccountProfileEdit input, CancellationToken ct = default) =>
+        await SendAsync<AccountProfileEdit>(new(HttpMethod.Put, "api/v1/admin/profile"), input, ct)
+        ?? throw new CmsException("無法更新個人資料。");
+
+    public Task ChangeMyPasswordAsync(ChangePasswordInput input, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, "api/v1/admin/profile/password", input, ct);
+
+    public Task<DashboardSummary?> GetDashboardAsync(CancellationToken ct = default) =>
+        GetAsync<DashboardSummary>("api/v1/admin/dashboard", ct);
+
+    public async Task<List<RedirectItem>> ListRedirectsAsync(CancellationToken ct = default) =>
+        await GetAsync<List<RedirectItem>>("api/v1/admin/redirects", ct) ?? [];
+
+    public async Task<RedirectItem> CreateRedirectAsync(RedirectCreateInput input, CancellationToken ct = default) =>
+        await SendAsync<RedirectItem>(new(HttpMethod.Post, "api/v1/admin/redirects"), input, ct)
+        ?? throw new CmsException("無法建立重定向規則。");
+
+    public Task DeleteRedirectAsync(Guid id, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/redirects/{id}", null, ct);
 
     // ---------- 管理面（BFF 通行證）----------
 

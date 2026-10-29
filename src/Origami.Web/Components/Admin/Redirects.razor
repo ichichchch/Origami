@@ -1,0 +1,123 @@
+@page "/admin/redirects"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Redirects.PageTitle", "301 重定向 · 內容管理")</PageTitle>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">@UiText.T("Admin.Redirects.Eyebrow", "網址遷移與 SEO")</p>
+        <h1>@UiText.T("Admin.Redirects.Title", "301 重定向管理")</h1>
+        <p>@UiText.T("Admin.Redirects.Introduction", "管理舊網址代稱到現行內容的永久轉址（301 Moved Permanently）。修改已發布文章代稱時也會自動建立。")</p>
+    </div>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+
+<div class="management-grid">
+    <section class="panel settings-panel">
+        <h2>@UiText.T("Admin.Redirects.AddTitle", "新增 301 重定向")</h2>
+        <EditForm Model="_form" OnSubmit="CreateAsync" FormName="redirect-create">
+            <fieldset disabled="@EditBlocked">
+                <div class="field">
+                    <label for="redirect-old-slug">@UiText.T("Admin.Redirects.OldSlug", "舊網址代稱（Old Slug）") <span class="required">@UiText.T("Common.Required", "必填")</span></label>
+                    <input id="redirect-old-slug" @bind="_form.OldSlug" @bind:event="oninput" maxlength="@Limits.Slug" required placeholder="old-post-slug" />
+                    <span class="field-help">@UiText.T("Admin.Redirects.OldSlugHelp", "不含 /posts/ 或 /pages/ 前綴；訪客造訪舊網址時會收到 301 永久轉址。")</span>
+                </div>
+                <div class="field">
+                    <label for="redirect-target">@UiText.T("Admin.Redirects.TargetContent", "目標內容") <span class="required">@UiText.T("Common.Required", "必填")</span></label>
+                    <select id="redirect-target" @bind="_form.TargetId" required>
+                        <option value="">@UiText.T("Admin.Redirects.SelectTarget", "請選擇目標文章或頁面…")</option>
+                        @foreach (var item in _candidates)
+                        {
+                            <option value="@item.Id">@($"[{(item.Kind == ContentKind.Page ? "頁面" : "文章")}] {item.Title} (/{(item.Kind == ContentKind.Page ? "pages" : "posts")}/{item.Slug})")</option>
+                        }
+                    </select>
+                </div>
+                <button type="submit" class="button" disabled="@(EditBlocked || string.IsNullOrWhiteSpace(_form.OldSlug) || string.IsNullOrWhiteSpace(_form.TargetId))">@UiText.T("Admin.Redirects.Save", "建立重定向")</button>
+            </fieldset>
+        </EditForm>
+    </section>
+
+    <section class="panel">
+        <div class="panel-toolbar">
+            <h2>@UiText.T("Admin.Redirects.AllRules", "現行規則") <span class="count">@_items.Count</span></h2>
+        </div>
+        @if (_items.Count == 0)
+        {
+            <div class="empty-state">
+                <h2>@UiText.T("Admin.Redirects.EmptyTitle", "尚無重定向規則")</h2>
+                <p>@UiText.T("Admin.Redirects.EmptyHelp", "修改已發布內容的網址代稱，或由左側手動建立規則後會列於此處。")</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@UiText.T("Admin.Redirects.OldPath", "舊代稱")</th>
+                            <th scope="col">@UiText.T("Admin.Redirects.Target", "轉址目標")</th>
+                            <th scope="col">@UiText.T("Admin.Redirects.CreatedAt", "建立時間")</th>
+                            <th scope="col">@UiText.T("Admin.Redirects.Actions", "操作")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr @key="item.Id">
+                                <td><code>@item.OldSlug</code></td>
+                                <td>
+                                    <a href="@("/admin/content/" + item.ContentId)">@item.ContentTitle</a>
+                                    <span class="slug-text"> → /@(item.ContentKind == ContentKind.Page ? "pages" : "posts")/@item.ContentSlug</span>
+                                </td>
+                                <td class="date-cell">@item.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>
+                                    <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => DeleteAsync(item.Id)">@UiText.T("Common.Delete", "刪除")</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<RedirectItem> _items = [];
+    private List<ContentSummary> _candidates = [];
+    private RedirectForm _form = new();
+
+    private sealed class RedirectForm
+    {
+        public string OldSlug { get; set; } = "";
+        public string TargetId { get; set; } = "";
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private Task LoadAsync() => RunAsync(async ct =>
+    {
+        _items = await Api.ListRedirectsAsync(ct);
+        var posts = await Api.ListAdminAsync(ContentKind.Post, 1, Limits.MaxPageSize, ct: ct);
+        var pages = await Api.ListAdminAsync(ContentKind.Page, 1, Limits.MaxPageSize, ct: ct);
+        _candidates = [.. (posts?.Items ?? []), .. (pages?.Items ?? [])];
+    });
+
+    private Task CreateAsync() => RunEditAsync(async ct =>
+    {
+        if (!Guid.TryParse(_form.TargetId, out var contentId))
+            throw new CmsException("請選擇有效的目標內容。");
+        await Api.CreateRedirectAsync(new RedirectCreateInput(_form.OldSlug, contentId), ct);
+        _form = new RedirectForm();
+        _items = await Api.ListRedirectsAsync(ct);
+    }, UiText.T("Admin.Redirects.CreatedNotice", "301 重定向規則已儲存。"));
+
+    private Task DeleteAsync(Guid id) => RunEditAsync(async ct =>
+    {
+        await Api.DeleteRedirectAsync(id, ct);
+        _items = await Api.ListRedirectsAsync(ct);
+    }, UiText.T("Admin.Redirects.DeletedNotice", "重定向規則已刪除。"));
+}

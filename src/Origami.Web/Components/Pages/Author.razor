@@ -20,7 +20,19 @@ else if (_result.Items.Count == 0)
 }
 else
 {
-    <section class="public-heading"><p class="eyebrow">@UiText.T("Public.Author.Eyebrow", "作者")</p><h1>@(_authorName ?? Slug)<span class="heading-dot">.</span></h1><p>@UiText.T("Public.Author.Intro", "這位作者的公開文章，依發布時間排序。")</p></section>
+    <section class="public-heading">
+        <p class="eyebrow">@UiText.T("Public.Author.Eyebrow", "作者")</p>
+        @if (!string.IsNullOrWhiteSpace(_profile?.AvatarUrl))
+        {
+            <img class="author-avatar" src="@_profile.AvatarUrl" alt="@(_authorName ?? Slug)" loading="lazy" />
+        }
+        <h1>@(_authorName ?? Slug)<span class="heading-dot">.</span></h1>
+        <p>@(!string.IsNullOrWhiteSpace(_profile?.Bio) ? _profile.Bio : UiText.T("Public.Author.Intro", "這位作者的公開文章，依發布時間排序。"))</p>
+        @if (!string.IsNullOrWhiteSpace(_profile?.WebsiteUrl) && Uri.TryCreate(_profile.WebsiteUrl, UriKind.Absolute, out var webUri) && webUri.Scheme is "http" or "https")
+        {
+            <p><a href="@webUri.AbsoluteUri" rel="nofollow noopener" target="_blank">@webUri.Host ↗</a></p>
+        }
+    </section>
     <div class="post-list">
         @foreach (var post in _result.Items)
         {
@@ -43,6 +55,7 @@ else
     [Parameter] public string Slug { get; set; } = "";
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PagedResult<ContentSummary>? _result;
+    private PublicAuthorProfile? _profile;
     private string? _authorName;
     private string? _error;
     [SupplyParameterFromQuery(Name = "page")] private int? RequestedPage { get; set; }
@@ -56,7 +69,10 @@ else
             var ct = HttpContext?.RequestAborted ?? default;
             var page = Math.Max(1, RequestedPage ?? 1);
             _result = await Api.ListPublishedAsync(page, author: Slug, ct: ct);
-            if (_result is not null && _result.Items.Count > 0)
+            _profile = await Api.GetPublicAuthorAsync(Slug, ct);
+            if (!string.IsNullOrWhiteSpace(_profile?.DisplayName))
+                _authorName = _profile.DisplayName;
+            else if (_result is not null && _result.Items.Count > 0)
                 _authorName = _result.Items.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.AuthorName))?.AuthorName;
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客已斷線。 */ }

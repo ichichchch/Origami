@@ -43,15 +43,34 @@ else
                 <tr @key="comment.Id">
                     <td class="date-cell">
                         <strong>@comment.AuthorName</strong>
+                        @if (comment.IsAdminReply) { <span class="status-badge published">@UiText.T("Admin.Comments.OfficialReply", "官方回覆")</span> }
                         @if (comment.Url.Length > 0) { <br /><small class="slug-text">@comment.Url</small> }
                         <small>@comment.CreatedAt.ToString("yyyy.MM.dd HH:mm") UTC</small>
                     </td>
-                    <td class="title-cell"><span class="slug-text">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.OnContent", "於「{0}」"), comment.ContentTitle)</span><div class="comment-body">@MarkdownPreview(comment.Markdown)</div></td>
+                    <td class="title-cell">
+                        <span class="slug-text">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.OnContent", "於「{0}」"), comment.ContentTitle)@if (!string.IsNullOrEmpty(comment.ParentAuthorName)) { <text> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.ReplyTo", "回覆 {0}"), comment.ParentAuthorName)</text> }</span>
+                        <div class="comment-body">@MarkdownPreview(comment.Markdown)</div>
+                        @if (_replyingToId == comment.Id)
+                        {
+                            <div class="reply-box">
+                                <label class="sr-only" for="@("admin-reply-" + comment.Id)">@UiText.T("Admin.Comments.ReplyLabel", "回覆內容")</label>
+                                <textarea id="@("admin-reply-" + comment.Id)" rows="3" maxlength="@Limits.CommentBody" @bind="_replyBody" @bind:event="oninput" placeholder="@UiText.T("Admin.Comments.ReplyPlaceholder", "輸入回覆內容（支援 Markdown）…")" disabled="@EditBlocked"></textarea>
+                                <div class="button-row">
+                                    <button type="button" class="button button-small" disabled="@(EditBlocked || string.IsNullOrWhiteSpace(_replyBody))" @onclick="() => SubmitReplyAsync(comment.Id)">@UiText.T("Admin.Comments.SubmitReply", "送出回覆")</button>
+                                    <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="CancelReply">@UiText.T("Admin.Comments.Cancel", "取消")</button>
+                                </div>
+                            </div>
+                        }
+                    </td>
                     <td><span class="status-badge @(comment.Status == CommentStatus.Approved ? "published" : "draft")">@StatusText(comment.Status)</span></td>
                     <td><div class="table-actions">
                         @if (comment.Status != CommentStatus.Approved)
                         {
                             <button disabled="@EditBlocked" @onclick="() => ModerateAsync(comment, CommentStatus.Approved)">@UiText.T("Admin.Comments.Approve", "核可")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
+                        }
+                        @if (comment.Status == CommentStatus.Approved || comment.Status == CommentStatus.Pending)
+                        {
+                            <button class="text-button" disabled="@EditBlocked" @onclick="() => BeginReply(comment.Id)">@UiText.T("Admin.Comments.Reply", "回覆")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorComment", "{0} 的評論"), comment.AuthorName)</span></button>
                         }
                         @if (comment.Status != CommentStatus.Spam)
                         {
@@ -90,6 +109,8 @@ else
     private PagedResult<CommentService.CommentView>? _result;
     private CommentService.CommentCounts? _counts;
     private CommentService.CommentView? _pendingDelete;
+    private Guid? _replyingToId;
+    private string _replyBody = "";
     private int TotalCount => _counts is null ? 0 : _counts.Pending + _counts.Approved + _counts.Spam + _counts.Trashed;
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -129,6 +150,26 @@ else
         await Api.ModerateCommentAsync(comment.Id, target, comment.Version, ct);
         await LoadDataAsync(ct);
     }, UiText.T("Admin.Comments.StatusUpdated", "評論狀態已更新。"));
+
+    private void BeginReply(Guid commentId)
+    {
+        _replyingToId = commentId;
+        _replyBody = "";
+    }
+
+    private void CancelReply()
+    {
+        _replyingToId = null;
+        _replyBody = "";
+    }
+
+    private Task SubmitReplyAsync(Guid commentId) => RunEditAsync(async ct =>
+    {
+        await Api.ReplyCommentAsync(commentId, _replyBody, ct);
+        _replyingToId = null;
+        _replyBody = "";
+        await LoadDataAsync(ct);
+    }, UiText.T("Admin.Comments.Replied", "回覆已發表並公開顯示。"));
 
     private async Task DeleteAsync()
     {
