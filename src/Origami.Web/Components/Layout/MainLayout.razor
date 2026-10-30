@@ -5,7 +5,7 @@
 
 <a class="skip-link" href="#main-content">@UiText.T("Layout.Main.01", "跳至主要內容")</a>
 <div class="site-shell" style="@ThemeStyle" data-card-style="@_settings.CardStyle"
-     data-color-scheme="@_settings.ColorScheme"
+     data-color-scheme="@ResolvedScheme"
      data-show-cover="@(_settings.ShowCover ? "true" : "false")"
      data-show-byline="@(_settings.ShowByline ? "true" : "false")">
     <header class="site-header">
@@ -117,14 +117,26 @@
         return "/pages/" + string.Join("/", parts);
     }
 
-    /// <summary>受控版型的樣式變數；色碼只接受合法十六進位值，避免注入樣式。</summary>
+    /// <summary>受控版型的樣式變數；色碼只接受合法十六進位值，避免注入樣式。
+    /// 注入的是品牌基色（--accent-base），明暗模式各自在其上派生填充與前景色。</summary>
     private string ThemeStyle
     {
         get
         {
             var color = ThemePresets.IsValidColor(_settings.AccentColor) ? _settings.AccentColor : "#2f6f4e";
             var width = ThemePresets.IsValidReadingWidth(_settings.ReadingWidth) ? _settings.ReadingWidth : 68;
-            return $"--accent:{color};--reading-width:{width}ch";
+            return $"--accent-base:{color};--reading-width:{width}ch";
+        }
+    }
+
+    /// <summary>站台設為 auto 時跟隨訪客系統；後台外觀切換寫入的 cookie 是訪客的明確意願，優先於系統探測。</summary>
+    private string ResolvedScheme
+    {
+        get
+        {
+            if (_settings.ColorScheme != ThemePresets.ColorSchemeAuto) return _settings.ColorScheme;
+            var preference = HttpContext?.Request.Cookies[ThemePresets.ThemeCookieName];
+            return ThemePresets.IsValidColorScheme(preference) ? preference! : ThemePresets.ColorSchemeAuto;
         }
     }
 

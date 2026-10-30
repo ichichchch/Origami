@@ -104,7 +104,8 @@ public sealed class ThemeSettingsTests(IsolatedPostgres postgres) : ServiceTestB
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var html = await response.Content.ReadAsStringAsync();
         // 版型變數以 CSS 自訂屬性輸出，並以 data 屬性控制署名與卡片樣式。
-        Assert.Contains("--accent:#123456", html, StringComparison.Ordinal);
+        // 注入的是品牌基色 --accent-base；明暗兩式各自在其上派生填充與前景色。
+        Assert.Contains("--accent-base:#123456", html, StringComparison.Ordinal);
         Assert.Contains("--reading-width:72ch", html, StringComparison.Ordinal);
         Assert.Contains("data-card-style=\"grid\"", html, StringComparison.Ordinal);
         Assert.Contains("data-show-byline=\"false\"", html, StringComparison.Ordinal);
@@ -157,7 +158,100 @@ public sealed class ThemeSettingsTests(IsolatedPostgres postgres) : ServiceTestB
         await Expect(shell).ToHaveAttributeAsync("data-card-style", "grid");
         var style = await shell.GetAttributeAsync("style");
         Assert.NotNull(style);
-        Assert.Contains("--accent:#8a5a2b", style, StringComparison.Ordinal);
+        Assert.Contains("--accent-base:#8a5a2b", style, StringComparison.Ordinal);
         Assert.Empty(errors);
+    }
+
+    [PostgresFact]
+    public async Task Admin_theme_toggle_cycles_schemes_and_persists_via_cookie()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync(environment: "Development");
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new()
+        {
+            Channel = Environment.GetEnvironmentVariable("ORIGAMI_BROWSER_CHANNEL") ?? "msedge", Headless = true
+        });
+        await using var context = await browser.NewContextAsync(new()
+        {
+            BaseURL = site.Address.ToString(), IgnoreHTTPSErrors = true,
+            ViewportSize = new() { Width = 1366, Height = 900 }
+        });
+        var page = await context.NewPageAsync();
+        var errors = new ConcurrentQueue<string>();
+        page.PageError += (_, error) => errors.Enqueue(error);
+
+        await page.GotoAsync("/account/login?lang=en");
+        await page.Locator("#username").FillAsync("test-admin");
+        await page.Locator("#password").FillAsync(password);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Sign in", Exact = true }).ClickAsync();
+        await page.WaitForURLAsync("**/admin/posts");
+
+        // 初始為 auto；點擊循環至 light 並寫入 cookie，重載後由服務端讀 cookie 渲染。
+        var adminShell = page.Locator(".admin-shell");
+        await Expect(adminShell).ToHaveAttributeAsync("data-color-scheme", "auto");
+        await page.Locator("[data-theme-toggle]").ClickAsync();
+        await Expect(adminShell).ToHaveAttributeAsync("data-color-scheme", "light");
+        var scheme = await page.EvaluateAsync<string>("() => (document.cookie.match(/origami\\.theme=(\\w+)/) || [])[1]");
+        Assert.Equal("light", scheme);
+        await page.ReloadAsync();
+        await Expect(page.Locator(".admin-shell")).ToHaveAttributeAsync("data-color-scheme", "light");
+
+        // 公開站台設為 auto 時，訪客明確選擇的 cookie 覆蓋系統探測。
+        var publicPage = await context.NewPageAsync();
+        await publicPage.GotoAsync("/");
+        await Expect(publicPage.Locator(".site-shell")).ToHaveAttributeAsync("data-color-scheme", "light");
+        Assert.Empty(errors);
+    }
+
+    [PostgresFact]
+    public async Task Settings_save_keeps_color_scheme_and_other_unedited_fields()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        using var admin = await App.AdministratorAsync();
+        var before = await admin.Settings.GetAsync();
+        before.ColorScheme = ThemePresets.ColorSchemeDark;
+        before.MaintenanceMessage = "保存不應清空未編輯的欄位";
+        await admin.Settings.SaveAsync(before);
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync(environment: "Development");
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new()
+        {
+            Channel = Environment.GetEnvironmentVariable("ORIGAMI_BROWSER_CHANNEL") ?? "msedge", Headless = true
+        });
+        await using var context = await browser.NewContextAsync(new()
+        {
+            BaseURL = site.Address.ToString(), IgnoreHTTPSErrors = true,
+            ViewportSize = new() { Width = 1366, Height = 900 }
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("/account/login?lang=en");
+        await page.Locator("#username").FillAsync("test-admin");
+        await page.Locator("#password").FillAsync(password);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Sign in", Exact = true }).ClickAsync();
+        await page.WaitForURLAsync("**/admin/posts");
+
+        // 只改網站名稱後儲存；色彩模式與維護訊息等未編輯欄位必須原樣保留。
+        await page.GotoAsync("/admin/settings");
+        await page.Locator("#site-name").FillAsync("不可清空他人欄位");
+        for (var attempt = 0; ; attempt++)
+        {
+            await page.GetByRole(AriaRole.Button, new() { Name = "Save settings", Exact = true }).ClickAsync();
+            try
+            {
+                await Expect(page.Locator(".notice-success")).ToBeVisibleAsync(new() { Timeout = 2000 });
+                break;
+            }
+            catch (PlaywrightException) when (attempt < 2) { }
+        }
+
+        var after = await admin.Settings.GetAsync();
+        Assert.Equal(ThemePresets.ColorSchemeDark, after.ColorScheme);
+        Assert.Equal("保存不應清空未編輯的欄位", after.MaintenanceMessage);
     }
 }

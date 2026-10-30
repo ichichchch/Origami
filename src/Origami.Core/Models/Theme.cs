@@ -18,6 +18,9 @@ public static class ThemePresets
     public const string ColorSchemeLight = "light";
     public const string ColorSchemeDark = "dark";
 
+    /// <summary>個人外觀偏好的 cookie 名；後台三態切換寫入，站台設為 auto 時以此覆蓋系統探測。</summary>
+    public const string ThemeCookieName = "origami.theme";
+
     public static bool IsValidColorScheme(string? scheme) =>
         scheme is ColorSchemeAuto or ColorSchemeLight or ColorSchemeDark;
 

@@ -5,7 +5,7 @@
 <a class="skip-link" href="#main-content">@UiText.T("Layout.Main.01", "跳至主要內容")</a>
 @* 各頁面的互動島嶼無法攔截 Static SSR 連結的增強導覽。
    後台採整份文件導覽，讓 NavigationLock 得以保護未儲存的輸入。 *@
-<div class="admin-shell" data-enhance-nav="false">
+<div class="admin-shell" data-enhance-nav="false" data-color-scheme="@_scheme">
     <aside class="admin-sidebar">
         <a class="admin-brand" href="/admin"><span class="brand-mark" aria-hidden="true">O</span><span>Origami<small>@UiText.T("Layout.Admin.ContentManagement", "內容管理")</small></span></a>
         <nav class="admin-nav" aria-label="@UiText.T("Layout.Admin.Navigation", "後台導覽")">
@@ -41,6 +41,11 @@
         </nav>
         <div class="sidebar-bottom">
             <a href="/" data-enhance-nav="false">@UiText.T("Layout.Admin.ViewSite", "檢視公開網站 ↗")</a>
+            <button type="button" class="theme-toggle" data-theme-toggle data-scheme="@_scheme"
+                    data-label-auto="@UiText.T("Layout.Admin.ThemeAuto", "外觀：跟隨系統")"
+                    data-label-light="@UiText.T("Layout.Admin.ThemeLight", "外觀：淺色")"
+                    data-label-dark="@UiText.T("Layout.Admin.ThemeDark", "外觀：深色")"
+                    aria-label="@UiText.T("Layout.Admin.ThemeToggle", "切換後台外觀（跟隨系統／淺色／深色）")">@SchemeLabel(_scheme)</button>
             <form method="post" action="/account/logout" data-enhance="false">
                 <AntiforgeryToken />
                 <button type="submit" class="logout-button">@UiText.T("Layout.Admin.SignOut", "登出")</button>
@@ -62,6 +67,24 @@
 
 @code {
     private SiteAccessInfo? _access;
+    private string _scheme = ThemePresets.ColorSchemeAuto;
+
+    // 後台外觀偏好：讀 cookie 由服務端渲染 data-color-scheme，避免載入閃爍；
+    // 切換由 theme.js 就地循環 auto→light→dark 並回寫 cookie。
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private static string SchemeLabel(string scheme) => scheme switch
+    {
+        ThemePresets.ColorSchemeLight => UiText.T("Layout.Admin.ThemeLight", "外觀：淺色"),
+        ThemePresets.ColorSchemeDark => UiText.T("Layout.Admin.ThemeDark", "外觀：深色"),
+        _ => UiText.T("Layout.Admin.ThemeAuto", "外觀：跟隨系統"),
+    };
+
+    protected override void OnInitialized()
+    {
+        var preference = HttpContext?.Request.Cookies[ThemePresets.ThemeCookieName];
+        _scheme = ThemePresets.IsValidColorScheme(preference) ? preference! : ThemePresets.ColorSchemeAuto;
+    }
 
     // 僅供導覽顯示；取得失敗（未登入或服務暫停）時隱藏角色相關連結，不阻擋頁面本身。
     protected override async Task OnInitializedAsync()
