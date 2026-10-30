@@ -139,7 +139,18 @@ public sealed class ThemeSettingsTests(IsolatedPostgres postgres) : ServiceTestB
         await page.WaitForURLAsync("**/admin/posts");
 
         await page.GotoAsync("/admin/settings");
+
+        // 即時預覽：容器跟隨站點設定渲染，切換預設後無須儲存立即套用新強調色。
+        var preview = page.Locator(".theme-preview");
+        await Expect(preview).ToBeVisibleAsync();
+        await Expect(preview).ToHaveAttributeAsync("data-color-scheme", "auto");
+
         await page.SelectOptionAsync("#theme-preset", "gallery");
+        await Expect(preview).ToHaveAttributeAsync("data-card-style", "grid");
+        var previewStyle = await preview.GetAttributeAsync("style");
+        Assert.NotNull(previewStyle);
+        Assert.Contains("--accent-base:#8a5a2b", previewStyle, StringComparison.Ordinal);
+
         for (var attempt = 0; ; attempt++)
         {
             await page.GetByRole(AriaRole.Button, new() { Name = "Save settings", Exact = true }).ClickAsync();

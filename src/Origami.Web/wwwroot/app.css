@@ -395,8 +395,9 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .prose .toc ul { margin: 0; padding-left: 1.2rem; display: grid; gap: .3rem; }
 .prose .toc .toc-h3 { margin-left: 1rem; }
 .prose .toc .toc-h4 { margin-left: 2rem; }
-.prose .note, .prose .warning, .prose .tip { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: .8rem 1rem; border-radius: var(--radius); margin: 1.1rem 0; }
-.prose .warning { border-left-color: var(--danger); }
+.prose .note, .prose .warning, .prose .tip { border-left: 4px solid var(--accent-ink); background: var(--accent-soft); padding: .8rem 1rem; border-radius: var(--radius); margin: 1.1rem 0; }
+.prose .tip { border-left-color: var(--success-ink); background: var(--success-soft); }
+.prose .warning { border-left-color: var(--warning-ink); background: var(--warning-soft); }
 .link-picker { margin-bottom: 1rem; padding: .9rem 1rem; }
 
 /* 麵包屑、可摺疊區塊、原生音視訊卡片、深色模式與社交頁尾 */
@@ -416,3 +417,11 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 @media (prefers-color-scheme: dark) {
     [data-color-scheme="auto"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --surface-sunken: #171e1a; --surface-raised: #232b26; --shadow-raised: 0 16px 70px #00000066; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --border-strong: #46524a; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #141916); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #10140f; background: var(--paper); color: var(--ink); min-height: 100vh; }
 }
+
+/* 設定頁版型即時預覽：重用公開站 .site-shell 的變數派生與 data 屬性開關，
+   未儲存的調整即時反映；覆蓋外殼的滿版高度，讓深色預覽侷限在面板內。 */
+.theme-preview { display: grid; gap: .9rem; padding: 1.6rem; border: 1px solid var(--border); border-radius: var(--radius); overflow: clip; }
+.theme-preview[data-color-scheme] { min-height: 0; background: var(--paper); color: var(--ink); }
+.theme-preview-heading { font-family: var(--font-heading, "Noto Serif TC", "PMingLiU", serif); font-size: 1.5rem; margin: 0; }
+.theme-preview-body { margin: 0; color: var(--muted); max-width: var(--reading-width, 68ch); }
+.theme-preview .post-preview h2 { font-size: 1.15rem; }

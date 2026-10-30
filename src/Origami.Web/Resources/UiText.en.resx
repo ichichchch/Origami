@@ -1093,6 +1093,18 @@
   <data name="Layout.Admin.ViewSite" xml:space="preserve">
     <value>View public site ↗</value>
   </data>
+  <data name="Layout.Admin.ThemeAuto" xml:space="preserve">
+    <value>Appearance: follow system</value>
+  </data>
+  <data name="Layout.Admin.ThemeLight" xml:space="preserve">
+    <value>Appearance: light</value>
+  </data>
+  <data name="Layout.Admin.ThemeDark" xml:space="preserve">
+    <value>Appearance: dark</value>
+  </data>
+  <data name="Layout.Admin.ThemeToggle" xml:space="preserve">
+    <value>Switch admin appearance (system / light / dark)</value>
+  </data>
   <data name="Layout.Admin.Workspace" xml:space="preserve">
     <value>Workspace</value>
   </data>
@@ -4005,6 +4017,36 @@
   </data>
   <data name="Admin.Settings.ThemeColorScheme" xml:space="preserve">
     <value>Color scheme (light/dark)</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewTitle" xml:space="preserve">
+    <value>Live theme preview</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewHeading" xml:space="preserve">
+    <value>With paper's patience, fold content into shape</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewBody" xml:space="preserve">
+    <value>This sample paragraph previews body font, line height and column width. Adjust the theme settings above and this preview follows instantly — nothing changes on the public site until you save.</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewLink" xml:space="preserve">
+    <value>Sample link</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewButton" xml:space="preserve">
+    <value>Primary button</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewSecondary" xml:space="preserve">
+    <value>Secondary button</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewPostTitle" xml:space="preserve">
+    <value>Sample post title</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewPostSummary" xml:space="preserve">
+    <value>Sample summary: card style, byline and cover toggles are reflected here instantly.</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewByline" xml:space="preserve">
+    <value>Sample author · 2026.10.30</value>
+  </data>
+  <data name="Admin.Settings.ThemePreviewRead" xml:space="preserve">
+    <value>Read →</value>
   </data>
   <data name="Admin.Settings.ColorSchemeAuto" xml:space="preserve">
     <value>Automatic (follow the visitor's system setting)</value>

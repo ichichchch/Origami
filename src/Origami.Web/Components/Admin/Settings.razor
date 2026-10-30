@@ -134,6 +134,31 @@
                         <option value="@ThemePresets.ColorSchemeDark">@UiText.T("Admin.Settings.ColorSchemeDark", "深色模式（Dark）")</option>
                     </select>
                 </div>
+                <section class="theme-preview site-shell" aria-label="@UiText.T("Admin.Settings.ThemePreviewTitle", "版型即時預覽")"
+                         data-color-scheme="@_model.ColorScheme" data-card-style="@_model.CardStyle"
+                         data-show-cover="@(_model.ShowCover ? "true" : "false")"
+                         data-show-byline="@(_model.ShowByline ? "true" : "false")"
+                         style="@PreviewStyle">
+                    <p class="eyebrow">ORIGAMI</p>
+                    <h2 class="theme-preview-heading">@UiText.T("Admin.Settings.ThemePreviewHeading", "以紙的耐心，摺出內容的形狀")</h2>
+                    <p class="theme-preview-body">@UiText.T("Admin.Settings.ThemePreviewBody", "這是一段示範文字，用來預覽正文的字體、行距與欄寬。調整上方的版型設定，這裡會立即跟著變化，儲存前不影響公開網站。")</p>
+                    <p><a>@UiText.T("Admin.Settings.ThemePreviewLink", "示範連結")</a></p>
+                    <div class="button-row">
+                        <span class="button">@UiText.T("Admin.Settings.ThemePreviewButton", "主要按鈕")</span>
+                        <span class="button button-secondary">@UiText.T("Admin.Settings.ThemePreviewSecondary", "次要按鈕")</span>
+                    </div>
+                    <div class="post-list">
+                        <article class="post-preview">
+                            <time>2026.10.30</time>
+                            <div class="post-summary">
+                                <h2>@UiText.T("Admin.Settings.ThemePreviewPostTitle", "示範文章標題")</h2>
+                                <p>@UiText.T("Admin.Settings.ThemePreviewPostSummary", "示範摘要：卡片樣式、署名與封面開關都會在這裡即時反映。")</p>
+                                <p class="byline">@UiText.T("Admin.Settings.ThemePreviewByline", "示範作者 · 2026.10.30")</p>
+                            </div>
+                            <span class="read-link">@UiText.T("Admin.Settings.ThemePreviewRead", "閱讀 →")</span>
+                        </article>
+                    </div>
+                </section>
                 <div class="field"><label for="footer-text">@UiText.T("Admin.Settings.FooterText", "頁尾版權與補充文字（選填）")</label><input id="footer-text" @bind="_model.FooterText" @bind:event="oninput" maxlength="@Limits.FooterText" disabled="@Blocked" placeholder="@UiText.T("Admin.Settings.FooterTextPlaceholder", "留空顯示預設 © 年份 站名")" /></div>
                 <div class="field"><label for="social-github">@UiText.T("Admin.Settings.SocialGithub", "頁尾 GitHub 連結（選填）")</label><input id="social-github" type="url" @bind="_model.SocialGithubUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://github.com/..." /></div>
                 <div class="field"><label for="social-x">@UiText.T("Admin.Settings.SocialX", "頁尾 X / Twitter 連結（選填）")</label><input id="social-x" type="url" @bind="_model.SocialXUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://x.com/..." /></div>
@@ -380,6 +405,17 @@
     {
         if (_model is null) return;
         _model.ColorScheme = args.Value?.ToString() ?? ThemePresets.ColorSchemeAuto;
+    }
+
+    /// <summary>即時預覽的樣式變數：與 MainLayout 相同的驗證規則，僅作用於預覽容器。</summary>
+    private string PreviewStyle
+    {
+        get
+        {
+            var color = ThemePresets.IsValidColor(_model?.AccentColor) ? _model!.AccentColor : "#2f6f4e";
+            var width = ThemePresets.IsValidReadingWidth(_model?.ReadingWidth ?? 68) ? _model!.ReadingWidth : 68;
+            return $"--accent-base:{color};--reading-width:{width}ch";
+        }
     }
     private ImportService.ImportPreview? _importPreview;
     private byte[]? _importFile;
