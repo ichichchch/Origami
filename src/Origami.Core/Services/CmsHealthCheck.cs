@@ -41,12 +41,24 @@ public sealed class SiteHealthService(
         // 1. 資料庫連線與遷移狀態
         var dbConnected = await db.Database.CanConnectAsync(ct);
         var pendingMigrations = dbConnected ? (await db.Database.GetPendingMigrationsAsync(ct)).Count() : 0;
+        var dbStatus = "good";
+        var dbMessage = "資料庫連線正常，結構為最新版本。";
+        if (!dbConnected)
+        {
+            dbStatus = "critical";
+            dbMessage = "無法連線至資料庫。";
+        }
+        else if (pendingMigrations > 0)
+        {
+            dbStatus = "warning";
+            dbMessage = $"有 {pendingMigrations} 項待套用的資料庫遷移。";
+        }
         items.Add(new SiteHealthCheckItem(
             "database",
             "核心基礎設施",
             "PostgreSQL 資料庫連線與結構",
-            !dbConnected ? "critical" : pendingMigrations > 0 ? "warning" : "good",
-            !dbConnected ? "無法連線至資料庫。" : pendingMigrations > 0 ? $"有 {pendingMigrations} 項待套用的資料庫遷移。" : "資料庫連線正常，結構為最新版本。"));
+            dbStatus,
+            dbMessage));
 
         // 2. 儲存目錄可寫性檢查（Images / Files / Staging）
         var storageWritable = CheckStorageWritable(storage);

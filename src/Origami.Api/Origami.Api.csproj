@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <NoDefaultLaunchSettingsFile>True</NoDefaultLaunchSettingsFile>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <UserSecretsId>origami-api-local-dev</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +16,8 @@
   <ItemGroup>
     <!-- MCP 從網站主機遷至這個機器介面主機；JSON v1 與其共用速率限制預算。 -->
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <!-- API 參考文件 UI：官方 Scalar ASP.NET Core 整合，讀取本機自建的 OpenAPI 契約。 -->
+    <PackageReference Include="Scalar.AspNetCore" Version="2.18.5" />
   </ItemGroup>
 
 </Project>

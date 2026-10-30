@@ -309,9 +309,16 @@
             return "/admin/export" + query;
         }
     }
-    private string FilterSuffix => _exportKind.Length == 0
-        ? ""
-        : _exportKind == "Post" && _exportCategory.Length > 0 ? UiText.T("Admin.Settings.CategoryFilterSuffix", "／依分類") : _exportKind == "Post" ? UiText.T("Admin.Settings.PostsFilterSuffix", "／僅文章") : UiText.T("Admin.Settings.PagesFilterSuffix", "／僅頁面");
+    private string FilterSuffix
+    {
+        get
+        {
+            if (_exportKind.Length == 0) return "";
+            if (_exportKind != "Post") return UiText.T("Admin.Settings.PagesFilterSuffix", "／僅頁面");
+            if (_exportCategory.Length > 0) return UiText.T("Admin.Settings.CategoryFilterSuffix", "／依分類");
+            return UiText.T("Admin.Settings.PostsFilterSuffix", "／僅文章");
+        }
+    }
     private void ExportKindChanged(ChangeEventArgs args)
     {
         _exportKind = args.Value?.ToString() ?? "";

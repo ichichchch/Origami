@@ -75,11 +75,7 @@ public sealed class BulkOperationsTests(IsolatedPostgres postgres) : ServiceTest
         var post = await CreatePostAsync(actor, "API 批次文章");
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var adminClient = api.CreateClient();
-        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        // BFF 合約：管理端點要求服務通行證＋有效的管理員工作階段戳記。
-        adminClient.DefaultRequestHeaders.Add(AdminSession.StampHeader, await App.AdminSecurityStampAsync());
-        adminClient.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var adminClient = api.CreateBffClient(Token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
 
         using var invalidAction = await adminClient.PostAsJsonAsync("/api/v1/admin/contents/bulk",
             new { action = "explode", items = new[] { new { id = post.Id, version = post.Version } } });

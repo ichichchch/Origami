@@ -137,6 +137,23 @@ public static class TenancyEndpoints
 
         group.MapDelete("/profile/personal-data", async (SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.EraseMyPersonalDataAsync(ct)));
+
+        // BFF 先完成密碼／2FA 再驗證 OAuth key；Core 仍重驗本人、戳記與固定登入期限。
+        // 不接受 userId，PAT 即使具寫入權限也不能讀取或變更綁定。
+        var externalLogins = group.MapGroup("/profile/external-logins")
+            .RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+        externalLogins.MapGet("", async (ExternalLoginService logins, CancellationToken ct) =>
+            Results.Ok(await logins.ListAsync(ct)));
+        externalLogins.MapPost("", async (ExternalLoginLinkInput input, ExternalLoginService logins, CancellationToken ct) =>
+        {
+            await logins.LinkAsync(input, ct);
+            return Results.NoContent();
+        });
+        externalLogins.MapDelete("/{provider}", async (string provider, ExternalLoginService logins, CancellationToken ct) =>
+        {
+            await logins.UnlinkAsync(provider, ct);
+            return Results.NoContent();
+        });
     }
 
     public sealed record NavigationOrderInput(List<NavigationOrderItem>? Items);

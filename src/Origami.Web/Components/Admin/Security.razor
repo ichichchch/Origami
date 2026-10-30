@@ -73,6 +73,11 @@
         </section>
     </div>
 }
+<section class="panel settings-panel settings-width">
+    <h2>@UiText.T("Account.External.Title", "第三方登入綁定")</h2>
+    <p class="field-help">@UiText.T("Account.External.Help", "綁定後可使用第三方帳號登入；不會建立新帳號或變更站點權限。本機密碼仍保留。")</p>
+    <a class="button button-secondary" href="/account/external-logins" data-enhance-nav="false">@UiText.T("Admin.Security.ExternalLogins", "管理第三方登入")</a>
+</section>
 @if (_status is not null)
 {
     <section class="panel settings-panel settings-width">

@@ -58,7 +58,7 @@ public sealed class PersistenceTests : ServiceTestBase
             Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
             Assert.Equal("/admin/posts", new Uri(client.BaseAddress!, login.Headers.Location!).AbsolutePath);
             originalCookies = CopyAuthenticationCookie(cookies, source.Address);
-            await AssertAuthenticatedAsync(client, post.Title, media);
+            await AssertAuthenticatedAsync(client, post.Title, media, source);
             articleBytes = await ReadPublishedArticleAsync(client, post, media);
             await AssertImageAsync(client, media, imageBytes);
         }
@@ -141,7 +141,7 @@ public sealed class PersistenceTests : ServiceTestBase
                     using var login = await HttpSecurityTests.LoginAsync(client, password);
                     Assert.Equal(HttpStatusCode.Redirect, login.StatusCode);
                     Assert.Equal("/admin/posts", new Uri(client.BaseAddress!, login.Headers.Location!).AbsolutePath);
-                    await AssertAuthenticatedAsync(client, post.Title, media);
+                    await AssertAuthenticatedAsync(client, post.Title, media, restored);
                     Assert.Equal(articleBytes, await ReadPublishedArticleAsync(client, post, media));
                     await AssertImageAsync(client, media, imageBytes);
                 }
@@ -168,13 +168,15 @@ public sealed class PersistenceTests : ServiceTestBase
         Assert.Contains("/account/login", response.Headers.Location!.OriginalString);
     }
 
-    private static async Task AssertAuthenticatedAsync(HttpClient client, string title, MediaItem media)
+    private static async Task AssertAuthenticatedAsync(HttpClient client, string title, MediaItem media, RunningSite? site = null)
     {
         using var posts = await client.GetAsync("/admin/posts");
-        Assert.Equal(HttpStatusCode.OK, posts.StatusCode);
+        Assert.True(posts.StatusCode == HttpStatusCode.OK,
+            $"status={(int)posts.StatusCode} errors={string.Join(" | ", site?.ErrorLines ?? [])}");
         Assert.Contains(title, await posts.Content.ReadAsStringAsync());
         using var images = await client.GetAsync("/admin/media");
-        Assert.Equal(HttpStatusCode.OK, images.StatusCode);
+        Assert.True(images.StatusCode == HttpStatusCode.OK,
+            $"media status={(int)images.StatusCode} errors={string.Join(" | ", site?.ErrorLines ?? [])}");
         var html = await images.Content.ReadAsStringAsync();
         Assert.Contains(media.OriginalName, html);
         Assert.Contains(media.Url, html);

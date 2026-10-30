@@ -6,6 +6,8 @@ public static class AccessClaims
     public const string SiteHeader = "X-Origami-Site";
     public const string UserHeader = "X-Origami-User";
     public const string StampHeader = "X-Admin-Security-Stamp";
+    public const string SessionExpiresHeader = "X-Origami-Session-Expires";
+    public const string SessionExpiresAt = "origami:session-expires";
     public const string Bff = "origami:bff";
     public const string CredentialId = "origami:credential";
     public const string CredentialScope = "origami:scope";
@@ -72,3 +74,8 @@ public sealed class CredentialCreateInput
 }
 /// <summary>僅建立成功時回傳一次；不可寫入日誌、持久化 UI 狀態或後續列表。</summary>
 public sealed record CreatedCredential(Guid Id, string Token, DateTimeOffset ExpiresAt);
+
+/// <summary>僅公開供應商名稱，不回傳外部帳號識別。</summary>
+public sealed record ExternalLoginSummary(string LoginProvider, string ProviderDisplayName);
+/// <summary>供已驗證 OAuth 回呼的可信 BFF 使用；帳號一律由目前登入主體決定。</summary>
+public sealed record ExternalLoginLinkInput(string LoginProvider, string ProviderKey);

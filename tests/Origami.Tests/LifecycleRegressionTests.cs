@@ -18,19 +18,19 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
             await db.Contents.Where(x => x.Id == post.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.DeletedAt, DateTimeOffset.UtcNow.AddDays(-40)));
         }
 
-        var gate = new DeleteGate();
+        var gate = new PurgeLockGate();
         var service = new ContentService(new GatedFactory(App.ConnectionString, gate),
             admin.Services.GetRequiredService<AdminAccess>(), TimeProvider.System);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var purge = service.PurgeExpiredTrashAsync(timeout.Token);
         try
         {
-            await gate.DeleteEntered.Task.WaitAsync(TimeSpan.FromSeconds(30), timeout.Token);
-            // 管理員在清理流程列出與刪除之間還原該內容。
+            await gate.LockEntered.Task.WaitAsync(TimeSpan.FromSeconds(30), timeout.Token);
+            // 管理員在清理流程鎖列重判狀態之前還原該內容；鎖列後必須略過已還原者。
             var trashed = await admin.Content.GetEditAsync(post.Id!.Value, timeout.Token);
             await admin.Content.RestoreAsync(trashed.Id!.Value, trashed.Version, timeout.Token);
             gate.Release.TrySetResult();
-            await purge;
+            Assert.Equal(0, await purge);
 
             await using var check = await App.CreateContextAsync();
             Assert.True(await check.Contents.AnyAsync(x => x.Id == post.Id), "a restored draft survives the purge");
@@ -160,18 +160,20 @@ public sealed class LifecycleRegressionTests(IsolatedPostgres postgres) : Servic
             Task.FromResult(CreateDbContext());
     }
 
-    /// <summary>讓清理流程停在列出逾期項目與刪除之間。</summary>
-    private sealed class DeleteGate : DbCommandInterceptor
+    /// <summary>讓清理流程停在「列出逾期項目」與「鎖列重判狀態」之間。</summary>
+    private sealed class PurgeLockGate : DbCommandInterceptor
     {
-        public TaskCompletionSource DeleteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource LockEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
-            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.StartsWith("DELETE FROM \"Contents\"", StringComparison.Ordinal))
+            // 候選列的鎖列查詢帶有狀態條件；鎖定後清理流程才會重新判斷是否仍逾期。
+            if (command.CommandText.Contains("FOR UPDATE", StringComparison.Ordinal) &&
+                command.CommandText.Contains("\"Status\"", StringComparison.Ordinal))
             {
-                DeleteEntered.TrySetResult();
+                LockEntered.TrySetResult();
                 await Release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
             }
             return result;

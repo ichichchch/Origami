@@ -20,7 +20,7 @@
     <div class="upload-control">
         <div id="media-drop-zone" class="drop-zone" aria-describedby="media-drop-help">
             <label for="media-upload" class="sr-only">@UiText.T("Admin.Media.SelectImages", "選取要上傳的圖片（可多選）")</label>
-            <InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm" additionalAttributes="@(new Dictionary<string, object> { ["multiple"] = true })" disabled="@EditBlocked" />
+            <InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm" multiple disabled="@EditBlocked" />
             <p id="media-drop-help" class="field-help">@UiText.T("Admin.Media.DropHelp", "把圖片拖到這裡，或點選選取多個檔案。")</p>
         </div>
         @if (_uploadName is not null) { <p role="status">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.Uploading", "正在上傳：{0}"), _uploadName)</p> }

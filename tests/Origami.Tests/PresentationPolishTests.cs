@@ -12,12 +12,12 @@ public sealed class PresentationPolishTests(IsolatedPostgres postgres) : Service
             .ToDictionary(x => x.GetAttribute("name")!, x => x.GetAttribute("value") ?? "");
         fields["Input.Username"] = "test-admin";
         fields["Input.Password"] = password;
-        if (remember) fields["Input.Remember"] = "true";
+        fields["Input.Remember"] = remember ? "true" : "false";
         return await client.PostAsync("/account/login", new FormUrlEncodedContent(fields));
     }
 
     [PostgresFact]
-    public async Task Remember_me_switches_to_a_persistent_cookie()
+    public async Task Login_environment_defaults_to_public_and_home_issues_a_thirty_day_cookie()
     {
         var password = IsolatedPostgres.NewPassword();
         await App.Provisioner.ResetPasswordAsync(password);
@@ -25,6 +25,11 @@ public sealed class PresentationPolishTests(IsolatedPostgres postgres) : Service
         await site.StartAsync();
 
         using var sessionClient = site.CreateClient();
+        var loginDocument = new HtmlParser().ParseDocument(await sessionClient.GetStringAsync("/account/login"));
+        var environments = loginDocument.QuerySelectorAll("input[type='radio'][name='Input.Remember']");
+        Assert.Equal(2, environments.Length);
+        Assert.Equal("false", Assert.Single(environments, input => input.HasAttribute("checked")).GetAttribute("value"));
+        Assert.Empty(loginDocument.QuerySelectorAll("button[formaction='/account/external/challenge']"));
         using var ephemeral = await LoginAsync(sessionClient, password, remember: false);
         Assert.Equal(HttpStatusCode.Redirect, ephemeral.StatusCode);
         var ephemeralCookie = ephemeral.Headers.GetValues("Set-Cookie")
@@ -32,11 +37,17 @@ public sealed class PresentationPolishTests(IsolatedPostgres postgres) : Service
         Assert.DoesNotContain("expires=", ephemeralCookie, StringComparison.OrdinalIgnoreCase);
 
         using var persistentClient = site.CreateClient();
+        var before = DateTimeOffset.UtcNow;
         using var persistent = await LoginAsync(persistentClient, password, remember: true);
+        var after = DateTimeOffset.UtcNow;
         Assert.Equal(HttpStatusCode.Redirect, persistent.StatusCode);
         var persistentCookie = persistent.Headers.GetValues("Set-Cookie")
             .Single(c => c.Contains("__Host-Origami.Admin", StringComparison.Ordinal));
-        Assert.Contains("expires=", persistentCookie, StringComparison.OrdinalIgnoreCase);
+        var parsed = Microsoft.Net.Http.Headers.SetCookieHeaderValue.Parse(persistentCookie);
+        Assert.NotNull(parsed.Expires);
+        Assert.InRange(parsed.Expires.Value, before.AddDays(30).AddSeconds(-1), after.AddDays(30));
+        Assert.True(parsed.Secure);
+        Assert.True(parsed.HttpOnly);
 
         await App.Provisioner.ResetPasswordAsync(IsolatedPostgres.NewPassword());
     }

@@ -10,10 +10,10 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JavaScript
 
-<PageTitle>@(ReadOnly ? UiText.T("Admin.ContentEditor.ViewPageTitle", "檢視內容 · 內容管理") : _model?.Id is null ? UiText.T("Admin.ContentEditor.NewPageTitle", "新增內容 · 內容管理") : UiText.T("Admin.ContentEditor.EditPageTitle", "編輯內容 · 內容管理"))</PageTitle>
+<PageTitle>@PageTitleText</PageTitle>
 <UnsavedGuard Dirty="Dirty" Busy="@(Busy || ChildBusy)" />
 <div class="page-heading">
-    <div><a class="back-link" href="@ListPath">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.BackToList", "← 返回{0}列表"), KindLabel)</a><h1>@string.Format(CultureInfo.CurrentCulture, ReadOnly ? UiText.T("Admin.ContentEditor.ViewHeading", "檢視{0}") : _model?.Id is null ? UiText.T("Admin.ContentEditor.NewHeading", "新增{0}") : UiText.T("Admin.ContentEditor.EditHeading", "編輯{0}"), KindLabel)</h1><p>@UiText.T("Admin.ContentEditor.Introduction", "專注寫作，準備好再與世界分享。")</p></div>
+    <div><a class="back-link" href="@ListPath">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.BackToList", "← 返回{0}列表"), KindLabel)</a><h1>@string.Format(CultureInfo.CurrentCulture, HeadingText, KindLabel)</h1><p>@UiText.T("Admin.ContentEditor.Introduction", "專注寫作，準備好再與世界分享。")</p></div>
     <span class="save-indicator @(Dirty ? "unsaved" : "")" role="status">@SaveStatusText</span>
     @if (_autosaveAt is { } at)
     {
@@ -200,7 +200,7 @@ else if (_model is not null)
                             <button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">@UiText.T("Admin.ContentEditor.InsertImage", "插入圖片")</button>
                         </div>
                     </div>
-                    <InputFile id="editor-inline-upload" OnChange="UploadInlineFilesAsync" additionalAttributes="@(new Dictionary<string, object> { ["multiple"] = true, ["class"] = "sr-only" })" disabled="@Blocked" />
+                    <InputFile id="editor-inline-upload" OnChange="UploadInlineFilesAsync" multiple class="sr-only" disabled="@Blocked" />
                     @if (_linkPickerOpen)
                     {
                         <div class="panel link-picker" role="region" aria-label="@UiText.T("Admin.ContentEditor.InternalLinkPicker", "搜尋並插入站內連結")">
@@ -500,6 +500,26 @@ else if (_model is not null)
         || _model is { Status: ContentStatus.Draft or ContentStatus.Pending, PublishAt: null });
     private bool _canEditThis;
     private bool ReadOnly => _model is null || !EditAllowed;
+    /// <summary>瀏覽器標題：依檢視、新增或編輯狀態顯示對應文字。</summary>
+    private string PageTitleText
+    {
+        get
+        {
+            if (ReadOnly) return UiText.T("Admin.ContentEditor.ViewPageTitle", "檢視內容 · 內容管理");
+            if (_model?.Id is null) return UiText.T("Admin.ContentEditor.NewPageTitle", "新增內容 · 內容管理");
+            return UiText.T("Admin.ContentEditor.EditPageTitle", "編輯內容 · 內容管理");
+        }
+    }
+    /// <summary>頁面大標題格式字串：依檢視、新增或編輯狀態顯示對應文字。</summary>
+    private string HeadingText
+    {
+        get
+        {
+            if (ReadOnly) return UiText.T("Admin.ContentEditor.ViewHeading", "檢視{0}");
+            if (_model?.Id is null) return UiText.T("Admin.ContentEditor.NewHeading", "新增{0}");
+            return UiText.T("Admin.ContentEditor.EditHeading", "編輯{0}");
+        }
+    }
     private Task<bool> RunSaveAsync(Func<CancellationToken, Task> action, string? success = null) =>
         RunAsync(async ct =>
         {

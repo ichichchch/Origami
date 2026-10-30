@@ -12,7 +12,6 @@ public sealed partial class MainViewModel(Navigator navigator, OrigamiApiClient 
     private const int PageSize = 10;
     private int page;
     private int total;
-    private bool inSearchMode;
 
     [ObservableProperty]
     public partial ObservableCollection<ItemModel> Items { get; set; } = [];
@@ -54,7 +53,6 @@ public sealed partial class MainViewModel(Navigator navigator, OrigamiApiClient 
         await RunBusyAsync(async ct =>
         {
             var result = await api.SearchAsync(query, PageSize, ct);
-            inSearchMode = true;
             total = result.Hits.Count;
             page = 1;
             CanLoadMore = false;
@@ -75,17 +73,22 @@ public sealed partial class MainViewModel(Navigator navigator, OrigamiApiClient 
         await RunBusyAsync(async ct =>
         {
             var result = await api.ListPostsAsync(targetPage, PageSize, ct);
-            inSearchMode = false;
             page = result.Page;
             total = result.Total;
             var loaded = (targetPage - 1) * PageSize + result.Items.Count;
             CanLoadMore = loaded < total;
             Mode = "最新文章";
-            var mapped = result.Items.Select(item => new ItemModel(
-                item.Title,
-                (item.IsProtected ? "此內容受密碼保護，App 不提供正文。" : item.Excerpt),
-                item.Slug,
-                item.IsSticky ? "置頂" : item.IsProtected ? "保護" : ""));
+            var mapped = result.Items.Select(item =>
+            {
+                var badge = "";
+                if (item.IsSticky) badge = "置頂";
+                else if (item.IsProtected) badge = "保護";
+                return new ItemModel(
+                    item.Title,
+                    (item.IsProtected ? "此內容受密碼保護，App 不提供正文。" : item.Excerpt),
+                    item.Slug,
+                    badge);
+            });
             if (targetPage == 1) Items = [.. mapped];
             else foreach (var entry in mapped) Items.Add(entry);
             Message = result.Items.Count == 0 ? "目前沒有已發布的文章。" : "";

@@ -4,6 +4,25 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
 {
     // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
+    /// <summary>自動摘要取用的正文長度上限；正文更短時使用全文。</summary>
+    private const int ExcerptPreviewLength = 600;
+    /// <summary>受密碼保護內容在公開列表顯示的摘要提示。</summary>
+    private const string ProtectedExcerptText = "此內容受密碼保護。";
+
+    /// <summary>組裝公開摘要：受密碼保護時顯示提示，其次採用手動摘要，最後使用正文預覽。</summary>
+    private static string BuildExcerpt(bool isProtected, string manualExcerpt, string preview)
+    {
+        if (isProtected) return ProtectedExcerptText;
+        return BuildExcerpt(manualExcerpt, preview);
+    }
+
+    /// <summary>組裝公開摘要：優先採用手動摘要，其次使用正文預覽。</summary>
+    private static string BuildExcerpt(string manualExcerpt, string preview)
+    {
+        if (!string.IsNullOrEmpty(manualExcerpt)) return manualExcerpt;
+        return preview;
+    }
+
     public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default,
         ContentStatus? status = null, string? search = null, string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null)
     {
@@ -1218,16 +1237,25 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (month is { } filterMonth) query = query.Where(x => x.PublishedAt!.Value.Month == filterMonth);
         var total = await query.CountAsync(ct);
         // 置頂文章排在公開列表每一頁前頭；穩定的排序鍵讓分頁結果一致。
-        var items = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
-            .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+        // 自動摘要只在資料庫端截斷前段正文，避免整篇正文傳回應用程式。
+        var rows = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id).Skip(offset).Take(pageSize)
+            .Select(x => new
             {
-                Excerpt = x.IsProtected ? "此內容受密碼保護。" : x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
-                ExcerptIsManual = x.IsProtected || x.Excerpt != "",
-                IsSticky = x.IsSticky,
-                IsProtected = x.IsProtected,
+                x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version,
+                x.IsProtected, x.IsSticky, x.Excerpt,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
-                CoverAltText = x.Cover != null ? x.Cover.AltText : ""
+                CoverAltText = x.Cover != null ? x.Cover.AltText : "",
+                Preview = x.Markdown.Substring(0, x.Markdown.Length > ExcerptPreviewLength ? ExcerptPreviewLength : x.Markdown.Length)
             }).ToListAsync(ct);
+        var items = rows.Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+        {
+            Excerpt = BuildExcerpt(x.IsProtected, x.Excerpt, x.Preview),
+            ExcerptIsManual = x.IsProtected || x.Excerpt != "",
+            IsSticky = x.IsSticky,
+            IsProtected = x.IsProtected,
+            CoverFileName = x.CoverFileName,
+            CoverAltText = x.CoverAltText
+        }).ToList();
         return new(items, total, page, pageSize);
     }
 
@@ -1282,14 +1310,21 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         }
         if (tag is not null) query = query.Where(x => x.Tags.Any(t => t.Slug == tag));
         if (author is not null) query = query.Where(x => x.AuthorSlug == author);
-        return await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
-            .Take(count).Select(x => new FeedEntry(x.Id, x.Title, x.Slug, x.PublishedAt,
-                x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
+        var rows = await query.OrderByDescending(x => x.IsSticky).ThenByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
+            .Take(count).Select(x => new
+            {
+                x.Id, x.Title, x.Slug, x.PublishedAt, x.Excerpt, x.Markdown, x.AuthorName, x.Kind,
+                ContentTypeSlug = x.ContentType != null ? x.ContentType.Slug : resolvedTypeSlug,
+                Preview = x.Markdown.Substring(0, x.Markdown.Length > ExcerptPreviewLength ? ExcerptPreviewLength : x.Markdown.Length)
+            }).ToListAsync(ct);
+        // 訂閱內容只含未受密碼保護的已發布文章，摘要不需顯示保護提示。
+        return rows.Select(x => new FeedEntry(x.Id, x.Title, x.Slug, x.PublishedAt,
+                BuildExcerpt(x.Excerpt, x.Preview),
                 x.Markdown, x.Excerpt != "", x.AuthorName)
             {
                 Kind = x.Kind,
-                ContentTypeSlug = x.ContentType != null ? x.ContentType.Slug : resolvedTypeSlug
-            }).ToListAsync(ct);
+                ContentTypeSlug = x.ContentTypeSlug
+            }).ToList();
     }
 
     public sealed record FeedEntry(Guid Id, string Title, string Slug, DateTimeOffset? PublishedAt,
@@ -1399,20 +1434,28 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             query = query.Where(x => x.CustomTerms.Any(ctm => subtree.Contains(ctm.TermId)));
         }
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
+        var rows = await query.OrderByDescending(x => x.PublishedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize)
-            .Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+            .Select(x => new
             {
-                Excerpt = x.IsProtected ? "此內容受密碼保護。" : x.Excerpt != "" ? x.Excerpt : x.Markdown.Substring(0, x.Markdown.Length > 600 ? 600 : x.Markdown.Length),
-                ExcerptIsManual = x.IsProtected || x.Excerpt != "",
-                IsProtected = x.IsProtected,
+                x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version,
+                x.IsProtected, x.Excerpt, x.AuthorName, x.AuthorSlug, x.MetaDescription, x.NoIndex, x.ParentId,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
-                AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
-                MetaDescription = x.MetaDescription, NoIndex = x.NoIndex,
-                ParentId = x.ParentId,
-                ContentTypeSlug = normalized
+                Preview = x.Markdown.Substring(0, x.Markdown.Length > ExcerptPreviewLength ? ExcerptPreviewLength : x.Markdown.Length)
             }).ToListAsync(ct);
+        var items = rows.Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
+        {
+            Excerpt = BuildExcerpt(x.IsProtected, x.Excerpt, x.Preview),
+            ExcerptIsManual = x.IsProtected || x.Excerpt != "",
+            IsProtected = x.IsProtected,
+            CoverFileName = x.CoverFileName,
+            CoverAltText = x.CoverAltText,
+            AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
+            MetaDescription = x.MetaDescription, NoIndex = x.NoIndex,
+            ParentId = x.ParentId,
+            ContentTypeSlug = normalized
+        }).ToList();
         return new(items, total, page, pageSize);
     }
 

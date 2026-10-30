@@ -1,0 +1,115 @@
+@page "/account/external-logins"
+@attribute [Authorize]
+@attribute [ExcludeFromInteractiveRouting]
+@inject OrigamiClient Api
+@inject ExternalProviderCatalog Providers
+@inject NavigationManager Navigation
+
+<PageTitle>@UiText.T("Account.External.Title", "第三方登入綁定")</PageTitle>
+<section class="auth-card external-account-card" aria-labelledby="external-title">
+    <h1 id="external-title">@UiText.T("Account.External.Title", "第三方登入綁定")</h1>
+    <p class="field-help">@UiText.T("Account.External.Help", "綁定後可使用第三方帳號登入；不會建立新帳號或變更站點權限。本機密碼仍保留。")</p>
+    <p class="notice">@UiText.T("Account.External.RevocationHelp", "綁定或解除成功後，所有既有登入及 API 憑證將失效，請重新登入。")</p>
+    @if (errorMessage is not null)
+    {
+        <p class="notice notice-error" role="alert">@errorMessage</p>
+    }
+    @if (pendingProvider is not null)
+    {
+        <section class="panel">
+            <h2>@UiText.T("Account.External.ConfirmTitle", "確認綁定已驗證的第三方帳號")</h2>
+            <p>@pendingProvider</p>
+            <form method="post" action="/account/external/link/complete" data-enhance="false">
+                <AntiforgeryToken />
+                <button type="submit" class="button">@UiText.T("Account.External.Confirm", "確認綁定並重新登入")</button>
+                <a class="button button-secondary" href="/admin/security" data-enhance-nav="false">@UiText.T("Common.Cancel", "取消")</a>
+            </form>
+        </section>
+    }
+    @if (loaded)
+    {
+        <h2>@UiText.T("Account.External.Linked", "已綁定")</h2>
+        @if (logins.Count == 0)
+        {
+            <p class="field-help">@UiText.T("Account.External.NoLinks", "尚未綁定第三方帳號。")</p>
+        }
+        @foreach (var login in logins)
+        {
+            <form method="post" action="/account/external/unlink" data-enhance="false" class="external-account-form">
+                <AntiforgeryToken />
+                <input type="hidden" name="provider" value="@login.LoginProvider" />
+                <h3>@login.ProviderDisplayName</h3>
+                <div class="field">
+                    <label for="@($"unlink-password-{login.LoginProvider}")">@UiText.T("Admin.Security.CurrentPassword", "目前密碼")</label>
+                    <input id="@($"unlink-password-{login.LoginProvider}")" type="password" name="password" autocomplete="current-password" maxlength="1024" required />
+                </div>
+                <div class="field">
+                    <label for="@($"unlink-code-{login.LoginProvider}")">@UiText.T("Account.External.CodeHelp", "已啟用兩步驗證時，請填動態碼或恢復碼")</label>
+                    <input id="@($"unlink-code-{login.LoginProvider}")" name="code" autocomplete="one-time-code" maxlength="10" />
+                </div>
+                <button type="submit" class="button button-danger">@UiText.T("Account.External.Unlink", "確認解除綁定")</button>
+            </form>
+        }
+        <h2>@UiText.T("Account.External.LinkTitle", "綁定新的第三方帳號")</h2>
+        @if (available.Count == 0)
+        {
+            <p class="field-help">@UiText.T("Account.External.NoProviders", "目前沒有可新增的供應商；尚未設定的第三方登入不會啟用。")</p>
+        }
+        else
+        {
+            <form method="post" action="/account/external/link" data-enhance="false" class="external-account-form">
+                <AntiforgeryToken />
+                <div class="field">
+                    <label for="link-password">@UiText.T("Admin.Security.CurrentPassword", "目前密碼")</label>
+                    <input id="link-password" type="password" name="password" autocomplete="current-password" maxlength="1024" required />
+                </div>
+                <div class="field">
+                    <label for="link-code">@UiText.T("Account.External.CodeHelp", "已啟用兩步驗證時，請填動態碼或恢復碼")</label>
+                    <input id="link-code" name="code" autocomplete="one-time-code" maxlength="10" />
+                </div>
+                <div class="button-row">
+                    @foreach (var provider in available)
+                    {
+                        <button type="submit" name="provider" value="@provider.Name" class="button button-secondary">@provider.DisplayName</button>
+                    }
+                </div>
+            </form>
+        }
+    }
+    <p><a href="/admin/security" data-enhance-nav="false">@UiText.T("Account.External.Back", "返回個人安全設定")</a></p>
+</section>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? ErrorCode { get; set; }
+    [SupplyParameterFromQuery(Name = "confirm")] public string? Confirm { get; set; }
+    private IReadOnlyList<ExternalLoginSummary> logins = [];
+    private IReadOnlyList<ExternalProviderDescriptor> available = [];
+    private string? pendingProvider;
+    private string? errorMessage;
+    private bool loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpContext is null)
+        {
+            Navigation.NavigateTo("/account/external-logins", forceLoad: true);
+            return;
+        }
+        if (ErrorCode == "verification")
+            errorMessage = UiText.T("Account.External.VerificationFailed", "無法確認身份，請檢查密碼及兩步驗證碼後重試。");
+        try
+        {
+            logins = await Api.GetMyExternalLoginsAsync(HttpContext.RequestAborted);
+            available = Providers.ForOrigin(WebSignInFlow.Origin(HttpContext))
+                .Where(provider => !logins.Any(login => login.LoginProvider == provider.Name)).ToArray();
+            if (Confirm == "1")
+                pendingProvider = await ExternalLoginEndpoints.GetPendingLinkProviderAsync(HttpContext);
+            loaded = true;
+        }
+        catch (Exception exception) when (exception is CmsException or HttpRequestException or UnauthorizedAccessException)
+        {
+            errorMessage = UiText.T("Account.External.LoadFailed", "無法載入綁定狀態，請重新登入或稍後再試。");
+        }
+    }
+}

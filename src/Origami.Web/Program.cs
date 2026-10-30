@@ -51,6 +51,8 @@ builder.Services.AddScoped<CircuitHandler, SiteCircuitHandler>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents()
     .AddHubOptions(options => options.MaximumReceiveMessageSize = 2 * 1024 * 1024);
 builder.Services.AddCmsIdentity();
+builder.Services.AddExternalAuthentication(builder.Configuration);
+builder.Services.AddScoped<WebSignInFlow>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>(provider => new LoginThrottle(provider.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<ContentService>();

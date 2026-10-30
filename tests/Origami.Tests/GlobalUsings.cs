@@ -44,6 +44,7 @@ global using System.Net.Http.Headers;
 global using System.Net.Http.Json;
 global using System.Net.Sockets;
 global using System.Reflection;
+global using System.Resources;
 global using System.Security.Claims;
 global using System.Security.Cryptography;
 global using System.Security.Cryptography.X509Certificates;

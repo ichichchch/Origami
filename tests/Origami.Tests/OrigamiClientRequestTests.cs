@@ -53,6 +53,48 @@ public sealed class OrigamiClientRequestTests
             await Assert.ThrowsAsync<AccessDeniedException>(() => api.ReleaseEditingAsync(Guid.NewGuid()));
     }
 
+    [Fact]
+    public async Task Every_request_replaces_default_identity_headers_and_expired_snapshot_becomes_anonymous()
+    {
+        var deadline = new DateTimeOffset(2030, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        var clock = new RequestClock(deadline.AddHours(-1));
+        var auth = new MutableAuthenticationStateProvider();
+        auth.SetPrincipal(new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.NameIdentifier, "request-user"),
+            new Claim(new IdentityOptions().ClaimsIdentity.SecurityStampClaimType, "request-stamp"),
+            LoginSessionLifetime.CreateClaim(deadline)
+        ], "test")));
+        var observed = new List<string[]>();
+        using var handler = new RecordingHandler(request =>
+        {
+            observed.Add(new[] { AccessClaims.UserHeader, AccessClaims.StampHeader, AccessClaims.SessionExpiresHeader }
+                .Select(name => request.Headers.TryGetValues(name, out var values) ? string.Join(",", values) : "").ToArray());
+            return new(HttpStatusCode.OK) { Content = JsonContent.Create(Array.Empty<PageNavItem>()) };
+        });
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://example.test/") };
+        http.DefaultRequestHeaders.Add(AccessClaims.UserHeader, "old-user");
+        http.DefaultRequestHeaders.Add(AccessClaims.StampHeader, "old-stamp");
+        http.DefaultRequestHeaders.Add(AccessClaims.SessionExpiresHeader, "253402300799");
+        var api = new OrigamiClient(http,
+            new AdminSession(new HttpContextAccessor(), auth, Options.Create(new IdentityOptions()), clock));
+        await api.GetNavigationAsync();
+        clock.UtcNow = deadline.AddTicks(-1);
+        await api.GetNavigationAsync();
+        clock.UtcNow = deadline;
+        await api.GetNavigationAsync();
+        Assert.Equal(new[] { "request-user", "request-stamp", deadline.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) }, observed[0]);
+        Assert.Equal(observed[0], observed[1]);
+        Assert.Equal(new[] { "", "", "" }, observed[2]);
+        Assert.Equal("old-user", Assert.Single(http.DefaultRequestHeaders.GetValues(AccessClaims.UserHeader)));
+    }
+
+    private sealed class RequestClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset UtcNow { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => UtcNow;
+    }
+
     private static OrigamiClient Client(HttpClient http) => new(http,
         new AdminSession(new HttpContextAccessor(), new AnonymousAuthentication(), Options.Create(new IdentityOptions())));
 

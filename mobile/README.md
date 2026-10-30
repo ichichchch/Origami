@@ -38,9 +38,22 @@ dotnet run --project mobile/Origami.Mobile.Desktop
 
 ## Android
 
-- 需要 `android` workload（本机已装）**与 Android SDK**（本机尚未安装：构建报 XA5300）。
-  安装方式：Visual Studio Installer 勾选 Android SDK，或用 cmdline-tools 的 `sdkmanager`；
-  SDK 在自定义路径时以 `-p:AndroidSdkDirectory=<路径>` 传入。
+- 需要 `android` workload（本机已装）、**Android SDK** 与 **JDK 21**。
+  - Android SDK：本机已装于 `D:\Android\Sdk`；用 cmdline-tools 的 `sdkmanager` 安装，
+    SDK 在自定义路径时以 `-p:AndroidSdkDirectory=<路径>` 传入。
+  - JDK：.NET Android 工具链只接受 JDK 21（`Microsoft.OpenJDK.21`）；JDK 26 会报 XA0030，
+    以 `-p:JavaSdkDirectory=<路径>` 指定 JDK 21 的安装目录。
+- 本机已验证的构建命令：
+
+```bash
+dotnet build mobile/Origami.Mobile.Android/Origami.Mobile.Android.csproj -c Release \
+  -p:AndroidSdkDirectory="D:/Android/Sdk" \
+  -p:JavaSdkDirectory="C:/Program Files/Microsoft/jdk-21.0.13.21-hotspot"
+```
+
+  输出 APK 于 `mobile/Origami.Mobile.Android/bin/Release/net10.0-android/`。
+  JDK 21 的版本字串（`21.0.13.0.2`）无法被工具链的版本解析器识别，会产生 XA0033 警告；
+  构建结果不受影响。
 - 模拟器访问开发机请把 App 设置改为 `http://10.0.2.2:5100`（10.0.2.2 即宿主机 localhost）。
 - 清单已开启 `usesCleartextTraffic` 仅供开发连 `http://`；正式环境 API 必须使用 HTTPS。
 

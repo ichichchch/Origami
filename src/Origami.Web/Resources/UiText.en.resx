@@ -208,9 +208,6 @@
   <data name="Public.ContentDetail.02" xml:space="preserve">
     <value>Back to home</value>
   </data>
-  <data name="Public.ContentDetail.03" xml:space="preserve">
-    <value>← Back to home</value>
-  </data>
   <data name="Public.ContentDetail.04" xml:space="preserve">
     <value>This content is password protected</value>
   </data>
@@ -398,13 +395,10 @@
     <value>Authenticator code</value>
   </data>
   <data name="Account.Login.CodeFailure" xml:space="preserve">
-    <value>The authenticator code is incorrect or has expired. Try again.</value>
-  </data>
-  <data name="Account.Login.CodeHelp" xml:space="preserve">
-    <value>Your account and password have been verified. Enter the 6-digit code shown in your authenticator app.</value>
+    <value>The verification code is incorrect or has expired. Sign in again.</value>
   </data>
   <data name="Account.Login.CodeLength" xml:space="preserve">
-    <value>The verification code must be 6 digits.</value>
+    <value>Enter a 6-digit authenticator code or an 8-character recovery code.</value>
   </data>
   <data name="Account.Login.CodeRequired" xml:space="preserve">
     <value>Enter the authenticator code.</value>
@@ -417,9 +411,6 @@
   </data>
   <data name="Account.Login.Introduction" xml:space="preserve">
     <value>Sign in to write posts, create pages, manage images, and use the site's AI assistant.</value>
-  </data>
-  <data name="Account.Login.Locked" xml:space="preserve">
-    <value>Your account is temporarily locked. Try again after the lockout period.</value>
   </data>
   <data name="Account.Login.LoginFailure" xml:space="preserve">
     <value>Unable to sign in. Check your account and password, or try again later.</value>
@@ -439,14 +430,8 @@
   <data name="Account.Login.RegistrationHelp" xml:space="preserve">
     <value>Public registration is not available. Contact an administrator for an account and site membership. Sign in separately on each domain; cross-domain single sign-on is not supported.</value>
   </data>
-  <data name="Account.Login.Remember" xml:space="preserve">
-    <value>Remember me (stay signed in on this browser)</value>
-  </data>
   <data name="Account.Login.ResetHelp" xml:space="preserve">
     <value>{0} only resets the network administrator's password and disables their two-step verification. Other users are not changed. Enter the password interactively in the terminal, never as a command-line argument.</value>
-  </data>
-  <data name="Account.Login.Restart" xml:space="preserve">
-    <value>Sign in again with your account and password</value>
   </data>
   <data name="Account.Login.SetupTitle" xml:space="preserve">
     <value>First time here, or forgot your password?</value>
@@ -2227,9 +2212,6 @@
   <data name="Admin.ContentEditor.ApproveAndPublish" xml:space="preserve">
     <value>Approve and publish</value>
   </data>
-  <data name="Admin.ContentEditor.AuthorReadOnlyNotice" xml:space="preserve">
-    <value>This content is published and managed by editors. You can still view the content and its revisions.</value>
-  </data>
   <data name="Admin.ContentEditor.AutosaveHelp" xml:space="preserve">
     <value>Existing drafts are autosaved every {0} seconds (drafts only). The original publication date is preserved and is not reset when republishing.</value>
   </data>
@@ -3631,4 +3613,537 @@
   <data name="Public.TypeContent.Yes" xml:space="preserve">
     <value>Yes</value>
   </data>
+  <data name="Admin.Audit.PageTitle" xml:space="preserve">
+    <value>Audit log · Content management</value>
+  </data>
+  <data name="Admin.Audit.Eyebrow" xml:space="preserve">
+    <value>Security and governance</value>
+  </data>
+  <data name="Admin.Audit.Title" xml:space="preserve">
+    <value>Audit log</value>
+  </data>
+  <data name="Admin.Audit.Introduction" xml:space="preserve">
+    <value>Review this site's records of publishing, editing, settings changes, and security operations (administrators only).</value>
+  </data>
+  <data name="Admin.Audit.LogsHeading" xml:space="preserve">
+    <value>Recent records</value>
+  </data>
+  <data name="Admin.Audit.EmptyTitle" xml:space="preserve">
+    <value>No audit records yet</value>
+  </data>
+  <data name="Admin.Audit.EmptyHelp" xml:space="preserve">
+    <value>Content changes, settings saves, and security operations on this site are recorded here automatically.</value>
+  </data>
+  <data name="Admin.Audit.Time" xml:space="preserve">
+    <value>Time (UTC)</value>
+  </data>
+  <data name="Admin.Audit.Actor" xml:space="preserve">
+    <value>Actor</value>
+  </data>
+  <data name="Admin.Audit.Action" xml:space="preserve">
+    <value>Event</value>
+  </data>
+  <data name="Admin.Audit.Target" xml:space="preserve">
+    <value>Target description</value>
+  </data>
+  <data name="Admin.Audit.Pagination" xml:space="preserve">
+    <value>Audit log pagination</value>
+  </data>
+  <data name="Common.PreviousPage" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="Common.NextPage" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="Admin.Audit.AdminOnly" xml:space="preserve">
+    <value>The audit log is visible to site administrators only.</value>
+  </data>
+  <data name="Admin.Comments.OfficialReply" xml:space="preserve">
+    <value>Official reply</value>
+  </data>
+  <data name="Admin.Comments.ReplyTo" xml:space="preserve">
+    <value>Reply to {0}</value>
+  </data>
+  <data name="Admin.Comments.ReplyLabel" xml:space="preserve">
+    <value>Reply content</value>
+  </data>
+  <data name="Admin.Comments.ReplyPlaceholder" xml:space="preserve">
+    <value>Enter the reply (Markdown is supported)…</value>
+  </data>
+  <data name="Admin.Comments.SubmitReply" xml:space="preserve">
+    <value>Post reply</value>
+  </data>
+  <data name="Admin.Comments.Reply" xml:space="preserve">
+    <value>Reply</value>
+  </data>
+  <data name="Admin.Comments.Replied" xml:space="preserve">
+    <value>The reply is posted and shown publicly.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiSuggestSummary" xml:space="preserve">
+    <value>✨ AI suggests a summary and SEO description</value>
+  </data>
+  <data name="Admin.ContentEditor.MenuOrder" xml:space="preserve">
+    <value>Page order (menu order)</value>
+  </data>
+  <data name="Admin.ContentEditor.MenuOrderHelp" xml:space="preserve">
+    <value>Lower numbers come first (0 by default); used for the default page navigation and the admin page list order.</value>
+  </data>
+  <data name="Common.PleaseSelect" xml:space="preserve">
+    <value>Please select…</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertToc" xml:space="preserve">
+    <value>Insert table of contents [toc]</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertCallout" xml:space="preserve">
+    <value>Insert callout</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertDetails" xml:space="preserve">
+    <value>Insert collapsible block</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertInternalLink" xml:space="preserve">
+    <value>Internal link</value>
+  </data>
+  <data name="Admin.ContentEditor.InternalLinkPicker" xml:space="preserve">
+    <value>Search and insert an internal link</value>
+  </data>
+  <data name="Admin.ContentEditor.SearchInternalContent" xml:space="preserve">
+    <value>Search posts or pages on this site</value>
+  </data>
+  <data name="Admin.ContentEditor.SearchLinkPlaceholder" xml:space="preserve">
+    <value>Enter a title keyword…</value>
+  </data>
+  <data name="Common.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertLinkAction" xml:space="preserve">
+    <value>Insert link</value>
+  </data>
+  <data name="Admin.ContentEditor.Author" xml:space="preserve">
+    <value>Author</value>
+  </data>
+  <data name="Admin.ContentEditor.DefaultAuthor" xml:space="preserve">
+    <value>Current user</value>
+  </data>
+  <data name="Admin.ContentEditor.AllowComments" xml:space="preserve">
+    <value>Allow visitor comments</value>
+  </data>
+  <data name="Admin.ContentEditor.AllowCommentsHelp" xml:space="preserve">
+    <value>When this is unchecked, the comment form is closed for this post (site-wide comments must also be enabled).</value>
+  </data>
+  <data name="Admin.ContentEditor.DuplicateAsDraft" xml:space="preserve">
+    <value>Duplicate as a new draft</value>
+  </data>
+  <data name="Admin.ContentEditor.ReadingStats" xml:space="preserve">
+    <value>{0:N0} words · about {1} min read</value>
+  </data>
+  <data name="Admin.ContentEditor.AiSuggestFailed" xml:space="preserve">
+    <value>Could not generate a summary suggestion. Try again later.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiSuggestedNotice" xml:space="preserve">
+    <value>Summary and SEO description suggestions were filled in from the title and body.</value>
+  </data>
+  <data name="Admin.ContentEditor.DuplicateFailed" xml:space="preserve">
+    <value>Could not duplicate the content. Try again.</value>
+  </data>
+  <data name="Admin.ContentEditor.InlineUploadSuccess" xml:space="preserve">
+    <value>Uploaded and inserted the media syntax.</value>
+  </data>
+  <data name="Admin.ContentList.Duplicate" xml:space="preserve">
+    <value>Duplicate</value>
+  </data>
+  <data name="Admin.ContentList.DuplicateFailed" xml:space="preserve">
+    <value>Could not duplicate the content. Try again.</value>
+  </data>
+  <data name="Admin.ContentList.DuplicatedNotice" xml:space="preserve">
+    <value>Duplicated as a new draft.</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeUrl" xml:space="preserve">
+    <value>URL</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeSelect" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeMedia" xml:space="preserve">
+    <value>Media</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldOptions" xml:space="preserve">
+    <value>Select options (comma separated)</value>
+  </data>
+  <data name="Admin.Dashboard.PageTitle" xml:space="preserve">
+    <value>Dashboard · Content management</value>
+  </data>
+  <data name="Admin.Dashboard.Eyebrow" xml:space="preserve">
+    <value>Site overview</value>
+  </data>
+  <data name="Admin.Dashboard.Title" xml:space="preserve">
+    <value>Dashboard</value>
+  </data>
+  <data name="Admin.Dashboard.Introduction" xml:space="preserve">
+    <value>Quickly review posts, pages, comment moderation, views over the last 30 days, and top content.</value>
+  </data>
+  <data name="Admin.Dashboard.NewPost" xml:space="preserve">
+    <value>Write a new post</value>
+  </data>
+  <data name="Admin.Dashboard.NewPage" xml:space="preserve">
+    <value>Add a page</value>
+  </data>
+  <data name="Admin.Dashboard.Loading" xml:space="preserve">
+    <value>Loading dashboard data…</value>
+  </data>
+  <data name="Admin.Dashboard.Metrics" xml:space="preserve">
+    <value>Key metrics</value>
+  </data>
+  <data name="Admin.Dashboard.PublishedPosts" xml:space="preserve">
+    <value>Published posts</value>
+  </data>
+  <data name="Admin.Dashboard.DraftsAndPending" xml:space="preserve">
+    <value>{0} drafts · {1} pending review</value>
+  </data>
+  <data name="Admin.Dashboard.PublishedPages" xml:space="preserve">
+    <value>Pages</value>
+  </data>
+  <data name="Admin.Dashboard.PageDrafts" xml:space="preserve">
+    <value>{0} drafts</value>
+  </data>
+  <data name="Admin.Dashboard.PendingComments" xml:space="preserve">
+    <value>Comments pending review</value>
+  </data>
+  <data name="Admin.Dashboard.ApprovedComments" xml:space="preserve">
+    <value>{0} approved · {1} spam</value>
+  </data>
+  <data name="Admin.Dashboard.Views30Days" xml:space="preserve">
+    <value>Views in the last 30 days</value>
+  </data>
+  <data name="Admin.Dashboard.Views7Days" xml:space="preserve">
+    <value>{0:N0} views in the last 7 days · {1} media items</value>
+  </data>
+  <data name="Admin.Dashboard.TrendTitle" xml:space="preserve">
+    <value>Daily views over the last 30 days</value>
+  </data>
+  <data name="Admin.Dashboard.TrendTotal" xml:space="preserve">
+    <value>{0:N0} views in total</value>
+  </data>
+  <data name="Admin.Dashboard.NoViewsYet" xml:space="preserve">
+    <value>No public views recorded recently.</value>
+  </data>
+  <data name="Admin.Dashboard.TrendList" xml:space="preserve">
+    <value>Daily views</value>
+  </data>
+  <data name="Admin.Dashboard.TopContents" xml:space="preserve">
+    <value>Top content</value>
+  </data>
+  <data name="Admin.Dashboard.NoTopContents" xml:space="preserve">
+    <value>No top content yet.</value>
+  </data>
+  <data name="Admin.Dashboard.ContentTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Admin.Dashboard.Views30d" xml:space="preserve">
+    <value>30 days</value>
+  </data>
+  <data name="Admin.Dashboard.ViewsAll" xml:space="preserve">
+    <value>All time</value>
+  </data>
+  <data name="Admin.Dashboard.RecentDrafts" xml:space="preserve">
+    <value>Recent drafts and pending review</value>
+  </data>
+  <data name="Admin.Dashboard.NoRecentDrafts" xml:space="preserve">
+    <value>There are no drafts in progress or items pending review.</value>
+  </data>
+  <data name="Admin.Media.KindFilter" xml:space="preserve">
+    <value>Media type filter</value>
+  </data>
+  <data name="Admin.Media.AllKinds" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="Admin.Media.HideReferences" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="Admin.Media.ShowReferences" xml:space="preserve">
+    <value>Show references</value>
+  </data>
+  <data name="Admin.Redirects.PageTitle" xml:space="preserve">
+    <value>301 redirects · Content management</value>
+  </data>
+  <data name="Admin.Redirects.Eyebrow" xml:space="preserve">
+    <value>URL migration and SEO</value>
+  </data>
+  <data name="Admin.Redirects.Title" xml:space="preserve">
+    <value>301 redirect management</value>
+  </data>
+  <data name="Admin.Redirects.Introduction" xml:space="preserve">
+    <value>Manage permanent redirects (301 Moved Permanently) from old URL slugs to current content. Changing the slug of a published post also creates one automatically.</value>
+  </data>
+  <data name="Admin.Redirects.AddTitle" xml:space="preserve">
+    <value>Add a 301 redirect</value>
+  </data>
+  <data name="Admin.Redirects.OldSlug" xml:space="preserve">
+    <value>Old slug</value>
+  </data>
+  <data name="Common.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Redirects.OldSlugHelp" xml:space="preserve">
+    <value>Without the /posts/ or /pages/ prefix; visitors on the old URL receive a 301 permanent redirect.</value>
+  </data>
+  <data name="Admin.Redirects.TargetContent" xml:space="preserve">
+    <value>Target content</value>
+  </data>
+  <data name="Admin.Redirects.SelectTarget" xml:space="preserve">
+    <value>Select the target post or page…</value>
+  </data>
+  <data name="Admin.Redirects.Save" xml:space="preserve">
+    <value>Create redirect</value>
+  </data>
+  <data name="Admin.Redirects.AllRules" xml:space="preserve">
+    <value>Current rules</value>
+  </data>
+  <data name="Admin.Redirects.EmptyTitle" xml:space="preserve">
+    <value>No redirect rules yet</value>
+  </data>
+  <data name="Admin.Redirects.EmptyHelp" xml:space="preserve">
+    <value>Rules appear here once you change the slug of published content or add one manually on the left.</value>
+  </data>
+  <data name="Admin.Redirects.OldPath" xml:space="preserve">
+    <value>Old slug</value>
+  </data>
+  <data name="Admin.Redirects.Target" xml:space="preserve">
+    <value>Redirect target</value>
+  </data>
+  <data name="Admin.Redirects.CreatedAt" xml:space="preserve">
+    <value>Created</value>
+  </data>
+  <data name="Admin.Redirects.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Common.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.Redirects.CreatedNotice" xml:space="preserve">
+    <value>The 301 redirect rule was saved.</value>
+  </data>
+  <data name="Admin.Redirects.DeletedNotice" xml:space="preserve">
+    <value>The redirect rule was deleted.</value>
+  </data>
+  <data name="Admin.Security.ProfileTitle" xml:space="preserve">
+    <value>Public author profile</value>
+  </data>
+  <data name="Admin.Security.ProfileHelp" xml:space="preserve">
+    <value>Shown on your post bylines and the author archive page (/author/slug).</value>
+  </data>
+  <data name="Admin.Security.UserName" xml:space="preserve">
+    <value>Sign-in account</value>
+  </data>
+  <data name="Admin.Security.DisplayName" xml:space="preserve">
+    <value>Public display name</value>
+  </data>
+  <data name="Admin.Security.DisplayNameHelp" xml:space="preserve">
+    <value>Changing this also updates the byline of your published posts and your author page slug.</value>
+  </data>
+  <data name="Admin.Security.Email" xml:space="preserve">
+    <value>Email (for password reset)</value>
+  </data>
+  <data name="Admin.Security.WebsiteUrl" xml:space="preserve">
+    <value>Website (optional)</value>
+  </data>
+  <data name="Admin.Security.AvatarUrl" xml:space="preserve">
+    <value>Avatar URL (optional)</value>
+  </data>
+  <data name="Admin.Security.Bio" xml:space="preserve">
+    <value>Author bio</value>
+  </data>
+  <data name="Admin.Security.SaveProfile" xml:space="preserve">
+    <value>Save profile</value>
+  </data>
+  <data name="Admin.Security.ChangePasswordTitle" xml:space="preserve">
+    <value>Change sign-in password</value>
+  </data>
+  <data name="Admin.Security.ChangePasswordHelp" xml:space="preserve">
+    <value>At least 8 characters, including uppercase and lowercase letters, numbers, symbols, and at least four distinct characters.</value>
+  </data>
+  <data name="Admin.Security.NewPassword" xml:space="preserve">
+    <value>New password</value>
+  </data>
+  <data name="Admin.Security.UpdatePassword" xml:space="preserve">
+    <value>Update password</value>
+  </data>
+  <data name="Admin.Security.RecoveryCodesTitle" xml:space="preserve">
+    <value>Save these one-time recovery codes now (they are shown only once):</value>
+  </data>
+  <data name="Admin.Security.RecoveryCodesHelp" xml:space="preserve">
+    <value>If you lose your phone or cannot use the authenticator, enter one of these codes when signing in (each code works only once).</value>
+  </data>
+  <data name="Admin.Security.RecoveryCodesRemaining" xml:space="preserve">
+    <value>Recovery codes remaining: {0}.</value>
+  </data>
+  <data name="Admin.Security.RegenerateRecoveryCodes" xml:space="preserve">
+    <value>Regenerate recovery codes</value>
+  </data>
+  <data name="Admin.Security.ProfileSaved" xml:space="preserve">
+    <value>The profile was updated.</value>
+  </data>
+  <data name="Admin.Security.PasswordUpdated" xml:space="preserve">
+    <value>The password was updated.</value>
+  </data>
+  <data name="Admin.Security.RecoveryCodesRegenerated" xml:space="preserve">
+    <value>Recovery codes were regenerated and the old codes no longer work.</value>
+  </data>
+  <data name="Admin.Settings.CommentCloseDays" xml:space="preserve">
+    <value>Auto-close comments on older posts (days)</value>
+  </data>
+  <data name="Admin.Settings.CommentCloseDaysHelp" xml:space="preserve">
+    <value>Comments close automatically once a post has been published longer than this many days; 0 never closes them automatically.</value>
+  </data>
+  <data name="Admin.Settings.CommentBlockedWords" xml:space="preserve">
+    <value>Comment blocked words (optional)</value>
+  </data>
+  <data name="Admin.Settings.CommentBlockedWordsPlaceholder" xml:space="preserve">
+    <value>Separate keywords with commas or new lines…</value>
+  </data>
+  <data name="Admin.Settings.CommentBlockedWordsHelp" xml:space="preserve">
+    <value>Visitor comments whose name, URL, or content matches any of these words are silently marked as spam.</value>
+  </data>
+  <data name="Admin.Settings.ThemeColorScheme" xml:space="preserve">
+    <value>Color scheme (light/dark)</value>
+  </data>
+  <data name="Admin.Settings.ColorSchemeAuto" xml:space="preserve">
+    <value>Automatic (follow the visitor's system setting)</value>
+  </data>
+  <data name="Admin.Settings.ColorSchemeLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="Admin.Settings.ColorSchemeDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="Admin.Settings.FooterText" xml:space="preserve">
+    <value>Footer copyright and extra text (optional)</value>
+  </data>
+  <data name="Admin.Settings.FooterTextPlaceholder" xml:space="preserve">
+    <value>Leave empty to show the default © year site name</value>
+  </data>
+  <data name="Admin.Settings.SocialGithub" xml:space="preserve">
+    <value>Footer GitHub link (optional)</value>
+  </data>
+  <data name="Admin.Settings.SocialX" xml:space="preserve">
+    <value>Footer X / Twitter link (optional)</value>
+  </data>
+  <data name="Admin.Settings.SocialMastodon" xml:space="preserve">
+    <value>Footer Mastodon / social link (optional)</value>
+  </data>
+  <data name="Admin.Settings.MaintenanceAndWebhook" xml:space="preserve">
+    <value>Maintenance mode and outbound webhooks</value>
+  </data>
+  <data name="Admin.Settings.MaintenanceAndWebhookHelp" xml:space="preserve">
+    <value>Control the site-wide maintenance notice and the outbound hooks for published content and new comments.</value>
+  </data>
+  <data name="Admin.Settings.MaintenanceMode" xml:space="preserve">
+    <value>Enable site maintenance mode</value>
+  </data>
+  <data name="Admin.Settings.MaintenanceModeHelp" xml:space="preserve">
+    <value>When enabled, ordinary visitors see a maintenance page (HTTP 503) on public pages, while signed-in site members can still browse normally.</value>
+  </data>
+  <data name="Admin.Settings.MaintenanceMessage" xml:space="preserve">
+    <value>Maintenance message (optional)</value>
+  </data>
+  <data name="Admin.Settings.MaintenancePlaceholder" xml:space="preserve">
+    <value>The site is undergoing routine maintenance. Please check back later.</value>
+  </data>
+  <data name="Admin.Settings.WebhookUrl" xml:space="preserve">
+    <value>Outbound webhook endpoint (optional)</value>
+  </data>
+  <data name="Admin.Settings.WebhookUrlHelp" xml:space="preserve">
+    <value>Sends a JSON POST when a post is published (content.published) or a new comment arrives (comment.created).</value>
+  </data>
+  <data name="Admin.Settings.WebhookSecret" xml:space="preserve">
+    <value>Webhook HMAC signing secret (optional)</value>
+  </data>
+  <data name="Admin.Settings.WebhookSecretHelp" xml:space="preserve">
+    <value>When set, a sha256=... signature is added to the X-Origami-Signature header.</value>
+  </data>
+  <data name="Admin.Taxonomies.ParentCategory" xml:space="preserve">
+    <value>Parent category (optional)</value>
+  </data>
+  <data name="Admin.Taxonomies.NoParent" xml:space="preserve">
+    <value>None (top level)</value>
+  </data>
+  <data name="Admin.Taxonomies.ParentCategoryHelp" xml:space="preserve">
+    <value>After a parent category is set, filtering by the parent also lists posts in its child categories.</value>
+  </data>
+  <data name="Admin.Taxonomies.ParentLabel" xml:space="preserve">
+    <value>Parent: {0}</value>
+  </data>
+  <data name="Admin.Users.Reset2FA" xml:space="preserve">
+    <value>Reset 2FA</value>
+  </data>
+  <data name="Admin.Users.Reset2FaNotice" xml:space="preserve">
+    <value>Two-factor authentication and recovery codes were reset for that user.</value>
+  </data>
+  <data name="Layout.Admin.Dashboard" xml:space="preserve">
+    <value>Dashboard</value>
+  </data>
+  <data name="Layout.Admin.Redirects" xml:space="preserve">
+    <value>301 redirects</value>
+  </data>
+  <data name="Layout.Admin.AuditLogs" xml:space="preserve">
+    <value>Audit log</value>
+  </data>
+  <data name="Layout.Main.MaintenanceTitle" xml:space="preserve">
+    <value>The site is under maintenance</value>
+  </data>
+  <data name="Layout.Main.MaintenanceDefault" xml:space="preserve">
+    <value>We are performing routine maintenance. Please come back later.</value>
+  </data>
+  <data name="Layout.Main.MaintenanceAdminNotice" xml:space="preserve">
+    <value>Maintenance mode is on: ordinary visitors see the maintenance page, while you can still preview because you have site access.</value>
+  </data>
+  <data name="Public.ContentDetail.Breadcrumbs" xml:space="preserve">
+    <value>Breadcrumb navigation</value>
+  </data>
+  <data name="Public.ContentDetail.ReadingTime" xml:space="preserve">
+    <value>About {0} min read</value>
+  </data>
+  <data name="Public.ContentDetail.OfficialReply" xml:space="preserve">
+    <value>Author / administrator</value>
+  </data>
+  <data name="Public.ContentDetail.InReplyTo" xml:space="preserve">
+    <value>Reply to {0}</value>
+  </data>
+  <data name="Public.ContentDetail.ReplyLink" xml:space="preserve">
+    <value>Reply</value>
+  </data>
+  <data name="Public.ContentDetail.ReplyingTo" xml:space="preserve">
+    <value>Replying to the comment by {0}</value>
+  </data>
+  <data name="Public.ContentDetail.CancelReply" xml:space="preserve">
+    <value>Cancel reply</value>
+  </data>
+  <data name="Public.ContentDetail.CommentsClosedByAge" xml:space="preserve">
+    <value>This post was published longer ago than the comment period, so comments are closed.</value>
+  </data>
+  <data name="Account.Login.SecondFactorHelp" xml:space="preserve"><value>Your identity has been verified. Enter a 6-digit authenticator code or an 8-character recovery code.</value></data>
+  <data name="Account.Login.Environment" xml:space="preserve"><value>Sign-in environment</value></data>
+  <data name="Account.Login.PublicEnvironment" xml:space="preserve"><value>Public device · up to 8 hours</value></data>
+  <data name="Account.Login.HomeEnvironment" xml:space="preserve"><value>Home device · stay signed in for 30 days</value></data>
+  <data name="Account.Login.EnvironmentHelp" xml:space="preserve"><value>Activity does not extend the deadline. Sign out after using a public device; closing the browser may not end your session.</value></data>
+  <data name="Account.Login.ExternalHelp" xml:space="preserve"><value>Or use a linked account with the sign-in environment selected above.</value></data>
+  <data name="Account.Login.BindingHelp" xml:space="preserve"><value>Before your first external sign-in, sign in with your existing account and link the provider in your security settings.</value></data>
+  <data name="Account.Login.ExternalFailed" xml:space="preserve"><value>External sign-in did not complete. Try again or use your account and password.</value></data>
+  <data name="Account.Login.ExternalUnlinked" xml:space="preserve"><value>This external account is not linked. Sign in with your existing account, then link it in your security settings.</value></data>
+  <data name="Account.Login.BindingsChanged" xml:space="preserve"><value>Your external sign-in links have changed. Existing sessions and API credentials are no longer valid. Please sign in again.</value></data>
+  <data name="Account.External.Title" xml:space="preserve"><value>External sign-in accounts</value></data>
+  <data name="Account.External.Help" xml:space="preserve"><value>Link an external account to sign in without creating another account or changing site permissions. Your local password is retained.</value></data>
+  <data name="Account.External.RevocationHelp" xml:space="preserve"><value>Linking or unlinking revokes all existing sessions and API credentials. You will need to sign in again.</value></data>
+  <data name="Account.External.ConfirmTitle" xml:space="preserve"><value>Confirm linking the verified external account</value></data>
+  <data name="Account.External.Confirm" xml:space="preserve"><value>Confirm link and sign in again</value></data>
+  <data name="Common.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Account.External.Linked" xml:space="preserve"><value>Linked accounts</value></data>
+  <data name="Account.External.NoLinks" xml:space="preserve"><value>No external accounts are linked.</value></data>
+  <data name="Account.External.CodeHelp" xml:space="preserve"><value>Authenticator or recovery code, if two-factor authentication is enabled</value></data>
+  <data name="Account.External.Unlink" xml:space="preserve"><value>Confirm unlink</value></data>
+  <data name="Account.External.LinkTitle" xml:space="preserve"><value>Link an external account</value></data>
+  <data name="Account.External.NoProviders" xml:space="preserve"><value>No additional providers are available. Unconfigured external sign-in providers remain disabled.</value></data>
+  <data name="Account.External.Back" xml:space="preserve"><value>Back to security settings</value></data>
+  <data name="Account.External.VerificationFailed" xml:space="preserve"><value>Identity verification failed. Check your password and two-factor code, then try again.</value></data>
+  <data name="Account.External.LoadFailed" xml:space="preserve"><value>Unable to load linked accounts. Sign in again or try later.</value></data>
+  <data name="Admin.Security.ExternalLogins" xml:space="preserve"><value>Manage external sign-in accounts</value></data>
 </root>

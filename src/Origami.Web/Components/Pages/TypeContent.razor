@@ -117,7 +117,10 @@ else
     }
 
     /// <summary>自訂欄位值的公開文字；核取方塊以是／否呈現。</summary>
-    private static string FieldText(PublicFieldValue field) => field.FieldType == CustomFieldTypes.Checkbox
-        ? (field.Value == "true" ? UiText.T("Public.TypeContent.Yes", "是") : UiText.T("Public.TypeContent.No", "否"))
-        : field.Value;
+    private static string FieldText(PublicFieldValue field)
+    {
+        if (field.FieldType != CustomFieldTypes.Checkbox) return field.Value;
+        if (field.Value == "true") return UiText.T("Public.TypeContent.Yes", "是");
+        return UiText.T("Public.TypeContent.No", "否");
+    }
 }

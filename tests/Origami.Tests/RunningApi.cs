@@ -126,6 +126,8 @@ internal sealed class RunningApi : IAsyncDisposable
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
         client.DefaultRequestHeaders.Add(AccessClaims.UserHeader, userId);
         client.DefaultRequestHeaders.Add(AccessClaims.StampHeader, stamp);
+        client.DefaultRequestHeaders.Add(AccessClaims.SessionExpiresHeader,
+            LoginSessionLifetime.CreateClaim(DateTimeOffset.UtcNow.AddHours(8)).Value);
         return client;
     }
 

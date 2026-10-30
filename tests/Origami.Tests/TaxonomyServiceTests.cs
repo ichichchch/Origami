@@ -89,11 +89,7 @@ public sealed class TaxonomyServiceTests(IsolatedPostgres postgres) : ServiceTes
         var target = await actor.Taxonomy.SaveAsync(TaxonomyKind.Category, new() { Name = "API 目標" });
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var client = api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        // BFF 合約：管理端點要求服務通行證＋有效的管理員工作階段戳記。
-        client.DefaultRequestHeaders.Add(AdminSession.StampHeader, await App.AdminSecurityStampAsync());
-        client.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var client = api.CreateBffClient(Token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
 
         using var self = await client.PostAsJsonAsync($"/api/v1/admin/taxonomies/{source.Id}/merge?kind=Category",
             new { targetId = source.Id, version = source.Version });

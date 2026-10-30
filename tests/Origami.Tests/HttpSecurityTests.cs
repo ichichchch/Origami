@@ -208,7 +208,9 @@ public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Equal(HttpStatusCode.Redirect, anonymous.StatusCode);
         Assert.Contains("/account/login", anonymous.Headers.Location!.ToString());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/account/register")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/account/reset-password")).StatusCode);
+        // 密碼重設流程已於 2026-10-28 解鎖實作：頁面存在但沒有有效權杖就不能完成重設。
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/account/forgot-password")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/account/reset-password")).StatusCode);
 
         var forgedLogin = await client.PostAsync("/account/login", new FormUrlEncodedContent(new Dictionary<string, string>
         { ["Input.Username"] = "test-admin", ["Input.Password"] = password, ["_handler"] = "account-login" }));

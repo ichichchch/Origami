@@ -107,7 +107,10 @@ public sealed class AdminAccess(
 
         // BFF 可以帶有 SiteId；只有憑證識別或範圍宣告才表示 PAT，殘缺宣告一律拒絕。
         if (!principal.HasClaim(x => x.Type is AccessClaims.CredentialId or AccessClaims.CredentialScope))
+        {
+            if (!LoginSessionLifetime.IsValid(principal, clock.GetUtcNow())) throw InvalidSession();
             return (user, null, db.CurrentSiteId);
+        }
 
         if (!Guid.TryParse(SingleClaim(principal, AccessClaims.CredentialId), out var credentialId) ||
             !Guid.TryParse(SingleClaim(principal, AccessClaims.SiteId), out var siteId) ||
@@ -143,15 +146,20 @@ public sealed class AdminAccess(
         ClaimsPrincipal? principal,
         IDbContextFactory<CmsDbContext> contextFactory,
         IdentityOptions identityOptions,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeProvider? timeProvider = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!TryReadIdentity(principal, identityOptions, out var userId, out var stamp)) return false;
+        var clock = timeProvider ?? TimeProvider.System;
+        if (!TryReadIdentity(principal, identityOptions, out var userId, out var stamp) ||
+            principal!.HasClaim(x => x.Type is AccessClaims.CredentialId or AccessClaims.CredentialScope) ||
+            !LoginSessionLifetime.IsValid(principal, clock.GetUtcNow())) return false;
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var user = await context.Users.AsNoTracking().Where(x => x.Id == userId)
             .Select(x => new { x.IsDisabled, x.SecurityStamp }).SingleOrDefaultAsync(cancellationToken);
         return user is not null && !user.IsDisabled && !string.IsNullOrEmpty(user.SecurityStamp) &&
-            string.Equals(stamp, user.SecurityStamp, StringComparison.Ordinal);
+            string.Equals(stamp, user.SecurityStamp, StringComparison.Ordinal) &&
+            LoginSessionLifetime.IsValid(principal, clock.GetUtcNow());
     }
 
     private static bool TryReadIdentity(ClaimsPrincipal? principal, IdentityOptions options,

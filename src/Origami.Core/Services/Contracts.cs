@@ -231,9 +231,17 @@ public sealed record MediaItem(Guid Id, string FileName, string OriginalName, st
     public int ReferenceCount { get; set; }
     public string Url => "/media/" + FileName;
     // 未設定替代文字時沿用歷史預留字；括號會被逸出，作者文字無法破壞語法。
-    public string Markdown => Kind == MediaKind.Image
-        ? "![" + (AltText == "" ? "圖片" : AltText.Replace("[", "\\[").Replace("]", "\\]")) + "](" + Url + ")"
-        : "[" + (AltText == "" ? OriginalName : AltText.Replace("[", "\\[").Replace("]", "\\]")) + "](" + Url + ")";
+    public string Markdown
+    {
+        get
+        {
+            var alt = AltText.Replace("[", "\\[").Replace("]", "\\]");
+            if (AltText.Length == 0) alt = Kind == MediaKind.Image ? "圖片" : OriginalName;
+            return Kind == MediaKind.Image
+                ? "![" + alt + "](" + Url + ")"
+                : "[" + alt + "](" + Url + ")";
+        }
+    }
 }
 /// <summary>批次上傳的單檔結果；失敗時附原因，單檔失敗不影響其他檔案。</summary>
 public sealed record MediaBatchItem(string FileName, bool Succeeded, string Message, MediaItem? Item);

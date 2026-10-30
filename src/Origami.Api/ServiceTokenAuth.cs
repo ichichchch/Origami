@@ -98,22 +98,31 @@ public sealed class AdminPrincipalProvider(
 
         var users = context.Request.Headers[UserHeader];
         var stamps = context.Request.Headers[StampHeader];
+        var deadlines = context.Request.Headers[AccessClaims.SessionExpiresHeader];
         // 同時拒絕多個標頭值及代理折疊後的逗號清單，不能任意挑一個身分。
-        if (users.Count > 1 || stamps.Count > 1 ||
+        if (users.Count > 1 || stamps.Count > 1 || deadlines.Count > 1 ||
             (users.Count == 1 && users[0]?.Contains(',') == true) ||
-            (stamps.Count == 1 && stamps[0]?.Contains(',') == true))
+            (stamps.Count == 1 && stamps[0]?.Contains(',') == true) ||
+            (deadlines.Count == 1 && deadlines[0]?.Contains(',') == true))
             throw new BadHttpRequestException("轉發身分標頭不可重複。");
         var userId = users.Count == 1 ? users[0] : null;
         var stamp = stamps.Count == 1 ? stamps[0] : null;
-        // BFF 也代表匿名訪客取公開呈現資料；缺少任一工作階段值都不視為使用者。
-        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(stamp)) return Anonymous();
+        // BFF 也代表匿名訪客取公開呈現資料；沒有使用者時不建立工作階段。
+        if (string.IsNullOrWhiteSpace(userId)) return Anonymous();
+        if (string.IsNullOrWhiteSpace(stamp) || deadlines.Count != 1)
+            throw new UnauthorizedAccessException("登入已失效，請重新登入。");
         var types = identityOptions.Value.ClaimsIdentity;
         var identity = new ClaimsIdentity(
         [
             new Claim(types.UserIdClaimType, userId),
             new Claim(types.SecurityStampClaimType, stamp),
+            new Claim(AccessClaims.SessionExpiresAt, deadlines[0] ?? ""),
         ], ServiceTokenAuth.SchemeName, types.UserNameClaimType, types.RoleClaimType);
-        return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity)));
+        var principal = new ClaimsPrincipal(identity);
+        if (!LoginSessionLifetime.TryRead(principal, out _))
+            throw new BadHttpRequestException("轉發工作階段期限無效。");
+        // 截止時間與現行安全戳記由 Core 在每次操作重驗，PAT 永不走此分支。
+        return Task.FromResult(new AuthenticationState(principal));
     }
 
     private static Task<AuthenticationState> Anonymous() =>

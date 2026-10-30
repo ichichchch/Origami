@@ -28,56 +28,72 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<Guid>("CategoriesId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：CategoriesId。");
 
                     b.Property<Guid>("ContentsId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：ContentsId。");
 
                     b.HasKey("SiteId", "CategoriesId", "ContentsId");
 
                     b.HasIndex("SiteId", "ContentsId");
 
-                    b.ToTable("ContentCategories");
+                    b.ToTable("ContentCategories", t =>
+                        {
+                            t.HasComment("内容-分类关联表。");
+                        });
                 });
 
             modelBuilder.Entity("ContentTags", b =>
                 {
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<Guid>("ContentsId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：ContentsId。");
 
                     b.Property<Guid>("TagsId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：TagsId。");
 
                     b.HasKey("SiteId", "ContentsId", "TagsId");
 
                     b.HasIndex("SiteId", "TagsId");
 
-                    b.ToTable("ContentTags");
+                    b.ToTable("ContentTags", t =>
+                        {
+                            t.HasComment("内容-标签关联表。");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ConcurrencyStamp。");
 
                     b.Property<string>("Name")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("名称。");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：NormalizedName。");
 
                     b.HasKey("Id");
 
@@ -85,196 +101,254 @@ namespace Origami.Core.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("RoleNameIndex");
 
-                    b.ToTable("AspNetRoles", (string)null);
+                    b.ToTable("AspNetRoles", null, t =>
+                        {
+                            t.HasComment("系统角色表：Identity 内置角色定义。");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("主键 ID。");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ClaimType。");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ClaimValue。");
 
                     b.Property<string>("RoleId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：RoleId。");
 
                     b.HasKey("Id");
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AspNetRoleClaims", (string)null);
+                    b.ToTable("AspNetRoleClaims", null, t =>
+                        {
+                            t.HasComment("角色声明表：Identity 角色附加声明。");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("主键 ID。");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ClaimType。");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ClaimValue。");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("用户 ID。");
 
                     b.HasKey("Id");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserClaims", (string)null);
+                    b.ToTable("AspNetUserClaims", null, t =>
+                        {
+                            t.HasComment("用户声明表：Identity 用户附加声明。");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
                 {
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：LoginProvider。");
 
                     b.Property<string>("ProviderKey")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ProviderKey。");
 
                     b.Property<string>("ProviderDisplayName")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ProviderDisplayName。");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("用户 ID。");
 
                     b.HasKey("LoginProvider", "ProviderKey");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("AspNetUserLogins", (string)null);
+                    b.ToTable("AspNetUserLogins", null, t =>
+                        {
+                            t.HasComment("外部登录表：Identity 第三方登录绑定。");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<string>", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("用户 ID。");
 
                     b.Property<string>("RoleId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：RoleId。");
 
                     b.HasKey("UserId", "RoleId");
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("AspNetUserRoles", (string)null);
+                    b.ToTable("AspNetUserRoles", null, t =>
+                        {
+                            t.HasComment("用户角色关联表：Identity 用户与角色多对多关系。");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
                 {
                     b.Property<string>("UserId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("用户 ID。");
 
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：LoginProvider。");
 
                     b.Property<string>("Name")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("名称。");
 
                     b.Property<string>("Value")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：Value。");
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
-                    b.ToTable("AspNetUserTokens", (string)null);
+                    b.ToTable("AspNetUserTokens", null, t =>
+                        {
+                            t.HasComment("用户令牌表：Identity 令牌与会话相关数据。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.AdminUser", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("主键 ID。");
 
                     b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：AccessFailedCount。");
 
                     b.Property<string>("AvatarUrl")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("头像地址。");
 
                     b.Property<string>("Bio")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("用户简介。");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：ConcurrencyStamp。");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：Email。");
 
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：EmailConfirmed。");
 
                     b.Property<bool>("IsDisabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("账号是否禁用。");
 
                     b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：LockoutEnabled。");
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("业务字段：LockoutEnd。");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：NormalizedEmail。");
 
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：NormalizedUserName。");
 
                     b.Property<string>("PasswordHash")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：PasswordHash。");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：PhoneNumber。");
 
                     b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：PhoneNumberConfirmed。");
 
                     b.Property<string>("RecoveryCodeHashes")
                         .IsRequired()
                         .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)");
+                        .HasColumnType("character varying(1024)")
+                        .HasComment("恢复码哈希集合。");
 
                     b.Property<string>("SecurityStamp")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("业务字段：SecurityStamp。");
 
                     b.Property<int?>("SingletonKey")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("全局单例管理员标记。");
 
                     b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：TwoFactorEnabled。");
 
                     b.Property<string>("TwoFactorSecret")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("两步验证密钥。");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：UserName。");
 
                     b.Property<string>("WebsiteUrl")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("个人网站地址。");
 
                     b.HasKey("Id");
 
@@ -291,6 +365,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("AspNetUsers", null, t =>
                         {
+                            t.HasComment("后台账号表：保存管理员/编辑者账号及登录安全信息。");
+
                             t.HasCheckConstraint("CK_Admin_Singleton", "\"SingletonKey\" IS NULL OR \"SingletonKey\" = 1");
                         });
                 });
@@ -299,42 +375,52 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("过期时间。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("character varying(100)")
+                        .HasComment("名称。");
 
                     b.Property<DateTimeOffset?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("撤销时间。");
 
                     b.Property<int>("Scope")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("权限范围（只读/读写）。");
 
                     b.Property<string>("SecretHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .HasComment("API 密钥哈希（不存明文）。");
 
                     b.Property<string>("SecurityStamp")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("安全戳（失效控制）。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("UserId")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("用户 ID。");
 
                     b.HasKey("Id");
 
@@ -344,6 +430,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("ApiCredentials", t =>
                         {
+                            t.HasComment("API 凭据表：站点级访问密钥（仅存摘要）。");
+
                             t.HasCheckConstraint("CK_ApiCredential_ExpiresAt", "\"ExpiresAt\" > \"CreatedAt\"");
 
                             t.HasCheckConstraint("CK_ApiCredential_Name", "length(btrim(\"Name\")) > 0");
@@ -360,73 +448,90 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("Action")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .HasComment("操作动作。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Target")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("操作目标。");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasComment("用户 ID。");
 
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("character varying(256)")
+                        .HasComment("操作者用户名快照。");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SiteId", "CreatedAt", "Id");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("AuditLogs", t =>
+                        {
+                            t.HasComment("审计日志表：关键管理操作记录。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.Category", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("描述说明。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("父级对象 ID。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -437,6 +542,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("Categories", t =>
                         {
+                            t.HasComment("分类表：内容分类体系。");
+
                             t.HasCheckConstraint("CK_Category_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
                         });
                 });
@@ -445,33 +552,40 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<string>("HostName")
                         .HasMaxLength(253)
                         .HasColumnType("character varying(253)")
+                        .HasComment("业务字段：HostName。")
                         .UseCollation("C");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否启用。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("character varying(100)")
+                        .HasComment("名称。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。")
                         .UseCollation("C");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -484,6 +598,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("Sites", t =>
                         {
+                            t.HasComment("站点表：多站点租户的基础信息。");
+
                             t.HasCheckConstraint("CK_Site_DefaultActive", "\"Id\" <> '11111111-1111-1111-1111-111111111111'::uuid OR \"IsActive\"");
 
                             t.HasCheckConstraint("CK_Site_DefaultHost", "\"HostName\" IS NOT NULL OR \"Id\" = '11111111-1111-1111-1111-111111111111'::uuid");
@@ -511,120 +627,152 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<bool>("AllowComments")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否允许评论。");
 
                     b.Property<string>("AuthorId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("作者账号 ID。");
 
                     b.Property<string>("AuthorName")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("作者显示名快照。");
 
                     b.Property<string>("AuthorSlug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("作者 URL 代称。");
 
                     b.Property<Guid?>("ContentTypeId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("自定义内容类型 ID。");
 
                     b.Property<Guid?>("CoverMediaId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("封面媒体 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("进入回收站时间。");
 
                     b.Property<DateTimeOffset?>("EditingAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("编辑锁最近心跳时间。");
 
                     b.Property<string>("EditingById")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("当前编辑锁占用者 ID。");
 
                     b.Property<string>("EditingByName")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("当前编辑锁占用者名称。");
 
                     b.Property<string>("Excerpt")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("内容摘要。");
 
                     b.Property<bool>("IsPrivate")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否私密（仅后台可见）。");
 
                     b.Property<bool>("IsProtected")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否启用访问密码。");
 
                     b.Property<bool>("IsSticky")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否置顶（文章列表优先显示）。");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("内容类型：文章或页面。");
 
                     b.Property<string>("Markdown")
                         .IsRequired()
                         .HasMaxLength(200000)
-                        .HasColumnType("character varying(200000)");
+                        .HasColumnType("character varying(200000)")
+                        .HasComment("Markdown 正文。");
 
                     b.Property<int>("MenuOrder")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("页面菜单排序权重。");
 
                     b.Property<string>("MetaDescription")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("SEO 元描述。");
 
                     b.Property<bool>("NoIndex")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否禁止搜索引擎索引。");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("父级对象 ID。");
 
                     b.Property<Guid?>("PreviewToken")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("预览令牌（发布前分享预览）。");
 
                     b.Property<string>("ProtectionHash")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("访问密码哈希值。");
 
                     b.Property<DateTimeOffset?>("PublishAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("计划发布时间。");
 
                     b.Property<DateTimeOffset?>("PublishedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("发布时间。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("状态枚举值。");
 
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasComment("标题。");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("更新时间。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -650,6 +798,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("Contents", t =>
                         {
+                            t.HasComment("内容主表：文章/页面及其发布状态。");
+
                             t.HasCheckConstraint("CK_Content_DeletedAt", "(\"Status\" = 2) = (\"DeletedAt\" IS NOT NULL)");
 
                             t.HasCheckConstraint("CK_Content_Kind", "\"Kind\" IN (0, 1)");
@@ -674,45 +824,56 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("AuthorName")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("评论作者显示名。");
 
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<bool>("IsAdminReply")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否官方回复。");
 
                     b.Property<string>("Markdown")
                         .IsRequired()
                         .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("character varying(4000)")
+                        .HasComment("评论内容（Markdown）。");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("父级对象 ID。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("状态枚举值。");
 
                     b.Property<string>("Url")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("评论作者网址。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -724,6 +885,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("Comments", t =>
                         {
+                            t.HasComment("评论表：访客评论与审核状态。");
+
                             t.HasCheckConstraint("CK_Comment_Author", "length(btrim(\"AuthorName\")) > 0");
 
                             t.HasCheckConstraint("CK_Comment_Body", "length(btrim(\"Markdown\")) > 0");
@@ -738,17 +901,21 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<Guid>("TermId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：TermId。");
 
                     b.HasKey("Id");
 
@@ -759,29 +926,37 @@ namespace Origami.Core.Data.Migrations
                     b.HasIndex("SiteId", "ContentId", "TermId")
                         .IsUnique();
 
-                    b.ToTable("ContentCustomTerms");
+                    b.ToTable("ContentCustomTerms", t =>
+                        {
+                            t.HasComment("内容-自定义词条关联表。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentEmbedding", b =>
                 {
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<int>("ChunkIndex")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("切片序号。");
 
                     b.Property<string>("ChunkText")
                         .IsRequired()
                         .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
+                        .HasColumnType("character varying(4000)")
+                        .HasComment("切片文本。");
 
                     b.Property<Vector>("Embedding")
                         .IsRequired()
-                        .HasColumnType("vector(1536)");
+                        .HasColumnType("vector(1536)")
+                        .HasComment("向量数据。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.HasKey("ContentId", "ChunkIndex");
 
@@ -792,29 +967,37 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasIndex("SiteId", "ContentId");
 
-                    b.ToTable("ContentEmbeddings");
+                    b.ToTable("ContentEmbeddings", t =>
+                        {
+                            t.HasComment("语义向量表：内容切片与向量。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentFieldValue", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<Guid>("FieldId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：FieldId。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Value")
                         .IsRequired()
                         .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasColumnType("character varying(2000)")
+                        .HasComment("业务字段：Value。");
 
                     b.HasKey("Id");
 
@@ -825,72 +1008,91 @@ namespace Origami.Core.Data.Migrations
                     b.HasIndex("SiteId", "ContentId", "FieldId")
                         .IsUnique();
 
-                    b.ToTable("ContentFieldValues");
+                    b.ToTable("ContentFieldValues", t =>
+                        {
+                            t.HasComment("内容自定义字段值表。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentRevision", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<string>("Excerpt")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("业务字段：Excerpt。");
 
                     b.Property<string>("Markdown")
                         .IsRequired()
                         .HasMaxLength(200000)
-                        .HasColumnType("character varying(200000)");
+                        .HasColumnType("character varying(200000)")
+                        .HasComment("Markdown 正文。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("SnapshotJson")
                         .IsRequired()
                         .HasMaxLength(65536)
-                        .HasColumnType("character varying(65536)");
+                        .HasColumnType("character varying(65536)")
+                        .HasComment("结构化快照 JSON（分类/标签/SEO/字段值等）。");
 
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasComment("标题。");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SiteId", "ContentId", "CreatedAt");
 
-                    b.ToTable("ContentRevisions");
+                    b.ToTable("ContentRevisions", t =>
+                        {
+                            t.HasComment("内容修订表：内容历史快照。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentSlugRedirect", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<string>("OldSlug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("业务字段：OldSlug。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.HasKey("Id");
 
@@ -899,52 +1101,66 @@ namespace Origami.Core.Data.Migrations
                     b.HasIndex("SiteId", "OldSlug")
                         .IsUnique();
 
-                    b.ToTable("SlugRedirects");
+                    b.ToTable("SlugRedirects", t =>
+                        {
+                            t.HasComment("Slug 重定向表：旧路径到内容的永久跳转映射。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.ContentType", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("描述说明。");
 
                     b.Property<bool>("IsArchived")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否归档。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。");
 
                     b.Property<bool>("SupportsCategories")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：SupportsCategories。");
 
                     b.Property<bool>("SupportsHierarchy")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：SupportsHierarchy。");
 
                     b.Property<bool>("SupportsTags")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：SupportsTags。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -953,6 +1169,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("ContentTypes", t =>
                         {
+                            t.HasComment("内容类型表：自定义内容模型定义。");
+
                             t.HasCheckConstraint("CK_ContentType_Name", "length(btrim(\"Name\")) > 0");
 
                             t.HasCheckConstraint("CK_ContentType_Slug", "length(btrim(\"Slug\")) > 0");
@@ -962,70 +1180,88 @@ namespace Origami.Core.Data.Migrations
             modelBuilder.Entity("Origami.Core.Models.ContentView", b =>
                 {
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<DateOnly>("Date")
-                        .HasColumnType("date");
+                        .HasColumnType("date")
+                        .HasComment("日期。");
 
                     b.Property<int>("Count")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("当日浏览次数。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.HasKey("ContentId", "Date");
 
                     b.HasIndex("SiteId", "ContentId");
 
-                    b.ToTable("ContentViews");
+                    b.ToTable("ContentViews", t =>
+                        {
+                            t.HasComment("内容浏览统计表：按天聚合的浏览次数。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.CustomField", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid>("ContentTypeId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：ContentTypeId。");
 
                     b.Property<string>("FieldType")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasComment("业务字段：FieldType。");
 
                     b.Property<bool>("IsArchived")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否归档。");
 
                     b.Property<bool>("IsRequired")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：IsRequired。");
 
                     b.Property<string>("Key")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("业务字段：Key。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
 
                     b.Property<string>("Options")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("业务字段：Options。");
 
                     b.Property<int>("Position")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("排序位置（值越小越靠前）。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -1034,6 +1270,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("CustomFields", t =>
                         {
+                            t.HasComment("自定义字段定义表：内容类型可扩展字段。");
+
                             t.HasCheckConstraint("CK_CustomField_Key", "length(btrim(\"Key\")) > 0");
 
                             t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
@@ -1046,39 +1284,48 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid>("ContentTypeId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：ContentTypeId。");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("描述说明。");
 
                     b.Property<bool>("IsArchived")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否归档。");
 
                     b.Property<bool>("IsHierarchical")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：IsHierarchical。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -1087,6 +1334,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("CustomTaxonomies", t =>
                         {
+                            t.HasComment("自定义分类法表：挂载到内容类型的词汇集。");
+
                             t.HasCheckConstraint("CK_CustomTaxonomy_Name", "length(btrim(\"Name\")) > 0");
 
                             t.HasCheckConstraint("CK_CustomTaxonomy_Slug", "length(btrim(\"Slug\")) > 0");
@@ -1097,36 +1346,44 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("描述说明。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
 
                     b.Property<Guid?>("ParentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("父级对象 ID。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。");
 
                     b.Property<Guid>("TaxonomyId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：TaxonomyId。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -1137,6 +1394,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("CustomTaxonomyTerms", t =>
                         {
+                            t.HasComment("自定义词条表：自定义分类法下的具体词条。");
+
                             t.HasCheckConstraint("CK_CustomTerm_Name", "length(btrim(\"Name\")) > 0");
 
                             t.HasCheckConstraint("CK_CustomTerm_Parent", "\"ParentId\" IS NULL OR \"ParentId\" <> \"Id\"");
@@ -1149,81 +1408,102 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<int>("Attempts")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("已重试次数。");
 
                     b.Property<Guid>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<DateTimeOffset>("EnqueuedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("入队时间。");
 
                     b.Property<DateTimeOffset>("NextAttemptAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("下次重试时间。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SiteId", "ContentId")
                         .IsUnique();
 
-                    b.ToTable("EmbeddingJobs");
+                    b.ToTable("EmbeddingJobs", t =>
+                        {
+                            t.HasComment("向量生成任务表：嵌入计算队列。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.MediaAsset", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("AltText")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("替代文本（无障碍/SEO）。");
 
                     b.Property<string>("Caption")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("媒体说明文字。");
 
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
+                        .HasColumnType("character varying(40)")
+                        .HasComment("MIME 类型。");
 
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("存储文件名。");
 
                     b.Property<int>("Height")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("高度（像素）。");
 
                     b.Property<int>("Kind")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("类型枚举值。");
 
                     b.Property<string>("OriginalName")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasComment("原始上传文件名。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<long>("Size")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasComment("文件大小（字节）。");
 
                     b.Property<DateTimeOffset>("UploadedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("上传时间。");
 
                     b.Property<int>("Width")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("宽度（像素）。");
 
                     b.HasKey("Id");
 
@@ -1234,6 +1514,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("MediaAssets", t =>
                         {
+                            t.HasComment("媒体资源表：图片/文档/音视频元数据。");
+
                             t.HasCheckConstraint("CK_MediaAsset_Kind", "\"Kind\" IN (0, 1, 2, 3)");
                         });
                 });
@@ -1242,22 +1524,27 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("UserId")
-                        .HasColumnType("text");
+                        .HasColumnType("text")
+                        .HasComment("用户 ID。");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("业务字段：DisplayName。");
 
                     b.Property<int>("Role")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：Role。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("SiteId", "UserId");
 
@@ -1265,6 +1552,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("SiteMemberships", t =>
                         {
+                            t.HasComment("站点成员表：用户在站点内的角色与署名。");
+
                             t.HasCheckConstraint("CK_SiteMembership_DisplayName", "\"DisplayName\" = btrim(\"DisplayName\")");
 
                             t.HasCheckConstraint("CK_SiteMembership_Role", "\"Role\" IN (0, 1, 2, 3)");
@@ -1275,34 +1564,42 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<Guid?>("ContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("内容 ID。");
 
                     b.Property<bool>("IsVisible")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：IsVisible。");
 
                     b.Property<int>("Position")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("排序位置（值越小越靠前）。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("标题。");
 
                     b.Property<string>("Url")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("链接地址。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
@@ -1312,6 +1609,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("SiteNavItems", t =>
                         {
+                            t.HasComment("站点导航表：前台自定义导航项。");
+
                             t.HasCheckConstraint("CK_SiteNavItem_Target", "(\"ContentId\" IS NOT NULL AND \"Url\" = '') OR (\"ContentId\" IS NULL AND \"Url\" <> '')");
 
                             t.HasCheckConstraint("CK_SiteNavItem_Title", "length(btrim(\"Title\")) > 0");
@@ -1322,157 +1621,195 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<int>("Id")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("单例主键（固定为 1）。");
 
                     b.Property<string>("AccentColor")
                         .IsRequired()
                         .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
+                        .HasColumnType("character varying(7)")
+                        .HasComment("主题强调色。");
 
                     b.Property<string>("AuthorDisplayName")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("前台默认作者显示名。");
 
                     b.Property<string>("CardStyle")
                         .IsRequired()
                         .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                        .HasColumnType("character varying(10)")
+                        .HasComment("卡片样式。");
 
                     b.Property<string>("ColorScheme")
                         .IsRequired()
                         .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
+                        .HasColumnType("character varying(10)")
+                        .HasComment("颜色模式。");
 
                     b.Property<bool>("CommentAutoApprove")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("评论是否自动通过。");
 
                     b.Property<string>("CommentBlockedWords")
                         .IsRequired()
                         .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasColumnType("character varying(2000)")
+                        .HasComment("评论敏感词列表。");
 
                     b.Property<int>("CommentCloseDays")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("发布后自动关闭评论天数。");
 
                     b.Property<bool>("CommentsEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否启用评论系统。");
 
                     b.Property<bool>("CustomNavigationEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否启用受控导航。");
 
                     b.Property<string>("DateFormat")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("character varying(32)")
+                        .HasComment("日期显示格式。");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("描述说明。");
 
                     b.Property<bool>("EmailNotificationsEnabled")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否发送邮件通知。");
 
                     b.Property<int?>("FeedItems")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("订阅源输出条目数。");
 
                     b.Property<bool?>("FeedShowFullText")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("订阅源是否输出全文。");
 
                     b.Property<string>("FooterText")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("页脚文本。");
 
                     b.Property<Guid?>("HomePageContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("首页绑定内容 ID。");
 
                     b.Property<Guid?>("LogoMediaId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("站点 Logo 媒体 ID。");
 
                     b.Property<string>("MaintenanceMessage")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("维护模式提示语。");
 
                     b.Property<bool>("MaintenanceMode")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否启用维护模式。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("character varying(100)")
+                        .HasComment("名称。");
 
                     b.Property<string>("PermalinkScheme")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("character varying(32)")
+                        .HasComment("固定链接方案。");
 
                     b.Property<int?>("PostsPerPage")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("列表每页文章数。");
 
                     b.Property<Guid?>("PrivacyPageContentId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("隐私政策页面 ID。");
 
                     b.Property<int>("ReadingWidth")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("阅读宽度（字符列）。");
 
                     b.Property<bool>("ShowByline")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否显示作者署名。");
 
                     b.Property<bool>("ShowCover")
-                        .HasColumnType("boolean");
+                        .HasColumnType("boolean")
+                        .HasComment("是否显示封面图。");
 
                     b.Property<Guid?>("SiteIconMediaId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("站点图标媒体 ID。");
 
                     b.Property<string>("SocialGithubUrl")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("GitHub 社交链接。");
 
                     b.Property<string>("SocialMastodonUrl")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("Mastodon 社交链接。");
 
                     b.Property<string>("SocialXUrl")
                         .IsRequired()
                         .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
+                        .HasColumnType("character varying(300)")
+                        .HasComment("X/Twitter 社交链接。");
 
                     b.Property<string>("ThemePreset")
                         .IsRequired()
                         .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
+                        .HasColumnType("character varying(20)")
+                        .HasComment("主题预设名称。");
 
                     b.Property<string>("TimeFormat")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("character varying(32)")
+                        .HasComment("时间显示格式。");
 
                     b.Property<string>("TimeZoneId")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .HasComment("站点时区。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.Property<string>("WebhookSecret")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
+                        .HasColumnType("character varying(128)")
+                        .HasComment("Webhook 签名密钥。");
 
                     b.Property<string>("WebhookUrl")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("Webhook 接收地址。");
 
                     b.HasKey("SiteId", "Id");
 
@@ -1486,6 +1823,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.ToTable("Settings", t =>
                         {
+                            t.HasComment("站点设置表：站点配置与展示选项。");
+
                             t.HasCheckConstraint("CK_Settings_FeedItems", "\"FeedItems\" IS NULL OR \"FeedItems\" BETWEEN 1 AND 50");
 
                             t.HasCheckConstraint("CK_Settings_PostsPerPage", "\"PostsPerPage\" IS NULL OR \"PostsPerPage\" BETWEEN 1 AND 50");
@@ -1534,91 +1873,113 @@ namespace Origami.Core.Data.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("描述说明。");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("URL 代称（站内唯一或局部唯一）。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SiteId", "Slug")
                         .IsUnique();
 
-                    b.ToTable("Tags");
+                    b.ToTable("Tags", t =>
+                        {
+                            t.HasComment("标签表：内容标签体系。");
+                        });
                 });
 
             modelBuilder.Entity("Origami.Core.Models.WebhookDeliveryRecord", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
 
                     b.Property<int>("Attempts")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("投递尝试次数。");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
 
                     b.Property<DateTimeOffset?>("DeliveredAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("最终投递成功时间。");
 
                     b.Property<string>("Event")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("character varying(64)")
+                        .HasComment("事件名称。");
 
                     b.Property<string>("LastError")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("最近一次错误信息。");
 
                     b.Property<int?>("LastStatusCode")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("最近一次响应状态码。");
 
                     b.Property<DateTimeOffset?>("NextAttemptAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("下次重试时间。");
 
                     b.Property<string>("PayloadJson")
                         .IsRequired()
                         .HasMaxLength(65536)
-                        .HasColumnType("character varying(65536)");
+                        .HasColumnType("character varying(65536)")
+                        .HasComment("投递负载 JSON。");
 
                     b.Property<string>("Signature")
                         .IsRequired()
                         .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
+                        .HasColumnType("character varying(160)")
+                        .HasComment("请求签名。");
 
                     b.Property<Guid>("SiteId")
                         .IsConcurrencyToken()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
 
                     b.Property<int>("Status")
-                        .HasColumnType("integer");
+                        .HasColumnType("integer")
+                        .HasComment("状态枚举值。");
 
                     b.Property<string>("TargetUrl")
                         .IsRequired()
                         .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("character varying(500)")
+                        .HasComment("投递目标地址。");
 
                     b.HasKey("Id");
 
@@ -1626,7 +1987,10 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasIndex("SiteId", "Status", "NextAttemptAt");
 
-                    b.ToTable("WebhookDeliveries");
+                    b.ToTable("WebhookDeliveries", t =>
+                        {
+                            t.HasComment("Webhook 投递记录表：出站事件投递状态与重试。");
+                        });
                 });
 
             modelBuilder.Entity("ContentCategories", b =>

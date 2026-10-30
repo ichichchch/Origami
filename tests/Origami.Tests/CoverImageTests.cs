@@ -112,11 +112,7 @@ public sealed class CoverImageTests(IsolatedPostgres postgres) : ServiceTestBase
         var asset = await CreateAssetAsync();
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var adminClient = api.CreateClient();
-        adminClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        // BFF 合約：管理端點要求服務通行證＋有效的管理員工作階段戳記。
-        adminClient.DefaultRequestHeaders.Add(AdminSession.StampHeader, await App.AdminSecurityStampAsync());
-        adminClient.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var adminClient = api.CreateBffClient(Token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
 
         using var created = await adminClient.PostAsJsonAsync("/api/v1/admin/contents",
             new { title = "API 封面文章", kind = "Post", markdown = "本文", status = "Published", coverMediaId = asset.Id });

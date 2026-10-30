@@ -2,6 +2,8 @@
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
 @inject NavigationManager Navigation
+@inject WebSignInFlow SignInFlow
+@inject ExternalProviderCatalog Providers
 
 <PageTitle>@UiText.T("Account.Login.PageTitle", "管理員登入")</PageTitle>
 
@@ -9,16 +11,13 @@
     <p class="eyebrow">@UiText.T("Account.Login.Brand", "ORIGAMI · 內容工作室")</p>
     <h1 id="login-title">@UiText.T("Account.Login.Title", "管理員登入")</h1>
     <p class="field-help">@UiText.T("Account.Login.Introduction", "登入後可撰寫文章、建立獨立頁面、管理圖片與使用站內 AI 助理。")</p>
-
     @if (errorMessage is not null)
     {
         <p class="notice notice-error" role="alert">@errorMessage</p>
     }
-
     @if (awaitingCode)
     {
-        <p class="field-help">@UiText.T("Account.Login.CodeHelp", "帳號密碼已確認，請輸入驗證器應用程式顯示的 6 位動態碼，或輸入 8 碼一次性備用恢復碼。")</p>
-        @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證。 *@
+        <p class="field-help">@UiText.T("Account.Login.SecondFactorHelp", "身份已確認，請輸入驗證器的 6 位動態碼，或 8 碼一次性備用恢復碼。")</p>
         <EditForm Model="CodeForm" method="post" OnValidSubmit="CodeAsync" OnInvalidSubmit="ClearCode" FormName="account-code" Enhance="false">
             <DataAnnotationsValidator />
             <ValidationSummary />
@@ -27,34 +26,45 @@
                 <input id="code" name="CodeForm.Code" autocomplete="one-time-code" maxlength="10" required />
             </div>
             <button type="submit" class="button full-width">@UiText.T("Account.Login.Verify", "驗證並登入")</button>
-            <p class="field-help"><a href="/account/login">@UiText.T("Account.Login.Restart", "改用帳號密碼重新登入")</a></p>
         </EditForm>
     }
     else
     {
-        @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證。 *@
         <EditForm Model="Input" method="post" OnValidSubmit="LoginAsync" OnInvalidSubmit="ClearPassword" FormName="account-login" Enhance="false">
             <DataAnnotationsValidator />
             <ValidationSummary />
+            <fieldset class="login-environment">
+                <legend>@UiText.T("Account.Login.Environment", "登入環境")</legend>
+                <label for="public-environment"><input id="public-environment" name="Input.Remember" type="radio" value="false" checked="@(!Input.Remember)" /> @UiText.T("Account.Login.PublicEnvironment", "公用環境 · 最長 8 小時")</label>
+                <label for="remember"><input id="remember" name="Input.Remember" type="radio" value="true" checked="@Input.Remember" /> @UiText.T("Account.Login.HomeEnvironment", "家用環境 · 保持登入 30 天")</label>
+                <p class="field-help">@UiText.T("Account.Login.EnvironmentHelp", "期限不會因持續操作而延長。公用設備用畢請登出；關閉瀏覽器不保證立即撤銷登入。")</p>
+            </fieldset>
             <div class="field">
                 <label for="username">@UiText.T("Account.Login.UserName", "帳號")</label>
                 <InputText id="username" @bind-Value="Input.Username" autocomplete="username" maxlength="256" required />
             </div>
             <div class="field">
                 <label for="password">@UiText.T("Account.Login.Password", "密碼")</label>
-                @* 表單對應在 POST 時讀取此欄位；絕不繫結或渲染其送出值。 *@
                 <input id="password" name="Input.Password" type="password" autocomplete="current-password" maxlength="1024" required />
             </div>
-            <div class="field checkbox-field">
-                <label for="remember"><input id="remember" name="Input.Remember" type="checkbox" value="true" /> @UiText.T("Account.Login.Remember", "記住我（在此瀏覽器保持登入）")</label>
-            </div>
             <button type="submit" class="button full-width">@UiText.T("Account.Login.Submit", "登入")</button>
+            @if (availableProviders.Count > 0)
+            {
+                <div class="external-login-options">
+                    <p class="field-help">@UiText.T("Account.Login.ExternalHelp", "或使用已綁定的第三方帳號登入（沿用上方登入環境）。")</p>
+                    @foreach (var provider in availableProviders)
+                    {
+                        <button type="submit" name="provider" value="@provider.Name" formaction="/account/external/challenge" formnovalidate class="button button-secondary">@provider.DisplayName</button>
+                    }
+                </div>
+            }
         </EditForm>
     }
     <p class="field-help"><a href="/account/forgot-password">@UiText.T("Account.Login.ForgotPassword", "忘記密碼？以電子郵件取得重設連結")</a></p>
     <details class="setup-help">
         <summary>@UiText.T("Account.Login.SetupTitle", "第一次使用，或忘記密碼？")</summary>
         <p>@UiText.T("Account.Login.RegistrationHelp", "本網站不提供公開註冊。一般帳號與站點成員資格請聯絡管理者；各網域需分別登入，不提供跨域單一登入。")</p>
+        <p>@UiText.T("Account.Login.BindingHelp", "第一次使用第三方登入前，請先用原帳號登入，在個人安全設定中綁定。")</p>
         <p>@((MarkupString)string.Format(CultureInfo.CurrentCulture, WebUtility.HtmlEncode(UiText.T("Account.Login.InitializeHelp", "只有首次全站管理者初始化使用伺服器命令：{0}。")), "<code>dotnet run --project src/Origami.Web -- admin-init</code>"))</p>
         <p>@((MarkupString)string.Format(CultureInfo.CurrentCulture, WebUtility.HtmlEncode(UiText.T("Account.Login.ResetHelp", "{0} 只恢復全站管理者密碼並停用其兩步驟驗證，不會修改其他使用者。密碼仍由終端機互動輸入，不可放入命令列。")), "<code>admin-reset</code>"))</p>
     </details>
@@ -62,21 +72,14 @@
 
 @code {
     private static string LoginFailure => UiText.T("Account.Login.LoginFailure", "無法登入。請確認帳號密碼，或稍後再試。");
-    private static string ThrottledMessage => UiText.T("Account.Login.Throttled", "嘗試次數過多，請稍後再試。");
-    private static string CodeFailure => UiText.T("Account.Login.CodeFailure", "動態驗證碼不正確或已過期，請再試一次。");
-    private static string LockedMessage => UiText.T("Account.Login.Locked", "帳戶已暫時鎖定，請於鎖定時間過後再試。");
-    private const string PendingCookie = "origami.2fa";
     private string? errorMessage;
     private bool awaitingCode;
+    private IReadOnlyList<ExternalProviderDescriptor> availableProviders = [];
 
-    [CascadingParameter]
-    private HttpContext? HttpContext { get; set; }
-
-    [SupplyParameterFromForm(FormName = "account-login")]
-    private LoginInput Input { get; set; } = default!;
-
-    [SupplyParameterFromForm(FormName = "account-code")]
-    private CodeInput CodeForm { get; set; } = default!;
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? LoginError { get; set; }
+    [SupplyParameterFromForm(FormName = "account-login")] private LoginInput Input { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "account-code")] private CodeInput CodeForm { get; set; } = default!;
 
     protected override void OnInitialized()
     {
@@ -84,167 +87,69 @@
         CodeForm ??= new();
         if (HttpContext is null)
         {
-            // 保險措施：防止上層不小心在 circuit 中渲染此頁面。
             Navigation.NavigateTo("/account/login", forceLoad: true);
             return;
         }
-        // 仍有效的待驗證 cookie 會在全新的 GET 請求直接顯示驗證碼步驟。
-        awaitingCode = TryReadPendingUser(HttpContext) is not null;
+        awaitingCode = SignInFlow.ReadPending(HttpContext) is not null;
+        availableProviders = Providers.ForOrigin(WebSignInFlow.Origin(HttpContext));
+        errorMessage = LoginError switch
+        {
+            "external" => UiText.T("Account.Login.ExternalFailed", "第三方登入未完成，請重新嘗試或改用帳號密碼。"),
+            "unlinked" => UiText.T("Account.Login.ExternalUnlinked", "此第三方帳號尚未綁定。請先用原帳號登入，再至個人安全設定綁定。"),
+            "changed" => UiText.T("Account.Login.BindingsChanged", "第三方綁定已更新，既有登入及 API 憑證已失效，請重新登入。"),
+            _ => null
+        };
+    }
+
+    private bool CanSubmit()
+    {
+        if (HttpContext is null || !HttpMethods.IsPost(HttpContext.Request.Method) || HttpContext.Response.HasStarted)
+        {
+            Navigation.NavigateTo("/account/login", forceLoad: true);
+            return false;
+        }
+        if (SignInFlow.TryAcquire(HttpContext)) return true;
+        errorMessage = UiText.T("Account.Login.Throttled", "嘗試次數過多，請稍後再試。");
+        HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        return false;
     }
 
     private async Task LoginAsync()
     {
-        var context = HttpContext;
-        if (context is null || !HttpMethods.IsPost(context.Request.Method) || context.Response.HasStarted)
-        {
-            Navigation.NavigateTo("/account/login", forceLoad: true);
-            return;
-        }
-
-        // 檢查憑證前先消耗限流額度；絕不以送出的帳號或轉送標頭作為鍵值。
-        var throttle = context.RequestServices.GetRequiredService<LoginThrottle>();
-        if (!throttle.TryAcquire(context.Connection.RemoteIpAddress?.ToString()))
-        {
-            Input.Password = string.Empty;
-            errorMessage = ThrottledMessage;
-            if (!context.Response.HasStarted) context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            return;
-        }
-
-        // 只在作用中的 HTTP 請求內解析：絕不將 SignInManager 注入 circuit。
-        var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
-        var userManager = context.RequestServices.GetRequiredService<UserManager<AdminUser>>();
-        AdminUser? user;
-        Microsoft.AspNetCore.Identity.SignInResult passwordCheck;
+        var password = Input.Password;
+        Input.Password = string.Empty;
+        if (!CanSubmit()) return;
         try
         {
-            user = await userManager.FindByNameAsync(Input.Username.Trim());
-            // 未知的帳號會走與真實帳號相同的密碼雜湊路徑。
-            passwordCheck = user is null
-                ? Microsoft.AspNetCore.Identity.SignInResult.Failed
-                : await signInManager.CheckPasswordSignInAsync(user, Input.Password, lockoutOnFailure: true);
+            var user = await SignInFlow.CheckPasswordAsync(Input.Username, password);
+            if (user is null) { errorMessage = LoginFailure; return; }
+            if (await SignInFlow.BeginAsync(HttpContext!, user, Input.Remember))
+                Navigation.NavigateTo("/admin/posts", forceLoad: true);
+            else awaitingCode = true;
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (exception is DbUpdateException or DbException or CmsException)
         {
-            Input.Password = string.Empty;
             errorMessage = LoginFailure;
-            return;
         }
-        catch (DbException)
-        {
-            Input.Password = string.Empty;
-            errorMessage = LoginFailure;
-            return;
-        }
-
-        Input.Password = string.Empty;
-        if (user is null || user.IsDisabled || !passwordCheck.Succeeded)
-        {
-            // 不揭露帳號是否存在、已停用、已鎖定或因其他原因被擋。
-            errorMessage = LoginFailure;
-            return;
-        }
-        if (user.TwoFactorEnabled && user.TwoFactorSecret != "")
-        {
-            // 密碼已證實、身份還沒有：效期 5 分鐘的簽章 cookie 承載待驗證的
-            // 使用者 id 與目前的安全戳記，因此密碼重設或兩步驗證
-            // 變更都會在伺服器端結束待驗證期間，而不只是瀏覽器端。
-            var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
-                .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
-            context.Response.Cookies.Append(PendingCookie, protector.Protect(PendingPayload(user, Input.Remember), TimeSpan.FromMinutes(5)),
-                new CookieOptions { HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromMinutes(5) });
-            awaitingCode = true;
-            CodeForm.Code = string.Empty;
-            return;
-        }
-        await signInManager.SignInAsync(user, isPersistent: Input.Remember);
-        // 絕不採用呼叫端提供的返回網址。Cookie 需要完整的 HTTP 導覽。
-        Navigation.NavigateTo("/admin/posts", forceLoad: true);
     }
 
     private async Task CodeAsync()
     {
-        var context = HttpContext;
-        if (context is null || !HttpMethods.IsPost(context.Request.Method) || context.Response.HasStarted)
-        {
-            Navigation.NavigateTo("/account/login", forceLoad: true);
-            return;
-        }
-        var throttle = context.RequestServices.GetRequiredService<LoginThrottle>();
-        if (!throttle.TryAcquire(context.Connection.RemoteIpAddress?.ToString()))
-        {
-            CodeForm.Code = string.Empty;
-            errorMessage = ThrottledMessage;
-            if (!context.Response.HasStarted) context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            return;
-        }
-        var pending = TryReadPendingUser(context);
-        if (pending is null)
-        {
-            awaitingCode = false;
-            errorMessage = CodeFailure;
-            return;
-        }
-        var signInManager = context.RequestServices.GetRequiredService<SignInManager<AdminUser>>();
-        var userManager = context.RequestServices.GetRequiredService<UserManager<AdminUser>>();
-        var user = await userManager.FindByIdAsync(pending.UserId);
-        var submittedCode = CodeForm.Code;
+        var code = CodeForm.Code;
         CodeForm.Code = string.Empty;
-        if (user is null || user.IsDisabled || !user.TwoFactorEnabled || user.TwoFactorSecret == ""
-            || !string.Equals(user.SecurityStamp, pending.SecurityStamp, StringComparison.Ordinal))
+        if (!CanSubmit()) return;
+        try
         {
-            // 不揭露是哪個因子失敗；待驗證 cookie 隨該次嘗試期間一同失效。
-            context.Response.Cookies.Delete(PendingCookie);
-            errorMessage = CodeFailure;
-            return;
-        }
-        if (await userManager.IsLockedOutAsync(user))
-        {
-            // 已鎖定的帳號在第二因子階段同樣維持鎖定；猜測驗證碼
-            // 不能跑得比密碼階段建立的帳號鎖定更久。
-            context.Response.Cookies.Delete(PendingCookie);
-            errorMessage = LockedMessage;
-            return;
-        }
-        var totpOk = Totp.Verify(user.TwoFactorSecret, submittedCode, TimeProvider.System);
-        var recoveryOk = !totpOk && TwoFactorService.TryRedeemRecoveryCode(user, submittedCode);
-        if (!totpOk && !recoveryOk)
-        {
-            await userManager.AccessFailedAsync(user);
-            // 不揭露是哪個因子失敗；待驗證 cookie 隨該次嘗試期間一同失效。
-            context.Response.Cookies.Delete(PendingCookie);
-            errorMessage = CodeFailure;
-            return;
-        }
-        if (recoveryOk) await userManager.UpdateAsync(user);
-        await userManager.ResetAccessFailedCountAsync(user);
-        context.Response.Cookies.Delete(PendingCookie);
-        await signInManager.SignInAsync(user, isPersistent: pending.Remember);
-        Navigation.NavigateTo("/admin/posts", forceLoad: true);
-    }
-
-    /// <summary>待驗證 cookie 的酬載：使用者、安全戳記，與「記住我」的選擇（兩步驟登入時沿用）。</summary>
-    private static string PendingPayload(AdminUser user, bool remember) => user.Id + "|" + user.SecurityStamp + "|" + (remember ? "1" : "0");
-
-    private static PendingSignIn? TryReadPendingUser(HttpContext context)
-    {
-        if (context.Request.Cookies.TryGetValue(PendingCookie, out var value) && !string.IsNullOrEmpty(value))
-        {
-            try
+            if (await SignInFlow.CompleteSecondFactorAsync(HttpContext!, code))
             {
-                var protector = context.RequestServices.GetRequiredService<IDataProtectionProvider>()
-                    .CreateProtector("Origami.TwoFactorPending,v1").ToTimeLimitedDataProtector();
-                var payload = protector.Unprotect(value);
-                var parts = payload.Split('|');
-                if (parts.Length != 3 || parts.Any(string.IsNullOrEmpty)) return null;
-                return new PendingSignIn(parts[0], parts[1], parts[2] == "1");
+                Navigation.NavigateTo("/admin/posts", forceLoad: true);
+                return;
             }
-            catch (CryptographicException) { /* 已過期或遭竄改的待驗證 cookie 只是重新開始流程。 */ }
         }
-        return null;
+        catch (Exception exception) when (exception is DbUpdateException or DbException or CmsException) { }
+        awaitingCode = false;
+        errorMessage = UiText.T("Account.Login.CodeFailure", "驗證碼不正確或已過期，請重新登入。");
     }
-
-    private sealed record PendingSignIn(string UserId, string SecurityStamp, bool Remember);
 
     private void ClearPassword() => Input.Password = string.Empty;
     private void ClearCode() => CodeForm.Code = string.Empty;
@@ -256,7 +161,7 @@
         public static string PasswordRequired => UiText.T("Account.Login.PasswordRequired", "請輸入密碼。");
         public static string PasswordTooLong => UiText.T("Account.Login.PasswordTooLong", "密碼過長。");
         public static string CodeRequired => UiText.T("Account.Login.CodeRequired", "請輸入動態驗證碼。");
-        public static string CodeLength => UiText.T("Account.Login.CodeLength", "驗證碼為 6 位數字。");
+        public static string CodeLength => UiText.T("Account.Login.CodeLength", "請輸入 6 位動態碼或 8 碼恢復碼。");
     }
 
     public sealed class LoginInput
@@ -264,12 +169,9 @@
         [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.UserNameRequired))]
         [StringLength(AdminProvisioner.MaximumUserNameLength, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.UserNameTooLong))]
         public string Username { get; set; } = string.Empty;
-
         [Required(ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordRequired))]
         [StringLength(AdminProvisioner.MaximumPasswordLength, ErrorMessageResourceType = typeof(ValidationText), ErrorMessageResourceName = nameof(ValidationText.PasswordTooLong))]
         public string Password { get; set; } = string.Empty;
-
-        /// <summary>勾選後以持久 Cookie 登入（兩步驗證路徑會把此選擇帶到第二階段）。</summary>
         public bool Remember { get; set; }
     }
 

@@ -132,11 +132,7 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
         await actor.Content.SaveAsync(NewContent("API 封裝", status: ContentStatus.Published));
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var client = api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        // BFF 合約：管理端點要求服務通行證＋有效的管理員工作階段戳記。
-        client.DefaultRequestHeaders.Add(AdminSession.StampHeader, await App.AdminSecurityStampAsync());
-        client.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var client = api.CreateBffClient(Token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
 
         using var response = await client.GetAsync("/api/v1/admin/transfer/export-archive");
         Assert.True(response.IsSuccessStatusCode,

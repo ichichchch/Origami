@@ -39,9 +39,8 @@ public sealed class ApiV1AdminEndpointTests(IsolatedPostgres postgres) : Service
 
         // 通行證正確、但工作階段戳記缺失或已輪替（登出／密碼重設後的舊電路）：
         // 管理寫入仍必須被拒——這是 BFF 架構下立即撤銷互動電路寫入權的防線。
-        using var noStamp = api.CreateClient();
-        noStamp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        noStamp.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var noStamp = api.CreateBffClient(Token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
+        noStamp.DefaultRequestHeaders.Remove(AccessClaims.StampHeader); // 保留有效期限，只測缺少戳記。
         using var staleStamp = api.CreateBffClient(Token, await App.AdminUserIdAsync(), "rotated-away-stamp");
         using var noUser = api.CreateClient();
         noUser.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);

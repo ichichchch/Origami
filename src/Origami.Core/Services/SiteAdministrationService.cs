@@ -585,6 +585,9 @@ public sealed class SiteAdministrationService(
                 .Where(x => x.UserId == userId)
                 .ExecuteDeleteAsync(ct);
 
+            // 與帳號匿名化、停用及戳記輪替同一交易，避免抹除後殘留第三方帳號識別。
+            await db.UserLogins.Where(x => x.UserId == userId).ExecuteDeleteAsync(ct);
+
             var removedMemberships = await db.SiteMemberships.IgnoreQueryFilters()
                 .Where(x => x.UserId == userId)
                 .ExecuteDeleteAsync(ct);

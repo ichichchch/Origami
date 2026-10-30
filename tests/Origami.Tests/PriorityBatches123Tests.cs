@@ -273,7 +273,13 @@ public sealed class PriorityBatches123Tests(IsolatedPostgres postgres) : Service
         var bits = 0; var buffer = 0; var bytes = new List<byte>();
         foreach (var c in value)
         {
-            var index = c is >= 'A' and <= 'Z' ? c - 'A' : c is >= 'a' and <= 'z' ? c - 'a' : c is >= '2' and <= '7' ? c - '2' + 26 : -1;
+            var index = c switch
+            {
+                >= 'A' and <= 'Z' => c - 'A',
+                >= 'a' and <= 'z' => c - 'a',
+                >= '2' and <= '7' => c - '2' + 26,
+                _ => -1
+            };
             if (index < 0) continue;
             buffer = (buffer << 5) | index; bits += 5;
             if (bits >= 8) { bytes.Add((byte)((buffer >> (bits - 8)) & 0xff)); bits -= 8; }

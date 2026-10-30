@@ -51,6 +51,10 @@ public sealed class ProtectedServiceTests(IsolatedPostgres postgres) : ServiceTe
     [InlineData("missing-id")]
     [InlineData("unknown-user")]
     [InlineData("unauthenticated")]
+    [InlineData("missing-deadline")]
+    [InlineData("expired-deadline")]
+    [InlineData("duplicate-deadline")]
+    [InlineData("malformed-deadline")]
     public async Task Forged_or_incomplete_identity_claims_do_not_grant_administrator_access(string scenario)
     {
         using var actor = await App.AdministratorAsync();
@@ -68,6 +72,18 @@ public sealed class ProtectedServiceTests(IsolatedPostgres postgres) : ServiceTe
             case "unknown-user":
                 claims.RemoveAll(x => x.Type == options.UserIdClaimType);
                 claims.Add(new(options.UserIdClaimType, Guid.NewGuid().ToString()));
+                break;
+            case "missing-deadline": claims.RemoveAll(x => x.Type == AccessClaims.SessionExpiresAt); break;
+            case "expired-deadline":
+                claims.RemoveAll(x => x.Type == AccessClaims.SessionExpiresAt);
+                claims.Add(LoginSessionLifetime.CreateClaim(DateTimeOffset.UtcNow.AddSeconds(-1)));
+                break;
+            case "duplicate-deadline":
+                claims.Add(LoginSessionLifetime.CreateClaim(DateTimeOffset.UtcNow.AddDays(30)));
+                break;
+            case "malformed-deadline":
+                claims.RemoveAll(x => x.Type == AccessClaims.SessionExpiresAt);
+                claims.Add(new(AccessClaims.SessionExpiresAt, "not-a-timestamp"));
                 break;
             case "unauthenticated": break;
             default: throw new ArgumentOutOfRangeException(nameof(scenario));

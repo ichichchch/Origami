@@ -102,11 +102,7 @@ public sealed class QuickEditTests(IsolatedPostgres postgres) : ServiceTestBase(
         var item = await CreatePostAsync(actor, "API 快速編輯");
         await using var api = new RunningApi(App.ConnectionString);
         await api.StartAsync(serviceToken: Token);
-        using var client = api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        // BFF 合約：管理端點要求服務通行證＋有效的管理員工作階段戳記。
-        client.DefaultRequestHeaders.Add(AdminSession.StampHeader, await App.AdminSecurityStampAsync());
-        client.DefaultRequestHeaders.Add(AccessClaims.UserHeader, await App.AdminUserIdAsync());
+        using var client = api.CreateBffClient(Token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
 
         using var invalid = await client.PutAsJsonAsync($"/api/v1/admin/contents/{item.Id}/quick",
             new { title = "新標題", slug = "api-quick-slug", status = "Trashed", version = item.Version });

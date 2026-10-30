@@ -8,7 +8,7 @@
              x:DataType="vm:SettingsViewModel">
     <StackPanel Margin="16" Spacing="10" MaxWidth="560">
         <TextBlock Text="API 伺服器網址" FontSize="18" FontWeight="Bold" />
-        <TextBox Text="{Binding BaseUrl}" Watermark="http://localhost:5100" />
+        <TextBox Text="{Binding BaseUrl}" PlaceholderText="http://localhost:5100" />
         <TextBlock TextWrapping="Wrap" Opacity="0.7"
                    Text="Android 模擬器請填 http://10.0.2.2:連接埠（10.0.2.2 即開發機的 localhost）；實機請填開發機的區域網路位址。正式環境應使用 HTTPS。" />
         <Button Content="儲存" Command="{Binding SaveCommand}" HorizontalAlignment="Left" />

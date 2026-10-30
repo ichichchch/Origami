@@ -23,3 +23,4 @@ global using Origami.Core.Intelligence.SemanticSearch;
 global using Origami.Core.Models;
 global using Origami.Core.Services;
 global using Origami.Api;
+global using Scalar.AspNetCore;

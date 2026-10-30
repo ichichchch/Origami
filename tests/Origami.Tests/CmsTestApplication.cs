@@ -121,7 +121,10 @@ public sealed class CmsTestApplication : IAsyncDisposable
         {
             var user = await actor.Users.Users.SingleAsync(user => user.Id == userId);
             var factory = actor.Services.GetRequiredService<IUserClaimsPrincipalFactory<AdminUser>>();
-            actor.Authentication.SetPrincipal(await factory.CreateAsync(user));
+            var principal = await factory.CreateAsync(user);
+            ((ClaimsIdentity)principal.Identity!).AddClaim(LoginSessionLifetime.CreateClaim(
+                actor.Services.GetRequiredService<TimeProvider>().GetUtcNow().AddHours(8)));
+            actor.Authentication.SetPrincipal(principal);
             return actor;
         }
         catch { actor.Dispose(); throw; }

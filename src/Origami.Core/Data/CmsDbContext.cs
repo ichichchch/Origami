@@ -430,6 +430,243 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasIndex(x => new { x.SiteId, x.CreatedAt, x.Id });
             e.HasIndex(x => new { x.SiteId, x.Status, x.NextAttemptAt });
         });
+
+        ApplyChineseComments(builder);
+    }
+
+    private static readonly Dictionary<string, string> TableComments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["AspNetUsers"] = "后台账号表：保存管理员/编辑者账号及登录安全信息。",
+        ["AspNetRoles"] = "系统角色表：Identity 内置角色定义。",
+        ["AspNetUserRoles"] = "用户角色关联表：Identity 用户与角色多对多关系。",
+        ["AspNetUserClaims"] = "用户声明表：Identity 用户附加声明。",
+        ["AspNetUserLogins"] = "外部登录表：Identity 第三方登录绑定。",
+        ["AspNetUserTokens"] = "用户令牌表：Identity 令牌与会话相关数据。",
+        ["AspNetRoleClaims"] = "角色声明表：Identity 角色附加声明。",
+        ["Sites"] = "站点表：多站点租户的基础信息。",
+        ["SiteMemberships"] = "站点成员表：用户在站点内的角色与署名。",
+        ["SiteNavItems"] = "站点导航表：前台自定义导航项。",
+        ["ApiCredentials"] = "API 凭据表：站点级访问密钥（仅存摘要）。",
+        ["Contents"] = "内容主表：文章/页面及其发布状态。",
+        ["ContentRevisions"] = "内容修订表：内容历史快照。",
+        ["ContentViews"] = "内容浏览统计表：按天聚合的浏览次数。",
+        ["Categories"] = "分类表：内容分类体系。",
+        ["Tags"] = "标签表：内容标签体系。",
+        ["ContentTypes"] = "内容类型表：自定义内容模型定义。",
+        ["CustomTaxonomies"] = "自定义分类法表：挂载到内容类型的词汇集。",
+        ["CustomTaxonomyTerms"] = "自定义词条表：自定义分类法下的具体词条。",
+        ["ContentCustomTerms"] = "内容-自定义词条关联表。",
+        ["CustomFields"] = "自定义字段定义表：内容类型可扩展字段。",
+        ["ContentFieldValues"] = "内容自定义字段值表。",
+        ["MediaAssets"] = "媒体资源表：图片/文档/音视频元数据。",
+        ["SlugRedirects"] = "Slug 重定向表：旧路径到内容的永久跳转映射。",
+        ["Settings"] = "站点设置表：站点配置与展示选项。",
+        ["ContentEmbeddings"] = "语义向量表：内容切片与向量。",
+        ["EmbeddingJobs"] = "向量生成任务表：嵌入计算队列。",
+        ["Comments"] = "评论表：访客评论与审核状态。",
+        ["AuditLogs"] = "审计日志表：关键管理操作记录。",
+        ["WebhookDeliveries"] = "Webhook 投递记录表：出站事件投递状态与重试。",
+        ["ContentCategories"] = "内容-分类关联表。",
+        ["ContentTags"] = "内容-标签关联表。"
+    };
+
+    private static readonly Dictionary<string, string> CommonColumnComments = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Id"] = "主键 ID。",
+        ["SiteId"] = "所属站点 ID（租户隔离键）。",
+        ["UserId"] = "用户 ID。",
+        ["ContentId"] = "内容 ID。",
+        ["ParentId"] = "父级对象 ID。",
+        ["Name"] = "名称。",
+        ["Slug"] = "URL 代称（站内唯一或局部唯一）。",
+        ["Description"] = "描述说明。",
+        ["Title"] = "标题。",
+        ["Markdown"] = "Markdown 正文。",
+        ["Status"] = "状态枚举值。",
+        ["Kind"] = "类型枚举值。",
+        ["CreatedAt"] = "创建时间。",
+        ["UpdatedAt"] = "更新时间。",
+        ["PublishedAt"] = "发布时间。",
+        ["Version"] = "并发版本号（乐观并发控制）。",
+        ["Url"] = "链接地址。",
+        ["Position"] = "排序位置（值越小越靠前）。",
+        ["Count"] = "计数值。",
+        ["Date"] = "日期。",
+        ["IsActive"] = "是否启用。",
+        ["IsArchived"] = "是否归档。"
+    };
+
+    private static readonly Dictionary<string, Dictionary<string, string>> ColumnCommentsByTable =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Contents"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Kind"] = "内容类型：文章或页面。",
+                ["Excerpt"] = "内容摘要。",
+                ["MetaDescription"] = "SEO 元描述。",
+                ["NoIndex"] = "是否禁止搜索引擎索引。",
+                ["IsSticky"] = "是否置顶（文章列表优先显示）。",
+                ["AllowComments"] = "是否允许评论。",
+                ["MenuOrder"] = "页面菜单排序权重。",
+                ["PublishAt"] = "计划发布时间。",
+                ["DeletedAt"] = "进入回收站时间。",
+                ["PreviewToken"] = "预览令牌（发布前分享预览）。",
+                ["IsProtected"] = "是否启用访问密码。",
+                ["ProtectionHash"] = "访问密码哈希值。",
+                ["IsPrivate"] = "是否私密（仅后台可见）。",
+                ["ContentTypeId"] = "自定义内容类型 ID。",
+                ["CoverMediaId"] = "封面媒体 ID。",
+                ["AuthorId"] = "作者账号 ID。",
+                ["AuthorName"] = "作者显示名快照。",
+                ["AuthorSlug"] = "作者 URL 代称。",
+                ["EditingById"] = "当前编辑锁占用者 ID。",
+                ["EditingByName"] = "当前编辑锁占用者名称。",
+                ["EditingAt"] = "编辑锁最近心跳时间。"
+            },
+            ["ContentRevisions"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SnapshotJson"] = "结构化快照 JSON（分类/标签/SEO/字段值等）。"
+            },
+            ["ContentViews"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Count"] = "当日浏览次数。"
+            },
+            ["MediaAssets"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FileName"] = "存储文件名。",
+                ["OriginalName"] = "原始上传文件名。",
+                ["ContentType"] = "MIME 类型。",
+                ["AltText"] = "替代文本（无障碍/SEO）。",
+                ["Caption"] = "媒体说明文字。",
+                ["Size"] = "文件大小（字节）。",
+                ["Width"] = "宽度（像素）。",
+                ["Height"] = "高度（像素）。",
+                ["UploadedAt"] = "上传时间。"
+            },
+            ["Settings"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = "单例主键（固定为 1）。",
+                ["PostsPerPage"] = "列表每页文章数。",
+                ["FeedItems"] = "订阅源输出条目数。",
+                ["FeedShowFullText"] = "订阅源是否输出全文。",
+                ["AuthorDisplayName"] = "前台默认作者显示名。",
+                ["HomePageContentId"] = "首页绑定内容 ID。",
+                ["CustomNavigationEnabled"] = "是否启用受控导航。",
+                ["CommentsEnabled"] = "是否启用评论系统。",
+                ["CommentAutoApprove"] = "评论是否自动通过。",
+                ["SiteIconMediaId"] = "站点图标媒体 ID。",
+                ["LogoMediaId"] = "站点 Logo 媒体 ID。",
+                ["ThemePreset"] = "主题预设名称。",
+                ["AccentColor"] = "主题强调色。",
+                ["ReadingWidth"] = "阅读宽度（字符列）。",
+                ["ShowByline"] = "是否显示作者署名。",
+                ["ShowCover"] = "是否显示封面图。",
+                ["CardStyle"] = "卡片样式。",
+                ["ColorScheme"] = "颜色模式。",
+                ["FooterText"] = "页脚文本。",
+                ["SocialGithubUrl"] = "GitHub 社交链接。",
+                ["SocialXUrl"] = "X/Twitter 社交链接。",
+                ["SocialMastodonUrl"] = "Mastodon 社交链接。",
+                ["CommentBlockedWords"] = "评论敏感词列表。",
+                ["CommentCloseDays"] = "发布后自动关闭评论天数。",
+                ["MaintenanceMode"] = "是否启用维护模式。",
+                ["MaintenanceMessage"] = "维护模式提示语。",
+                ["WebhookUrl"] = "Webhook 接收地址。",
+                ["WebhookSecret"] = "Webhook 签名密钥。",
+                ["PrivacyPageContentId"] = "隐私政策页面 ID。",
+                ["EmailNotificationsEnabled"] = "是否发送邮件通知。",
+                ["PermalinkScheme"] = "固定链接方案。",
+                ["TimeZoneId"] = "站点时区。",
+                ["DateFormat"] = "日期显示格式。",
+                ["TimeFormat"] = "时间显示格式。"
+            },
+            ["ApiCredentials"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SecretHash"] = "API 密钥哈希（不存明文）。",
+                ["SecurityStamp"] = "安全戳（失效控制）。",
+                ["Scope"] = "权限范围（只读/读写）。",
+                ["ExpiresAt"] = "过期时间。",
+                ["RevokedAt"] = "撤销时间。"
+            },
+            ["Comments"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["AuthorName"] = "评论作者显示名。",
+                ["Url"] = "评论作者网址。",
+                ["Markdown"] = "评论内容（Markdown）。",
+                ["IsAdminReply"] = "是否官方回复。"
+            },
+            ["ContentEmbeddings"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ChunkIndex"] = "切片序号。",
+                ["ChunkText"] = "切片文本。",
+                ["Embedding"] = "向量数据。"
+            },
+            ["EmbeddingJobs"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["EnqueuedAt"] = "入队时间。",
+                ["Attempts"] = "已重试次数。",
+                ["NextAttemptAt"] = "下次重试时间。"
+            },
+            ["WebhookDeliveries"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Event"] = "事件名称。",
+                ["TargetUrl"] = "投递目标地址。",
+                ["PayloadJson"] = "投递负载 JSON。",
+                ["Signature"] = "请求签名。",
+                ["Attempts"] = "投递尝试次数。",
+                ["LastStatusCode"] = "最近一次响应状态码。",
+                ["LastError"] = "最近一次错误信息。",
+                ["NextAttemptAt"] = "下次重试时间。",
+                ["DeliveredAt"] = "最终投递成功时间。"
+            },
+            ["AuditLogs"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserName"] = "操作者用户名快照。",
+                ["Action"] = "操作动作。",
+                ["Target"] = "操作目标。"
+            },
+            ["AspNetUsers"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SingletonKey"] = "全局单例管理员标记。",
+                ["IsDisabled"] = "账号是否禁用。",
+                ["TwoFactorSecret"] = "两步验证密钥。",
+                ["RecoveryCodeHashes"] = "恢复码哈希集合。",
+                ["Bio"] = "用户简介。",
+                ["WebsiteUrl"] = "个人网站地址。",
+                ["AvatarUrl"] = "头像地址。"
+            }
+        };
+
+    private static void ApplyChineseComments(ModelBuilder builder)
+    {
+        foreach (var entityType in builder.Model.GetEntityTypes())
+        {
+            var tableName = entityType.GetTableName();
+            if (string.IsNullOrWhiteSpace(tableName))
+                continue;
+
+            entityType.SetComment(GetTableComment(tableName));
+
+            foreach (var property in entityType.GetProperties())
+                property.SetComment(GetColumnComment(tableName, property.Name));
+        }
+    }
+
+    private static string GetTableComment(string tableName) =>
+        TableComments.TryGetValue(tableName, out var comment)
+            ? comment
+            : $"业务表：{tableName}。";
+
+    private static string GetColumnComment(string tableName, string columnName)
+    {
+        if (ColumnCommentsByTable.TryGetValue(tableName, out var tableColumns) &&
+            tableColumns.TryGetValue(columnName, out var tableComment))
+            return tableComment;
+
+        if (CommonColumnComments.TryGetValue(columnName, out var commonComment))
+            return commonComment;
+
+        return $"业务字段：{columnName}。";
     }
 
     private void ConfigureSiteEntity<TEntity>(EntityTypeBuilder<TEntity> entity, string? siteNavigation = null)

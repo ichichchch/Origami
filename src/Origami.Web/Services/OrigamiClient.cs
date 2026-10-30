@@ -249,6 +249,19 @@ public sealed class OrigamiClient
     public Task ChangeMyPasswordAsync(ChangePasswordInput input, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Post, "api/v1/admin/profile/password", input, ct);
 
+    public async Task<IReadOnlyList<ExternalLoginSummary>> GetMyExternalLoginsAsync(CancellationToken ct = default) =>
+        await GetAsync<List<ExternalLoginSummary>>("api/v1/admin/profile/external-logins", ct)
+        ?? throw new CmsException("無法載入第三方綁定。");
+
+    public Task LinkExternalLoginAsync(ExternalLoginLinkInput input, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, "api/v1/admin/profile/external-logins", input, ct);
+
+    public async Task UnlinkExternalLoginAsync(string provider, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/v1/admin/profile/external-logins/{Uri.EscapeDataString(provider)}", ct);
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task<PersonalDataExport> ExportMyPersonalDataAsync(CancellationToken ct = default) =>
         await GetAsync<PersonalDataExport>("api/v1/admin/profile/personal-data", ct) ?? throw new CmsException("無法匯出個人資料。");
 
@@ -783,10 +796,13 @@ public sealed class OrigamiClient
             request.Headers.Remove(AccessClaims.SiteHeader);
             request.Headers.Remove(AccessClaims.UserHeader);
             request.Headers.Remove(AccessClaims.StampHeader);
+            request.Headers.Remove(AccessClaims.SessionExpiresHeader);
             request.Headers.Add(AccessClaims.SiteHeader, siteContext.SiteId.ToString("D"));
             // 空值也覆寫可能存在的 client 預設值，匿名請求不得繼承先前使用者。
             request.Headers.TryAddWithoutValidation(AccessClaims.UserHeader, identity?.UserId ?? "");
             request.Headers.TryAddWithoutValidation(AccessClaims.StampHeader, identity?.SecurityStamp ?? "");
+            request.Headers.TryAddWithoutValidation(AccessClaims.SessionExpiresHeader,
+                identity?.ExpiresAt.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture) ?? "");
             return await client.SendAsync(request, ct);
         }
     }
@@ -800,9 +816,11 @@ public sealed class OrigamiClient
 public sealed class AdminSession(
     IHttpContextAccessor accessor,
     AuthenticationStateProvider authenticationStateProvider,
-    IOptions<IdentityOptions> identityOptions)
+    IOptions<IdentityOptions> identityOptions,
+    TimeProvider? timeProvider = null)
 {
     public const string StampHeader = AccessClaims.StampHeader;
+    private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private bool circuit;
     private SessionIdentity? snapshot;
 
@@ -812,9 +830,11 @@ public sealed class AdminSession(
     public async Task<ClaimsPrincipal> PrincipalAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!circuit && accessor.HttpContext is { } context) return context.User;
-        var state = await authenticationStateProvider.GetAuthenticationStateAsync().WaitAsync(cancellationToken);
-        return state.User;
+        var principal = !circuit && accessor.HttpContext is { } context
+            ? context.User
+            : (await authenticationStateProvider.GetAuthenticationStateAsync().WaitAsync(cancellationToken)).User;
+        return LoginSessionLifetime.IsValid(principal, clock.GetUtcNow())
+            ? principal : new ClaimsPrincipal(new ClaimsIdentity());
     }
 
     public async Task<SessionIdentity?> GetAsync(CancellationToken cancellationToken = default)
@@ -823,12 +843,12 @@ public sealed class AdminSession(
         var claims = identityOptions.Value.ClaimsIdentity;
         var id = SingleClaim(principal, claims.UserIdClaimType);
         var stamp = SingleClaim(principal, claims.SecurityStampClaimType);
-        if (principal.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(id) || string.IsNullOrEmpty(stamp))
+        if (principal.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(id) || string.IsNullOrEmpty(stamp) ||
+            !LoginSessionLifetime.TryRead(principal, out var expires) || expires <= clock.GetUtcNow())
             return snapshot = null;
-        // 只重用不可變且身分與戳記完全一致的快照，不永久快取首次呼叫的 Task。
         var current = snapshot;
-        if (current?.UserId == id && current.SecurityStamp == stamp) return current;
-        return snapshot = new SessionIdentity(id, stamp);
+        if (current?.UserId == id && current.SecurityStamp == stamp && current.ExpiresAt == expires) return current;
+        return snapshot = new SessionIdentity(id, stamp, expires);
     }
 
     public async Task<string?> UserIdAsync(CancellationToken cancellationToken = default) =>
@@ -844,9 +864,10 @@ public sealed class AdminSession(
     }
 
     // 刻意不是 record，避免自動產生的 ToString 將安全戳記寫入診斷日誌。
-    public sealed class SessionIdentity(string userId, string securityStamp)
+    public sealed class SessionIdentity(string userId, string securityStamp, DateTimeOffset expiresAt)
     {
         public string UserId { get; } = userId;
         public string SecurityStamp { get; } = securityStamp;
+        public DateTimeOffset ExpiresAt { get; } = expiresAt;
     }
 }

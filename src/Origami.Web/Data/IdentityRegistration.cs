@@ -33,7 +33,24 @@ public static class IdentityRegistration
         services.Configure<DataProtectionTokenProviderOptions>(options =>
             options.TokenLifespan = TimeSpan.FromMinutes(PasswordResetService.TokenMinutes));
         services.Configure<SecurityStampValidatorOptions>(options =>
-            options.ValidationInterval = TimeSpan.Zero);
+        {
+            options.ValidationInterval = TimeSpan.Zero;
+            options.OnRefreshingPrincipal = context =>
+            {
+                if (LoginSessionLifetime.TryRead(context.CurrentPrincipal, out var expires) &&
+                    context.NewPrincipal?.Identity is ClaimsIdentity identity)
+                {
+                    foreach (var claim in identity.FindAll(AccessClaims.SessionExpiresAt).ToArray()) identity.RemoveClaim(claim);
+                    identity.AddClaim(LoginSessionLifetime.CreateClaim(expires));
+                }
+                return Task.CompletedTask;
+            };
+        });
+        services.Configure<CookieAuthenticationOptions>(IdentityConstants.ExternalScheme, options =>
+        {
+            options.ExpireTimeSpan = WebSignInFlow.PendingLifetime;
+            options.SlidingExpiration = false;
+        });
 
         // 對 Identity 註冊的每個 cookie 套用傳輸保護，而非只保護登入 cookie。
         foreach (var scheme in new[]
@@ -61,24 +78,25 @@ public static class IdentityRegistration
                 return context.Response.WriteAsync("你已登入，但沒有此站點的操作權限。", context.HttpContext.RequestAborted);
             };
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
-            options.SlidingExpiration = true;
+            options.SlidingExpiration = false;
             options.Events.OnValidatePrincipal = async context =>
             {
                 var requestServices = context.HttpContext.RequestServices;
-                // 明確驗證也涵蓋安全戳記驗證間隔內的請求。
                 var valid = await AdminAccess.ValidatePrincipalAsync(
                     context.Principal,
                     requestServices.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
                     requestServices.GetRequiredService<IOptions<IdentityOptions>>().Value,
-                    context.HttpContext.RequestAborted);
+                    context.HttpContext.RequestAborted,
+                    requestServices.GetRequiredService<TimeProvider>());
                 if (!valid)
                 {
                     context.RejectPrincipal();
                     await context.HttpContext.SignOutAsync(IdentityConstants.ApplicationScheme);
                     return;
                 }
-                // 同時保留官方 Identity 驗證器與宣告刷新。
                 await SecurityStampValidator.ValidatePrincipalAsync(context);
+                // Identity 的戳記驗證器會要求續發，即使已關閉滑動續期。
+                context.ShouldRenew = false;
             };
         });
 
@@ -94,6 +112,7 @@ public static class IdentityRegistration
     public static IEndpointRouteBuilder MapCmsIdentity(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapPost("/account/logout", LogoutAsync).RequireAuthorization();
+        endpoints.MapExternalLogins();
         return endpoints;
     }
 
@@ -103,7 +122,8 @@ public static class IdentityRegistration
         UserManager<AdminUser> userManager,
         SignInManager<AdminUser> signInManager,
         IDbContextFactory<CmsDbContext> contextFactory,
-        IOptions<IdentityOptions> identityOptions)
+        IOptions<IdentityOptions> identityOptions,
+        TimeProvider clock)
     {
         try
         {
@@ -117,7 +137,7 @@ public static class IdentityRegistration
         try
         {
             if (!await AdminAccess.ValidatePrincipalAsync(
-                context.User, contextFactory, identityOptions.Value, context.RequestAborted))
+                context.User, contextFactory, identityOptions.Value, context.RequestAborted, clock))
             {
                 return Results.Unauthorized();
             }

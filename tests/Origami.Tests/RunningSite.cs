@@ -8,12 +8,15 @@ internal sealed class RunningSite : IAsyncDisposable
     private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly X509Certificate2 certificate;
     private readonly ConcurrentQueue<string> warningCategories = new();
+    private readonly ConcurrentQueue<string> errorLines = new();
     private readonly string apiToken = "site-test-token-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
     private Process? process;
     private RunningApi? api;
     public Uri Address { get; private set; } = null!;
     public Uri? HttpAddress { get; private set; }
     public IReadOnlyCollection<string> WarningCategories => warningCategories.ToArray();
+    /// <summary>伺服器端錯誤輸出（含例外堆疊），供測試失敗時診斷 500 的根因。</summary>
+    public IReadOnlyList<string> ErrorLines => [.. errorLines];
     public string StorageRoot => Path.Combine(root, "storage");
 
     public RunningSite(string connectionString)
@@ -75,6 +78,9 @@ internal sealed class RunningSite : IAsyncDisposable
         await api.StartAsync(environment: environment, serviceToken: apiToken, listenOnHttp: true,
             configurationOverrides: configurationOverrides, storageRoot: StorageRoot);
         start.ArgumentList.Add(assembly);
+        // 預設不繼承開發機啟用的第三方登入；專用測試仍可在下方覆寫。
+        foreach (var provider in new[] { "Google", "Microsoft", "GitHub", "WeChat" })
+            SetEnvironment(start.Environment, $"Authentication__External__{provider}__Enabled", "false");
         ConfigureAiEnvironment(start.Environment, configurationOverrides);
         SetEnvironment(start.Environment, "Api__BaseUrl", api.Address.ToString());
         SetEnvironment(start.Environment, "Api__ServiceToken", apiToken);
@@ -88,6 +94,7 @@ internal sealed class RunningSite : IAsyncDisposable
         SetEnvironment(start.Environment, "Logging__LogLevel__Default", "Warning");
         SetEnvironment(start.Environment, "Logging__LogLevel__Microsoft.Hosting.Lifetime", "Information");
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var capturingError = false;
         void Capture(object sender, DataReceivedEventArgs e)
         {
             var line = e.Data;
@@ -96,6 +103,24 @@ internal sealed class RunningSite : IAsyncDisposable
                 // 只保留分類／事件 ID，絕不保留訊息本文、認證資訊或連線字串。
                 var end = line.IndexOf(']');
                 if (end >= 0) warningCategories.Enqueue(line[..(end + 1)]);
+                capturingError = false;
+            }
+            else if (line?.StartsWith("fail: ", StringComparison.Ordinal) == true)
+            {
+                capturingError = true;
+                errorLines.Enqueue(line);
+            }
+            else if (capturingError && line is not null && line.Length > 0)
+            {
+                // 例外堆疊是無標頭的後續行；遇到下一筆帶層級前綴的輸出即停止。
+                if (line.StartsWith("warn: ", StringComparison.Ordinal) ||
+                    line.StartsWith("info: ", StringComparison.Ordinal) ||
+                    line.StartsWith("fail: ", StringComparison.Ordinal) ||
+                    line.StartsWith("dbug: ", StringComparison.Ordinal))
+                {
+                    capturingError = false;
+                }
+                else errorLines.Enqueue(line);
             }
             // 同時啟用 HTTP 與 HTTPS 時，第一條監聽訊息出現得太早，不能當成就緒。
             if (line?.Contains("Application started.", StringComparison.Ordinal) == true) ready.TrySetResult();
