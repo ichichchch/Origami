@@ -33,6 +33,7 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 | Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item with line-diff against the editor), trash with 30-day retention and restore, revocable draft preview links |
 | Visibility | Private content is not public and requires management authorization, password-protected content needs the password, and neither enters search or AI retrieval |
 | Site settings | Site name and description, articles per page, feed items with a full-text option, author display name, fixed home page, site icon, data export (JSON / ZIP full backup) with replace-style import |
+| Appearance & themes | Controlled theme presets (reading serif / minimal compact / gallery display — real differences in fonts and layout density), accent color and column width fine-tuning, live preview on the settings page, automatic foreground lightening in dark mode, a per-admin three-state appearance toggle remembered via cookie (takes precedence over system detection when the site is set to auto), prefers-contrast support |
 
 Content is written in **Markdown**. Raw HTML is disabled and every rendered URL is checked against
 an allow-list, so stored content cannot introduce script execution.

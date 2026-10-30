@@ -106,7 +106,11 @@ public sealed class ThemeSettingsTests(IsolatedPostgres postgres) : ServiceTestB
         // 版型變數以 CSS 自訂屬性輸出，並以 data 屬性控制署名與卡片樣式。
         // 注入的是品牌基色 --accent-base；明暗兩式各自在其上派生填充與前景色。
         Assert.Contains("--accent-base:#123456", html, StringComparison.Ordinal);
+        // 預設版面變數（reading 襯線、寬鬆行距）與欄寬一併輸出，數值來自內建預設常數。
         Assert.Contains("--reading-width:72ch", html, StringComparison.Ordinal);
+        Assert.Contains("--font-body:", html, StringComparison.Ordinal);
+        Assert.Contains("--prose-line:2;", html, StringComparison.Ordinal);
+        Assert.Contains("--list-gap:2.2rem;", html, StringComparison.Ordinal);
         Assert.Contains("data-card-style=\"grid\"", html, StringComparison.Ordinal);
         Assert.Contains("data-show-byline=\"false\"", html, StringComparison.Ordinal);
     }

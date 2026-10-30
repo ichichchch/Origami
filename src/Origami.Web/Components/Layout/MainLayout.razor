@@ -117,17 +117,10 @@
         return "/pages/" + string.Join("/", parts);
     }
 
-    /// <summary>受控版型的樣式變數；色碼只接受合法十六進位值，避免注入樣式。
-    /// 注入的是品牌基色（--accent-base），明暗模式各自在其上派生填充與前景色。</summary>
-    private string ThemeStyle
-    {
-        get
-        {
-            var color = ThemePresets.IsValidColor(_settings.AccentColor) ? _settings.AccentColor : "#2f6f4e";
-            var width = ThemePresets.IsValidReadingWidth(_settings.ReadingWidth) ? _settings.ReadingWidth : 68;
-            return $"--accent-base:{color};--reading-width:{width}ch";
-        }
-    }
+    /// <summary>受控版型的樣式變數：品牌基色（--accent-base）與預設版面變數；
+    /// 明暗模式各自在其上派生填充與前景色。</summary>
+    private string ThemeStyle =>
+        ThemePresets.StyleVariables(_settings.AccentColor, _settings.ReadingWidth, _settings.ThemePreset);
 
     /// <summary>站台設為 auto 時跟隨訪客系統；後台外觀切換寫入的 cookie 是訪客的明確意願，優先於系統探測。</summary>
     private string ResolvedScheme

@@ -360,8 +360,8 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
 /* 受控版型：強調色衍生色在覆寫 --accent-base 的容器上重算（自訂屬性在宣告元素解析），
-   欄寬與顯示開關同樣由站點設定驅動。 */
-.site-shell { --accent: var(--accent-base); --accent-ink: var(--accent-base); --accent-hover: color-mix(in srgb, var(--accent) 84%, #000); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 84%, #000); --accent-soft: color-mix(in srgb, var(--accent) 12%, #fff); }
+   欄寬、字體棧與版面密度變數同樣由站點設定與預設驅動。 */
+.site-shell { font-family: var(--font-body, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif); --accent: var(--accent-base); --accent-ink: var(--accent-base); --accent-hover: color-mix(in srgb, var(--accent) 84%, #000); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 84%, #000); --accent-soft: color-mix(in srgb, var(--accent) 12%, #fff); }
 .site-shell[data-show-cover="false"] .post-cover,
 .site-shell[data-show-cover="false"] .cover-figure { display: none; }
 .site-shell[data-show-byline="false"] .byline { display: none; }
@@ -425,3 +425,12 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .theme-preview-heading { font-family: var(--font-heading, "Noto Serif TC", "PMingLiU", serif); font-size: 1.5rem; margin: 0; }
 .theme-preview-body { margin: 0; color: var(--muted); max-width: var(--reading-width, 68ch); }
 .theme-preview .post-preview h2 { font-size: 1.15rem; }
+
+/* 高對比偏好：整體提高次要文字與邊界對比（WCAG 增強，非替代語義令牌）。 */
+@media (prefers-contrast: more) {
+    :root { --muted: #4a574e; --border: #c9d2c7; --border-strong: #b4c0b2; }
+    [data-color-scheme="dark"] { --muted: #c6d4ca; --border: #4a574f; --border-strong: #5c6b62; }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+    [data-color-scheme="auto"] { --muted: #c6d4ca; --border: #4a574f; --border-strong: #5c6b62; }
+}

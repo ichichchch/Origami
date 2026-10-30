@@ -407,16 +407,9 @@
         _model.ColorScheme = args.Value?.ToString() ?? ThemePresets.ColorSchemeAuto;
     }
 
-    /// <summary>即時預覽的樣式變數：與 MainLayout 相同的驗證規則，僅作用於預覽容器。</summary>
-    private string PreviewStyle
-    {
-        get
-        {
-            var color = ThemePresets.IsValidColor(_model?.AccentColor) ? _model!.AccentColor : "#2f6f4e";
-            var width = ThemePresets.IsValidReadingWidth(_model?.ReadingWidth ?? 68) ? _model!.ReadingWidth : 68;
-            return $"--accent-base:{color};--reading-width:{width}ch";
-        }
-    }
+    /// <summary>即時預覽的樣式變數：與公開站 MainLayout 共用同一組受控版型變數，僅作用於預覽容器。</summary>
+    private string PreviewStyle =>
+        ThemePresets.StyleVariables(_model?.AccentColor, _model?.ReadingWidth ?? 68, _model?.ThemePreset);
     private ImportService.ImportPreview? _importPreview;
     private byte[]? _importFile;
     private string? _importError;
