@@ -480,16 +480,26 @@
         if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.SaveDenied", "網站設定僅限本站管理員。"));
         if (_model is null) return;
         ContentRules.Validate(_model);
+        // 儲存為全欄位覆寫：必須完整回傳所有設定欄位，漏項會把該欄位靜默重置回預設值。
         var input = new SiteSettings
         {
             Id = _model.Id, Name = _model.Name, Description = _model.Description, Version = _model.Version,
             PostsPerPage = _model.PostsPerPage, FeedItems = _model.FeedItems,
             FeedShowFullText = _model.FeedShowFullText, AuthorDisplayName = _model.AuthorDisplayName,
-            HomePageContentId = _model.HomePageContentId, SiteIconMediaId = _model.SiteIconMediaId,
-            LogoMediaId = _model.LogoMediaId, CustomNavigationEnabled = _model.CustomNavigationEnabled,
+            HomePageContentId = _model.HomePageContentId, PrivacyPageContentId = _model.PrivacyPageContentId,
+            EmailNotificationsEnabled = _model.EmailNotificationsEnabled,
+            PermalinkScheme = _model.PermalinkScheme, TimeZoneId = _model.TimeZoneId,
+            DateFormat = _model.DateFormat, TimeFormat = _model.TimeFormat,
+            SiteIconMediaId = _model.SiteIconMediaId, LogoMediaId = _model.LogoMediaId,
+            CustomNavigationEnabled = _model.CustomNavigationEnabled,
             CommentsEnabled = _model.CommentsEnabled, CommentAutoApprove = _model.CommentAutoApprove,
+            CommentBlockedWords = _model.CommentBlockedWords, CommentCloseDays = _model.CommentCloseDays,
             ThemePreset = _model.ThemePreset, AccentColor = _model.AccentColor, ReadingWidth = _model.ReadingWidth,
             ShowByline = _model.ShowByline, ShowCover = _model.ShowCover, CardStyle = _model.CardStyle,
+            ColorScheme = _model.ColorScheme, FooterText = _model.FooterText,
+            SocialGithubUrl = _model.SocialGithubUrl, SocialXUrl = _model.SocialXUrl, SocialMastodonUrl = _model.SocialMastodonUrl,
+            MaintenanceMode = _model.MaintenanceMode, MaintenanceMessage = _model.MaintenanceMessage,
+            WebhookUrl = _model.WebhookUrl, WebhookSecret = _model.WebhookSecret,
         };
         _model = await Api.SaveSettingsAsync(input, ct) ?? input;
         _baseline = Snapshot(_model);
