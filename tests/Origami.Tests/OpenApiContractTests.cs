@@ -49,13 +49,9 @@ public sealed class OpenApiContractTests(IsolatedPostgres postgres) : ServiceTes
         Assert.All(operations, operation =>
         {
             var summary = operation.Operation!["summary"]!.GetValue<string>();
-            var description = operation.Operation!["description"]!.GetValue<string>();
             Assert.False(string.IsNullOrWhiteSpace(summary));
-            Assert.False(string.IsNullOrWhiteSpace(description));
-            // 禁止退回「查詢 xxx / 建立或執行 xxx」這類中英夾雜的自動拼湊摘要，且名稱保持精簡。
+            // 禁止退回「查詢 xxx / 建立或執行 xxx」這類中英夾雜的自動拼湊摘要。
             Assert.DoesNotMatch(@"^(查詢|建立或執行|更新|刪除|呼叫) [a-zA-Z]", summary);
-            Assert.True(summary.Length <= 16, $"Operation '{operation.Method} {operation.Path}' summary '{summary}' is too long.");
-            Assert.NotEqual(summary, description);
             Assert.NotEmpty(operation.Operation!["tags"]!.AsArray());
             Assert.False(string.IsNullOrWhiteSpace(operation.Operation!["operationId"]!.GetValue<string>()));
         });

@@ -1,0 +1,182 @@
+@page "/admin/widgets"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Widgets.PageTitle", "小工具 · 內容管理")</PageTitle>
+<UnsavedGuard Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Widgets.Eyebrow", "受控小工具")</p><h1>@UiText.T("Admin.Widgets.Title", "側欄與頁尾小工具")</h1><p>@UiText.T("Admin.Widgets.Introduction", "以內建型別組成側欄與頁尾的內容區塊；可排序、隱藏，不載入任何程式碼。側欄在寬螢幕顯示於文章旁，頁尾區塊顯示於頁尾上方。")</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access?.CanRead == true && !CanEdit)
+{
+    <p class="notice">@UiText.T("Admin.Widgets.ReadOnlyNotice", "本站唯讀成員可檢視小工具設定，但不能調整。")</p>
+}
+<section class="panel settings-panel settings-width">
+    <h2>@(_edit.Id is null ? UiText.T("Admin.Widgets.AddItem", "新增小工具") : UiText.T("Admin.Widgets.EditItem", "編輯小工具"))</h2>
+    <EditForm Model="_edit" OnSubmit="Save" FormName="widget-editor">
+        <fieldset disabled="@EditBlocked">
+            <div class="field">
+                <label for="widget-area">@UiText.T("Admin.Widgets.Area", "區域")</label>
+                <select id="widget-area" value="@_edit.Area.ToString()" @onchange="AreaChanged" disabled="@(_edit.Id is not null)">
+                    <option value="@WidgetArea.Sidebar">@UiText.T("Admin.Widgets.AreaSidebar", "側欄")</option>
+                    <option value="@WidgetArea.Footer">@UiText.T("Admin.Widgets.AreaFooter", "頁尾")</option>
+                </select>
+                <span class="field-help">@UiText.T("Admin.Widgets.AreaHelp", "區域建立後不可變更；如需搬移請刪除後在目標區域重建。")</span>
+            </div>
+            <div class="field">
+                <label for="widget-type">@UiText.T("Admin.Widgets.Type", "型別")</label>
+                <select id="widget-type" value="@_edit.Type.ToString()" @onchange="TypeChanged">
+                    <option value="@WidgetType.RecentPosts">@UiText.T("Admin.Widgets.TypeRecentPosts", "最新文章")</option>
+                    <option value="@WidgetType.Categories">@UiText.T("Admin.Widgets.TypeCategories", "分類")</option>
+                    <option value="@WidgetType.Tags">@UiText.T("Admin.Widgets.TypeTags", "標籤")</option>
+                    <option value="@WidgetType.Search">@UiText.T("Admin.Widgets.TypeSearch", "搜尋框")</option>
+                    <option value="@WidgetType.Text">@UiText.T("Admin.Widgets.TypeText", "文字（Markdown）")</option>
+                    <option value="@WidgetType.RecentComments">@UiText.T("Admin.Widgets.TypeRecentComments", "最新評論")</option>
+                    <option value="@WidgetType.RssFeed">@UiText.T("Admin.Widgets.TypeRssFeed", "外部文章（RSS／Atom）")</option>
+                </select>
+                <span class="field-help">@UiText.T("Admin.Widgets.TypeHelp", "文字小工具與文章走同一條安全 Markdown 管線，不解析原始 HTML；外部文章由伺服器定期抓取公開 https feed。")</span>
+            </div>
+            <div class="field"><label for="widget-title">@UiText.T("Admin.Widgets.DisplayTitle", "顯示標題（選填）")</label><input id="widget-title" @bind="_edit.Title" @bind:event="oninput" maxlength="@Limits.WidgetTitle" placeholder="@UiText.T("Admin.Widgets.TitlePlaceholder", "留空使用型別預設標題")" /></div>
+            @if (_edit.Type == WidgetType.RecentPosts || _edit.Type == WidgetType.RecentComments || _edit.Type == WidgetType.RssFeed)
+            {
+                <div class="field"><label for="widget-count">@UiText.T("Admin.Widgets.Count", "顯示篇數")</label><input id="widget-count" type="number" min="1" max="@Limits.WidgetRecentPosts" @bind="_edit.Count" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.CountHelp", "1–{0} 篇。"), Limits.WidgetRecentPosts)</span></div>
+            }
+            @if (_edit.Type == WidgetType.RssFeed)
+            {
+                <div class="field"><label for="widget-feed-url">@UiText.T("Admin.Widgets.FeedUrl", "Feed 網址") <span class="required">@UiText.T("Admin.Widgets.Required2", "必填")</span></label><input id="widget-feed-url" type="url" @bind="_edit.Url" @bind:event="oninput" maxlength="@Limits.WidgetFeedUrl" placeholder="https://example.com/feed" /><span class="field-help">@UiText.T("Admin.Widgets.FeedUrlHelp", "公開 https 絕對網址（不接受本機或內網）；伺服器快取 10 分鐘，抓取失敗時暫時不顯示。")</span></div>
+            }
+            else if (_edit.Type == WidgetType.Text)
+            {
+                <div class="field"><label for="widget-markdown">@UiText.T("Admin.Widgets.Markdown", "文字內容（Markdown）") <span class="required">@UiText.T("Admin.Widgets.Required", "必填")</span></label><textarea id="widget-markdown" rows="6" maxlength="@Limits.WidgetMarkdown" @bind="_edit.Markdown" @bind:event="oninput" aria-describedby="widget-markdown-help"></textarea><span id="widget-markdown-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.MarkdownHelp", "最長 {0} 字，可使用連結、清單與圖片語法。"), Limits.WidgetMarkdown)</span></div>
+            }
+            <div class="field checkbox-field"><label for="widget-visible"><input id="widget-visible" type="checkbox" @bind="_edit.IsVisible" /> @UiText.T("Admin.Widgets.Visible", "顯示於前台")</label></div>
+            <div class="button-row">
+                <button type="submit" class="button">@(Busy ? UiText.T("Admin.Widgets.Saving", "儲存中…") : UiText.T("Admin.Widgets.SaveItem", "儲存小工具"))</button>
+                @if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => _edit = new()">@UiText.T("Admin.Widgets.CancelOrAdd", "取消 / 新增")</button> }
+            </div>
+        </fieldset>
+    </EditForm>
+</section>
+@foreach (var (area, heading) in new[] { (WidgetArea.Sidebar, UiText.T("Admin.Widgets.AreaSidebar", "側欄")), (WidgetArea.Footer, UiText.T("Admin.Widgets.AreaFooter", "頁尾")) })
+{
+    var areaItems = _items?.Where(x => x.Area == area).ToList();
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@heading <span class="count">@(areaItems?.Count ?? 0)</span></h2></div>
+        @if (areaItems is { Count: 0 })
+        {
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.EmptyTitle", "{0}尚未設定小工具"), heading)</h2><p>@UiText.T("Admin.Widgets.EmptyHelp", "新增後前台對應區域即會顯示；沒有任何可見項目時，側欄自動隱藏。")</p></div>
+        }
+        else if (areaItems is not null)
+        {
+            <div class="table-scroll"><table><caption class="sr-only">@heading</caption><thead><tr><th scope="col">@UiText.T("Admin.Widgets.Order", "順序")</th><th scope="col">@UiText.T("Admin.Widgets.Item", "項目")</th><th scope="col">@UiText.T("Admin.Widgets.Visible", "顯示")</th><th scope="col">@UiText.T("Admin.Widgets.Actions", "操作")</th></tr></thead><tbody>
+            @for (var index = 0; index < areaItems.Count; index++)
+            {
+                var item = areaItems[index];
+                var position = index;
+                <tr @key="item.Id">
+                    <td class="date-cell">@(position + 1)</td>
+                    <td class="title-cell"><strong>@(item.Title.Length > 0 ? item.Title : TypeLabel(item.Type))</strong><span class="slug-text">@TypeLabel(item.Type)@(item.Type == WidgetType.RecentPosts ? $" · {item.Count ?? 5}" : "")</span></td>
+                    <td>@(item.IsVisible ? UiText.T("Admin.Widgets.VisibleShort", "顯示") : UiText.T("Admin.Widgets.Hidden", "隱藏"))</td>
+                    <td><div class="table-actions">
+                        <button disabled="@(EditBlocked || position == 0)" @onclick="() => Move(area, position, -1)">@UiText.T("Admin.Widgets.MoveUp", "上移")<span class="sr-only"> @(item.Title.Length > 0 ? item.Title : TypeLabel(item.Type))</span></button>
+                        <button disabled="@(EditBlocked || position == areaItems.Count - 1)" @onclick="() => Move(area, position, 1)">@UiText.T("Admin.Widgets.MoveDown", "下移")<span class="sr-only"> @(item.Title.Length > 0 ? item.Title : TypeLabel(item.Type))</span></button>
+                        <button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Widgets.Edit", "編輯")<span class="sr-only"> @(item.Title.Length > 0 ? item.Title : TypeLabel(item.Type))</span></button>
+                        <button class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDelete = item">@UiText.T("Admin.Widgets.Delete", "刪除")<span class="sr-only"> @(item.Title.Length > 0 ? item.Title : TypeLabel(item.Type))</span></button>
+                    </div></td>
+                </tr>
+            }
+            </tbody></table></div>
+        }
+    </section>
+}
+@if (_pendingDelete is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="widget-delete-title">
+        <h2 id="widget-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.DeleteTitle", "刪除小工具「{0}」？"), _pendingDelete.Title.Length > 0 ? _pendingDelete.Title : TypeLabel(_pendingDelete.Type))</h2>
+        <p>@UiText.T("Admin.Widgets.DeleteWarning", "只移除小工具項目，不影響內容本身。此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Delete">@UiText.T("Admin.Widgets.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDelete = null">@UiText.T("Admin.Widgets.Cancel", "取消")</button></div>
+    </section>
+}
+
+@code {
+    private List<WidgetService.WidgetView>? _items;
+    private WidgetService.WidgetInput _edit = new();
+    private WidgetService.WidgetView? _pendingDelete;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private Task Load() => RunAsync(async ct =>
+    {
+        _items = await Api.ListWidgetsAsync(ct) ?? [];
+        _edit = new();
+    });
+
+    private static string TypeLabel(WidgetType type) => type switch
+    {
+        WidgetType.RecentPosts => UiText.T("Admin.Widgets.TypeRecentPosts", "最新文章"),
+        WidgetType.Categories => UiText.T("Admin.Widgets.TypeCategories", "分類"),
+        WidgetType.Tags => UiText.T("Admin.Widgets.TypeTags", "標籤"),
+        WidgetType.Search => UiText.T("Admin.Widgets.TypeSearch", "搜尋框"),
+        WidgetType.RecentComments => UiText.T("Admin.Widgets.TypeRecentComments", "最新評論"),
+        WidgetType.RssFeed => UiText.T("Admin.Widgets.TypeRssFeed", "外部文章（RSS／Atom）"),
+        _ => UiText.T("Admin.Widgets.TypeText", "文字（Markdown）")
+    };
+
+    private void AreaChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<WidgetArea>(args.Value?.ToString(), out var area)) _edit.Area = area;
+    }
+
+    private void TypeChanged(ChangeEventArgs args)
+    {
+        if (!Enum.TryParse<WidgetType>(args.Value?.ToString(), out var type)) return;
+        _edit.Type = type;
+        // 切換型別即重置組態欄位，避免把數字帶進文字、文字帶進其他型別。
+        _edit.Count = type is WidgetType.RecentPosts or WidgetType.RecentComments or WidgetType.RssFeed ? 5 : null;
+        if (type != WidgetType.Text) _edit.Markdown = "";
+        if (type != WidgetType.RssFeed) _edit.Url = "";
+    }
+
+    private void Edit(WidgetService.WidgetView item)
+    {
+        _edit = new WidgetService.WidgetInput
+        {
+            Id = item.Id, Area = item.Area, Type = item.Type, Title = item.Title,
+            Count = item.Count, Markdown = item.Markdown, Url = item.Url,
+            IsVisible = item.IsVisible, Version = item.Version
+        };
+    }
+
+    private Task Save() => RunEditAsync(async ct =>
+    {
+        await Api.SaveWidgetAsync(_edit, ct);
+        _edit = new();
+        _items = await Api.ListWidgetsAsync(ct) ?? [];
+    }, UiText.T("Admin.Widgets.Saved", "小工具已儲存。"));
+
+    private async Task Delete()
+    {
+        if (_pendingDelete is not { } item) return;
+        await RunEditAsync(async ct =>
+        {
+            await Api.DeleteWidgetAsync(item.Id, item.Version, ct);
+            _pendingDelete = null;
+            _items = await Api.ListWidgetsAsync(ct) ?? [];
+        }, UiText.T("Admin.Widgets.Deleted", "小工具已刪除。"));
+        _pendingDelete = null;
+    }
+
+    private Task Move(WidgetArea area, int index, int delta) => RunEditAsync(async ct =>
+    {
+        var list = _items?.Where(x => x.Area == area).ToList() ?? [];
+        var target = index + delta;
+        if (index < 0 || target < 0 || target >= list.Count) return;
+        (list[index], list[target]) = (list[target], list[index]);
+        var results = await Api.ReorderWidgetsAsync(area, list.Select(x => (x.Id, x.Version)).ToList(), ct) ?? [];
+        var failed = results.FirstOrDefault(x => !x.Succeeded);
+        if (failed is not null) throw new CmsException(failed.Message);
+        _items = await Api.ListWidgetsAsync(ct) ?? [];
+    }, UiText.T("Admin.Widgets.Reordered", "小工具順序已更新。"));
+}

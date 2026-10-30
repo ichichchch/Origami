@@ -1,4 +1,5 @@
 var builder = WebApplication.CreateBuilder(args);
+
 string connection;
 try
 {

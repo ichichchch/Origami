@@ -17,6 +17,7 @@ public static class ApiEndpoints
         group.MapGet("/search", SearchAsync);
         group.MapGet("/settings", GetSettingsAsync);
         group.MapGet("/navigation", GetNavigationAsync);
+        group.MapGet("/widgets", GetWidgetsAsync);
         // 已設定為靜態首頁的頁面：以內容識別取得已發布頁面。
         group.MapGet("/contents/{id}/published", GetPublishedPageAsync);
         // 公開圖片寬度表：前台 srcset 渲染所需的變體資訊。
@@ -101,13 +102,20 @@ public static class ApiEndpoints
             ColorScheme = value.ColorScheme, FooterText = value.FooterText,
             SocialGithubUrl = value.SocialGithubUrl, SocialXUrl = value.SocialXUrl, SocialMastodonUrl = value.SocialMastodonUrl,
             MaintenanceMode = value.MaintenanceMode, MaintenanceMessage = value.MaintenanceMessage,
+            SearchEngineBlocked = value.SearchEngineBlocked,
             PrivacyPageContentId = value.PrivacyPageContentId, PrivacyPageSlug = privacySlug, PrivacyPageTitle = privacyTitle,
-            PermalinkScheme = value.PermalinkScheme, TimeZoneId = value.TimeZoneId, DateFormat = value.DateFormat, TimeFormat = value.TimeFormat });
+            PermalinkScheme = value.PermalinkScheme, TimeZoneId = value.TimeZoneId, DateFormat = value.DateFormat, TimeFormat = value.TimeFormat,
+            // 輸出前再次清理：即使資料列被改寫，也絕不把未清理的樣式送到瀏覽器。
+            CustomCss = CssSanitizer.TryClean(value.CustomCss, out var customCss) ? customCss : "" });
     }
 
     /// <summary>前台頁首呈現所需的公開導覽選單。</summary>
     private static async Task<IResult> GetNavigationAsync(NavigationService navigation, CancellationToken ct) =>
         Results.Ok(await navigation.PublicAsync(ct));
+
+    /// <summary>側欄與頁尾的可見小工具及其渲染資料。</summary>
+    private static async Task<IResult> GetWidgetsAsync(WidgetService widgets, CancellationToken ct) =>
+        Results.Ok(await widgets.PublicAsync(ct));
 
     /// <summary>以內容識別取得已發布頁面，供靜態首頁渲染。</summary>
     private static async Task<IResult> GetPublishedPageAsync(Guid id, ContentService content, CancellationToken ct) =>
@@ -117,9 +125,9 @@ public static class ApiEndpoints
     private static async Task<IResult> GetMediaWidthsAsync(MediaService media, CancellationToken ct) =>
         Results.Ok(await media.PublicImageWidthsAsync(ct));
 
-    /// <summary>指定內容下所有已核可的公開評論。</summary>
-    private static async Task<IResult> ListPublicCommentsAsync(Guid id, CommentService comments, CancellationToken ct) =>
-        Results.Ok(await comments.ListPublicAsync(id, ct));
+    /// <summary>指定內容下所有已核可的公開評論；支援 ?page= 分頁（依服務端固定單頁上限）。</summary>
+    private static async Task<IResult> ListPublicCommentsAsync(Guid id, int? page, CommentService comments, CancellationToken ct) =>
+        Results.Ok(await comments.ListPublicPagedAsync(id, page ?? 1, ct));
 
     /// <summary>指定文章的上一篇與下一篇相鄰文章。</summary>
     private static async Task<IResult> GetNeighborsAsync(Guid id, ContentService content, CancellationToken ct) =>
@@ -269,6 +277,8 @@ public static class ApiEndpoints
         public string SocialMastodonUrl { get; init; } = "";
         /// <summary>是否啟用維護模式。</summary>
         public bool MaintenanceMode { get; init; }
+        /// <summary>要求搜尋引擎不要索引本站。</summary>
+        public bool SearchEngineBlocked { get; init; }
         /// <summary>維護模式下顯示給訪客的提示訊息。</summary>
         public string MaintenanceMessage { get; init; } = "";
         /// <summary>隱私權頁面的內容識別碼。</summary>
@@ -285,6 +295,8 @@ public static class ApiEndpoints
         public string DateFormat { get; init; } = "yyyy.MM.dd";
         /// <summary>時間顯示格式。</summary>
         public string TimeFormat { get; init; } = "HH:mm";
+        /// <summary>受控清理後的自訂 CSS；空字串代表未設定。</summary>
+        public string CustomCss { get; init; } = "";
     }
 
     /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>

@@ -199,6 +199,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await db.MediaAssets.ExecuteDeleteAsync(ct);
         // 導覽項目隨內容一併取代；舊項目引用的頁面已不存在，留著只會是死連結。
         await db.SiteNavItems.ExecuteDeleteAsync(ct);
+        await db.SiteWidgets.ExecuteDeleteAsync(ct);
         // 評論隨內容級聯刪除，此處明確清理以避免複合鍵殘留。
         await db.Comments.ExecuteDeleteAsync(ct);
 
@@ -521,6 +522,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             ? Math.Clamp(closeDays.GetInt32(), 0, 3650) : 0;
         settings.MaintenanceMode = site.TryGetProperty("maintenanceMode", out var maint) && maint.ValueKind == JsonValueKind.True;
         settings.MaintenanceMessage = Bounded(site, "maintenanceMessage", Limits.MaintenanceMessage, "維護提示訊息", optional: true);
+        // 匯入的自訂 CSS 同樣走清理；清理不過即丟棄，不讓匯入檔成為繞過儲存驗證的管道。
+        var importedCss = Bounded(site, "customCss", Limits.CustomCss, "自訂 CSS", optional: true);
+        settings.CustomCss = CssSanitizer.TryClean(importedCss, out var cleanCss) ? cleanCss : "";
         settings.Version = Guid.NewGuid();
 
         // 已發布的公開內容與全新發布一樣，重新進入嵌入管道；站點僅由伺服器指定。
@@ -564,6 +568,30 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 {
                     SiteId = db.CurrentSiteId, Title = title, Url = contentId is null ? url : "",
                     ContentId = contentId, IsVisible = visible, Position = position++
+                });
+            }
+        }
+
+        // 受控小工具：以宣告資料還原；無法辨識的區域或型別的項目略過，不讓匯入檔產生未定義區塊。
+        if (document.RootElement.TryGetProperty("widgets", out var widgetsNode) && widgetsNode.ValueKind == JsonValueKind.Array)
+        {
+            var position = 0;
+            foreach (var node in widgetsNode.EnumerateArray())
+            {
+                var area = node.GetString("area") is { } a && Enum.TryParse<WidgetArea>(a, ignoreCase: true, out var parsedArea)
+                    && Enum.IsDefined(parsedArea) ? parsedArea : (WidgetArea?)null;
+                var type = node.GetString("type") is { } t && Enum.TryParse<WidgetType>(t, ignoreCase: true, out var parsedType)
+                    && WidgetTypes.IsValid(parsedType) ? parsedType : (WidgetType?)null;
+                if (area is null || type is null) continue;
+                db.SiteWidgets.Add(new SiteWidget
+                {
+                    SiteId = db.CurrentSiteId,
+                    Area = area.Value,
+                    Type = type.Value,
+                    Title = Bounded(node, "title", Limits.WidgetTitle, "小工具標題", optional: true),
+                    ConfigJson = Bounded(node, "configJson", Limits.WidgetConfig, "小工具組態", optional: true),
+                    IsVisible = !node.TryGetProperty("isVisible", out var widgetVisible) || widgetVisible.ValueKind != JsonValueKind.False,
+                    Position = position++
                 });
             }
         }

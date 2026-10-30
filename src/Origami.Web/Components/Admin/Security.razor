@@ -4,6 +4,9 @@
 @layout AdminLayout
 @inherits AdminComponentBase
 @inject TwoFactorService TwoFactor
+@inject LoginSessionService Sessions
+@inject AdminAccess Admin
+@inject AuthenticationStateProvider AuthenticationState
 @inject OrigamiClient Api
 
 <PageTitle>@UiText.T("Admin.Security.PageTitle", "個人資料與安全 · 內容管理")</PageTitle>
@@ -184,12 +187,69 @@
     </section>
 }
 
+<section class="panel settings-panel settings-width">
+    <div class="panel-intro">
+        <h2>@UiText.T("Admin.Security.SessionsTitle", "登入工作階段")</h2>
+        <p>@UiText.T("Admin.Security.SessionsHelp", "目前有效的登入裝置與來源；可遠端登出其他工作階段，該裝置下次請求即失效。")</p>
+    </div>
+    @if (_sessions.Count == 0)
+    {
+        <p class="empty-state">@UiText.T("Admin.Security.NoSessions", "沒有有效的登入工作階段。")</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">@UiText.T("Admin.Security.SessionCreated", "登入時間")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionExpires", "到期時間")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionSource", "來源 IP")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionDevice", "裝置")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionStatusCol", "狀態")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionActions", "操作")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var session in _sessions)
+                    {
+                        <tr @key="session.Id">
+                            <td>@session.CreatedAt.ToString("yyyy.MM.dd HH:mm")</td>
+                            <td>@session.ExpiresAt.ToString("yyyy.MM.dd HH:mm")</td>
+                            <td><code>@session.RemoteIp</code></td>
+                            <td><span class="muted">@DeviceSummary(session)</span></td>
+                            <td>
+                                @if (session.Id == _currentSessionId)
+                                {
+                                    <span class="status-badge published">@UiText.T("Admin.Security.SessionCurrent", "目前工作階段")</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge draft">@UiText.T("Admin.Security.SessionOther", "其他裝置")</span>
+                                }
+                            </td>
+                            <td>
+                                @if (session.Id != _currentSessionId)
+                                {
+                                    <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RevokeSessionAsync(session.Id)">@UiText.T("Admin.Security.RevokeSession", "遠端登出")</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
 @code {
     // 個人安全設定只需全域有效登入，不要求本站成員資格。
     protected override bool UsesSiteAccess => false;
     private TwoFactorStatus? _status;
     private AccountProfileEdit? _profile;
     private ChangePasswordInput _passwordForm = new();
+    private List<LoginSessionService.SessionView> _sessions = [];
+    private Guid _currentSessionId;
     private (string Secret, string Uri)? _setup;
     private IReadOnlyList<string>? _recoveryCodes;
     private bool _confirmErase;
@@ -222,7 +282,38 @@
     {
         _status = await TwoFactor.GetStatusAsync(ct);
         _profile = await Api.GetMyProfileAsync(ct);
+        var user = await Admin.RequireUserAsync(ct);
+        // 互動電路中 HttpContext 為 null，會話識別改由驗證狀態主體讀取（預渲染與電路皆可用）。
+        var principal = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+        _currentSessionId = Guid.TryParseExact(
+            principal.FindFirst(AccessClaims.SessionId)?.Value, "N", out var sessionId)
+            ? sessionId : Guid.Empty;
+        _sessions = await Sessions.ListAsync(user.Id, ct);
     });
+    private Task RevokeSessionAsync(Guid id) => RunAsync(async ct =>
+    {
+        var user = await Admin.RequireUserAsync(ct);
+        await Sessions.RevokeAsync(user.Id, id, ct);
+        _sessions = await Sessions.ListAsync(user.Id, ct);
+    }, UiText.T("Admin.Security.SessionRevoked", "已登出該工作階段。"));
+
+    /// <summary>從 User-Agent 與登入方式整理一行裝置摘要；辨識失敗時如實顯示未知裝置。</summary>
+    private static string DeviceSummary(LoginSessionService.SessionView session)
+    {
+        var ua = session.UserAgent;
+        var browser = ua.Contains("Edg/", StringComparison.Ordinal) ? "Edge"
+            : ua.Contains("Chrome/", StringComparison.Ordinal) ? "Chrome"
+            : ua.Contains("Firefox/", StringComparison.Ordinal) ? "Firefox"
+            : ua.Contains("Safari/", StringComparison.Ordinal) ? "Safari" : "";
+        var os = ua.Contains("Windows", StringComparison.Ordinal) ? "Windows"
+            : ua.Contains("Android", StringComparison.Ordinal) ? "Android"
+            : ua.Contains("iPhone", StringComparison.Ordinal) || ua.Contains("iPad", StringComparison.Ordinal) ? "iOS"
+            : ua.Contains("Mac OS", StringComparison.Ordinal) ? "macOS"
+            : ua.Contains("Linux", StringComparison.Ordinal) ? "Linux" : "";
+        var parts = new[] { browser, os }.Where(x => x.Length > 0).ToList();
+        if (session.Provider is { Length: > 0 } provider && provider != "password") parts.Add(provider);
+        return parts.Count > 0 ? string.Join(" · ", parts) : UiText.T("Admin.Security.UnknownDevice", "未知裝置");
+    }
     private Task SaveProfileAsync() => RunAsync(async ct =>
     {
         if (_profile is null) return;

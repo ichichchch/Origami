@@ -157,9 +157,27 @@ public sealed class AdminAccess(
         await using var context = await contextFactory.CreateDbContextAsync(cancellationToken);
         var user = await context.Users.AsNoTracking().Where(x => x.Id == userId)
             .Select(x => new { x.IsDisabled, x.SecurityStamp }).SingleOrDefaultAsync(cancellationToken);
-        return user is not null && !user.IsDisabled && !string.IsNullOrEmpty(user.SecurityStamp) &&
-            string.Equals(stamp, user.SecurityStamp, StringComparison.Ordinal) &&
-            LoginSessionLifetime.IsValid(principal, clock.GetUtcNow());
+        if (user is null || user.IsDisabled || string.IsNullOrEmpty(user.SecurityStamp) ||
+            !string.Equals(stamp, user.SecurityStamp, StringComparison.Ordinal) ||
+            !LoginSessionLifetime.IsValid(principal, clock.GetUtcNow())) return false;
+        // 會話撤銷：僅對「帶會話識別」的主體生效（真實登入一律由 WebSignInFlow 簽發並落庫）。
+        // 缺識別的主體（測試偽造、升級前的舊 cookie）不參與撤銷機制，仍受戳記與期限約束。
+        if (TryReadSessionId(principal, out var sessionId))
+        {
+            var session = await context.LoginSessions.AsNoTracking()
+                .Where(x => x.Id == sessionId && x.UserId == userId)
+                .Select(x => new { x.RevokedAt, x.ExpiresAt }).SingleOrDefaultAsync(cancellationToken);
+            if (session is null || session.RevokedAt is not null || session.ExpiresAt <= clock.GetUtcNow())
+                return false;
+        }
+        return true;
+    }
+
+    private static bool TryReadSessionId(ClaimsPrincipal? principal, out Guid sessionId)
+    {
+        sessionId = Guid.Empty;
+        var claims = principal?.FindAll(AccessClaims.SessionId).Take(2).ToArray();
+        return claims is { Length: 1 } && Guid.TryParseExact(claims[0].Value, "N", out sessionId);
     }
 
     private static bool TryReadIdentity(ClaimsPrincipal? principal, IdentityOptions options,

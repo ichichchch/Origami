@@ -72,7 +72,8 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
             var actor = await App.AdministratorAsync();
             var service = new TwoFactorService(actor.Services.GetRequiredService<AdminAccess>(),
                 actor.Services.GetRequiredService<UserManager<AdminUser>>(),
-                actor.Services.GetRequiredService<SignInManager<AdminUser>>(), clock);
+                actor.Services.GetRequiredService<SignInManager<AdminUser>>(),
+                actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(), clock);
             return (actor, service);
         }
         var (admin, twoFactor) = await FreshAsync();

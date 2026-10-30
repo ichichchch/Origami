@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider? clock = null)
+public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider? clock = null, CmsEventBus? events = null)
 {
     public async Task<SiteSettings> GetAsync(CancellationToken ct = default)
     {
@@ -46,6 +46,8 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         var timeFormat = string.IsNullOrWhiteSpace(input.TimeFormat) ? "HH:mm" : input.TimeFormat.Trim();
         if (!PermalinkRules.IsValidTimeFormat(timeFormat))
             throw new CmsException("時間格式無效。");
+        // 自訂 CSS 以受控清理把關：危險構造直接拒絕，通過後以清理結果落庫。
+        var customCss = CssSanitizer.CleanOrThrow(input.CustomCss);
         await using var db = await factory.CreateDbContextAsync(ct);
         if (input.HomePageContentId is { } homeId)
         {
@@ -76,6 +78,7 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.HomePageContentId = input.HomePageContentId;
         entity.PrivacyPageContentId = input.PrivacyPageContentId;
         entity.EmailNotificationsEnabled = input.EmailNotificationsEnabled;
+        entity.SearchEngineBlocked = input.SearchEngineBlocked;
         entity.PermalinkScheme = permalinkScheme;
         entity.TimeZoneId = timeZoneId;
         entity.DateFormat = dateFormat;
@@ -102,6 +105,7 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.MaintenanceMessage = (input.MaintenanceMessage ?? "").Trim();
         entity.WebhookUrl = (input.WebhookUrl ?? "").Trim();
         entity.WebhookSecret = (input.WebhookSecret ?? "").Trim();
+        entity.CustomCss = customCss;
         entity.Version = Guid.NewGuid();
         db.AuditLogs.Add(new AuditLog
         {
@@ -113,11 +117,16 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             CreatedAt = (clock ?? TimeProvider.System).GetUtcNow()
         });
         await ContentRules.SaveAsync(db, ct);
+        if (events is not null)
+        {
+            await events.PublishAsync("settings.updated", db.CurrentSiteId, new { name = entity.Name }, ct);
+        }
         input.ColorScheme = entity.ColorScheme;
         input.PermalinkScheme = entity.PermalinkScheme;
         input.TimeZoneId = entity.TimeZoneId;
         input.DateFormat = entity.DateFormat;
         input.TimeFormat = entity.TimeFormat;
+        input.CustomCss = entity.CustomCss;
         input.Version = entity.Version;
         return input;
     }

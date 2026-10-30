@@ -8,9 +8,15 @@ public static class PublicEndpoints
 {
     public static void MapPublicEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/robots.txt", (HttpContext http) => Results.Text(
-            "User-agent: *\nDisallow: /admin\nDisallow: /account\nDisallow: /preview\n\nSitemap: " + BaseUrl(http) + "/sitemap.xml\n",
-            "text/plain", Encoding.UTF8));
+        app.MapGet("/robots.txt", async (OrigamiClient api, HttpContext http, CancellationToken ct) =>
+        {
+            var settings = await api.GetPublicSettingsAsync(ct);
+            // 站點要求不被索引時全站禁止且不提供 Sitemap；其餘情境僅封鎖管理與預覽路徑。
+            var body = settings?.SearchEngineBlocked == true
+                ? "User-agent: *\nDisallow: /\n"
+                : "User-agent: *\nDisallow: /admin\nDisallow: /account\nDisallow: /preview\n\nSitemap: " + BaseUrl(http) + "/sitemap.xml\n";
+            return Results.Text(body, "text/plain", Encoding.UTF8);
+        });
 
         app.MapGet("/sitemap.xml", async (OrigamiClient api, HttpContext http, CancellationToken ct) =>
         {

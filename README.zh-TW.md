@@ -24,6 +24,7 @@
 | 可見性 | 私密內容不公開，讀取須符合管理權限、密碼保護內容需解鎖後才顯示，兩者都不進入搜尋與 AI 檢索 |
 | 站點設定 | 網站名稱與說明、每頁文章數、訂閱條數與全文選項、作者顯示名稱、固定首頁、網站圖示、資料匯出（JSON／ZIP）與還原式匯入 |
 | 外觀與版型 | 受控版型三預設（閱讀襯線／極簡緊湊／圖集大標題，字體與版面密度實質差異）、強調色與欄寬微調、設定頁即時預覽、深色模式前景自動提亮、後台個人三態外觀切換（cookie 記憶，站台 auto 時優先於系統探測）、prefers-contrast 高對比增強 |
+| 小工具與自訂 CSS | 側欄與頁尾小工具：五種內建宣告式型別（最新文章／分類／標籤／搜尋框／Markdown 文字），可排序與隱藏，寬螢幕側欄、窄螢幕堆疊；自訂 CSS 儲存前經危險構造清理（註解移除，@import／@font-face／expression／javascript:／反斜線轉義一律拒絕），輸出前再次清理 |
 
 內容以 **Markdown** 書寫：原始 HTML 被停用，每個輸出網址都經過白名單檢查，儲存的內容無法引入腳本執行。
 
@@ -176,7 +177,7 @@ tests/Origami.Tests/
 | `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章與獨立頁面詳情（Markdown 原文）；草稿、受保護與私密內容一律 404 |
 | `/api/v1/search?q=` | 混合搜尋，規則與 `/search` 相同；模型未設定時退回關鍵字 |
 | `/mcp`、`/health` | 唯讀 MCP 工具（`search_posts`、`get_post`、`get_page`）與資料庫健康檢查 |
-| 公開讀取面 | `/settings`、`/navigation`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/media/widths`——網站頁面的資料來源 |
+| 公開讀取面 | `/settings`、`/navigation`、`/widgets`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/media/widths`——網站頁面的資料來源 |
 | `/api/v1/admin/…` | 管理讀取與寫入（內容／分類標籤／媒體／設定／修訂／預覽連結／匯入匯出）；BFF 轉發真實身分，PAT 按 Read／Write 及角色上限存取內容類端點，不能管理設定或匯入匯出 |
 | `/api/v1/sites/resolve?host=…` | 公開 Host 映射解析，只回傳站點中繼資料，不回傳帳號或憑證 |
 | `/api/v1/admin/access`、`/sites`、`/users`、`/members`、`/credentials` | 此列除首項外均相對 `/api/v1/admin`；BFF-only 權限、站點、全域帳號、成員及 PAT 管理，服務再檢查相應角色 |
@@ -189,6 +190,7 @@ tests/Origami.Tests/
 | `/admin/posts`、`/admin/pages` | 內容列表（含關鍵字搜尋、狀態篩選、回收桶）、快速編輯（就地改標題／代稱／狀態）、發布、撤回、確認後刪除 |
 | `/admin/content/{id}` | Markdown 編輯器、預覽、分類標籤指派、媒體插入、排程發布、修訂歷史、密碼保護與私密設定 |
 | `/admin/taxonomies` | 分類與標籤的建立、修改、刪除 |
+| `/admin/widgets` | 側欄與頁尾小工具的建立、編輯、排序、顯示開關與刪除（內建五種型別） |
 | `/admin/media` | 圖片上傳、媒體庫關鍵字搜尋、alt 文字編輯、引用保護刪除 |
 | `/admin/settings` | 網站名稱與說明、每頁文章數、訂閱條數、固定首頁、網站圖示、資料匯出（JSON／ZIP 完整備份）與還原式匯入 |
 | `/admin/security` | 自己帳號的兩步驟驗證（TOTP）啟用與停用 |
@@ -260,6 +262,7 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `ApiV1EndpointTests` | /api/v1 列表分頁與僅已發布、詳情對草稿／受保護／私密內容 404、搜尋無模型金鑰時退回關鍵字、參數校驗與按 IP 限流 |
 | `McpEndpointTests` | MCP 端點（Api 主機）僅暴露三個唯讀工具、草稿不可見、缺模型金鑰時工具層降級不回 5xx、按 IP 限流 |
 | `ApiV1AdminEndpointTests` | 寫入端點無通行證或錯誤通行證一律 401、建立→發布→撤回→回收桶→還原閉環、過期版本被拒絕不靜默覆寫、管理流量獨立限流配額 |
+| `WidgetAndCustomCssTests` | CSS 清理器危險構造拒絕與註解移除、小工具 CRUD／邊界驗證／區域排序／公開投影（僅已發布內容）、未登入拒絕與跨站隔離、自訂 CSS 清理落庫與匯出匯入往返 |
 
 2026-10-28 稽核修復輪已補齊並通過單項驗證：舊庫遷移升級把既有內容與 Settings 歸入預設站（`DatabaseIntegrationTests`）、PAT 限流分區與 BFF 豁免／跨憑證獨立（`TenancyApiTests`）、站點／帳號／成員管理的 BFF happy path、四個新管理頁的瀏覽器流程（`AdminTenancyBrowserTests`）、備份按站點目錄隔離（`BackupServiceTests`），以及網站主機在 Development 環境的啟動修復。其餘第一批邊界（跨 Host 隔離、遷移 Down 防護、Reader／角色寫入邊界、BFF 401／403、PAT 即時失效與數量上限、帳號自身 2FA）仍待使用者批量全量回歸；綠燈前不宣稱本批驗收完成。
 
@@ -273,4 +276,5 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 - 網站與 Api 為兩個程序：網站啟動前 Api 必須可用（`Api:BaseUrl`），雙方須設同一 `Api:ServiceToken`；單機部署建議相鄰連接埠，並配置 HTTPS，不能把 HTTP 回環範例當作帳號管理上線設定。
 - 登入、兩步驗證、站內助理、背景工作（嵌入／回收桶清理）、資料庫遷移與管理命令仍在網站主機本地執行。
 - 不含評論與外掛機制、主題系統、作者擁有權、待審稿、SSO 或私密附件；不引入 PHP 或 WordPress 資料表／REST API／外掛／主題相容層。
+- 自訂 CSS 屬受控清理而非自由模板：@import、@font-face、expression、javascript: 與反斜線轉義會被拒絕，覆蓋內建版型變數需 `!important`；`url()` 允許與內文圖片同級的站內／外部圖片資源。小工具僅有內建五種宣告式型別，不支援載入任意程式碼或自訂區塊型別。
 - `AddSiteIsolationAndApiCredentials` 未套用正式資料庫；多站／帳號／成員／憑證實際啟用後拒絕 `Down`，部署及回退前必須另行規劃完整備份與還原。

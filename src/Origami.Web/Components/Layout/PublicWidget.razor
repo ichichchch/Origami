@@ -1,0 +1,83 @@
+@inject MarkdownService Markdown
+
+@* 受控小工具的前台渲染：型別固定為內建五種，文字小工具走與內容相同的安全 Markdown 管線。 *@
+<section class="widget widget-@Widget.Type.ToString().ToLowerInvariant()" aria-label="@Heading">
+    <h2 class="widget-title">@Heading</h2>
+    @switch (Widget.Type)
+    {
+        case WidgetType.RecentPosts:
+            <ul class="widget-list">
+                @foreach (var post in Widget.RecentPosts)
+                {
+                    <li><a href="@("/posts/" + Uri.EscapeDataString(post.Slug))">@post.Title</a></li>
+                }
+            </ul>
+            break;
+        case WidgetType.Categories:
+            <ul class="widget-list">
+                @foreach (var category in Widget.Categories)
+                {
+                    <li><a style="@(category.Depth > 0 ? $"padding-inline-start:{category.Depth * 0.9}rem" : null)"
+                          href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@(category.Depth > 0 ? "└ " : "")@category.Name</a></li>
+                }
+            </ul>
+            break;
+        case WidgetType.Tags:
+            <ul class="widget-tags">
+                @foreach (var tag in Widget.Tags)
+                {
+                    <li><a href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Name</a></li>
+                }
+            </ul>
+            break;
+        case WidgetType.Search:
+            <form class="widget-search" method="get" action="/search" role="search">
+                <label class="sr-only" for="widget-search-q">@UiText.T("Public.Widget.SearchLabel", "搜尋文章")</label>
+                <input id="widget-search-q" type="search" name="q" maxlength="@Limits.SearchQueryMax"
+                       placeholder="@UiText.T("Public.Widget.SearchPlaceholder", "用意思找到文章…")" />
+                <button type="submit">@UiText.T("Public.Widget.SearchButton", "搜尋")</button>
+            </form>
+            break;
+        case WidgetType.Text:
+            <div class="widget-text">@((MarkupString)Markdown.Render(Widget.Markdown))</div>
+            break;
+        case WidgetType.RecentComments:
+            <ul class="widget-list widget-comments">
+                @foreach (var comment in Widget.RecentComments)
+                {
+                    <li>
+                        <a href="@("/posts/" + Uri.EscapeDataString(comment.PostSlug))">@comment.PostTitle</a>
+                        <span class="muted">· @comment.AuthorName · @comment.CreatedAt.ToString("yyyy.MM.dd")</span>
+                        @if (comment.Excerpt.Length > 0)
+                        {
+                            <p class="widget-comment-excerpt">@comment.Excerpt</p>
+                        }
+                    </li>
+                }
+            </ul>
+            break;
+        case WidgetType.RssFeed:
+            <ul class="widget-list">
+                @foreach (var item in Widget.RssItems)
+                {
+                    <li><a href="@item.Url" target="_blank" rel="noopener">@item.Title</a></li>
+                }
+            </ul>
+            break;
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public WidgetService.PublicWidget Widget { get; set; } = null!;
+
+    private string Heading => Widget.Title.Length > 0 ? Widget.Title : Widget.Type switch
+    {
+        WidgetType.RecentPosts => UiText.T("Public.Widget.RecentPosts", "最新文章"),
+        WidgetType.Categories => UiText.T("Public.Widget.Categories", "分類"),
+        WidgetType.Tags => UiText.T("Public.Widget.Tags", "標籤"),
+        WidgetType.Search => UiText.T("Public.Widget.Search", "搜尋"),
+        WidgetType.RecentComments => UiText.T("Public.Widget.RecentComments", "最新評論"),
+        WidgetType.RssFeed => UiText.T("Public.Widget.RssFeed", "外部文章"),
+        _ => UiText.T("Public.Widget.Text", "文字")
+    };
+}

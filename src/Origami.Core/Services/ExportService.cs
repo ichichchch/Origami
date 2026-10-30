@@ -76,6 +76,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         if (settings?.CommentCloseDays is > 0) writer.WriteNumber("commentCloseDays", settings.CommentCloseDays);
         if (settings?.MaintenanceMode == true) writer.WriteBoolean("maintenanceMode", true);
         if (!string.IsNullOrEmpty(settings?.MaintenanceMessage)) writer.WriteString("maintenanceMessage", settings.MaintenanceMessage);
+        if (!string.IsNullOrEmpty(settings?.CustomCss)) writer.WriteString("customCss", settings.CustomCss);
         writer.WriteEndObject();
 
         writer.WriteStartArray("categories");
@@ -265,6 +266,22 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             // 站內目標以頁面代稱表示，匯入時才解析成新的內容識別。
             if (item.ContentId is { } target && slugById.TryGetValue(target, out var pageSlug))
                 writer.WriteString("pageSlug", pageSlug);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // 受控小工具：以宣告資料原樣同行（區域、型別、組態 JSON 與順序），匯入時逐項驗證。
+        writer.WriteStartArray("widgets");
+        await foreach (var widget in db.SiteWidgets.AsNoTracking().OrderBy(x => x.Area).ThenBy(x => x.Position).ThenBy(x => x.Id)
+            .AsAsyncEnumerable().WithCancellation(ct))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("area", widget.Area.ToString().ToLowerInvariant());
+            writer.WriteString("type", widget.Type.ToString().ToLowerInvariant());
+            writer.WriteString("title", widget.Title);
+            writer.WriteString("configJson", widget.ConfigJson);
+            writer.WriteBoolean("isVisible", widget.IsVisible);
+            writer.WriteNumber("position", widget.Position);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();

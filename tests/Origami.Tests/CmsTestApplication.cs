@@ -61,12 +61,16 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<NavigationService>();
+        services.AddMemoryCache();
+        services.AddHttpClient();
+        services.AddScoped<WidgetService>();
         services.AddScoped<PasswordResetService>();
         services.AddScoped<CommentService>();
         services.AddSingleton<TestEmailSender>();
         services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<TestEmailSender>());
         services.AddScoped<WxrImportService>();
         services.AddScoped<SettingsService>();
+        services.AddScoped<CmsEventBus>();
         services.AddScoped<WebhookService>();
         services.AddScoped<SiteHealthService>();
         services.AddOptions<BackupOptions>();

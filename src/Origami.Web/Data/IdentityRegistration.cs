@@ -153,6 +153,8 @@ public static class IdentityRegistration
             {
                 return Results.Problem("The session changed. Reload the page and try again.", statusCode: StatusCodes.Status409Conflict);
             }
+            // 戳記已讓全部會話失效；同步撤銷資料列，裝置清單不留幽靈會話。
+            await LoginSessionService.RevokeAllAsync(contextFactory, user.Id, clock, context.RequestAborted);
         }
         catch (DbUpdateException)
         {

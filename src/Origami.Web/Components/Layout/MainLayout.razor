@@ -1,13 +1,23 @@
 @inherits LayoutComponentBase
 @inject OrigamiClient Api
+@inject PublicSettingsProvider Settings
 @inject AdminAccess Admin
 @inject ILogger<MainLayout> Logger
 
 <a class="skip-link" href="#main-content">@UiText.T("Layout.Main.01", "跳至主要內容")</a>
+@* 投機載入：滑鼠指向同源連結時才預先渲染（conservative），並排除後台與預覽路徑；不支援的瀏覽器會忽略。 *@
+<script type="speculationrules">
+    {"prerender":[{"source":"document","where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/admin*"}},{"not":{"href_matches":"/account*"}},{"not":{"href_matches":"/preview*"}}]},"eagerness":"conservative"}]}
+</script>
 <div class="site-shell" style="@ThemeStyle" data-card-style="@_settings.CardStyle"
      data-color-scheme="@ResolvedScheme"
      data-show-cover="@(_settings.ShowCover ? "true" : "false")"
      data-show-byline="@(_settings.ShowByline ? "true" : "false")">
+    @if (!string.IsNullOrWhiteSpace(_settings.CustomCss))
+    {
+        @* 自訂 CSS 已在 Api 投影與儲存時兩度清理；不放入 HeadContent 是因 layout 層不輸出 head 內容。 *@
+        <style>@((MarkupString)_settings.CustomCss)</style>
+    }
     <header class="site-header">
         <a class="site-brand" href="/">
             @if (!string.IsNullOrEmpty(_settings.LogoFileName))
@@ -48,9 +58,33 @@
         {
             <p class="notice" role="status">@UiText.T("Layout.Main.MaintenanceAdminNotice", "維護模式目前已開啟：一般訪客會看到維護中畫面，你因具備站點權限仍可正常預覽。")</p>
         }
-        <main id="main-content" class="public-main" tabindex="-1">@Body</main>
+        @if (_sidebarWidgets.Count > 0)
+        {
+            <div class="layout-columns">
+                <main id="main-content" class="public-main" tabindex="-1">@Body</main>
+                <aside class="site-sidebar" aria-label="@UiText.T("Layout.Main.Sidebar", "側欄")">
+                    @foreach (var widget in _sidebarWidgets)
+                    {
+                        <PublicWidget Widget="widget" />
+                    }
+                </aside>
+            </div>
+        }
+        else
+        {
+            <main id="main-content" class="public-main" tabindex="-1">@Body</main>
+        }
     }
     <footer class="site-footer">
+        @if (_footerWidgets.Count > 0)
+        {
+            <div class="footer-widgets">
+                @foreach (var widget in _footerWidgets)
+                {
+                    <PublicWidget Widget="widget" />
+                }
+            </div>
+        }
         <span>@(string.IsNullOrWhiteSpace(_settings.FooterText) ? $"© {DateTime.UtcNow.Year} {_settings.Name}" : _settings.FooterText)</span>
         @if (!string.IsNullOrWhiteSpace(_settings.PrivacyPageSlug))
         {
@@ -82,6 +116,8 @@
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private List<PageNavItem> _pages = [];
+    private List<WidgetService.PublicWidget> _sidebarWidgets = [];
+    private List<WidgetService.PublicWidget> _footerWidgets = [];
     private bool _isMember;
 
     /// <summary>帶深度的平面排序：子頁面跟在父頁面之後；若父頁面不在已發布集合內，
@@ -138,8 +174,11 @@
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
+            _settings = await Settings.GetAsync(ct);
             _pages = await Api.GetNavigationAsync(ct) ?? [];
+            var widgets = await Api.GetWidgetsAsync(ct) ?? [];
+            _sidebarWidgets = [.. widgets.Where(x => x.Area == WidgetArea.Sidebar)];
+            _footerWidgets = [.. widgets.Where(x => x.Area == WidgetArea.Footer)];
             if (_settings.MaintenanceMode)
             {
                 _isMember = await Admin.IsAdminAsync(ct);

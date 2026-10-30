@@ -4,7 +4,7 @@ namespace Origami.Core.Services;
 /// 訪客評論：張貼預設待審（可設定自動核可），核可後才公開；蜜罐與連結數
 /// 過量者靜默標為垃圾。基礎反垃圾不依賴任何第三方雲端服務。
 /// </summary>
-public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null)
+public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null)
 {
     public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot, Guid? ParentId = null);
     public sealed record CommentView(Guid Id, Guid ContentId, string ContentTitle, string AuthorName, string Url,
@@ -63,6 +63,15 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         };
         db.Comments.Add(entity);
         await ContentRules.SaveAsync(db, ct);
+        // 受控擴充點：事件名稱與 Webhook 對齊。
+        if (events is not null && status != CommentStatus.Spam)
+        {
+            await events.PublishAsync("comment.created", db.CurrentSiteId, new
+            {
+                id = entity.Id, contentId, contentTitle = content.Title, contentSlug = content.Slug,
+                authorName = name, status = status.ToString().ToLowerInvariant()
+            }, ct);
+        }
         if (status != CommentStatus.Spam && webhooks is not null)
         {
             await webhooks.DispatchAsync("comment.created", new
@@ -202,17 +211,23 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
             reply.Markdown, reply.Status, reply.CreatedAt, reply.Version, reply.ParentId, reply.IsAdminReply, parent.AuthorName);
     }
 
-    /// <summary>已核可的公開評論（閱讀順序：舊到新）；每次讀取重驗內容可評性與本站開關。</summary>
-    public async Task<List<CommentView>> ListPublicAsync(Guid contentId, CancellationToken ct = default)
+    /// <summary>已核可的公開評論（閱讀順序：舊到新），依 <see cref="Limits.CommentsPageSize"/> 分頁；每次讀取重驗內容可評性與本站開關。</summary>
+    public async Task<PagedResult<CommentView>> ListPublicPagedAsync(Guid contentId, int page = 1, CancellationToken ct = default)
     {
+        var normalized = Math.Max(1, page);
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await PublicComments(db, contentId)
-            .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
+        var query = PublicComments(db, contentId).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id);
+        var total = await query.CountAsync(ct);
+        var items = await query.Skip(ContentRules.Offset(normalized, Limits.CommentsPageSize)).Take(Limits.CommentsPageSize)
             .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version,
                 x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : ""))
-            .Take(Limits.CommentsPageSize)
             .ToListAsync(ct);
+        return new(items, total, normalized, Limits.CommentsPageSize);
     }
+
+    /// <summary>第一頁的公開評論（受單頁上限約束）；供不需要分頁的呼叫方便用。</summary>
+    public async Task<List<CommentView>> ListPublicAsync(Guid contentId, CancellationToken ct = default) =>
+        [.. (await ListPublicPagedAsync(contentId, 1, ct)).Items];
 
     public async Task<int> CountApprovedAsync(Guid contentId, CancellationToken ct = default)
     {
@@ -270,6 +285,13 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         comment.Status = target;
         comment.Version = Guid.NewGuid();
         await ContentRules.SaveAsync(db, ct);
+        if (events is not null && target == CommentStatus.Approved)
+        {
+            await events.PublishAsync("comment.approved", db.CurrentSiteId, new
+            {
+                id = comment.Id, contentId = comment.ContentId, authorName = comment.AuthorName
+            }, ct);
+        }
     }
 
     /// <summary>永久刪除；由後台人工確認後執行，同樣做並發版本檢查。</summary>

@@ -85,6 +85,10 @@
                     <label for="feed-full-text"><input id="feed-full-text" type="checkbox" @bind="_model.FeedShowFullText" disabled="@Blocked" /> @UiText.T("Admin.Settings.FeedFullText", "Feed 輸出全文")</label>
                     <p class="field-help">@UiText.T("Admin.Settings.FeedFullTextHelp", "開啟後 RSS（content:encoded）與 Atom（content）包含完整渲染後的本文；關閉則僅摘要。")</p>
                 </div>
+                <div class="field checkbox-field">
+                    <label for="search-engine-blocked"><input id="search-engine-blocked" type="checkbox" @bind="_model.SearchEngineBlocked" disabled="@Blocked" /> @UiText.T("Admin.Settings.SearchEngineBlocked", "要求搜尋引擎不要收錄本站")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.SearchEngineBlockedHelp", "開啟後 robots.txt 改為全站禁止，並在所有公開回應附上 noindex 標頭；搜尋引擎既有的收錄不會因此立即移除。")</p>
+                </div>
                 <div class="field"><label for="author-name">@UiText.T("Admin.Settings.AuthorDisplayName", "作者顯示名稱（選填）")</label><input id="author-name" @bind="_model.AuthorDisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" disabled="@Blocked" aria-describedby="author-name-help" placeholder="@UiText.T("Admin.Settings.AuthorPlaceholder", "例如：單文浩")" /><span id="author-name-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.AuthorDisplayNameHelp", "最多 {0} 字；顯示於文章詳情的作者列與 feed 作者欄位，留空不顯示。"), Limits.AuthorName)</span></div>
                 <div class="field checkbox-field">
                     <label for="comments-enabled"><input id="comments-enabled" type="checkbox" @bind="_model.CommentsEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.EnableComments", "開放訪客評論")</label>
@@ -159,6 +163,7 @@
                         </article>
                     </div>
                 </section>
+                <div class="field"><label for="custom-css">@UiText.T("Admin.Settings.CustomCss", "自訂 CSS（選填）")</label><textarea id="custom-css" rows="8" maxlength="@Limits.CustomCss" @bind="_model.CustomCss" @bind:event="oninput" disabled="@Blocked" spellcheck="false" aria-describedby="custom-css-help" placeholder="/* 例如 */ .site-header { letter-spacing: .02em; }"></textarea><span id="custom-css-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.CustomCssHelp", "最長 {0} 字元。儲存前會做安全清理：註解將被移除，@import、@font-face、expression、javascript: 等危險構造與反斜線轉義會被拒絕；要覆蓋內建版型變數時請使用 !important。"), Limits.CustomCss)</span></div>
                 <div class="field"><label for="footer-text">@UiText.T("Admin.Settings.FooterText", "頁尾版權與補充文字（選填）")</label><input id="footer-text" @bind="_model.FooterText" @bind:event="oninput" maxlength="@Limits.FooterText" disabled="@Blocked" placeholder="@UiText.T("Admin.Settings.FooterTextPlaceholder", "留空顯示預設 © 年份 站名")" /></div>
                 <div class="field"><label for="social-github">@UiText.T("Admin.Settings.SocialGithub", "頁尾 GitHub 連結（選填）")</label><input id="social-github" type="url" @bind="_model.SocialGithubUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://github.com/..." /></div>
                 <div class="field"><label for="social-x">@UiText.T("Admin.Settings.SocialX", "頁尾 X / Twitter 連結（選填）")</label><input id="social-x" type="url" @bind="_model.SocialXUrl" @bind:event="oninput" maxlength="@Limits.SocialUrl" disabled="@Blocked" placeholder="https://x.com/..." /></div>
@@ -517,6 +522,7 @@
             FeedShowFullText = _model.FeedShowFullText, AuthorDisplayName = _model.AuthorDisplayName,
             HomePageContentId = _model.HomePageContentId, PrivacyPageContentId = _model.PrivacyPageContentId,
             EmailNotificationsEnabled = _model.EmailNotificationsEnabled,
+            SearchEngineBlocked = _model.SearchEngineBlocked,
             PermalinkScheme = _model.PermalinkScheme, TimeZoneId = _model.TimeZoneId,
             DateFormat = _model.DateFormat, TimeFormat = _model.TimeFormat,
             SiteIconMediaId = _model.SiteIconMediaId, LogoMediaId = _model.LogoMediaId,

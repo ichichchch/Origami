@@ -4188,4 +4188,121 @@
   <data name="Account.External.VerificationFailed" xml:space="preserve"><value>Identity verification failed. Check your password and two-factor code, then try again.</value></data>
   <data name="Account.External.LoadFailed" xml:space="preserve"><value>Unable to load linked accounts. Sign in again or try later.</value></data>
   <data name="Admin.Security.ExternalLogins" xml:space="preserve"><value>Manage external sign-in accounts</value></data>
+  <data name="Layout.Admin.Widgets" xml:space="preserve"><value>Sidebar &amp; footer widgets</value></data>
+  <data name="Layout.Main.Sidebar" xml:space="preserve"><value>Sidebar</value></data>
+  <data name="Public.Widget.RecentPosts" xml:space="preserve"><value>Recent posts</value></data>
+  <data name="Public.Widget.Categories" xml:space="preserve"><value>Categories</value></data>
+  <data name="Public.Widget.Tags" xml:space="preserve"><value>Tags</value></data>
+  <data name="Public.Widget.Search" xml:space="preserve"><value>Search</value></data>
+  <data name="Public.Widget.Text" xml:space="preserve"><value>Text</value></data>
+  <data name="Public.Widget.SearchLabel" xml:space="preserve"><value>Search posts</value></data>
+  <data name="Public.Widget.SearchPlaceholder" xml:space="preserve"><value>Find posts by meaning…</value></data>
+  <data name="Public.Widget.SearchButton" xml:space="preserve"><value>Search</value></data>
+  <data name="Admin.Settings.CustomCss" xml:space="preserve"><value>Custom CSS (optional)</value></data>
+  <data name="Admin.Settings.CustomCssHelp" xml:space="preserve"><value>Up to {0} characters. Saved styles are sanitized first: comments are stripped and dangerous constructs (@import, @font-face, expression, javascript:) as well as backslash escapes are rejected; use !important to override built-in theme variables.</value></data>
+  <data name="Admin.Widgets.PageTitle" xml:space="preserve"><value>Widgets · Content management</value></data>
+  <data name="Admin.Widgets.Eyebrow" xml:space="preserve"><value>Controlled widgets</value></data>
+  <data name="Admin.Widgets.Title" xml:space="preserve"><value>Sidebar &amp; footer widgets</value></data>
+  <data name="Admin.Widgets.Introduction" xml:space="preserve"><value>Compose sidebar and footer blocks from built-in types; sortable and hideable, with no code loading. The sidebar appears beside content on wide screens; footer blocks appear above the footer line.</value></data>
+  <data name="Admin.Widgets.ReadOnlyNotice" xml:space="preserve"><value>Read-only members can view widget settings but cannot change them.</value></data>
+  <data name="Admin.Widgets.AddItem" xml:space="preserve"><value>Add widget</value></data>
+  <data name="Admin.Widgets.EditItem" xml:space="preserve"><value>Edit widget</value></data>
+  <data name="Admin.Widgets.Area" xml:space="preserve"><value>Area</value></data>
+  <data name="Admin.Widgets.AreaHelp" xml:space="preserve"><value>The area cannot be changed after creation; to move a widget, delete it and recreate it in the target area.</value></data>
+  <data name="Admin.Widgets.AreaSidebar" xml:space="preserve"><value>Sidebar</value></data>
+  <data name="Admin.Widgets.AreaFooter" xml:space="preserve"><value>Footer</value></data>
+  <data name="Admin.Widgets.Type" xml:space="preserve"><value>Type</value></data>
+  <data name="Admin.Widgets.TypeHelp" xml:space="preserve"><value>Text widgets use the same safe Markdown pipeline as posts; raw HTML is not parsed.</value></data>
+  <data name="Admin.Widgets.TypeRecentPosts" xml:space="preserve"><value>Recent posts</value></data>
+  <data name="Admin.Widgets.TypeCategories" xml:space="preserve"><value>Categories</value></data>
+  <data name="Admin.Widgets.TypeTags" xml:space="preserve"><value>Tags</value></data>
+  <data name="Admin.Widgets.TypeSearch" xml:space="preserve"><value>Search box</value></data>
+  <data name="Admin.Widgets.TypeText" xml:space="preserve"><value>Text (Markdown)</value></data>
+  <data name="Admin.Widgets.DisplayTitle" xml:space="preserve"><value>Display title (optional)</value></data>
+  <data name="Admin.Widgets.TitlePlaceholder" xml:space="preserve"><value>Leave empty to use the type default title</value></data>
+  <data name="Admin.Widgets.Count" xml:space="preserve"><value>Number of posts</value></data>
+  <data name="Admin.Widgets.CountHelp" xml:space="preserve"><value>1–{0} posts, published posts only.</value></data>
+  <data name="Admin.Widgets.Markdown" xml:space="preserve"><value>Text content (Markdown)</value></data>
+  <data name="Admin.Widgets.Required" xml:space="preserve"><value>Required</value></data>
+  <data name="Admin.Widgets.MarkdownHelp" xml:space="preserve"><value>Up to {0} characters; links, lists and image syntax are supported.</value></data>
+  <data name="Admin.Widgets.Visible" xml:space="preserve"><value>Show on the public site</value></data>
+  <data name="Admin.Widgets.VisibleShort" xml:space="preserve"><value>Visible</value></data>
+  <data name="Admin.Widgets.Hidden" xml:space="preserve"><value>Hidden</value></data>
+  <data name="Admin.Widgets.Saving" xml:space="preserve"><value>Saving…</value></data>
+  <data name="Admin.Widgets.SaveItem" xml:space="preserve"><value>Save widget</value></data>
+  <data name="Admin.Widgets.CancelOrAdd" xml:space="preserve"><value>Cancel / add</value></data>
+  <data name="Admin.Widgets.EmptyTitle" xml:space="preserve"><value>No widgets in the {0} area yet</value></data>
+  <data name="Admin.Widgets.EmptyHelp" xml:space="preserve"><value>Once added, the area appears on the public site; when no visible items remain, the sidebar hides itself.</value></data>
+  <data name="Admin.Widgets.Order" xml:space="preserve"><value>Order</value></data>
+  <data name="Admin.Widgets.Item" xml:space="preserve"><value>Item</value></data>
+  <data name="Admin.Widgets.Actions" xml:space="preserve"><value>Actions</value></data>
+  <data name="Admin.Widgets.MoveUp" xml:space="preserve"><value>Move up</value></data>
+  <data name="Admin.Widgets.MoveDown" xml:space="preserve"><value>Move down</value></data>
+  <data name="Admin.Widgets.Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="Admin.Widgets.Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Admin.Widgets.DeleteTitle" xml:space="preserve"><value>Delete widget “{0}”?</value></data>
+  <data name="Admin.Widgets.DeleteWarning" xml:space="preserve"><value>Only the widget is removed; content is unaffected. This action cannot be undone.</value></data>
+  <data name="Admin.Widgets.ConfirmDelete" xml:space="preserve"><value>Confirm delete</value></data>
+  <data name="Admin.Widgets.Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Admin.Widgets.Saved" xml:space="preserve"><value>Widget saved.</value></data>
+  <data name="Admin.Widgets.Deleted" xml:space="preserve"><value>Widget deleted.</value></data>
+  <data name="Admin.Widgets.Reordered" xml:space="preserve"><value>Widget order updated.</value></data>
+  <data name="Admin.Settings.SearchEngineBlocked" xml:space="preserve"><value>Ask search engines not to index this site</value></data>
+  <data name="Admin.Settings.SearchEngineBlockedHelp" xml:space="preserve"><value>When enabled, robots.txt disallows the entire site and every public response carries a noindex header. Pages already indexed by search engines are not removed immediately.</value></data>
+  <data name="Public.ContentDetail.CommentsPagination" xml:space="preserve"><value>Comment pagination</value></data>
+  <data name="Public.ContentDetail.CommentsPrev" xml:space="preserve"><value>Previous</value></data>
+  <data name="Public.ContentDetail.CommentsNext" xml:space="preserve"><value>Next</value></data>
+  <data name="Public.ContentDetail.CommentsPageStatus" xml:space="preserve"><value>Page {0} of {1}</value></data>
+  <data name="Public.ContentDetail.EditLink" xml:space="preserve"><value>Edit this content</value></data>
+  <data name="Admin.SiteHealth.PageTitle" xml:space="preserve"><value>Site Health &amp; Webhooks · Content Management</value></data>
+  <data name="Admin.SiteHealth.Eyebrow" xml:space="preserve"><value>Operations diagnostics and integration monitoring</value></data>
+  <data name="Admin.SiteHealth.Title" xml:space="preserve"><value>Site Health</value></data>
+  <data name="Admin.SiteHealth.Introduction" xml:space="preserve"><value>Review the database, storage writability, schedules, AI embedding queue, SMTP, backups, and outbound webhook delivery status (never including secrets or connection strings).</value></data>
+  <data name="Admin.SiteHealth.Recheck" xml:space="preserve"><value>Run checks again</value></data>
+  <data name="Admin.SiteHealth.OverallStatus" xml:space="preserve"><value>Overall status: </value></data>
+  <data name="Admin.SiteHealth.CheckedAt" xml:space="preserve"><value>Checked at: </value></data>
+  <data name="Admin.SiteHealth.ColCategory" xml:space="preserve"><value>Category</value></data>
+  <data name="Admin.SiteHealth.ColItem" xml:space="preserve"><value>Check</value></data>
+  <data name="Admin.SiteHealth.ColStatus" xml:space="preserve"><value>Status</value></data>
+  <data name="Admin.SiteHealth.ColSummary" xml:space="preserve"><value>Summary</value></data>
+  <data name="Admin.SiteHealth.WebhookDeliveries" xml:space="preserve"><value>Outbound webhook deliveries</value></data>
+  <data name="Admin.SiteHealth.WebhookHelp" xml:space="preserve"><value>Persisted, with exponential-backoff retries and manual re-delivery</value></data>
+  <data name="Admin.SiteHealth.NoDeliveries" xml:space="preserve"><value>No webhook deliveries yet.</value></data>
+  <data name="Admin.SiteHealth.ColEvent" xml:space="preserve"><value>Event</value></data>
+  <data name="Admin.SiteHealth.ColTarget" xml:space="preserve"><value>Target URL</value></data>
+  <data name="Admin.SiteHealth.ColStatus2" xml:space="preserve"><value>Status</value></data>
+  <data name="Admin.SiteHealth.ColAttempts" xml:space="preserve"><value>Attempts</value></data>
+  <data name="Admin.SiteHealth.ColLastResponse" xml:space="preserve"><value>Last response</value></data>
+  <data name="Admin.SiteHealth.ColTime" xml:space="preserve"><value>Time</value></data>
+  <data name="Admin.SiteHealth.ColActions" xml:space="preserve"><value>Actions</value></data>
+  <data name="Admin.SiteHealth.RetryNow" xml:space="preserve"><value>Re-deliver</value></data>
+  <data name="Admin.SiteHealth.OpenApiTitle" xml:space="preserve"><value>OpenAPI and API discovery contract</value></data>
+  <data name="Admin.SiteHealth.OpenApiHelp" xml:space="preserve"><value>Origami is API-first and publishes a machine-readable OpenAPI 3.1 document with the endpoint catalogue.</value></data>
+  <data name="Admin.SiteHealth.ViewOpenApi" xml:space="preserve"><value>View the OpenAPI 3.1 JSON contract ↗</value></data>
+  <data name="Admin.SiteHealth.AdminOnly" xml:space="preserve"><value>Site health is visible to site administrators only.</value></data>
+  <data name="Admin.SiteHealth.RetryTriggered" xml:space="preserve"><value>Webhook re-delivery triggered.</value></data>
+  <data name="Admin.SiteHealth.StatusGood" xml:space="preserve"><value>Good</value></data>
+  <data name="Admin.SiteHealth.StatusWarning" xml:space="preserve"><value>Warning</value></data>
+  <data name="Admin.SiteHealth.StatusCritical" xml:space="preserve"><value>Critical</value></data>
+  <data name="Admin.Security.SessionsTitle" xml:space="preserve"><value>Login sessions</value></data>
+  <data name="Admin.Security.SessionsHelp" xml:space="preserve"><value>Active logins with their origin; you can remotely sign out other sessions, which take effect on their next request.</value></data>
+  <data name="Admin.Security.NoSessions" xml:space="preserve"><value>No active login sessions.</value></data>
+  <data name="Admin.Security.SessionCreated" xml:space="preserve"><value>Signed in</value></data>
+  <data name="Admin.Security.SessionExpires" xml:space="preserve"><value>Expires</value></data>
+  <data name="Admin.Security.SessionSource" xml:space="preserve"><value>Source IP</value></data>
+  <data name="Admin.Security.SessionDevice" xml:space="preserve"><value>Device</value></data>
+  <data name="Admin.Security.SessionStatusCol" xml:space="preserve"><value>Status</value></data>
+  <data name="Admin.Security.SessionActions" xml:space="preserve"><value>Actions</value></data>
+  <data name="Admin.Security.SessionCurrent" xml:space="preserve"><value>This session</value></data>
+  <data name="Admin.Security.SessionOther" xml:space="preserve"><value>Other device</value></data>
+  <data name="Admin.Security.RevokeSession" xml:space="preserve"><value>Sign out remotely</value></data>
+  <data name="Admin.Security.SessionRevoked" xml:space="preserve"><value>That session has been signed out.</value></data>
+  <data name="Admin.Security.UnknownDevice" xml:space="preserve"><value>Unknown device</value></data>
+  <data name="Admin.Widgets.TypeRecentComments" xml:space="preserve"><value>Recent comments</value></data>
+  <data name="Admin.Widgets.TypeRssFeed" xml:space="preserve"><value>External articles (RSS/Atom)</value></data>
+  <data name="Admin.Widgets.FeedUrl" xml:space="preserve"><value>Feed URL</value></data>
+  <data name="Admin.Widgets.Required2" xml:space="preserve"><value>Required</value></data>
+  <data name="Admin.Widgets.FeedUrlHelp" xml:space="preserve"><value>Public absolute https URL (local or intranet hosts rejected); cached for 10 minutes, and hidden while the feed cannot be fetched.</value></data>
+  <data name="Public.Widget.RecentComments" xml:space="preserve"><value>Recent comments</value></data>
+  <data name="Public.Widget.RssFeed" xml:space="preserve"><value>External articles</value></data>
 </root>

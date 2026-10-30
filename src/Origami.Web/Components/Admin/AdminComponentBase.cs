@@ -4,6 +4,8 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
 {
     [Inject] protected ILogger<AdminComponentBase> Logger { get; set; } = default!;
     [Inject] protected OrigamiClient AccessApi { get; set; } = default!;
+    // 預渲染期間的請求內容；互動電路中為 null，RunAsync 以此串接預渲染請求的中斷。
+    [CascadingParameter] protected HttpContext? HttpContext { get; set; }
     protected CancellationTokenSource Lifetime { get; } = new();
     protected bool Busy { get; private set; }
     protected bool LoginRequired { get; private set; }

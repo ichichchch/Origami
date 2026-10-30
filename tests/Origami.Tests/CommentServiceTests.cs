@@ -24,6 +24,32 @@ public sealed class CommentServiceTests(IsolatedPostgres postgres) : ServiceTest
     }
 
     [PostgresFact]
+    public async Task Public_comments_paginate_beyond_the_single_page_cap()
+    {
+        var (contentId, _) = await CreatePostAsync();
+        using var admin = await App.AdministratorAsync();
+        await EnableCommentsAsync(admin, autoApprove: true);
+        var comments = admin.Services.GetRequiredService<CommentService>();
+
+        for (var i = 1; i <= Limits.CommentsPageSize + 2; i++)
+            await comments.PostAsync(contentId, new CommentService.CommentPostInput($"訪客{i:00}", null, $"第 {i} 則留言", false));
+
+        // 分頁：第一頁滿頁、其餘落到第二頁；閱讀順序（舊到新）跨頁延續且兩頁不重疊。
+        var first = await comments.ListPublicPagedAsync(contentId, 1);
+        Assert.Equal(Limits.CommentsPageSize + 2, first.Total);
+        Assert.Equal(Limits.CommentsPageSize, first.Items.Count);
+        Assert.Equal(2, first.TotalPages);
+        var second = await comments.ListPublicPagedAsync(contentId, 2);
+        Assert.Equal(2, second.Items.Count);
+        Assert.All(second.Items, later => Assert.DoesNotContain(later.Id, first.Items.Select(earlier => earlier.Id).ToList()));
+        Assert.True(second.Items[^1].CreatedAt >= first.Items[^1].CreatedAt);
+
+        // 不需要分頁的舊入口（第一頁上限清單）維持原行為。
+        var legacy = await comments.ListPublicAsync(contentId);
+        Assert.Equal(Limits.CommentsPageSize, legacy.Count);
+    }
+
+    [PostgresFact]
     public async Task Comments_default_to_pending_and_appear_only_after_approval()
     {
         var (contentId, _) = await CreatePostAsync();

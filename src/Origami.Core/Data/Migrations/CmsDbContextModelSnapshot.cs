@@ -1443,6 +1443,63 @@ namespace Origami.Core.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.LoginSessionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("业务字段：ExpiresAt。");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasComment("业务字段：Provider。");
+
+                    b.Property<string>("RemoteIp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasComment("业务字段：RemoteIp。");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("业务字段：RevokedAt。");
+
+                    b.Property<string>("UserAgent")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：UserAgent。");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)")
+                        .HasComment("用户 ID。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("LoginSessions", t =>
+                        {
+                            t.HasComment("业务表：LoginSessions。");
+
+                            t.HasCheckConstraint("CK_LoginSession_Time", "\"CreatedAt\" <= \"ExpiresAt\"");
+                        });
+                });
+
             modelBuilder.Entity("Origami.Core.Models.MediaAsset", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1670,6 +1727,12 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("boolean")
                         .HasComment("是否启用评论系统。");
 
+                    b.Property<string>("CustomCss")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("character varying(50000)")
+                        .HasComment("自定义 CSS（保存前经危险构造清理）。");
+
                     b.Property<bool>("CustomNavigationEnabled")
                         .HasColumnType("boolean")
                         .HasComment("是否启用受控导航。");
@@ -1745,6 +1808,10 @@ namespace Origami.Core.Data.Migrations
                     b.Property<int>("ReadingWidth")
                         .HasColumnType("integer")
                         .HasComment("阅读宽度（字符列）。");
+
+                    b.Property<bool>("SearchEngineBlocked")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：SearchEngineBlocked。");
 
                     b.Property<bool>("ShowByline")
                         .HasColumnType("boolean")
@@ -1845,6 +1912,7 @@ namespace Origami.Core.Data.Migrations
                             CommentBlockedWords = "",
                             CommentCloseDays = 0,
                             CommentsEnabled = false,
+                            CustomCss = "",
                             CustomNavigationEnabled = false,
                             DateFormat = "yyyy.MM.dd",
                             Description = "用文字，分享你的世界。",
@@ -1855,6 +1923,7 @@ namespace Origami.Core.Data.Migrations
                             Name = "Origami",
                             PermalinkScheme = "post-name",
                             ReadingWidth = 68,
+                            SearchEngineBlocked = false,
                             ShowByline = true,
                             ShowCover = true,
                             SocialGithubUrl = "",
@@ -1866,6 +1935,65 @@ namespace Origami.Core.Data.Migrations
                             Version = new Guid("134d979d-707b-40b1-bd78-95d96033fd84"),
                             WebhookSecret = "",
                             WebhookUrl = ""
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.SiteWidget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<int>("Area")
+                        .HasColumnType("integer")
+                        .HasComment("所属区域：侧栏或页尾。");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasMaxLength(24000)
+                        .HasColumnType("character varying(24000)")
+                        .HasComment("类型配置 JSON。");
+
+                    b.Property<bool>("IsVisible")
+                        .HasColumnType("boolean")
+                        .HasComment("是否显示于前台。");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasComment("排序位置（值越小越靠前）。");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasComment("显示标题（空时用类型默认标题）。");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer")
+                        .HasComment("小工具类型（内置声明式）。");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Area", "Position", "Id");
+
+                    b.ToTable("SiteWidgets", t =>
+                        {
+                            t.HasComment("站点小工具表：侧栏与页尾的声明式内容区块。");
+
+                            t.HasCheckConstraint("CK_SiteWidget_Area", "\"Area\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6)");
                         });
                 });
 
@@ -2504,6 +2632,17 @@ namespace Origami.Core.Data.Migrations
                         .HasForeignKey("SiteId", "SiteIconMediaId")
                         .HasPrincipalKey("SiteId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.SiteWidget", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Site");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.Tag", b =>

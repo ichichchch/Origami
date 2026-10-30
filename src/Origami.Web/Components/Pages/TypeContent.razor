@@ -2,6 +2,7 @@
 @inject OrigamiClient Api
 @inject MarkdownService Markdown
 @inject NavigationManager Navigation
+@inject AdminAccess Admin
 @inject ILogger<TypeContent> Logger
 
 <PageTitle>@UiText.T("Public.TypeContent.PageTitle", "{0} · 內容專區")</PageTitle>
@@ -35,6 +36,10 @@ else
             @if (!string.IsNullOrWhiteSpace(_content.AuthorName))
             {
                 <p class="byline">@UiText.T("Public.ContentDetail.Author", "作者") · @_content.AuthorName</p>
+            }
+            @if (_canEdit)
+            {
+                <p class="byline"><a class="text-button" href="@("/admin/content/" + _content.Id)" data-enhance-nav="false" rel="nofollow">@UiText.T("Public.ContentDetail.EditLink", "編輯此文")</a></p>
             }
         </header>
         @if (_content.CoverUrl is { } coverUrl)
@@ -77,6 +82,7 @@ else
     private PublicContent? _content;
     private string _html = "";
     private string _error = "";
+    private bool _canEdit;
     private string _title = "";
     private string _typeName = "";
     private string _metaDescription = "";
@@ -99,6 +105,8 @@ else
             _title = _content.Title;
             _metaDescription = _content.MetaDescription != "" ? _content.MetaDescription : _content.Excerpt;
             _html = Markdown.Render(_content.Markdown, await Api.GetPublicImageWidthsAsync(ct) ?? []);
+            // 情境編輯連結：僅對已登入且具本站編輯權者顯示；匿名訪客不付出權限查詢成本。
+            _canEdit = HttpContext?.User.Identity?.IsAuthenticated == true && await Admin.IsAdminAsync(ct);
         }
         catch (CmsException) { Missing(); }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }

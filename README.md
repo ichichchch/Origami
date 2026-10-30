@@ -29,6 +29,7 @@
 | 通知与健康 | 出站 Webhook（content.published／comment.created，HMAC-SHA256 签章、指数退避重试与人工重送）与 SiteHealth 系统健康面板（数据库、存储、排程、嵌入、Webhook、SMTP、备份、组态） |
 | 站点运维 | 维护模式（回 HTTP 503，已登入成员豁免）、深色／浅色／自动色彩模式、网站标志、301 重定向管理、两步验证备用恢复码 |
 | 外观与版型 | 受控版型三预设（阅读衬线／极简紧凑／图集大标题，字体与版面密度实质差异）、强调色与栏宽微调、设置页即时预览、深色模式前景自动提亮、后台个人三态外观切换（cookie 记忆，站点 auto 时优先于系统探测）、prefers-contrast 高对比增强 |
+| 小工具与自定义 CSS | 侧栏与页尾小工具：五种内建宣告式型别（最新文章／分类／标签／搜索框／Markdown 文字），可排序与隐藏，宽屏侧栏、窄屏堆叠；自定义 CSS 保存前经危险构造清理（注释移除，@import／@font-face／expression／javascript:／反斜线转义一律拒绝），输出前再次清理 |
 | 个人资料 | 帐号个人资料汇出与涂抹（GDPR），全站管理者可代办其他帐号；其内容与评论一并匿名化 |
 | 编辑辅助 | 编辑器 AI 摘要与 SEO 描述建议（未设定模型时退回本地确定性摘要）、新草稿自动储存、清单批次编辑与快速编辑 |
 | 介面语言 | 介面可切换繁体中文／英文（`?lang=` 与 cookie），介面文字集中于资源档；英文翻译缺漏与格式占位符不符由测试拦截 |
@@ -184,7 +185,7 @@ tests/Origami.Tests/
 | `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章与独立页面详情（Markdown 原文）；草稿、受保护与私密内容一律 404 |
 | `/api/v1/search?q=` | 混合搜索，规则与 `/search` 相同；模型未设定时退回关键字 |
 | `/mcp`、`/health` | 唯读 MCP 工具（`search_posts`、`get_post`、`get_page`）与数据库健康检查 |
-| 公开读取面 | `/settings`、`/navigation`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/media/widths`——网站页面的数据来源 |
+| 公开读取面 | `/settings`、`/navigation`、`/widgets`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/media/widths`——网站页面的数据来源 |
 | `/api/v1/admin/…` | 管理读取与写入（内容／分类标签／媒体／设置／修订／预览连结／汇入汇出）；BFF 转发真实身份，PAT 按 Read／Write 及角色上限存取内容类端点，不能管理设置或汇入汇出 |
 | `/api/v1/sites/resolve?host=…` | 公开 Host 映射解析，只返回站点中继资料，不返回账号或凭证 |
 | `/api/v1/admin/access`、`/sites`、`/users`、`/members`、`/credentials` | 此列除首项外均相对 `/api/v1/admin`；BFF-only 权限、站点、全局账号、成员及 PAT 管理，服务再检查相应角色 |
@@ -197,6 +198,7 @@ tests/Origami.Tests/
 | `/admin/posts`、`/admin/pages` | 内容列表（含关键字搜索、状态筛选、回收桶）、快速编辑（就地改标题／代称／状态）、发布、撤回、确认后删除 |
 | `/admin/content/{id}` | Markdown 编辑器、预览、分类标签指派、媒体插入、排程发布、修订历史、密码保护与私密设定 |
 | `/admin/taxonomies` | 分类与标签的创建、修改、删除 |
+| `/admin/widgets` | 侧栏与页尾小工具的创建、编辑、排序、显示开关与删除（内建五种型别） |
 | `/admin/media` | 图片上传、媒体库关键字搜索、alt 文字编辑、引用保护删除 |
 | `/admin/settings` | 网站名称与说明、每页文章数、订阅条数、固定首页、网站图标、资料汇出（JSON／ZIP 完整备份）与还原式汇入 |
 | `/admin/security` | 自己账号的两步验证（TOTP）启用与停用 |
@@ -268,6 +270,7 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | `ApiV1EndpointTests` | /api/v1 列表分页与仅已发布、详情对草稿／受保护／私密内容 404、搜索无模型金钥时退回关键字、参数校验与按 IP 限流 |
 | `McpEndpointTests` | MCP 端点（Api 主机）仅暴露三个唯读工具、草稿不可见、缺模型金钥时工具层降级不返回 5xx、按 IP 限流 |
 | `ApiV1AdminEndpointTests` | 写入端点无通行证或错误通行证一律 401、建立→发布→撤回→回收桶→还原闭环、过期版本被拒绝不静默覆写、管理流量独立限流配额 |
+| `WidgetAndCustomCssTests` | CSS 清理器危险构造拒绝与注释移除、小工具 CRUD／边界验证／区域排序／公开投影（仅已发布内容）、未登录拒绝与跨站隔离、自定义 CSS 清理落库与汇出汇入往返 |
 
 2026-10-28 审计修复轮已补齐并通过单项验证：旧库迁移升级把既有内容与 Settings 归入默认站（`DatabaseIntegrationTests`）、PAT 限流分区与 BFF 豁免／跨凭证独立（`TenancyApiTests`）、站点／账号／成员管理的 BFF happy path、四个新管理页的浏览器流程（`AdminTenancyBrowserTests`）、备份按站点目录隔离（`BackupServiceTests`），以及 Web 主机在 Development 环境的启动修复。其余第一批边界（跨 Host 隔离、迁移 Down 防护、Reader／角色写入边界、BFF 401／403、PAT 即时失效与数量上限、账号自身 2FA）仍待使用者批量全量回归；绿灯前不宣称本批验收完成。
 
@@ -281,4 +284,5 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 - 网站与 Api 为两个进程：网站启动前 Api 必须可用（`Api:BaseUrl`），双方须设同一 `Api:ServiceToken`；单机部署建议相邻端口，并配置 HTTPS，不能把 HTTP 回环示例当作账号管理上线配置。
 - 登录、两步验证、站内助理、背景工作（嵌入／回收桶清理）、数据库迁移与管理命令仍在网站主机本地执行。
 - 不含评论与插件机制、主题系统、作者拥有权、待审稿、SSO 或私密附件；不引入 PHP 或 WordPress 资料表／REST API／插件／主题兼容层。
+- 自定义 CSS 属受控清理而非自由模板：@import、@font-face、expression、javascript: 与反斜线转义会被拒绝，覆盖内置版型变量需 `!important`；`url()` 允许与内文图片同级的站内／外部图片资源。小工具仅有内建五种宣告式型别，不支持载入任意代码或自定义区块类型。
 - `AddSiteIsolationAndApiCredentials` 未套用正式数据库；多站／账号／成员／凭证实际启用后拒绝 `Down`，部署及回退前必须另行规划完整备份与恢复。

@@ -5,14 +5,14 @@
 @inherits AdminComponentBase
 @inject OrigamiClient Api
 
-<PageTitle>系統健康檢查與 Webhook · 內容管理</PageTitle>
+<PageTitle>@UiText.T("Admin.SiteHealth.PageTitle", "系統健康檢查與 Webhook · 內容管理")</PageTitle>
 <div class="page-heading">
     <div>
-        <p class="eyebrow">維運診斷與整合監控</p>
-        <h1>系統健康檢查（Site Health）</h1>
-        <p>檢視資料庫、儲存目錄可寫性、排程、AI 嵌入佇列、SMTP、備份與出站 Webhook 投遞狀態（不含任何機密或連線字串）。</p>
+        <p class="eyebrow">@UiText.T("Admin.SiteHealth.Eyebrow", "維運診斷與整合監控")</p>
+        <h1>@UiText.T("Admin.SiteHealth.Title", "系統健康檢查（Site Health）")</h1>
+        <p>@UiText.T("Admin.SiteHealth.Introduction", "檢視資料庫、儲存目錄可寫性、排程、AI 嵌入佇列、SMTP、備份與出站 Webhook 投遞狀態（不含任何機密或連線字串）。")</p>
     </div>
-    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">重新檢查</button>
+    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="LoadAsync">@UiText.T("Admin.SiteHealth.Recheck", "重新檢查")</button>
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
 
@@ -20,17 +20,17 @@
 {
     <section class="panel settings-panel settings-width">
         <div class="panel-toolbar">
-            <h2>整體健康狀態：<span class="status-badge @(_report.OverallStatus == "good" ? "published" : "draft")">@StatusLabel(_report.OverallStatus)</span></h2>
-            <span class="muted">檢查時間：@_report.CheckedAt.ToString("yyyy.MM.dd HH:mm:ss") UTC</span>
+            <h2>@UiText.T("Admin.SiteHealth.OverallStatus", "整體健康狀態：")<span class="status-badge @(_report.OverallStatus == "good" ? "published" : "draft")">@StatusLabel(_report.OverallStatus)</span></h2>
+            <span class="muted">@UiText.T("Admin.SiteHealth.CheckedAt", "檢查時間：")@_report.CheckedAt.ToString("yyyy.MM.dd HH:mm:ss") UTC</span>
         </div>
         <div class="table-scroll">
             <table>
                 <thead>
                     <tr>
-                        <th scope="col">類別</th>
-                        <th scope="col">檢查項目</th>
-                        <th scope="col">狀態</th>
-                        <th scope="col">診斷摘要</th>
+                        <th scope="col">@UiText.T("Admin.SiteHealth.ColCategory", "類別")</th>
+                        <th scope="col">@UiText.T("Admin.SiteHealth.ColItem", "檢查項目")</th>
+                        <th scope="col">@UiText.T("Admin.SiteHealth.ColStatus", "狀態")</th>
+                        <th scope="col">@UiText.T("Admin.SiteHealth.ColSummary", "診斷摘要")</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -53,12 +53,12 @@
 {
     <section class="panel settings-panel settings-width">
         <div class="panel-toolbar">
-            <h2>出站 Webhook 投遞紀錄 <span class="count">@_deliveries.Total</span></h2>
-            <span class="muted">支援持久化、指數退避自動重試與人工重送</span>
+            <h2>@UiText.T("Admin.SiteHealth.WebhookDeliveries", "出站 Webhook 投遞紀錄") <span class="count">@_deliveries.Total</span></h2>
+            <span class="muted">@UiText.T("Admin.SiteHealth.WebhookHelp", "支援持久化、指數退避自動重試與人工重送")</span>
         </div>
         @if (_deliveries.Items.Count == 0)
         {
-            <p class="empty-state">尚無 Webhook 投遞紀錄。</p>
+            <p class="empty-state">@UiText.T("Admin.SiteHealth.NoDeliveries", "尚無 Webhook 投遞紀錄。")</p>
         }
         else
         {
@@ -66,13 +66,13 @@
                 <table>
                     <thead>
                         <tr>
-                            <th scope="col">事件</th>
-                            <th scope="col">目標網址</th>
-                            <th scope="col">狀態</th>
-                            <th scope="col">嘗試次數</th>
-                            <th scope="col">最後回應</th>
-                            <th scope="col">時間</th>
-                            <th scope="col">操作</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColEvent", "事件")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColTarget", "目標網址")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColStatus2", "狀態")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColAttempts", "嘗試次數")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColLastResponse", "最後回應")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColTime", "時間")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColActions", "操作")</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -86,7 +86,7 @@
                                 <td>@(d.LastStatusCode?.ToString() ?? "") @(string.IsNullOrEmpty(d.LastError) ? "" : $"({d.LastError})")</td>
                                 <td>@d.CreatedAt.ToString("MM.dd HH:mm:ss")</td>
                                 <td>
-                                    <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RetryAsync(d.Id)">立即重送</button>
+                                    <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="() => RetryAsync(d.Id)">@UiText.T("Admin.SiteHealth.RetryNow", "立即重送")</button>
                                 </td>
                             </tr>
                         }
@@ -99,11 +99,11 @@
 
 <section class="panel settings-panel settings-width">
     <div class="panel-intro">
-        <h2>OpenAPI 與 API 探索契約</h2>
-        <p>Origami 為 API-first 架構，提供機器可讀的 OpenAPI 3.1 規格文件與端點清單。</p>
+        <h2>@UiText.T("Admin.SiteHealth.OpenApiTitle", "OpenAPI 與 API 探索契約")</h2>
+        <p>@UiText.T("Admin.SiteHealth.OpenApiHelp", "Origami 為 API-first 架構，提供機器可讀的 OpenAPI 3.1 規格文件與端點清單。")</p>
     </div>
     <div class="button-row">
-        <a class="button button-secondary" href="/api/v1/openapi.json" target="_blank" rel="noopener">檢視 OpenAPI 3.1 JSON 契約 ↗</a>
+        <a class="button button-secondary" href="/api/v1/openapi.json" target="_blank" rel="noopener">@UiText.T("Admin.SiteHealth.ViewOpenApi", "檢視 OpenAPI 3.1 JSON 契約 ↗")</a>
     </div>
 </section>
 
@@ -115,7 +115,7 @@
 
     private Task LoadAsync() => RunAsync(async ct =>
     {
-        if (!CanAdminister) throw new AccessDeniedException("系統健康檢查僅限本站管理員檢視。");
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.SiteHealth.AdminOnly", "系統健康檢查僅限本站管理員檢視。"));
         _report = await Api.GetSiteHealthAsync(ct);
         _deliveries = await Api.ListWebhookDeliveriesAsync(1, 20, ct);
     });
@@ -125,13 +125,13 @@
         await Api.RetryWebhookDeliveryAsync(id, ct);
         _deliveries = await Api.ListWebhookDeliveriesAsync(1, 20, ct);
         _report = await Api.GetSiteHealthAsync(ct);
-    }, "已觸發 Webhook 重送。");
+    }, UiText.T("Admin.SiteHealth.RetryTriggered", "已觸發 Webhook 重送。"));
 
     private static string StatusLabel(string status) => status switch
     {
-        "good" => "良好",
-        "warning" => "注意",
-        "critical" => "異常",
+        "good" => UiText.T("Admin.SiteHealth.StatusGood", "良好"),
+        "warning" => UiText.T("Admin.SiteHealth.StatusWarning", "注意"),
+        "critical" => UiText.T("Admin.SiteHealth.StatusCritical", "異常"),
         _ => status
     };
 }

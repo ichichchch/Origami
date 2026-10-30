@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null)
+public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null)
 {
     // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
@@ -443,6 +443,21 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 publishedAt = entity.PublishedAt
             }, ct);
         }
+        // 受控擴充點：發布與撤回在同一落庫點通知訂閱者（事件名稱與 Webhook 對齊）。
+        if (events is not null && entity.Status == ContentStatus.Published && !wasPublished)
+        {
+            await events.PublishAsync("content.published", db.CurrentSiteId, new
+            {
+                id = entity.Id, kind = entity.Kind.ToString().ToLowerInvariant(), title = entity.Title, slug = entity.Slug
+            }, ct);
+        }
+        if (events is not null && wasPublished && entity.Status != ContentStatus.Published)
+        {
+            await events.PublishAsync("content.withdrawn", db.CurrentSiteId, new
+            {
+                id = entity.Id, kind = entity.Kind.ToString().ToLowerInvariant(), title = entity.Title, slug = entity.Slug
+            }, ct);
+        }
         await NotifyWorkflowEmailsAsync(db, entity, previousStatus, isNew: id is null, ct);
         input.Id = entity.Id;
         input.Kind = entity.Kind;
@@ -737,6 +752,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             db.Remove(entity);
             await ContentRules.SaveAsync(db, ct);
             await transaction.CommitAsync(ct);
+            if (events is not null)
+            {
+                await events.PublishAsync("content.deleted", db.CurrentSiteId, new
+                {
+                    id = entity.Id, kind = entity.Kind.ToString().ToLowerInvariant(), title = entity.Title, slug = entity.Slug
+                }, ct);
+            }
             return true;
         });
     }
@@ -779,6 +801,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         entity.Version = Guid.NewGuid();
         await SyncEmbeddingAsync(db, entity, now, ct);
         await ContentRules.SaveAsync(db, ct);
+        if (events is not null)
+        {
+            await events.PublishAsync("content.trashed", db.CurrentSiteId, new
+            {
+                id = entity.Id, kind = entity.Kind.ToString().ToLowerInvariant(), title = entity.Title, slug = entity.Slug
+            }, ct);
+        }
     }
 
     /// <summary>把回收桶內容還原為草稿狀態以便繼續編輯。</summary>

@@ -3,6 +3,19 @@ namespace Origami.Tests;
 [Collection(PostgresCollection.Name)]
 public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
 {
+    /// <summary>AVIF／HEIC 可行性探針（結論：現有依賴不可行）。SkiaSharp 4.153.1 枚舉含 Avif 但編碼器
+    /// 未編入（Encode 回 null）、亦無法解碼；Heic 連枚舉值都沒有。匯入 AVIF 需新的解碼器依賴，另行拍板。</summary>
+    [Fact]
+    public void Avif_and_heic_are_not_usable_with_the_current_image_pipeline()
+    {
+        Assert.Throws<ArgumentException>(() => Enum.Parse<SKEncodedImageFormat>("Heic"));
+        using var bitmap = new SKBitmap(64, 48);
+        using (var canvas = new SKCanvas(bitmap)) canvas.Clear(SKColors.Orange);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var encoded = image.Encode(SKEncodedImageFormat.Avif, 90);
+        Assert.Null(encoded);
+    }
+
     [PostgresTheory]
     [InlineData(SKEncodedImageFormat.Png, "照片.PNG", ".png", "image/png")]
     [InlineData(SKEncodedImageFormat.Jpeg, "photo.jpg", ".jpg", "image/jpeg")]

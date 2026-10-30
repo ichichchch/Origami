@@ -4,7 +4,8 @@ public sealed class SiteAdministrationService(
     IDbContextFactory<CmsDbContext> factory,
     AdminAccess admin,
     UserManager<AdminUser> userManager,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    CmsEventBus? events = null)
 {
     private const int MaximumSites = 200;
     private const int MaximumMembers = 200;
@@ -183,6 +184,11 @@ public sealed class SiteAdministrationService(
                     throw new CmsException("使用者名稱已存在。");
                 throw new CmsException("無法建立帳號，請檢查使用者名稱及密碼規則。");
             }
+            if (events is not null)
+            {
+                // 帳號屬識別網域的全域操作；SiteId 以空值表示非站點範圍事件。
+                await events.PublishAsync("user.created", Guid.Empty, new { id = user.Id, userName = user.UserName }, ct);
+            }
             return new UserSummary(user.Id, user.UserName ?? "", user.IsDisabled, false);
         });
     }
@@ -219,6 +225,7 @@ public sealed class SiteAdministrationService(
             user.SecurityStamp = Guid.NewGuid().ToString("N");
             user.ConcurrencyStamp = Guid.NewGuid().ToString("N");
             await db.SaveChangesAsync(ct);
+            await RevokeLoginSessionsAsync(db, user.Id, ct);
             await transaction.CommitAsync(ct);
             return true;
         });
@@ -427,6 +434,8 @@ public sealed class SiteAdministrationService(
         var result = await userManager.ChangePasswordAsync(user, input.CurrentPassword ?? "", newPassword);
         if (!result.Succeeded)
             throw new CmsException("目前密碼不正確，或新密碼不符合規則。");
+        // Identity 改密碼自動輪替安全戳記；同步撤銷會話資料列，裝置清單不留幽靈會話。
+        await LoginSessionService.RevokeAllAsync(factory, user.Id, timeProvider, ct);
     }
 
     /// <summary>全站管理者重設一般使用者的兩步驗證（TOTP 與恢復碼），並輪替安全戳記使其重新登入。</summary>
@@ -457,6 +466,7 @@ public sealed class SiteAdministrationService(
                 CreatedAt = timeProvider.GetUtcNow()
             });
             await db.SaveChangesAsync(ct);
+            await RevokeLoginSessionsAsync(db, user.Id, ct);
             await transaction.CommitAsync(ct);
             return true;
         });
@@ -618,6 +628,7 @@ public sealed class SiteAdministrationService(
             });
 
             await db.SaveChangesAsync(ct);
+            await RevokeLoginSessionsAsync(db, user.Id, ct);
             await transaction.CommitAsync(ct);
             return new PersonalDataEraseResult(user.Id, anonymizedContents, anonymizedComments, removedMemberships, revokedCredentials);
         });
@@ -625,6 +636,11 @@ public sealed class SiteAdministrationService(
 
     private static SiteSummary Summary(CmsSite site) =>
         new(site.Id, site.Name, site.Slug, site.HostName, site.IsActive, site.Version);
+
+    /// <summary>戳記輪替後同步撤銷該使用者的會話資料列（同一交易內），裝置清單不留幽靈會話。</summary>
+    private async Task RevokeLoginSessionsAsync(CmsDbContext db, string userId, CancellationToken ct) =>
+        await db.LoginSessions.Where(x => x.UserId == userId && x.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.RevokedAt, timeProvider.GetUtcNow()), ct);
 
     private static bool IsDnsLabel(string value) => value.Length is >= 1 and <= 63 &&
         char.IsAsciiLetterOrDigit(value[0]) && char.IsAsciiLetterOrDigit(value[^1]) &&

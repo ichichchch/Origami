@@ -40,6 +40,32 @@ public static class TenancyEndpoints
         group.MapPut("/navigation/order", async (NavigationOrderInput input, NavigationService navigation, CancellationToken ct) =>
             Results.Ok(await navigation.ReorderAsync([.. (input.Items ?? []).Select(x => (x.Id, x.Version))], ct)));
 
+        // 受控小工具管理面：清單、建立／更新、刪除與單一區域排序。
+        group.MapGet("/widgets", async (WidgetService widgets, CancellationToken ct) =>
+            Results.Ok(await widgets.ListAsync(ct)));
+
+        group.MapPost("/widgets", async (WidgetService.WidgetInput input, WidgetService widgets, CancellationToken ct) =>
+        {
+            input.Id = null; // 建立絕不得指向既有資料列
+            return Results.Ok(await widgets.SaveAsync(input, ct));
+        });
+
+        group.MapPut("/widgets/{id}", async (Guid id, WidgetService.WidgetInput input, WidgetService widgets, CancellationToken ct) =>
+        {
+            input.Id = id; // 身分識別由路由決定
+            return Results.Ok(await widgets.SaveAsync(input, ct));
+        });
+
+        group.MapDelete("/widgets/{id}", async (Guid id, Guid version, WidgetService widgets, CancellationToken ct) =>
+        {
+            await widgets.DeleteAsync(id, version, ct);
+            return Results.NoContent();
+        });
+
+        // 排序僅作用於提交的區域；逐筆攜帶版本，依提交順序重新編號。
+        group.MapPut("/widgets/order", async (WidgetOrderInput input, WidgetService widgets, CancellationToken ct) =>
+            Results.Ok(await widgets.ReorderAsync(input.Area, [.. (input.Items ?? []).Select(x => (x.Id, x.Version))], ct)));
+
         group.MapGet("/access", async (SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.GetAccessAsync(ct)));
 
@@ -158,4 +184,6 @@ public static class TenancyEndpoints
 
     public sealed record NavigationOrderInput(List<NavigationOrderItem>? Items);
     public sealed record NavigationOrderItem(Guid Id, Guid Version);
+    public sealed record WidgetOrderInput(WidgetArea Area, List<WidgetOrderItem>? Items);
+    public sealed record WidgetOrderItem(Guid Id, Guid Version);
 }

@@ -117,6 +117,10 @@ else if (_content is not null)
                     <div class="chip-list" aria-label="@UiText.T("Public.ContentDetail.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
                 }
             }
+            @if (_canEdit)
+            {
+                <p class="byline"><a class="text-button" href="@("/admin/content/" + _content.Id)" data-enhance-nav="false" rel="nofollow">@UiText.T("Public.ContentDetail.EditLink", "編輯此文")</a></p>
+            }
         </header>
         @if (_locked)
         {
@@ -195,7 +199,7 @@ else if (_content is not null)
         @if (_settings.CommentsEnabled && _content.AllowComments && !_locked && !_isPrivate && !_content.IsProtected && _content.Kind == ContentKind.Post)
         {
             <section class="comments" aria-labelledby="comments-title">
-                <h2 id="comments-title">@string.Format(UiText.T("Public.ContentDetail.CommentCount", "評論（{0}）"), _comments.Count)</h2>
+                <h2 id="comments-title">@string.Format(UiText.T("Public.ContentDetail.CommentCount", "評論（{0}）"), _commentTotal)</h2>
                 @foreach (var comment in _comments)
                 {
                     <article class="comment @(comment.ParentId is not null ? "comment-reply" : "")">
@@ -217,7 +221,7 @@ else if (_content is not null)
                                 <span class="muted"> · @string.Format(UiText.T("Public.ContentDetail.InReplyTo", "回覆 {0}"), comment.ParentAuthorName)</span>
                             }
                             · @comment.CreatedAt.ToString("yyyy.MM.dd HH:mm") <span class="sr-only">UTC</span>
-                            · <a class="text-button" href="@(DetailPath + "?replyTo=" + comment.Id + "#comment-name")">@UiText.T("Public.ContentDetail.ReplyLink", "回覆")</a>
+                            · <a class="text-button" href="@(DetailPath + WithCommentQuery("replyTo=" + comment.Id) + "#comment-name")">@UiText.T("Public.ContentDetail.ReplyLink", "回覆")</a>
                         </p>
                         @* 訪客評論與內容走同一條 Markdown 安全渲染管線（停用 HTML、過濾危險協定）。 *@
                         <div class="comment-body">@((MarkupString)Markdown.Render(comment.Markdown))</div>
@@ -226,6 +230,14 @@ else if (_content is not null)
                 @if (_comments.Count == 0)
                 {
                     <p class="muted">@UiText.T("Public.ContentDetail.NoComments", "還沒有評論；成為第一位留言的訪客。")</p>
+                }
+                @if (_commentPageTotal > 1)
+                {
+                    <nav class="pagination" aria-label="@UiText.T("Public.ContentDetail.CommentsPagination", "評論分頁")">
+                        @if (_commentPageNum > 1) { <a class="button button-secondary" href="@CommentPageHref(_commentPageNum - 1)">@UiText.T("Public.ContentDetail.CommentsPrev", "上一頁")</a> }
+                        <span>@string.Format(UiText.T("Public.ContentDetail.CommentsPageStatus", "第 {0} / {1} 頁"), _commentPageNum, _commentPageTotal)</span>
+                        @if (_commentPageNum < _commentPageTotal) { <a class="button button-secondary" href="@CommentPageHref(_commentPageNum + 1)">@UiText.T("Public.ContentDetail.CommentsNext", "下一頁")</a> }
+                    </nav>
                 }
                 @if (_commentPosted)
                 {
@@ -248,7 +260,7 @@ else if (_content is not null)
                         <input type="hidden" name="CommentForm.ParentId" value="@replyTarget.Id" />
                         <p class="notice" role="status">
                             @string.Format(UiText.T("Public.ContentDetail.ReplyingTo", "正在回覆 {0} 的評論"), replyTarget.AuthorName)
-                            · <a href="@(DetailPath + "#comments-title")">@UiText.T("Public.ContentDetail.CancelReply", "取消回覆")</a>
+                            · <a href="@(DetailPath + WithCommentQuery() + "#comments-title")">@UiText.T("Public.ContentDetail.CancelReply", "取消回覆")</a>
                         </p>
                     }
                     <button type="submit" class="button">@UiText.T("Public.ContentDetail.SubmitComment", "送出評論")</button>
@@ -281,12 +293,16 @@ else
     private bool _redirecting;
     private bool _locked;
     private bool _isPrivate;
+    private bool _canEdit;
     private bool _readable;
     private List<string> _canonicalSegments = [];
     private List<BreadcrumbNode> _breadcrumbs = [];
     private List<ContentNeighbor> _neighbors = [];
     private IReadOnlyList<SemanticHit> _related = [];
     private List<CommentService.CommentView> _comments = [];
+    private int _commentTotal;
+    private int _commentPageNum = 1;
+    private int _commentPageTotal = 1;
     private bool _commentPosted;
     private string? _commentError;
     private List<string> _pageSections = [""];
@@ -294,6 +310,7 @@ else
     private int _pageTotal = 1;
     [SupplyParameterFromQuery(Name = "page")] private int? RequestedPage { get; set; }
     [SupplyParameterFromQuery(Name = "replyTo")] private Guid? ReplyToCommentId { get; set; }
+    [SupplyParameterFromQuery(Name = "commentPage")] private int? RequestedCommentPage { get; set; }
     [SupplyParameterFromForm(FormName = "content-comment")]
     private CommentFormInput CommentForm { get; set; } = default!;
     private sealed class CommentFormInput
@@ -369,6 +386,41 @@ else
         ? "/pages/" + string.Join("/", _canonicalSegments.Select(Uri.EscapeDataString))
         : "/posts/" + Uri.EscapeDataString(_content?.Slug ?? "");
     private string PageHref(int page) => page <= 1 ? DetailPath : DetailPath + "?page=" + page;
+
+    /// <summary>評論分頁連結：保留長文分頁的 ?page= 上下文，僅替換 commentPage。</summary>
+    private string CommentPageHref(int page)
+    {
+        var parts = new List<string>();
+        if (_pageIndex > 1) parts.Add("page=" + _pageIndex);
+        if (page > 1) parts.Add("commentPage=" + page);
+        return DetailPath + (parts.Count == 0 ? "" : "?" + string.Join("&", parts)) + "#comments-title";
+    }
+
+    /// <summary>以目前長文分頁與評論分頁為基礎附加上下文（回覆、取消回覆連結使用）。</summary>
+    private string WithCommentQuery(params string[] extra)
+    {
+        var parts = new List<string>();
+        if (_pageIndex > 1) parts.Add("page=" + _pageIndex);
+        if (_commentPageNum > 1) parts.Add("commentPage=" + _commentPageNum);
+        parts.AddRange(extra.Where(x => x.Length > 0));
+        return parts.Count == 0 ? "" : "?" + string.Join("&", parts);
+    }
+
+    /// <summary>載入指定頁的公開評論；請求頁碼超過總頁數時夾回最後一頁再讀一次。</summary>
+    private async Task LoadCommentsAsync(int page, CancellationToken ct)
+    {
+        var result = await Api.GetPublicCommentsAsync(_content!.Id, page, ct);
+        if (result is null) return;
+        if (page > 1 && result.TotalPages > 0 && page > result.TotalPages)
+        {
+            result = await Api.GetPublicCommentsAsync(_content.Id, result.TotalPages, ct);
+            if (result is null) return;
+        }
+        _comments = [.. result.Items];
+        _commentTotal = result.Total;
+        _commentPageNum = result.Page;
+        _commentPageTotal = result.TotalPages;
+    }
     /// <summary>oEmbed 探索連結；讓支援的站台以文章網址取得嵌入資訊。</summary>
     private string OembedUrl => BaseUrl + "/oembed?url=" + Uri.EscapeDataString(Canonical) + "&format=json";
     private string MetaDescription => _content is null ? ""
@@ -569,6 +621,8 @@ else
                 }
                 _isPrivate = true;
             }
+            // 情境編輯連結：僅對已登入且具本站編輯權者顯示；匿名訪客不付出權限查詢成本。
+            _canEdit = HttpContext?.User.Identity?.IsAuthenticated == true && await Admin.IsAdminAsync(ct);
             if (!_locked)
             {
                 await RenderBodyAsync(ct);
@@ -642,7 +696,7 @@ else
             _commentPosted = true;
             _commentError = null;
             CommentForm = new CommentFormInput();
-            _comments = await Api.GetPublicCommentsAsync(_content.Id, HttpContext.RequestAborted) ?? [];
+            await LoadCommentsAsync(_commentPageNum, HttpContext.RequestAborted);
         }
         catch (CmsException error) { _commentError = CommentErrorMessage(error.Message); }
         catch (Exception error)
@@ -685,7 +739,7 @@ else
         _html = Markdown.Render(_pageSections[_pageIndex - 1], _imageWidths);
         if (_content.Kind == ContentKind.Post && _settings.CommentsEnabled && _content.AllowComments && !_isPrivate && !_content.IsProtected)
         {
-            try { _comments = await Api.GetPublicCommentsAsync(_content.Id, ct) ?? []; }
+            try { await LoadCommentsAsync(Math.Max(1, RequestedCommentPage ?? 1), ct); }
             catch (Exception error) { Logger.LogWarning(error, "評論載入失敗"); }
         }
         if (_content.Kind == ContentKind.Post)

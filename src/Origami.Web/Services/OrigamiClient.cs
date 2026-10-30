@@ -29,6 +29,8 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public string SocialXUrl { get; init; } = "";
     public string SocialMastodonUrl { get; init; } = "";
     public bool MaintenanceMode { get; init; }
+    /// <summary>要求搜尋引擎不要索引本站；robots.txt 與 X-Robots-Tag 標頭的開關。</summary>
+    public bool SearchEngineBlocked { get; init; }
     public string MaintenanceMessage { get; init; } = "";
     public Guid? PrivacyPageContentId { get; init; }
     public string PrivacyPageSlug { get; init; } = "";
@@ -37,6 +39,8 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public string TimeZoneId { get; init; } = "UTC";
     public string DateFormat { get; init; } = "yyyy.MM.dd";
     public string TimeFormat { get; init; } = "HH:mm";
+    /// <summary>受控清理後的自訂 CSS；空字串代表未設定。</summary>
+    public string CustomCss { get; init; } = "";
     /// <summary>Api 無法回應時的後備站名與說明；全站單一來源。</summary>
     public static PublicSiteSettings Default { get; } = new("Origami", "用文字，分享你的世界。", null, null, null, "", null, null);
 }
@@ -96,8 +100,32 @@ public sealed class OrigamiClient
         SendAsync<List<BulkItemResult>>(new(HttpMethod.Put, "api/v1/admin/navigation/order"),
             new { items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
 
-    public Task<List<CommentService.CommentView>?> GetPublicCommentsAsync(Guid contentId, CancellationToken ct = default) =>
-        GetAsync<List<CommentService.CommentView>>($"api/v1/contents/{contentId}/comments", ct);
+    // ---------- 受控小工具管理與公開讀取 ----------
+
+    public Task<List<WidgetService.PublicWidget>?> GetWidgetsAsync(CancellationToken ct = default) =>
+        GetAsync<List<WidgetService.PublicWidget>>("api/v1/widgets", ct);
+
+    public Task<List<WidgetService.WidgetView>?> ListWidgetsAsync(CancellationToken ct = default) =>
+        GetAsync<List<WidgetService.WidgetView>>("api/v1/admin/widgets", ct);
+
+    public Task<WidgetService.WidgetView?> SaveWidgetAsync(WidgetService.WidgetInput input, CancellationToken ct = default) =>
+        input.Id is null
+            ? SendAsync<WidgetService.WidgetView>(new(HttpMethod.Post, "api/v1/admin/widgets"), input, ct)
+            : SendAsync<WidgetService.WidgetView>(new(HttpMethod.Put, $"api/v1/admin/widgets/{input.Id}"), input, ct);
+
+    public async Task DeleteWidgetAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/v1/admin/widgets/{id}?version={version}", ct);
+        await EnsureSuccessAsync(response);
+    }
+
+    public Task<List<BulkItemResult>?> ReorderWidgetsAsync(WidgetArea area, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default) =>
+        SendAsync<List<BulkItemResult>>(new(HttpMethod.Put, "api/v1/admin/widgets/order"),
+            new { area, items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
+
+    public Task<PagedResult<CommentService.CommentView>?> GetPublicCommentsAsync(Guid contentId, int page = 1,
+        CancellationToken ct = default) =>
+        GetAsync<PagedResult<CommentService.CommentView>>($"api/v1/contents/{contentId}/comments?page={page}", ct);
 
     public Task PostCommentAsync(Guid contentId, string authorName, string? url, string markdown, bool honeypot, Guid? parentId = null, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/contents/{contentId}/comments",

@@ -7,6 +7,7 @@ public sealed class TwoFactorService(
     AdminAccess admin,
     UserManager<AdminUser> users,
     SignInManager<AdminUser> signIn,
+    IDbContextFactory<CmsDbContext> factory,
     TimeProvider clock)
 {
     public async Task<TwoFactorStatus> GetStatusAsync(CancellationToken ct = default)
@@ -39,8 +40,9 @@ public sealed class TwoFactorService(
         user.TwoFactorEnabled = true;
         user.RecoveryCodeHashes = hashJoined;
         await UpdateAsync(user);
-        // 輪替安全戳記，迫使既有登入遵守新加入的驗證要求。
+        // 輪替安全戳記，迫使既有登入遵守新加入的驗證要求；同步撤銷會話資料列。
         await users.UpdateSecurityStampAsync(user);
+        await LoginSessionService.RevokeAllAsync(factory, user.Id, clock, ct);
         return plainCodes;
     }
 

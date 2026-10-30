@@ -4,7 +4,11 @@ namespace Origami.Core.Services;
 /// 密碼重設流程：以寄件方式提供重設連結，並以 Identity 權杖完成重設。
 /// 申請一律回傳相同結果，避免被用來列舉已註冊的電子郵件。
 /// </summary>
-public sealed class PasswordResetService(UserManager<AdminUser> users, IEmailSender mail)
+public sealed class PasswordResetService(
+    UserManager<AdminUser> users,
+    IEmailSender mail,
+    IDbContextFactory<CmsDbContext> factory,
+    TimeProvider? clock = null)
 {
     /// <summary>重設權杖有效期（分鐘）。</summary>
     public const int TokenMinutes = 30;
@@ -44,8 +48,9 @@ public sealed class PasswordResetService(UserManager<AdminUser> users, IEmailSen
         var result = await users.ResetPasswordAsync(user, token, newPassword);
         if (!result.Succeeded)
             return new(false, "重設連結無效或已過期，或新密碼未符合規則，請重新申請。");
-        // 重設後輪替安全戳記，既有登入與工作階段立即失效。
+        // 重設後輪替安全戳記，既有登入與工作階段立即失效；同步撤銷會話資料列。
         await users.UpdateSecurityStampAsync(user);
+        await LoginSessionService.RevokeAllAsync(factory, user.Id, clock);
         return new(true, "密碼已更新。");
     }
 }

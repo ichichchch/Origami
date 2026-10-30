@@ -120,8 +120,11 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
     private sealed class StubApiProvider(IServiceProvider inner, OrigamiClient api) : IServiceProvider
     {
         private readonly NavigationManager navigation = new LayoutNavigation();
+        // MainLayout 的公開設定改經每請求快取供應器取得；隔離渲染同樣以樁接面提供。
+        private readonly PublicSettingsProvider settings = new(api);
 
         public object? GetService(Type serviceType) => serviceType == typeof(OrigamiClient) ? api
+            : serviceType == typeof(PublicSettingsProvider) ? settings
             : serviceType == typeof(NavigationManager) ? navigation : inner.GetService(serviceType);
     }
 

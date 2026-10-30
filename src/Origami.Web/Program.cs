@@ -58,15 +58,19 @@ builder.Services.AddSingleton<LoginThrottle>(provider => new LoginThrottle(provi
 builder.Services.AddScoped<ContentService>();
 builder.Services.AddScoped<TaxonomyService>();
 builder.Services.AddScoped<NavigationService>();
+builder.Services.AddScoped<WidgetService>();
 builder.Services.AddScoped<WxrImportService>();
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<CommentService>();
 builder.Services.AddScoped<SettingsService>();
+builder.Services.AddScoped<CmsEventBus>();
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddSingleton<MarkdownService>();
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
 builder.Services.AddHttpClient("OrigamiWebhook");
+builder.Services.AddHttpClient("OrigamiWidgetFeed", client => client.Timeout = TimeSpan.FromSeconds(5))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddHttpClient("OrigamiWxrAttachment")
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddScoped<WebhookService>();
@@ -83,6 +87,7 @@ builder.Services.AddScoped<AiStatusService>();
 // 匯入匯出自 API-first 起經 OrigamiClient 走 Api 主機；本機不註冊 Import 服務
 // （Export 服務僅供背景備份複用，AdminAccess 由 AddCmsIdentity 註冊）。
 builder.Services.AddScoped<TwoFactorService>();
+builder.Services.AddScoped<LoginSessionService>();
 builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
 builder.Services.AddHostedService<EmbeddingJobWorker>();
 builder.Services.AddHostedService<ContentLifecycleWorker>();
@@ -123,6 +128,7 @@ void ConfigureApiClient(HttpClient client)
 }
 builder.Services.AddHttpClient<OrigamiClient>(ConfigureApiClient)
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddScoped<PublicSettingsProvider>();
 builder.Services.AddHttpClient<SiteResolver>(client =>
     {
         ConfigureApiClient(client);
@@ -199,6 +205,20 @@ app.Use(async (context, next) =>
         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         await context.Response.WriteAsync(UiText.T("Common.CredentialsExpired", "登入或網站服務憑證已失效，請重新登入；若持續失敗請聯絡管理者。"), context.RequestAborted);
     }
+});
+// 搜尋引擎可見度：Static SSR 的 layout 層無法輸出 head meta，改以回應標頭涵蓋所有公開頁面；
+// 設定經 PublicSettingsProvider 每請求快取，與版面共用同一次讀取。
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/_blazor")
+        && (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)))
+    {
+        var settings = await context.RequestServices.GetRequiredService<PublicSettingsProvider>()
+            .GetAsync(context.RequestAborted);
+        if (settings.SearchEngineBlocked)
+            context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+    }
+    await next(context);
 });
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAuthentication();

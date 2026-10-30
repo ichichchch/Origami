@@ -39,6 +39,22 @@ public static partial class Limits
     public const int SocialUrl = 300;
     public const int CommentBlockedWords = 2000;
     public const int MaintenanceMessage = 500;
+    /// <summary>自訂 CSS 的長度上限（清理前的原始輸入）。</summary>
+    public const int CustomCss = 50_000;
+    /// <summary>小工具顯示標題上限。</summary>
+    public const int WidgetTitle = 80;
+    /// <summary>文字小工具的 Markdown 內容上限。</summary>
+    public const int WidgetMarkdown = 10_000;
+    /// <summary>小工具組態 JSON 的儲存上限（須容納轉義後的 Markdown）。</summary>
+    public const int WidgetConfig = 24_000;
+    /// <summary>單一小工具區域的項目數上限。</summary>
+    public const int MaxWidgetsPerArea = 20;
+    /// <summary>最新文章小工具可顯示的篇數上限。</summary>
+    public const int WidgetRecentPosts = 10;
+    /// <summary>外部 feed 小工具的網址長度上限。</summary>
+    public const int WidgetFeedUrl = 500;
+    /// <summary>外部 feed 單次抓取的位元組上限；超過即放棄解析。</summary>
+    public const int WidgetFeedMaxBytes = 2_097_152;
     public const int CustomFieldOptions = 500;
     public const int WebhookUrl = 500;
     public const int WebhookSecret = 128;
@@ -355,6 +371,8 @@ public sealed class SiteSettings
     public Guid? PrivacyPageContentId { get; set; }
     /// <summary>是否啟用評論與審稿流程的電子郵件通知（需同時設定 SMTP）。</summary>
     public bool EmailNotificationsEnabled { get; set; }
+    /// <summary>要求搜尋引擎不要索引本站；開啟時 robots.txt 全站禁止，公開回應附 X-Robots-Tag: noindex。</summary>
+    public bool SearchEngineBlocked { get; set; }
     /// <summary>文章永久連結結構方案：post-name（/posts/{slug}）、day-and-name、month-and-name、numeric。</summary>
     [StringLength(Limits.PermalinkScheme)] public string PermalinkScheme { get; set; } = "post-name";
     /// <summary>站點預設顯示時區（IANA 或 Windows 時區 ID，預設 UTC）。</summary>
@@ -363,6 +381,8 @@ public sealed class SiteSettings
     [StringLength(Limits.DateFormat)] public string DateFormat { get; set; } = "yyyy.MM.dd";
     /// <summary>站點預設時間顯示格式（受控白名單）。</summary>
     [StringLength(Limits.TimeFormat)] public string TimeFormat { get; set; } = "HH:mm";
+    /// <summary>自訂 CSS：儲存前經 CssSanitizer 清理（危險構造直接拒絕），輸出前仍會再次清理。</summary>
+    [StringLength(Limits.CustomCss)] public string CustomCss { get; set; } = "";
     public Guid Version { get; set; }
 }
 

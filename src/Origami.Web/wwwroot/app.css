@@ -434,3 +434,30 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
     [data-color-scheme="auto"] { --muted: #c6d4ca; --border: #4a574f; --border-strong: #5c6b62; }
 }
+
+/* 側欄與頁尾小工具（受控宣告式區塊）：寬螢幕側欄並排，窄螢幕堆疊於主內容之後；
+   沒有任何可見側欄項目時 MainLayout 直接輸出單欄，不套用此處的雙欄。 */
+.layout-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.6rem; align-items: start; max-width: min(100% - 2.5rem, 80rem); margin-inline: auto; }
+.site-sidebar { display: grid; gap: 1.4rem; min-width: 0; }
+@media (min-width: 72rem) {
+    .layout-columns { grid-template-columns: minmax(0, 1fr) 17rem; }
+    .site-sidebar { position: sticky; top: 1.6rem; }
+}
+.widget { display: grid; gap: .65rem; padding: 1.1rem 1.2rem 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: .9rem; min-width: 0; }
+.widget-title { font-size: .78rem; font-weight: 650; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.widget-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; overflow-wrap: anywhere; }
+.widget-list a { text-decoration: none; }
+.widget-list a:hover { text-decoration: underline; }
+.widget-comments .muted { font-size: .72rem; }
+.widget-comment-excerpt { margin: .15rem 0 0; font-size: .78rem; color: var(--muted); line-height: 1.5; }
+.widget-tags { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem .55rem; }
+.widget-tags a { font-size: .8rem; color: var(--muted); text-decoration: none; }
+.widget-tags a:hover { color: var(--accent-ink); }
+.widget-search { display: flex; gap: .45rem; }
+.widget-search input { flex: 1; min-height: 38px; }
+.widget-search button { min-height: 38px; padding: .35rem .8rem; }
+.widget-text :where(p, ul, ol) { margin: 0 0 .7rem; }
+.widget-text :where(p):last-child { margin-bottom: 0; }
+.widget-text :where(a) { text-decoration: underline; }
+.footer-widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1.4rem 2rem; margin-bottom: 1.6rem; }
+.footer-widgets .widget { background: transparent; }

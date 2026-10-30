@@ -34,6 +34,7 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 | Visibility | Private content is not public and requires management authorization, password-protected content needs the password, and neither enters search or AI retrieval |
 | Site settings | Site name and description, articles per page, feed items with a full-text option, author display name, fixed home page, site icon, data export (JSON / ZIP full backup) with replace-style import |
 | Appearance & themes | Controlled theme presets (reading serif / minimal compact / gallery display — real differences in fonts and layout density), accent color and column width fine-tuning, live preview on the settings page, automatic foreground lightening in dark mode, a per-admin three-state appearance toggle remembered via cookie (takes precedence over system detection when the site is set to auto), prefers-contrast support |
+| Widgets & custom CSS | Sidebar and footer widgets: five built-in declarative types (recent posts / categories / tags / search box / Markdown text), sortable and hideable, sidebar beside content on wide screens and stacked on narrow ones. Custom CSS is sanitized before saving (comments stripped; @import, @font-face, expression, javascript: and backslash escapes are rejected) and sanitized again before output |
 
 Content is written in **Markdown**. Raw HTML is disabled and every rendered URL is checked against
 an allow-list, so stored content cannot introduce script execution.
@@ -268,7 +269,7 @@ endpoints expose drafts; use authorized management reads for drafts.
 | `/api/v1/posts/{slug}`, `/api/v1/pages/{slug}` | Article and page detail (raw Markdown); drafts, protected and private content always return `404` |
 | `/api/v1/search?q=` | Hybrid search with the same rules as `/search`; keyword-only when no model is configured |
 | `/mcp`, `/health` | Read-only MCP tools (`search_posts`, `get_post`, `get_page`) and database liveness |
-| Public reads | `/settings`, `/navigation`, `/contents/{id}/neighbors`, `/contents/{id}/related`, `/archives`, `/categories/popular`, `/taxonomies/{kind}/{slug}`, `/redirects/{slug}`, `/preview/{token}`, `/sitemap`, `/feed`, `/media/widths` — the data source behind every website page |
+| Public reads | `/settings`, `/navigation`, `/widgets`, `/contents/{id}/neighbors`, `/contents/{id}/related`, `/archives`, `/categories/popular`, `/taxonomies/{kind}/{slug}`, `/redirects/{slug}`, `/preview/{token}`, `/sitemap`, `/feed`, `/media/widths` — the data source behind every website page |
 | `/api/v1/admin/…` | Management reads/writes (content, taxonomies, media, settings, revisions, preview links, export/import); BFF forwards the real user, while PATs access content operations under Read/Write and role ceilings, not settings or import/export |
 | `/api/v1/sites/resolve?host=…` | Public Host mapping; returns only site metadata, not accounts or credentials |
 | `/api/v1/admin/access`, `/sites`, `/users`, `/members`, `/credentials` | All but the first path in this row are relative to `/api/v1/admin`; BFF-only access, site, global account, membership and PAT management, with service-level role checks |
@@ -281,6 +282,7 @@ Admin area (Interactive Server, per page render mode):
 | `/admin/posts`, `/admin/pages` | Content list with keyword search, status filters and the trash; quick edit (title/slug/status in place); publish, withdraw, confirmed delete |
 | `/admin/content/{id}` | Markdown editor, preview, taxonomy assignment, media insertion, scheduled publishing, revision history, protection and privacy settings |
 | `/admin/taxonomies` | Create, edit and delete categories and tags |
+| `/admin/widgets` | Create, edit, reorder, show/hide and delete sidebar and footer widgets (five built-in types) |
 | `/admin/media` | Image upload, media library search, alt text, reference-protected deletion |
 | `/admin/settings` | Site name and description, articles per page, feed items, fixed home page, site icon, data export (JSON / ZIP full backup) with replace-style import |
 | `/admin/security` | Two-factor (TOTP) setup and removal for one's own account |
@@ -365,6 +367,7 @@ the web tests exercise the full BFF chain.
 | `ApiV1EndpointTests` | /api/v1 list pagination and published-only content, detail `404` for drafts, protected and private items, keyword fallback without a model key, parameter validation and per-IP rate limiting |
 | `McpEndpointTests` | The MCP endpoint (Api host) exposes exactly three read-only tools, drafts stay invisible, a missing key degrades at the tool level without a 5xx, per-IP rate limiting |
 | `ApiV1AdminEndpointTests` | Write endpoints reject missing or wrong service tokens with 401, the create→publish→withdraw→trash→restore round trip, stale versions are rejected without silent overwrites, admin traffic has its own rate budget |
+| `WidgetAndCustomCssTests` | CSS sanitizer rejects dangerous constructs and strips comments, widget CRUD/boundary validation/area-scoped reordering/public projection (published content only), anonymous access refused with per-site isolation, sanitized custom CSS persistence and export/import round trip |
 
 The browser tests drive real Edge or Chrome through Playwright; the persistence test performs an
 actual `pg_dump` / `pg_restore` cycle.
@@ -408,6 +411,10 @@ user's full batch regression; the batch is not claimed accepted before that pass
   migrations and admin commands still run inside the website host.
 - No comments, plugins, menu editor, theming, author ownership, editorial review, SSO or private
   attachments. No PHP runtime or WordPress table/REST API/plugin/theme compatibility layer.
+- Custom CSS is sanitized, not a free-form template: @import, @font-face, expression, javascript:
+  and backslash escapes are rejected, and overriding built-in theme variables requires `!important`;
+  `url()` may reference on-site or external image resources at the same trust level as inline images.
+  Widgets are limited to the five built-in declarative types — no arbitrary code or custom block types.
 - `AddSiteIsolationAndApiCredentials` has not been applied to production. Once sites/accounts/
   memberships/credentials are used, `Down` refuses a downgrade; plan full backups and recovery
   separately before deployment or rollback.

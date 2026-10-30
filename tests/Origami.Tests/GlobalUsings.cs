@@ -54,5 +54,7 @@ global using System.Text.Json;
 global using System.Text.Json.Nodes;
 global using System.Text.Json.Serialization;
 global using System.Text.RegularExpressions;
+global using System.Xml;
 global using System.Xml.Linq;
+global using Microsoft.Extensions.Caching.Memory;
 global using static Microsoft.Playwright.Assertions;

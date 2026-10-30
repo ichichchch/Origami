@@ -8,6 +8,7 @@ public static class AccessClaims
     public const string StampHeader = "X-Admin-Security-Stamp";
     public const string SessionExpiresHeader = "X-Origami-Session-Expires";
     public const string SessionExpiresAt = "origami:session-expires";
+    public const string SessionId = "origami:session-id";
     public const string Bff = "origami:bff";
     public const string CredentialId = "origami:credential";
     public const string CredentialScope = "origami:scope";

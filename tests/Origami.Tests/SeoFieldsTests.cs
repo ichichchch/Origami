@@ -43,6 +43,41 @@ public sealed class SeoFieldsTests(IsolatedPostgres postgres) : ServiceTestBase(
     }
 
     [PostgresFact]
+    public async Task Site_level_search_engine_block_toggles_robots_and_header()
+    {
+        using var admin = await App.AdministratorAsync();
+        var settings = await admin.Settings.GetAsync();
+        settings.SearchEngineBlocked = true;
+        await admin.Settings.SaveAsync(settings);
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+
+        // 全站禁止時 robots.txt 不再揭露 Sitemap，僅輸出根目錄 Disallow。
+        var robots = await client.GetAsync("/robots.txt");
+        Assert.Equal(HttpStatusCode.OK, robots.StatusCode);
+        var body = await robots.Content.ReadAsStringAsync();
+        Assert.Contains("Disallow: /\n", body);
+        Assert.DoesNotContain("Sitemap:", body);
+
+        // 公開頁面與詳情頁都以回應標頭標記 noindex（layout 層 head 的替代方案）。
+        var home = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, home.StatusCode);
+        Assert.Equal("noindex, nofollow", string.Join(",", home.Headers.GetValues("X-Robots-Tag")));
+
+        // 關閉後立即恢復：robots 回到僅封鎖管理路徑並提供 Sitemap，公開回應不再附標頭。
+        settings.SearchEngineBlocked = false;
+        await admin.Settings.SaveAsync(settings);
+        var restored = await client.GetAsync("/robots.txt");
+        var restoredBody = await restored.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Disallow: /\n", restoredBody);
+        Assert.Contains("Sitemap:", restoredBody);
+        var homeAgain = await client.GetAsync("/");
+        Assert.False(homeAgain.Headers.Contains("X-Robots-Tag"));
+    }
+
+    [PostgresFact]
     public async Task Public_pages_emit_robots_and_structured_data()
     {
         using var admin = await App.AdministratorAsync();

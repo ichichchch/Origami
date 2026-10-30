@@ -9,7 +9,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public DbSet<CmsSite> Sites => Set<CmsSite>();
     public DbSet<SiteMembership> SiteMemberships => Set<SiteMembership>();
     public DbSet<SiteNavItem> SiteNavItems => Set<SiteNavItem>();
+    public DbSet<SiteWidget> SiteWidgets => Set<SiteWidget>();
     public DbSet<ApiCredential> ApiCredentials => Set<ApiCredential>();
+    public DbSet<LoginSessionRecord> LoginSessions => Set<LoginSessionRecord>();
     public DbSet<Content> Contents => Set<Content>();
     public DbSet<ContentComment> Comments => Set<ContentComment>();
     public DbSet<ContentRevision> ContentRevisions => Set<ContentRevision>();
@@ -42,6 +44,17 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.RecoveryCodeHashes).HasMaxLength(1024).IsRequired();
             e.HasIndex(x => x.SingletonKey).IsUnique().HasFilter("\"SingletonKey\" IS NOT NULL");
             e.ToTable("AspNetUsers", t => t.HasCheckConstraint("CK_Admin_Singleton", "\"SingletonKey\" IS NULL OR \"SingletonKey\" = 1"));
+        });
+        builder.Entity<LoginSessionRecord>(e =>
+        {
+            // 識別網域實體：不套站點查詢篩選器，與 AspNetUsers 同級。
+            e.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+            e.Property(x => x.UserAgent).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RemoteIp).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Provider).HasMaxLength(64).IsRequired();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.ExpiresAt);
+            e.ToTable(t => t.HasCheckConstraint("CK_LoginSession_Time", "\"CreatedAt\" <= \"ExpiresAt\""));
         });
         builder.Entity<CmsSite>(e =>
         {
@@ -95,6 +108,19 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 t.HasCheckConstraint("CK_SiteNavItem_Title", "length(btrim(\"Title\")) > 0");
                 t.HasCheckConstraint("CK_SiteNavItem_Target",
                     "(\"ContentId\" IS NOT NULL AND \"Url\" = '') OR (\"ContentId\" IS NULL AND \"Url\" <> '')");
+            });
+        });
+        builder.Entity<SiteWidget>(e =>
+        {
+            ConfigureSiteEntity(e, nameof(SiteWidget.Site));
+            e.Property(x => x.Title).HasMaxLength(Limits.WidgetTitle).IsRequired();
+            e.Property(x => x.ConfigJson).HasMaxLength(Limits.WidgetConfig).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.SiteId, x.Area, x.Position, x.Id });
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SiteWidget_Area", "\"Area\" IN (0, 1)");
+                t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6)");
             });
         });
         builder.Entity<ApiCredential>(e =>        {
@@ -446,6 +472,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         ["Sites"] = "站点表：多站点租户的基础信息。",
         ["SiteMemberships"] = "站点成员表：用户在站点内的角色与署名。",
         ["SiteNavItems"] = "站点导航表：前台自定义导航项。",
+        ["SiteWidgets"] = "站点小工具表：侧栏与页尾的声明式内容区块。",
         ["ApiCredentials"] = "API 凭据表：站点级访问密钥（仅存摘要）。",
         ["Contents"] = "内容主表：文章/页面及其发布状态。",
         ["ContentRevisions"] = "内容修订表：内容历史快照。",
@@ -578,7 +605,16 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 ["PermalinkScheme"] = "固定链接方案。",
                 ["TimeZoneId"] = "站点时区。",
                 ["DateFormat"] = "日期显示格式。",
-                ["TimeFormat"] = "时间显示格式。"
+                ["TimeFormat"] = "时间显示格式。",
+                ["CustomCss"] = "自定义 CSS（保存前经危险构造清理）。"
+            },
+            ["SiteWidgets"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Area"] = "所属区域：侧栏或页尾。",
+                ["Type"] = "小工具类型（内置声明式）。",
+                ["Title"] = "显示标题（空时用类型默认标题）。",
+                ["ConfigJson"] = "类型配置 JSON。",
+                ["IsVisible"] = "是否显示于前台。"
             },
             ["ApiCredentials"] = new(StringComparer.OrdinalIgnoreCase)
             {

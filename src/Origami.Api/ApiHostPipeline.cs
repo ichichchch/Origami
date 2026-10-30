@@ -28,6 +28,7 @@ public static class ApiHostPipeline
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddMemoryCache();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<MarkdownService>();
         // Identity 僅供管理服務建立帳號；不註冊 Cookie、SignInManager 或背景工作。
@@ -52,6 +53,8 @@ public static class ApiHostPipeline
         builder.Services.AddAuthorization(options => options.AddPolicy(ServiceTokenAuth.BffOnlyPolicy,
             policy => policy.RequireAuthenticatedUser().RequireClaim(AccessClaims.Bff, "true")));
         builder.Services.AddScoped<AdminAccess>();
+        // 受控擴充點：訂閱者由部署方註冊；未註冊時事件匯流排為零成本。
+        builder.Services.AddScoped<CmsEventBus>();
         builder.Services.AddScoped<SiteAdministrationService>();
         // 與 Identity EF store 共用 AddDbContextFactory 註冊的 scoped CmsDbContext，確保綁定交易一致。
         builder.Services.AddScoped<ExternalLoginService>();
@@ -60,6 +63,7 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<ContentTypeService>();
         builder.Services.AddScoped<TaxonomyService>();
         builder.Services.AddScoped<NavigationService>();
+        builder.Services.AddScoped<WidgetService>();
         builder.Services.AddScoped<WxrImportService>();
         builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
         builder.Services.AddScoped<CommentService>();
@@ -72,6 +76,9 @@ public static class ApiHostPipeline
         builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
         builder.Services.AddOptions<BackupOptions>().BindConfiguration("Backup");
         builder.Services.AddHttpClient("OrigamiWebhook");
+        // 外部 feed 小工具的抓取通道：短逾時、不跟隨轉址、不帶 cookie，回應大小另由服務層上限約束。
+        builder.Services.AddHttpClient("OrigamiWidgetFeed", client => client.Timeout = TimeSpan.FromSeconds(5))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         builder.Services.AddHttpClient("OrigamiWxrAttachment")
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         builder.Services.AddScoped<WebhookService>();

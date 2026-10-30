@@ -45,7 +45,7 @@ public sealed class WebSignInFlow(
                 new CookieOptions { Path = "/", HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = PendingLifetime });
             return false;
         }
-        await SignInAsync(context, user, remember);
+        await SignInAsync(context, user, remember, provider);
         return true;
     }
 
@@ -80,7 +80,7 @@ public sealed class WebSignInFlow(
             if (linkedUser?.Id != user.Id) return false;
         }
         if (!await VerifySecondFactorAsync(user, code)) return false;
-        await SignInAsync(context, user, pending.Remember);
+        await SignInAsync(context, user, pending.Remember, pending.Provider);
         return true;
     }
 
@@ -126,7 +126,7 @@ public sealed class WebSignInFlow(
         return true;
     }
 
-    private async Task SignInAsync(HttpContext context, AdminUser user, bool remember)
+    private async Task SignInAsync(HttpContext context, AdminUser user, bool remember, string? provider = null)
     {
         EnsureSucceeded(await users.ResetAccessFailedCountAsync(user));
         var issued = DateTimeOffset.FromUnixTimeSeconds(clock.GetUtcNow().ToUnixTimeSeconds());
@@ -135,9 +135,29 @@ public sealed class WebSignInFlow(
         {
             IsPersistent = remember, AllowRefresh = false, IssuedUtc = issued, ExpiresUtc = expires
         };
-        await signIn.SignInWithClaimsAsync(user, properties, [LoginSessionLifetime.CreateClaim(expires)]);
+        // 每次登入產生獨立會話識別並落庫：cookie 內的 claim 是憑證，資料列是撤銷開關。
+        var sessionId = Guid.NewGuid();
+        await signIn.SignInWithClaimsAsync(user, properties,
+        [
+            LoginSessionLifetime.CreateClaim(expires),
+            new Claim(AccessClaims.SessionId, sessionId.ToString("N"))
+        ]);
+        await using var db = await factory.CreateDbContextAsync(context.RequestAborted);
+        db.LoginSessions.Add(new LoginSessionRecord
+        {
+            Id = sessionId,
+            UserId = user.Id,
+            CreatedAt = issued,
+            ExpiresAt = expires,
+            UserAgent = Truncate(context.Request.Headers.UserAgent.ToString(), 256),
+            RemoteIp = Truncate(context.Connection.RemoteIpAddress?.ToString() ?? "", 64),
+            Provider = provider ?? "password"
+        });
+        await db.SaveChangesAsync(context.RequestAborted);
         ClearPending(context);
     }
+
+    private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
 
     private static void EnsureSucceeded(IdentityResult result)
     {
