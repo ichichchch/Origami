@@ -64,6 +64,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddMemoryCache();
         services.AddHttpClient();
         services.AddScoped<WidgetService>();
+        services.AddScoped<MarketplaceService>();
         services.AddScoped<PasswordResetService>();
         services.AddScoped<CommentService>();
         services.AddSingleton<TestEmailSender>();
