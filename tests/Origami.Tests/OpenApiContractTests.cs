@@ -8,7 +8,11 @@ public sealed class OpenApiContractTests(IsolatedPostgres postgres) : ServiceTes
 {
     private static readonly Regex GroupPattern = new(@"MapGroup\(""(?<prefix>[^""]+)""", RegexOptions.Compiled);
     private static readonly Regex RoutePattern = new(
-        @"\b(?<receiver>group|app)\.Map(Get|Post|Put|Delete|Patch)\(""(?<template>[^""]*)""",
+        @"\b(?<receiver>[A-Za-z_][A-Za-z0-9_]*)\.Map(Get|Post|Put|Delete|Patch)\(""(?<template>[^""]*)""",
+        RegexOptions.Compiled);
+    /// <summary>群組變數賦值（var 名稱 = 父群組.MapGroup("前綴")）；巢狀群組以變數名稱呼叫端點。</summary>
+    private static readonly Regex GroupVariablePattern = new(
+        @"(?:var\s+)?(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<parent>[A-Za-z_][A-Za-z0-9_]*)\.MapGroup\(""(?<prefix>[^""]+)""\)",
         RegexOptions.Compiled);
 
     [PostgresFact]
@@ -104,11 +108,26 @@ public sealed class OpenApiContractTests(IsolatedPostgres postgres) : ServiceTes
             var text = File.ReadAllText(path);
             var prefixes = GroupPattern.Matches(text).Cast<Match>().Select(match => match.Groups["prefix"].Value).ToList();
             var prefix = prefixes.Count > 0 ? prefixes[0] : "";
+            // 群組變數的前綴：巢狀群組以其父群組的前綴為基準。
+            var groupPrefixes = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (Match match in GroupVariablePattern.Matches(text).Cast<Match>())
+            {
+                var name = match.Groups["name"].Value;
+                var parent = match.Groups["parent"].Value;
+                var own = match.Groups["prefix"].Value;
+                var parentPrefix = parent == "app" ? "" : groupPrefixes.GetValueOrDefault(parent, prefix);
+                groupPrefixes[name] = parentPrefix + own;
+            }
 
-            foreach (Match match in RoutePattern.Matches(text))
+            foreach (Match match in RoutePattern.Matches(text).Cast<Match>())
             {
                 var template = match.Groups["template"].Value;
-                var full = match.Groups["receiver"].Value == "group" ? prefix + template : template;
+                var receiver = match.Groups["receiver"].Value;
+                string full;
+                if (receiver == "group") full = prefix + template;
+                else if (receiver == "app") full = template;
+                else if (groupPrefixes.TryGetValue(receiver, out var groupPrefix)) full = groupPrefix + template;
+                else continue; // 非本檔案宣告的接收者（例如另一個型別的端點擴充）
                 routes.Add(Normalize(full));
             }
         }

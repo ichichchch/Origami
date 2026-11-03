@@ -304,6 +304,71 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.Empty(errors);
     }
 
+    [PostgresFact]
+    public async Task WordPress_theme_is_converted_to_a_controlled_pack_without_keeping_code()
+    {
+        using var admin = await App.AdministratorAsync();
+        var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
+
+        // 分析：只讀 style.css 標頭的中繼資料與可推導的視覺參數。
+        var preview = await marketplace.AnalyzeWordPressThemeAsync(new MemoryStream(WordPressThemeZip()));
+        Assert.Equal("My Theme", preview.Name);
+        Assert.Equal("wp-my-theme", preview.Slug);
+        Assert.NotNull(preview.Theme);
+        Assert.Equal("#1f3a5f", preview.Theme!.AccentColor); // 樣式中最常見的非灰階色碼
+        Assert.Equal("serif", preview.Theme.FontBody); // font-family 為衬线家族
+        Assert.Empty(preview.Widgets); // 主題包不攜帶小工具定義
+
+        // 安装：成为受控主题包，模板与程序代码不落地、不执行。
+        var installed = await marketplace.InstallWordPressThemeAsync(new MemoryStream(WordPressThemeZip()));
+        Assert.Equal(PackageKind.Theme, installed.Kind);
+        Assert.False(installed.IsEnabled); // 主题包须另行启用
+        await using var db = await App.CreateContextAsync();
+        var row = await db.SitePackages.AsNoTracking().SingleAsync(x => x.Slug == "wp-my-theme");
+        Assert.DoesNotContain("<?php", row.ManifestJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("get_header", row.ManifestJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(MarketplaceRules.Validate(row.ManifestJson).Theme!.Css); // 第三方样式不直接带入
+    }
+
+    [PostgresFact]
+    public async Task WordPress_theme_import_rejects_archives_without_usable_style_header()
+    {
+        using var admin = await App.AdministratorAsync();
+        var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
+
+        // 缺少 style.css。
+        await Assert.ThrowsAsync<CmsException>(() => marketplace.AnalyzeWordPressThemeAsync(
+            new MemoryStream(WordPressThemeZip(styleCss: null, includeStyle: false))));
+
+        // style.css 缺少 Theme Name 标头。
+        await Assert.ThrowsAsync<CmsException>(() => marketplace.AnalyzeWordPressThemeAsync(
+            new MemoryStream(WordPressThemeZip(styleCss: "body { color: #123456; }"))));
+
+        // 非 ZIP 封装。
+        await Assert.ThrowsAsync<CmsException>(() => marketplace.AnalyzeWordPressThemeAsync(
+            new MemoryStream(Encoding.UTF8.GetBytes("not a zip"))));
+    }
+
+    [PostgresFact]
+    public async Task Package_export_round_trips_through_the_marketplace()
+    {
+        using var admin = await App.AdministratorAsync();
+        var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
+        var installed = await marketplace.InstallFromCatalogAsync("sunlit");
+
+        // 汇出为可分享的 ZIP：只含 manifest.json。
+        var bytes = await marketplace.ExportAsync(installed.Id, installed.Version);
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        Assert.Equal("manifest.json", Assert.Single(archive.Entries).FullName);
+
+        // 先解除原包，再以汇出的 ZIP 重新安装：内容一致。
+        await marketplace.UninstallAsync(installed.Id, installed.Version);
+        var restored = await marketplace.InstallFromZipAsync(new MemoryStream(bytes));
+        Assert.Equal("sunlit", restored.Slug);
+        Assert.Equal(PackageKind.Theme, restored.Kind);
+        Assert.Equal("#b3541e", restored.Theme!.AccentColor);
+    }
+
     private async Task<string> AdminUserIdFor(string userName)
     {
         using var admin = await App.AdministratorAsync();
@@ -331,6 +396,42 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
                 using var extra = new StreamWriter(archive.CreateEntry("extra.txt").Open());
                 extra.Write("夾帶檔案");
             }
+        }
+        return buffer.ToArray();
+    }
+
+    /// <summary>建立測試用 WordPress 主題封裝：含 style.css 標頭與模板檔（模板僅供測試，
+    /// 驗證匯入流程不會保留或執行它們）。</summary>
+    private static byte[] WordPressThemeZip(string? styleCss = null, bool includeStyle = true)
+    {
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            if (includeStyle)
+            {
+                using (var writer = new StreamWriter(archive.CreateEntry("mytheme/style.css").Open()))
+                    writer.Write(styleCss ?? """
+                        /*
+                        Theme Name: My Theme
+                        Theme URI: https://example.test/theme
+                        Author: Someone
+                        Description: A sample theme for conversion.
+                        Version: 1.2.3
+                        License: GNU General Public License v2 or later
+                        License URI: https://www.gnu.org/licenses/gpl-2.0.html
+                        Text Domain: mytheme
+                        Tags: blog, two-columns
+                        */
+                        body { color: #1f3a5f; background: #ffffff; }
+                        h1 { color: #1f3a5f; }
+                        a { color: #1f3a5f; }
+                        p { font-family: Georgia, "Times New Roman", serif; }
+                        """);
+            }
+            using (var template = new StreamWriter(archive.CreateEntry("mytheme/index.php").Open()))
+                template.Write("<?php get_header(); ?>");
+            using (var functions = new StreamWriter(archive.CreateEntry("mytheme/functions.php").Open()))
+                functions.Write("<?php add_action('init', function () {}); ?>");
         }
         return buffer.ToArray();
     }
