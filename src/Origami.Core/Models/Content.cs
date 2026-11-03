@@ -45,8 +45,9 @@ public static partial class Limits
     public const int WidgetTitle = 80;
     /// <summary>文字小工具的 Markdown 內容上限。</summary>
     public const int WidgetMarkdown = 10_000;
-    /// <summary>小工具組態 JSON 的儲存上限（須容納轉義後的 Markdown）。</summary>
-    public const int WidgetConfig = 24_000;
+    /// <summary>小工具組態 JSON 的儲存上限。須容納最壞情況的轉義膨脹：
+    /// 非 ASCII 字元經預設 JSON 編碼器轉義為 \uXXXX（每字 6 字元），10,000 字 Markdown ≈ 60,050 字元。</summary>
+    public const int WidgetConfig = 64_000;
     /// <summary>單一小工具區域的項目數上限。</summary>
     public const int MaxWidgetsPerArea = 20;
     /// <summary>最新文章小工具可顯示的篇數上限。</summary>

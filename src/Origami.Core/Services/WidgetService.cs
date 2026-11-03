@@ -181,7 +181,7 @@ public sealed class WidgetService(
             .ToListAsync(ct);
 
         var recentMax = widgets.Where(x => x.Type == WidgetType.RecentPosts)
-            .Select(x => WidgetTypes.ParseConfig(x.ConfigJson).Count ?? 5).DefaultIfEmpty(5).Max();
+            .Select(x => EffectiveCount(WidgetTypes.ParseConfig(x.ConfigJson).Count)).DefaultIfEmpty(5).Max();
         List<WidgetPostLink> recent = [];
         if (widgets.Any(x => x.Type == WidgetType.RecentPosts))
         {
@@ -218,7 +218,7 @@ public sealed class WidgetService(
 
         // 最新評論：與公開評論同一組可見性規則（已核可、已發布未保護未私密、本站開放評論）。
         var commentsMax = widgets.Where(x => x.Type == WidgetType.RecentComments)
-            .Select(x => WidgetTypes.ParseConfig(x.ConfigJson).Count ?? 5).DefaultIfEmpty(5).Max();
+            .Select(x => EffectiveCount(WidgetTypes.ParseConfig(x.ConfigJson).Count)).DefaultIfEmpty(5).Max();
         List<WidgetCommentLink> recentComments = [];
         if (widgets.Any(x => x.Type == WidgetType.RecentComments))
         {
@@ -242,10 +242,10 @@ public sealed class WidgetService(
             var config = WidgetTypes.ParseConfig(x.ConfigJson);
             List<WidgetRssItem> rss = [];
             if (x.Type == WidgetType.RssFeed && config.Url is { Length: > 0 } && WebhookService.IsAllowedWebhookUrl(config.Url))
-                rss = await FetchFeedItemsAsync(config.Url, Math.Min(config.Count ?? 5, Limits.WidgetRecentPosts), ct);
+                rss = await FetchFeedItemsAsync(config.Url, EffectiveCount(config.Count), ct);
             result.Add(new PublicWidget(x.Id, x.Area, x.Type, x.Title, config.Count ?? 5, config.Markdown ?? "",
-                recent.Take(config.Count ?? 5).ToList(), categories, tags,
-                recentComments.Take(config.Count ?? 5).ToList(), rss));
+                recent.Take(EffectiveCount(config.Count)).ToList(), categories, tags,
+                recentComments.Take(EffectiveCount(config.Count)).ToList(), rss));
         }
         return result;
     }
@@ -261,8 +261,19 @@ public sealed class WidgetService(
                 var client = httpClients.CreateClient("OrigamiWidgetFeed");
                 await using var remote = await client.GetStreamAsync(url, ct);
                 using var bounded = new MemoryStream();
-                await remote.CopyToAsync(bounded, 81920, ct);
-                if (bounded.Length == 0 || bounded.Length > Limits.WidgetFeedMaxBytes) return [];
+                var buffer = new byte[81920];
+                int read;
+                // 邊下載邊設限：超過上限立即中止讀取，不把超限內容整包讀進記憶體。
+                while ((read = await remote.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
+                {
+                    await bounded.WriteAsync(buffer.AsMemory(0, read), ct);
+                    if (bounded.Length > Limits.WidgetFeedMaxBytes)
+                    {
+                        entry.AbsoluteExpirationRelativeToNow = FeedFailureTtl;
+                        return [];
+                    }
+                }
+                if (bounded.Length == 0) return [];
                 bounded.Position = 0;
                 return ParseFeed(bounded, count);
             }
@@ -270,13 +281,17 @@ public sealed class WidgetService(
             {
                 throw;
             }
-            catch (Exception error) when (error is HttpRequestException or InvalidOperationException or XmlException or UriFormatException)
+            // IOException 含 .NET 的 HttpIOException：下載中途斷流與 HttpRequestException 同樣降級為空清單。
+            catch (Exception error) when (error is HttpRequestException or IOException or InvalidOperationException or XmlException or UriFormatException)
             {
                 entry.AbsoluteExpirationRelativeToNow = FeedFailureTtl;
                 return [];
             }
         }) ?? [];
     }
+
+    /// <summary>渲染端篇數夾持：組態來自資料庫（匯入檔可能未經服務層驗證），下界夾回 1 以免 Take 拋出例外。</summary>
+    private static int EffectiveCount(int? count) => Math.Clamp(count ?? 5, 1, Limits.WidgetRecentPosts);
 
     /// <summary>解析 RSS 2.0 或 Atom feed；禁止 DTD 與外部實體，項目連結僅保留 http／https。</summary>
     internal static List<WidgetRssItem> ParseFeed(Stream stream, int count)

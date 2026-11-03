@@ -198,6 +198,68 @@ public sealed class WidgetAndCustomCssTests(IsolatedPostgres postgres) : Service
         Assert.Empty(widget.RecentComments);
     }
 
+    [PostgresFact]
+    public async Task Text_widget_accepts_full_limit_of_non_ascii_markdown()
+    {
+        using var admin = await App.AdministratorAsync();
+        var widgets = admin.Services.GetRequiredService<WidgetService>();
+
+        // 非 ASCII 字元序列化為 \uXXXX（每字 6 字元）：10,000 字 CJK 約 60,050 字元，
+        // 欄位上限（Limits.WidgetConfig）必須容納，否則會以資料庫例外而非友好訊息失敗。
+        var saved = await widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Sidebar, Type = WidgetType.Text, Markdown = new string('寬', Limits.WidgetMarkdown) });
+        Assert.Equal(Limits.WidgetMarkdown, saved.Markdown.Length);
+
+        var view = Assert.Single(await widgets.ListAsync(), x => x.Id == saved.Id);
+        Assert.Equal(Limits.WidgetMarkdown, view.Markdown.Length);
+        var publicWidget = Assert.Single(await widgets.PublicAsync(), x => x.Id == saved.Id);
+        Assert.Equal(Limits.WidgetMarkdown, publicWidget.Markdown.Length);
+
+        await Assert.ThrowsAsync<CmsException>(() => widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Footer, Type = WidgetType.Text, Markdown = new string('寬', Limits.WidgetMarkdown + 1) }));
+    }
+
+    [PostgresFact]
+    public async Task Public_projection_clamps_invalid_counts_from_database()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Content.SaveAsync(NewContent("夾持文章", status: ContentStatus.Published));
+        var widgets = admin.Services.GetRequiredService<WidgetService>();
+        await widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Sidebar, Type = WidgetType.RecentPosts, Count = 3 });
+
+        // 模擬未經服務層驗證的匯入檔：直接改寫組態為負數篇數，公開投影不得拋出例外。
+        await using var db = await App.CreateContextAsync();
+        var row = await db.SiteWidgets.SingleAsync();
+        row.ConfigJson = """{"count":-3}""";
+        await db.SaveChangesAsync();
+
+        var widget = Assert.Single(await widgets.PublicAsync());
+        Assert.Equal("夾持文章", Assert.Single(widget.RecentPosts).Title); // 夾持為 1 篇，而非 Take(負數) 拋出
+    }
+
+    [PostgresFact]
+    public async Task Feed_fetch_degrades_on_oversize_or_interrupted_streams()
+    {
+        using var admin = await App.AdministratorAsync();
+        var access = admin.Services.GetRequiredService<AdminAccess>();
+        var widgets = admin.Services.GetRequiredService<WidgetService>();
+        await widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Sidebar, Type = WidgetType.RssFeed, Url = "https://big.example.test/feed", Count = 5 });
+        await widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Footer, Type = WidgetType.RssFeed, Url = "https://broken.example.test/feed", Count = 5 });
+
+        // 超限串流：無限供給位元組，抓取須在上限處立即中止；中斷串流：下載途中 IOException。
+        // 兩者都降級為空清單，不得讓公開頁面失敗。
+        var degraded = new WidgetService(App.ContextFactory, access,
+            new StubHttpClientFactory(url => url.Contains("big.example.test", StringComparison.Ordinal)
+                ? new EndlessZeroStream() : new InterruptedStream()),
+            new MemoryCache(new MemoryCacheOptions()));
+        var result = await degraded.PublicAsync();
+        Assert.Equal(2, result.Count(x => x.Type == WidgetType.RssFeed));
+        Assert.All(result.Where(x => x.Type == WidgetType.RssFeed), x => Assert.Empty(x.RssItems));
+    }
+
     [Fact]
     public void Rss_feed_parser_supports_rss2_and_atom_and_rejects_dtd()
     {
@@ -262,5 +324,59 @@ public sealed class WidgetAndCustomCssTests(IsolatedPostgres postgres) : Service
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
                 throw new HttpRequestException("offline");
         }
+    }
+
+    /// <summary>依網址提供串流的測試用 HttpClient 工廠：回應一律 200，內容來自指定串流。</summary>
+    private sealed class StubHttpClientFactory(Func<string, Stream> streams) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(new RoutingHandler(streams));
+
+        private sealed class RoutingHandler(Func<string, Stream> streams) : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    { Content = new StreamContent(streams(request.RequestUri!.AbsoluteUri)) });
+        }
+    }
+
+    /// <summary>無限供給零位元組的串流：驗證超過位元組上限時抓取立即中止，不會無限讀取。</summary>
+    private sealed class EndlessZeroStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Array.Clear(buffer, offset, count);
+            return count;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    /// <summary>首段讀取成功後即拋 IOException：模擬下載中途連線中斷。</summary>
+    private sealed class InterruptedStream : Stream
+    {
+        private bool _sentOnce;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_sentOnce) throw new IOException("connection reset");
+            _sentOnce = true;
+            Array.Clear(buffer, offset, count);
+            return count;
+        }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

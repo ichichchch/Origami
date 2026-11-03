@@ -1951,8 +1951,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.Property<string>("ConfigJson")
                         .IsRequired()
-                        .HasMaxLength(24000)
-                        .HasColumnType("character varying(24000)")
+                        .HasMaxLength(64000)
+                        .HasColumnType("character varying(64000)")
                         .HasComment("类型配置 JSON。");
 
                     b.Property<bool>("IsVisible")
