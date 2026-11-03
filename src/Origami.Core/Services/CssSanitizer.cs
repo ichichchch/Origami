@@ -62,7 +62,7 @@ public static partial class CssSanitizer
         {
             var name = match.Groups[1].Value;
             if (!AllowedAtRules.Contains(name))
-                return (false, "", $"不支援的 at-rule：@{name}（僅允許 media、supports、keyframes、layer、container、property、scope）。");
+                return (false, "", $"不支援的 at-rule：@{name}（僅允許 media、supports、keyframes、-webkit-keyframes、layer、container、property、scope）。");
         }
         return (true, text, "");
     }

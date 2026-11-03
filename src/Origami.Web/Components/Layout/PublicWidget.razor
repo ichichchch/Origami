@@ -1,6 +1,6 @@
 @inject MarkdownService Markdown
 
-@* 受控小工具的前台渲染：型別固定為內建五種，文字小工具走與內容相同的安全 Markdown 管線。 *@
+@* 受控小工具的前台渲染：型別固定為內建宣告式型別，文字小工具走與內容相同的安全 Markdown 管線。 *@
 <section class="widget widget-@Widget.Type.ToString().ToLowerInvariant()" aria-label="@Heading">
     <h2 class="widget-title">@Heading</h2>
     @switch (Widget.Type)

@@ -4298,6 +4298,16 @@
   <data name="Admin.Security.RevokeSession" xml:space="preserve"><value>Sign out remotely</value></data>
   <data name="Admin.Security.SessionRevoked" xml:space="preserve"><value>That session has been signed out.</value></data>
   <data name="Admin.Security.UnknownDevice" xml:space="preserve"><value>Unknown device</value></data>
+  <data name="Admin.Security.AvatarPlaceholder" xml:space="preserve"><value>/media/... or https://...</value></data>
+  <data name="Admin.Security.PrivacyTitle" xml:space="preserve"><value>Privacy and personal data tools</value></data>
+  <data name="Admin.Security.PrivacyHelp" xml:space="preserve"><value>Download your account's personal data (memberships, authored content list, and recent activity), or request erasure that anonymizes your published content.</value></data>
+  <data name="Admin.Security.DownloadData" xml:space="preserve"><value>Download personal data (JSON)</value></data>
+  <data name="Admin.Security.EraseData" xml:space="preserve"><value>Erase my personal data and disable the account</value></data>
+  <data name="Admin.Security.EraseConfirmTitle" xml:space="preserve"><value>Erase your personal data?</value></data>
+  <data name="Admin.Security.EraseConfirmBody" xml:space="preserve"><value>This clears your email, bio, and website, revokes all API credentials, anonymizes your posts and comments, and disables this account. It cannot be undone.</value></data>
+  <data name="Admin.Security.EraseConfirmAction" xml:space="preserve"><value>Confirm erasure and sign out</value></data>
+  <data name="Admin.Security.EraseCancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Admin.Security.Erased" xml:space="preserve"><value>Personal data erased; the account has been disabled.</value></data>
   <data name="Admin.Widgets.TypeRecentComments" xml:space="preserve"><value>Recent comments</value></data>
   <data name="Admin.Widgets.TypeRssFeed" xml:space="preserve"><value>External articles (RSS/Atom)</value></data>
   <data name="Admin.Widgets.FeedUrl" xml:space="preserve"><value>Feed URL</value></data>

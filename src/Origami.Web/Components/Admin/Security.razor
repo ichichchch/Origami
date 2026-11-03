@@ -43,7 +43,7 @@
                     </div>
                     <div class="field">
                         <label for="profile-avatar">@UiText.T("Admin.Security.AvatarUrl", "頭像網址（選填）")</label>
-                        <input id="profile-avatar" maxlength="@Limits.UserUrl" @bind="_profile.AvatarUrl" @bind:event="oninput" placeholder="/media/... 或 https://..." />
+                        <input id="profile-avatar" maxlength="@Limits.UserUrl" @bind="_profile.AvatarUrl" @bind:event="oninput" placeholder="@UiText.T("Admin.Security.AvatarPlaceholder", "/media/... 或 https://...")" />
                     </div>
                     <div class="field">
                         <label for="profile-bio">@UiText.T("Admin.Security.Bio", "作者簡介（Bio）")</label>
@@ -163,24 +163,24 @@
 
     <section class="panel settings-panel settings-width">
         <div class="panel-intro">
-            <h2>隱私權與個人資料工具</h2>
-            <p>下載你的帳號個人資料（含成員資格、撰寫內容清單與近期操作紀錄），或申請抹除個資並將已發表內容匿名化。</p>
+            <h2>@UiText.T("Admin.Security.PrivacyTitle", "隱私權與個人資料工具")</h2>
+            <p>@UiText.T("Admin.Security.PrivacyHelp", "下載你的帳號個人資料（含成員資格、撰寫內容清單與近期操作紀錄），或申請抹除個資並將已發表內容匿名化。")</p>
         </div>
         <div class="button-row">
-            <a class="button button-secondary" href="/admin/personal-data-export" download data-enhance-nav="false">下載個人資料（JSON）</a>
+            <a class="button button-secondary" href="/admin/personal-data-export" download data-enhance-nav="false">@UiText.T("Admin.Security.DownloadData", "下載個人資料（JSON）")</a>
             @if (Access?.IsNetworkAdmin != true)
             {
-                <button type="button" class="button button-danger" disabled="@Blocked" @onclick="() => _confirmErase = true">抹除我的個人資料並停用帳號</button>
+                <button type="button" class="button button-danger" disabled="@Blocked" @onclick="() => _confirmErase = true">@UiText.T("Admin.Security.EraseData", "抹除我的個人資料並停用帳號")</button>
             }
         </div>
         @if (_confirmErase)
         {
             <div class="notice notice-danger" role="alertdialog" style="margin-top: 1rem;">
-                <p><strong>確認抹除你的個人資料？</strong></p>
-                <p class="field-help">此操作將清空你的電子郵件、簡介與網站，撤銷所有 API 憑證，將你的文章與評論改為匿名，並停用此帳號。此操作無法復原。</p>
+                <p><strong>@UiText.T("Admin.Security.EraseConfirmTitle", "確認抹除你的個人資料？")</strong></p>
+                <p class="field-help">@UiText.T("Admin.Security.EraseConfirmBody", "此操作將清空你的電子郵件、簡介與網站，撤銷所有 API 憑證，將你的文章與評論改為匿名，並停用此帳號。此操作無法復原。")</p>
                 <div class="button-row">
-                    <button type="button" class="button button-danger" disabled="@Blocked" @onclick="EraseMyDataAsync">確認抹除並登出</button>
-                    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="() => _confirmErase = false">取消</button>
+                    <button type="button" class="button button-danger" disabled="@Blocked" @onclick="EraseMyDataAsync">@UiText.T("Admin.Security.EraseConfirmAction", "確認抹除並登出")</button>
+                    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="() => _confirmErase = false">@UiText.T("Admin.Security.EraseCancel", "取消")</button>
                 </div>
             </div>
         }
@@ -355,7 +355,7 @@
     {
         _confirmErase = false;
         await Api.EraseMyPersonalDataAsync(ct);
-    }, "個人資料已抹除，帳號已停用。");
+    }, UiText.T("Admin.Security.Erased", "個人資料已抹除，帳號已停用。"));
     private async Task Disable()
     {
         if (Blocked) return;
