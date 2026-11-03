@@ -151,7 +151,16 @@ public static class OpenApiDocumentBuilder
             ["delete /api/v1/admin/profile/personal-data"] = ("執行目前登入帳號的個人資料抹除與內容匿名化", "隱私"),
             ["get /api/v1/admin/profile/external-logins"] = ("列出目前登入帳號的外部登入綁定", "管理"),
             ["post /api/v1/admin/profile/external-logins"] = ("以 OAuth 繫結憑證完成外部登入綁定", "管理"),
-            ["delete /api/v1/admin/profile/external-logins/{provider}"] = ("解除目前登入帳號的指定外部登入綁定", "管理")
+            ["delete /api/v1/admin/profile/external-logins/{provider}"] = ("解除目前登入帳號的指定外部登入綁定", "管理"),
+
+            // 受控包市場管理端點
+            ["get /api/v1/admin/marketplace/catalog"] = ("列出內建受控包目錄與各站安裝狀態", "管理"),
+            ["get /api/v1/admin/marketplace/packages"] = ("列出已安裝的受控包與其宣告摘要", "管理"),
+            ["post /api/v1/admin/marketplace/packages/from-catalog"] = ("從內建目錄安裝指定的受控包", "管理"),
+            ["post /api/v1/admin/marketplace/packages/analyze"] = ("上傳受控包 ZIP 並解析預覽內容（不落地）", "管理"),
+            ["post /api/v1/admin/marketplace/packages/install-upload"] = ("上傳受控包 ZIP 並完成安裝", "管理"),
+            ["put /api/v1/admin/marketplace/packages/{id}/enabled"] = ("啟用或停用指定的受控包", "管理"),
+            ["delete /api/v1/admin/marketplace/packages/{id}"] = ("解除安裝指定的受控包", "管理")
         };
 
     private static readonly Dictionary<string, string[]> OperationQueryParameters =
@@ -187,7 +196,8 @@ public static class OpenApiDocumentBuilder
             ["delete /api/v1/admin/custom-fields/{id}"] = ["version"],
             ["delete /api/v1/admin/navigation/{id}"] = ["version"],
             ["get /api/v1/admin/users"] = ["page", "search"],
-            ["delete /api/v1/admin/members/{userId}"] = ["version"]
+            ["delete /api/v1/admin/members/{userId}"] = ["version"],
+            ["delete /api/v1/admin/marketplace/packages/{id}"] = ["version"]
         };
 
     private static readonly Dictionary<string, string> QueryParameterDescriptions =
@@ -295,6 +305,12 @@ public static class OpenApiDocumentBuilder
             ["export"] = "匯出",
             ["import"] = "匯入",
             ["transfer"] = "資料傳輸",
+            ["marketplace"] = "受控包市場",
+            ["packages"] = "受控包",
+            ["catalog"] = "內建目錄",
+            ["from-catalog"] = "內建目錄安裝",
+            ["install-upload"] = "上傳安裝",
+            ["enabled"] = "啟用狀態",
             ["posts"] = "文章",
             ["pages"] = "獨立頁面",
             ["search"] = "搜尋",

@@ -82,7 +82,7 @@ public static class ApiEndpoints
 
     /// <summary>站點公開設定、版型與呈現選項。</summary>
     private static async Task<IResult> GetSettingsAsync(SettingsService settings, ContentService content, MediaService media,
-        CancellationToken ct)
+        MarketplaceService marketplace, CancellationToken ct)
     {
         var value = await settings.GetAsync(ct);
         // 頁首標誌以檔名呈現；媒體網址由網站主機的 /media 提供。
@@ -93,6 +93,8 @@ public static class ApiEndpoints
             privacySlug = privPage.Slug;
             privacyTitle = privPage.Title;
         }
+        // 現行主題包的字體密度與 CSS：服務層對資料庫值重跑驗證，此處再清一次 CSS，與 CustomCss 同構。
+        var active = await marketplace.ActiveThemeAsync(ct);
         return Results.Ok(new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
             value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId, value.LogoMediaId)
         { LogoFileName = logoFileName ?? "", CommentsEnabled = value.CommentsEnabled,
@@ -106,7 +108,11 @@ public static class ApiEndpoints
             PrivacyPageContentId = value.PrivacyPageContentId, PrivacyPageSlug = privacySlug, PrivacyPageTitle = privacyTitle,
             PermalinkScheme = value.PermalinkScheme, TimeZoneId = value.TimeZoneId, DateFormat = value.DateFormat, TimeFormat = value.TimeFormat,
             // 輸出前再次清理：即使資料列被改寫，也絕不把未清理的樣式送到瀏覽器。
-            CustomCss = CssSanitizer.TryClean(value.CustomCss, out var customCss) ? customCss : "" });
+            CustomCss = CssSanitizer.TryClean(value.CustomCss, out var customCss) ? customCss : "",
+            PackageTheme = active is null ? null
+                : new PublicPackageTheme(active.Slug, active.FontBody, active.FontHeading, active.ProseLine,
+                    active.ListGap, active.HeadingScale,
+                    CssSanitizer.TryClean(active.Css, out var packageCss) ? packageCss : "") });
     }
 
     /// <summary>前台頁首呈現所需的公開導覽選單。</summary>
@@ -297,7 +303,13 @@ public static class ApiEndpoints
         public string TimeFormat { get; init; } = "HH:mm";
         /// <summary>受控清理後的自訂 CSS；空字串代表未設定。</summary>
         public string CustomCss { get; init; } = "";
+        /// <summary>現行受控主題包的字體與密度宣告；null 代表版型預設來自內建清單。</summary>
+        public PublicPackageTheme? PackageTheme { get; init; }
     }
+
+    /// <summary>現行主題包的公開投影：字體棧為內建常數值，CSS 已在輸出前再次清理。</summary>
+    public sealed record PublicPackageTheme(string Slug, string FontBody, string FontHeading,
+        double ProseLine, double ListGap, double HeadingScale, string Css);
 
     /// <summary>草稿預覽，或內容已發布時的永久轉址目標；兩者至多其一存在。</summary>
     public sealed record ApiPreview(PublicContent? Content, string? PublishedKind, string? PublishedSlug);

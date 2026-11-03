@@ -64,6 +64,7 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<TaxonomyService>();
         builder.Services.AddScoped<NavigationService>();
         builder.Services.AddScoped<WidgetService>();
+        builder.Services.AddScoped<MarketplaceService>();
         builder.Services.AddScoped<WxrImportService>();
         builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
         builder.Services.AddScoped<CommentService>();
@@ -123,6 +124,7 @@ public static class ApiHostPipeline
         app.MapAdminSettingsApiV1();
         app.MapAdminTransferApiV1();
         app.MapTenancyApiV1();
+        app.MapAdminMarketplaceApiV1();
         // API 參考文件（Scalar）直接讀取本機自建的 OpenAPI 契約，不另生一份規格。
         // /scalar 不屬租戶路徑，故不經站點解析、不受速率限制，與既有的 /openapi/v1.json 同級公開。
         app.MapScalarApiReference(options =>
