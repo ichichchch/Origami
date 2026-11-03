@@ -157,6 +157,21 @@ public sealed class OrigamiClient
         await EnsureSuccessAsync(response);
     }
 
+    /// <summary>第三方主題相容匯入：解析封裝的宣告式中繼資料與可推導的視覺參數，不保留模板程式碼。</summary>
+    public Task<MarketplaceService.ManifestPreview?> AnalyzeWordPressThemeAsync(byte[] bytes, CancellationToken ct = default) =>
+        SendPackageFileAsync<MarketplaceService.ManifestPreview>("api/v1/admin/marketplace/packages/import-theme/analyze", bytes, ct);
+
+    public Task<MarketplaceService.PackageView?> InstallWordPressThemeAsync(byte[] bytes, CancellationToken ct = default) =>
+        SendPackageFileAsync<MarketplaceService.PackageView>("api/v1/admin/marketplace/packages/import-theme", bytes, ct);
+
+    /// <summary>匯出受控包為可分享的 ZIP（僅 manifest.json）。</summary>
+    public async Task<byte[]> ExportPackageAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        using var response = await http.GetAsync($"api/v1/admin/marketplace/packages/{id}/export?version={version}", ct);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadAsByteArrayAsync(ct);
+    }
+
     /// <summary>包 ZIP 上傳一律以 application/zip 送出；內容安全由 Api 端服務層把關。</summary>
     private async Task<T?> SendPackageFileAsync<T>(string url, byte[] bytes, CancellationToken ct)
     {

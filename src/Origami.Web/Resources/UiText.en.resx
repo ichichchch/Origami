@@ -4330,6 +4330,7 @@
   <data name="Admin.Widgets.FeedUrlHelp" xml:space="preserve"><value>Public absolute https URL (local or intranet hosts rejected); cached for 10 minutes, and hidden while the feed cannot be fetched.</value></data>
   <data name="Public.Widget.RecentComments" xml:space="preserve"><value>Recent comments</value></data>
   <data name="Public.Widget.RssFeed" xml:space="preserve"><value>External articles</value></data>
+  <data name="Layout.Admin.Marketplace" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
   <data name="Admin.Marketplace.PageTitle" xml:space="preserve"><value>Themes &amp; widget packs · Content management</value></data>
   <data name="Admin.Marketplace.Title" xml:space="preserve"><value>Controlled package market</value></data>
   <data name="Admin.Marketplace.Heading" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
@@ -4371,5 +4372,10 @@
   <data name="Admin.Marketplace.Uninstalled" xml:space="preserve"><value>Pack uninstalled.</value></data>
   <data name="Admin.Marketplace.InstallDenied" xml:space="preserve"><value>Installing controlled packs requires the site administrator role.</value></data>
   <data name="Admin.Widgets.PackageBadge" xml:space="preserve"><value>from pack</value></data>
-  <data name="Layout.Admin.Marketplace" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
+  <data name="Admin.Marketplace.Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Admin.Marketplace.ImportThemeTitle" xml:space="preserve"><value>Import a third-party theme (WordPress)</value></data>
+  <data name="Admin.Marketplace.ImportThemeHelp" xml:space="preserve"><value>Upload a WordPress theme archive: only the style.css header (name, author, description, license) and derivable accent color and font family are read; templates and code are never kept or executed, and the remaining layout values can be fine-tuned on the settings page.</value></data>
+  <data name="Admin.Marketplace.ThemePreviewTitle" xml:space="preserve"><value>Theme conversion preview</value></data>
+  <data name="Admin.Marketplace.ThemeDerived" xml:space="preserve"><value>Converted visual values: accent color {0}, font {1}.</value></data>
+  <data name="Admin.Marketplace.ChooseThemeFile" xml:space="preserve"><value>Choose theme archive (.zip)</value></data>
 </root>

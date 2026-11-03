@@ -298,6 +298,13 @@ app.MapGet("/admin/export-archive", async (OrigamiClient api, CancellationToken 
 app.MapGet("/admin/export-wxr", async (OrigamiClient api, CancellationToken ct) =>
     Results.File(await api.ExportWxrAsync(ct), "application/xml", "origami-wxr-export.xml"))
     .RequireAuthorization();
+// 受控包匯出：可分享的 ZIP（僅 manifest.json），供其他站點匯入。
+app.MapGet("/admin/marketplace/package-export/{id:guid}", async (OrigamiClient api, Guid id, HttpContext http, CancellationToken ct) =>
+{
+    var raw = http.Request.Query["version"].ToString();
+    if (!Guid.TryParse(raw, out var version)) return Results.BadRequest(new { message = "參數 version 無效。" });
+    return Results.File(await api.ExportPackageAsync(id, version, ct), "application/zip", "origami-package.zip");
+}).RequireAuthorization();
 app.MapGet("/admin/personal-data-export", async (OrigamiClient api, CancellationToken ct) =>
 {
     var data = await api.ExportMyPersonalDataAsync(ct);

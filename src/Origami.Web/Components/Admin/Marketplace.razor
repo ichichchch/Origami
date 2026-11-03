@@ -73,6 +73,7 @@
                     <td>@(package.IsEnabled ? UiText.T("Admin.Marketplace.StatusEnabled", "啟用中") : UiText.T("Admin.Marketplace.StatusDisabled", "停用"))</td>
                     <td><div class="table-actions">
                         <button class="text-button" data-package-action="@(package.IsEnabled ? "disable" : "enable")" disabled="@AdministrationBlocked" @onclick="() => ToggleEnabled(package)">@(package.IsEnabled ? UiText.T("Admin.Marketplace.Disable", "停用") : UiText.T("Admin.Marketplace.Enable", "啟用"))<span class="sr-only"> @package.Name</span></button>
+                        <a class="text-button" data-package-action="export" href="/admin/marketplace/package-export/@package.Id?version=@package.Version">@UiText.T("Admin.Marketplace.Export", "匯出")<span class="sr-only"> @package.Name</span></a>
                         <button class="text-danger" data-package-action="uninstall" disabled="@AdministrationBlocked" @onclick="() => _pendingUninstall = package">@UiText.T("Admin.Marketplace.Uninstall", "解除")<span class="sr-only"> @package.Name</span></button>
                     </div></td>
                 </tr>
@@ -118,6 +119,38 @@
         }
     </section>
 }
+@if (!LoginRequired)
+{
+    <section class="panel settings-panel settings-width">
+        <h2>@UiText.T("Admin.Marketplace.ImportThemeTitle", "匯入第三方主題（WordPress）")</h2>
+        <p class="field-help">@UiText.T("Admin.Marketplace.ImportThemeHelp", "上傳 WordPress 主題壓縮檔：只讀取 style.css 標頭的名稱、作者、說明與授權等宣告，以及可推導的強調色與字體族；模板與程式碼一律不保留、不執行，其餘版面參數可於設定頁微調。")</p>
+        @if (_themePreview is not null && _themeFile is not null)
+        {
+            <section class="package-preview" aria-labelledby="theme-preview-title">
+                <h3 id="theme-preview-title">@UiText.T("Admin.Marketplace.ThemePreviewTitle", "主題轉換預覽")</h3>
+                <p><strong>@_themePreview.Name</strong>（@_themePreview.Slug）</p>
+                <p>@_themePreview.Description</p>
+                @if (_themePreview.Theme is { } theme)
+                {
+                    <p>@UiText.T("Admin.Marketplace.ThemeDerived", "轉換後的視覺參數：強調色 {0}、字體 {1}。")</p>
+                }
+                <div class="button-row">
+                    <button type="button" class="button" disabled="@Blocked" @onclick="InstallTheme">@UiText.T("Admin.Marketplace.ConfirmInstall", "確認安裝")</button>
+                    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelTheme">@UiText.T("Admin.Widgets.Cancel", "取消")</button>
+                </div>
+            </section>
+        }
+        else
+        {
+            <label class="button button-secondary" for="theme-file">@UiText.T("Admin.Marketplace.ChooseThemeFile", "選擇主題封裝（.zip）")</label>
+            <InputFile id="theme-file" OnChange="ChooseTheme" accept=".zip,application/zip" class="import-file-input" />
+        }
+        @if (_themeError is not null)
+        {
+            <p class="notice notice-error" role="alert">@_themeError</p>
+        }
+    </section>
+}
 @if (_pendingUninstall is not null)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="package-uninstall-title">
@@ -133,9 +166,12 @@
     private List<MarketplaceService.CatalogEntryView>? _catalog;
     private List<MarketplaceService.PackageView>? _installed;
     private MarketplaceService.ManifestPreview? _preview;
+    private MarketplaceService.ManifestPreview? _themePreview;
     private MarketplaceService.PackageView? _pendingUninstall;
     private byte[]? _packageFile;
+    private byte[]? _themeFile;
     private string? _packageError;
+    private string? _themeError;
 
     protected override Task OnInitializedAsync() => RunAsync(LoadDataAsync);
 
@@ -213,6 +249,45 @@
         _preview = null;
         _packageFile = null;
         _packageError = null;
+    }
+
+    private async Task ChooseTheme(InputFileChangeEventArgs args)
+    {
+        _themeError = null;
+        _themePreview = null;
+        _themeFile = null;
+        if (AdministrationBlocked) return;
+        try
+        {
+            await using (var stream = args.File.OpenReadStream(Limits.WordPressThemeZipMaxBytes))
+            using (var buffer = new MemoryStream())
+            {
+                await stream.CopyToAsync(buffer);
+                _themeFile = buffer.ToArray();
+            }
+            _themePreview = await Api.AnalyzeWordPressThemeAsync(_themeFile);
+        }
+        catch (UnauthorizedAccessException) { _themeFile = null; RequireLogin(); }
+        catch (AccessDeniedException error) { _themeFile = null; _themeError = error.Message; }
+        catch (CmsException error) { _themeFile = null; _themeError = error.Message; }
+        catch (IOException) { _themeError = UiText.T("Admin.Marketplace.UploadTooLarge", "包檔超過大小上限。"); }
+    }
+
+    private Task InstallTheme() => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Marketplace.InstallDenied", "安裝受控包僅限本站管理員。"));
+        if (_themeFile is null) return;
+        await Api.InstallWordPressThemeAsync(_themeFile, ct);
+        _themeFile = null;
+        _themePreview = null;
+        await LoadDataAsync(ct);
+    }, UiText.T("Admin.Marketplace.Installed", "包已安裝。"));
+
+    private void CancelTheme()
+    {
+        _themePreview = null;
+        _themeFile = null;
+        _themeError = null;
     }
 
     /// <summary>目錄卡的主題預覽：白名單鍵解析為內建字體棧常數後輸出，與公開站同一組變數。</summary>
