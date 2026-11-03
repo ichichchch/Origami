@@ -203,6 +203,76 @@ public sealed class MarketplaceService(
         }
     }
 
+    /// <summary>第三方（WordPress）主題相容匯入：只讀取 style.css 標頭的宣告式中繼資料與
+    /// 可推導的視覺參數，模板與程式碼一律不保留、不執行，轉為本站的受控主題包。</summary>
+    public async Task<ManifestPreview> AnalyzeWordPressThemeAsync(Stream input, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        var manifest = await BuildWordPressThemeManifestAsync(input, ct);
+        return ToPreview(manifest);
+    }
+
+    /// <summary>匯入第三方主題為受控主題包；套件的視覺參數可再於設定頁微調。</summary>
+    public async Task<PackageView> InstallWordPressThemeAsync(Stream input, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        var manifest = await BuildWordPressThemeManifestAsync(input, ct);
+        return await InstallAsync(manifest, PackageSource.Upload, ct);
+    }
+
+    /// <summary>匯出已安裝的受控包為可分享的 ZIP（僅 manifest.json）；不含任何程式碼。</summary>
+    public async Task<byte[]> ExportAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var package = await db.SitePackages.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new CmsException("受控包不存在。");
+        if (package.Version != version)
+            throw new CmsException("資料已被另一個分頁更新，請重新載入後再操作。");
+        // 匯出前重驗 manifest：儲存值不可信，不可輸出未驗證的宣告。
+        var manifest = MarketplaceRules.Validate(package.ManifestJson);
+        var canonical = MarketplaceRules.Canonicalize(manifest);
+        using var buffer = new MemoryStream();
+        using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using var writer = new StreamWriter(archive.CreateEntry("manifest.json").Open());
+            await writer.WriteAsync(canonical);
+        }
+        return buffer.ToArray();
+    }
+
+    /// <summary>把第三方主題封裝轉為受控主題包宣告；主題名稱與代稱皆由宣告資料推導。</summary>
+    private static async Task<PackageManifest> BuildWordPressThemeManifestAsync(Stream input, CancellationToken ct)
+    {
+        using var payload = await ArchiveGuard.BufferAsync(input, Limits.WordPressThemeZipMaxBytes,
+            $"主題封裝大小須為 1 位元組至 {Limits.WordPressThemeZipMaxBytes} 位元組。", ct);
+        var bytes = payload.GetBuffer();
+        if (payload.Length < 2 || bytes[0] != (byte)'P' || bytes[1] != (byte)'K')
+            throw new CmsException("主題封裝必須是 ZIP 壓縮檔。");
+        var info = await WordPressThemeReader.Read(payload);
+        var slug = "wp-" + NormalizeSlug(info.Name);
+        if (ThemePresets.Find(slug) is not null || slug is "wp")
+            slug = slug + "-theme";
+        var description = info.Description.Length > 0
+            ? info.Description
+            : $"由 WordPress 主題「{info.Name}」轉換而來。";
+        var manifest = new PackageManifest(slug, Truncate(info.Name, Limits.PackageName), Truncate(description, Limits.PackageDescription),
+            PackageKind.Theme,
+            new ThemeManifest(info.AccentColor, 68, true, true, ThemePresets.CardStyleList,
+                info.FontBody, info.FontHeading, 1.9, 1.8, 1, null), null);
+        return MarketplaceRules.ValidateManifest(manifest);
+    }
+
+    /// <summary>主題名稱轉代稱：保留小寫字母、數字與連字號，其餘以連字號取代並去除首尾連字號。</summary>
+    private static string NormalizeSlug(string name)
+    {
+        var slug = Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        return slug.Length == 0 ? "theme" : slug[..Math.Min(slug.Length, Limits.PackageSlug - 3)];
+    }
+
+    private static string Truncate(string value, int limit) =>
+        value.Length <= limit ? value : value[..limit];
+
     private async Task<PackageView> InstallAsync(PackageManifest manifest, PackageSource source, CancellationToken ct)
     {
         await admin.RequireRoleAsync(SiteRole.Administrator, ct);

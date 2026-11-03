@@ -33,11 +33,35 @@ public static class AdminMarketplaceEndpoints
         group.MapPut("/packages/{id}/enabled", async (Guid id, PackageEnableInput input, MarketplaceService marketplace, CancellationToken ct) =>
             Results.Ok(await marketplace.SetEnabledAsync(id, input.IsEnabled, input.Version, ct)));
 
+        // 第三方（WordPress）主題相容匯入：只讀取宣告式中繼資料與可推導的視覺參數，模板程式碼不保留。
+        group.MapPost("/packages/import-theme/analyze", async (IFormFile file, MarketplaceService marketplace, CancellationToken ct) =>
+        {
+            using var stream = OpenThemeFile(file);
+            return Results.Ok(await marketplace.AnalyzeWordPressThemeAsync(stream, ct));
+        }).DisableAntiforgery();
+
+        group.MapPost("/packages/import-theme", async (IFormFile file, MarketplaceService marketplace, CancellationToken ct) =>
+        {
+            using var stream = OpenThemeFile(file);
+            return Results.Ok(await marketplace.InstallWordPressThemeAsync(stream, ct));
+        }).DisableAntiforgery();
+
+        // 匯出為可分享的 ZIP（僅 manifest.json），供其他站點匯入。
+        group.MapGet("/packages/{id}/export", async (Guid id, Guid version, MarketplaceService marketplace, CancellationToken ct) =>
+            Results.File(await marketplace.ExportAsync(id, version, ct), "application/zip", "origami-package.zip"));
+
         group.MapDelete("/packages/{id}", async (Guid id, Guid version, MarketplaceService marketplace, CancellationToken ct) =>
         {
             await marketplace.UninstallAsync(id, version, ct);
             return Results.NoContent();
         });
+    }
+
+    private static Stream OpenThemeFile(IFormFile file)
+    {
+        if (file.Length is 0 or > Limits.WordPressThemeZipMaxBytes)
+            throw new CmsException($"主題封裝大小須為 1 位元組至 {Limits.WordPressThemeZipMaxBytes} 位元組。");
+        return file.OpenReadStream();
     }
 
     private static Stream OpenPackageFile(IFormFile file)

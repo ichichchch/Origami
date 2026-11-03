@@ -153,6 +153,13 @@ public static class OpenApiDocumentBuilder
             ["post /api/v1/admin/profile/external-logins"] = ("以 OAuth 繫結憑證完成外部登入綁定", "管理"),
             ["delete /api/v1/admin/profile/external-logins/{provider}"] = ("解除目前登入帳號的指定外部登入綁定", "管理"),
 
+            ["get /api/v1/widgets"] = ("取得側欄與頁尾的可見小工具及其渲染資料", "公開"),
+            ["get /api/v1/admin/widgets"] = ("列出後台受控小工具（含來源套件標記）", "管理"),
+            ["post /api/v1/admin/widgets"] = ("建立新的受控小工具", "管理"),
+            ["put /api/v1/admin/widgets/{id}"] = ("更新指定的受控小工具", "管理"),
+            ["delete /api/v1/admin/widgets/{id}"] = ("刪除指定的受控小工具", "管理"),
+            ["put /api/v1/admin/widgets/order"] = ("重新排序單一區域的受控小工具", "管理"),
+
             // 受控包市場管理端點
             ["get /api/v1/admin/marketplace/catalog"] = ("列出內建受控包目錄與各站安裝狀態", "管理"),
             ["get /api/v1/admin/marketplace/packages"] = ("列出已安裝的受控包與其宣告摘要", "管理"),
@@ -160,6 +167,9 @@ public static class OpenApiDocumentBuilder
             ["post /api/v1/admin/marketplace/packages/analyze"] = ("上傳受控包 ZIP 並解析預覽內容（不落地）", "管理"),
             ["post /api/v1/admin/marketplace/packages/install-upload"] = ("上傳受控包 ZIP 並完成安裝", "管理"),
             ["put /api/v1/admin/marketplace/packages/{id}/enabled"] = ("啟用或停用指定的受控包", "管理"),
+            ["post /api/v1/admin/marketplace/packages/import-theme/analyze"] = ("上傳第三方（WordPress）主題封裝並解析轉換預覽", "管理"),
+            ["post /api/v1/admin/marketplace/packages/import-theme"] = ("將第三方（WordPress）主題封裝轉為受控主題包並安裝", "管理"),
+            ["get /api/v1/admin/marketplace/packages/{id}/export"] = ("匯出受控包為可分享的 ZIP", "管理"),
             ["delete /api/v1/admin/marketplace/packages/{id}"] = ("解除安裝指定的受控包", "管理")
         };
 
@@ -197,7 +207,8 @@ public static class OpenApiDocumentBuilder
             ["delete /api/v1/admin/navigation/{id}"] = ["version"],
             ["get /api/v1/admin/users"] = ["page", "search"],
             ["delete /api/v1/admin/members/{userId}"] = ["version"],
-            ["delete /api/v1/admin/marketplace/packages/{id}"] = ["version"]
+            ["delete /api/v1/admin/marketplace/packages/{id}"] = ["version"],
+            ["get /api/v1/admin/marketplace/packages/{id}/export"] = ["version"]
         };
 
     private static readonly Dictionary<string, string> QueryParameterDescriptions =

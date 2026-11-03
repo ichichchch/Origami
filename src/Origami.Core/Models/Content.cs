@@ -71,6 +71,10 @@ public static partial class Limits
     public const int PackageMaxWidgets = 8;
     /// <summary>單站可安裝的受控包數量上限。</summary>
     public const int MaxInstalledPackages = 40;
+    /// <summary>第三方主題封裝的上傳大小上限（WordPress 主題常含圖片與字型檔）。</summary>
+    public const long WordPressThemeZipMaxBytes = 20 * 1024 * 1024;
+    /// <summary>第三方主題 style.css 的讀取上限；超過即拒絕解析。</summary>
+    public const int WordPressThemeCssBytes = 512_000;
     public const int CustomFieldOptions = 500;
     public const int WebhookUrl = 500;
     public const int WebhookSecret = 128;
