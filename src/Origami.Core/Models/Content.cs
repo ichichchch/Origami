@@ -28,8 +28,8 @@ public static partial class Limits
     public const int ContentTypeSlug = 80;
     /// <summary>自訂分類法的名稱上限。</summary>
     public const int CustomTaxonomyName = 80;
-    /// <summary>版型預設名稱上限。</summary>
-    public const int ThemePreset = 20;
+    /// <summary>版型預設名稱上限；須容納受控主題包的 "pkg:" 前綴加代稱。</summary>
+    public const int ThemePreset = 46;
     /// <summary>版型色碼長度上限（# 加六位數）。</summary>
     public const int ThemeColor = 7;
     /// <summary>卡片樣式名稱上限。</summary>
@@ -56,6 +56,21 @@ public static partial class Limits
     public const int WidgetFeedUrl = 500;
     /// <summary>外部 feed 單次抓取的位元組上限；超過即放棄解析。</summary>
     public const int WidgetFeedMaxBytes = 2_097_152;
+    /// <summary>受控包識別（slug）長度上限。</summary>
+    public const int PackageSlug = 40;
+    /// <summary>受控包顯示名稱上限。</summary>
+    public const int PackageName = 80;
+    /// <summary>受控包描述上限。</summary>
+    public const int PackageDescription = 300;
+    /// <summary>包 manifest 標準化 JSON 的儲存上限；須容納最壞情況的轉義膨脹
+    ///（8 個文字小工具各 10,000 字 Markdown 經 \uXXXX 轉義）。</summary>
+    public const int PackageManifestJson = 200_000;
+    /// <summary>包 ZIP 上傳檔的大小上限。</summary>
+    public const long PackageZipMaxBytes = 2 * 1024 * 1024;
+    /// <summary>單一小工具包可含的項目數上限；遠低於單區域上限，單包無法塞滿區域。</summary>
+    public const int PackageMaxWidgets = 8;
+    /// <summary>單站可安裝的受控包數量上限。</summary>
+    public const int MaxInstalledPackages = 40;
     public const int CustomFieldOptions = 500;
     public const int WebhookUrl = 500;
     public const int WebhookSecret = 128;

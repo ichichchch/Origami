@@ -16,7 +16,7 @@ public sealed class WidgetService(
     private static readonly TimeSpan FeedFailureTtl = TimeSpan.FromMinutes(1);
 
     public sealed record WidgetView(Guid Id, WidgetArea Area, WidgetType Type, string Title, int? Count,
-        string Markdown, string Url, int Position, bool IsVisible, Guid Version);
+        string Markdown, string Url, int Position, bool IsVisible, Guid Version, string PackageSlug = "");
 
     public sealed class WidgetInput
     {
@@ -37,13 +37,15 @@ public sealed class WidgetService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var rows = await db.SiteWidgets.AsNoTracking()
             .OrderBy(x => x.Area).ThenBy(x => x.Position).ThenBy(x => x.Id)
-            .Select(x => new { x.Id, x.Area, x.Type, x.Title, x.ConfigJson, x.Position, x.IsVisible, x.Version })
+            .Select(x => new { x.Id, x.Area, x.Type, x.Title, x.ConfigJson, x.Position, x.IsVisible, x.Version, x.PackageId })
             .ToListAsync(ct);
+        var packageSlugById = await db.SitePackages.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         return [.. rows.Select(x =>
         {
             var config = WidgetTypes.ParseConfig(x.ConfigJson);
             return new WidgetView(x.Id, x.Area, x.Type, x.Title, config.Count, config.Markdown ?? "",
-                config.Url ?? "", x.Position, x.IsVisible, x.Version);
+                config.Url ?? "", x.Position, x.IsVisible, x.Version,
+                x.PackageId is { } pid && packageSlugById.TryGetValue(pid, out var slug) ? slug : "");
         })];
     }
 
@@ -55,41 +57,7 @@ public sealed class WidgetService(
         if (!WidgetTypes.IsValid(input.Type)) throw new CmsException("小工具型別無效。");
         var title = (input.Title ?? "").Trim();
         if (title.Length > Limits.WidgetTitle) throw new CmsException($"小工具標題最長 {Limits.WidgetTitle} 字。");
-        var count = input.Count;
-        var markdown = (input.Markdown ?? "").Trim();
-        var url = (input.Url ?? "").Trim();
-        switch (input.Type)
-        {
-            case WidgetType.RecentPosts:
-            case WidgetType.RecentComments:
-                count ??= 5;
-                if (count is < 1 or > Limits.WidgetRecentPosts)
-                    throw new CmsException($"顯示篇數須為 1–{Limits.WidgetRecentPosts}。");
-                markdown = "";
-                url = "";
-                break;
-            case WidgetType.RssFeed:
-                count ??= 5;
-                if (count is < 1 or > Limits.WidgetRecentPosts)
-                    throw new CmsException($"Feed 顯示篇數須為 1–{Limits.WidgetRecentPosts}。");
-                if (url.Length == 0 || url.Length > Limits.WidgetFeedUrl || !WebhookService.IsAllowedWebhookUrl(url)
-                    || Uri.TryCreate(url, UriKind.Absolute, out var feedUri) is false || feedUri.Scheme != Uri.UriSchemeHttps)
-                    throw new CmsException("Feed 網址必須是公開 https 絕對網址（不接受本機或內網位址）。");
-                markdown = "";
-                break;
-            case WidgetType.Text:
-                count = null;
-                url = "";
-                if (markdown.Length == 0) throw new CmsException("文字小工具須填入內容。");
-                if (markdown.Length > Limits.WidgetMarkdown)
-                    throw new CmsException($"文字小工具內容最長 {Limits.WidgetMarkdown} 字。");
-                break;
-            default:
-                count = null;
-                markdown = "";
-                url = "";
-                break;
-        }
+        var (count, markdown, url) = NormalizeConfig(input.Type, input.Count, input.Markdown, input.Url);
         await using var db = await factory.CreateDbContextAsync(ct);
         SiteWidget entity;
         if (input.Id is { } existing)
@@ -123,6 +91,47 @@ public sealed class WidgetService(
         entity.Version = Guid.NewGuid();
         await ContentRules.SaveAsync(db, ct);
         return new(entity.Id, entity.Area, entity.Type, entity.Title, count, markdown, url, entity.Position, entity.IsVisible, entity.Version);
+    }
+
+    /// <summary>依型別驗證並正規化組態；無關欄位一律清空。手動建立與受控包安裝共用同一套規則，避免漂移。</summary>
+    internal static (int? Count, string Markdown, string Url) NormalizeConfig(WidgetType type, int? count, string? markdown, string? url)
+    {
+        var normalizedCount = count;
+        var normalizedMarkdown = (markdown ?? "").Trim();
+        var normalizedUrl = (url ?? "").Trim();
+        switch (type)
+        {
+            case WidgetType.RecentPosts:
+            case WidgetType.RecentComments:
+                normalizedCount ??= 5;
+                if (normalizedCount is < 1 or > Limits.WidgetRecentPosts)
+                    throw new CmsException($"顯示篇數須為 1–{Limits.WidgetRecentPosts}。");
+                normalizedMarkdown = "";
+                normalizedUrl = "";
+                break;
+            case WidgetType.RssFeed:
+                normalizedCount ??= 5;
+                if (normalizedCount is < 1 or > Limits.WidgetRecentPosts)
+                    throw new CmsException($"Feed 顯示篇數須為 1–{Limits.WidgetRecentPosts}。");
+                if (normalizedUrl.Length == 0 || normalizedUrl.Length > Limits.WidgetFeedUrl || !WebhookService.IsAllowedWebhookUrl(normalizedUrl)
+                    || Uri.TryCreate(normalizedUrl, UriKind.Absolute, out var feedUri) is false || feedUri.Scheme != Uri.UriSchemeHttps)
+                    throw new CmsException("Feed 網址必須是公開 https 絕對網址（不接受本機或內網位址）。");
+                normalizedMarkdown = "";
+                break;
+            case WidgetType.Text:
+                normalizedCount = null;
+                normalizedUrl = "";
+                if (normalizedMarkdown.Length == 0) throw new CmsException("文字小工具須填入內容。");
+                if (normalizedMarkdown.Length > Limits.WidgetMarkdown)
+                    throw new CmsException($"文字小工具內容最長 {Limits.WidgetMarkdown} 字。");
+                break;
+            default:
+                normalizedCount = null;
+                normalizedMarkdown = "";
+                normalizedUrl = "";
+                break;
+        }
+        return (normalizedCount, normalizedMarkdown, normalizedUrl);
     }
 
     public async Task DeleteAsync(Guid id, Guid version, CancellationToken ct = default)
@@ -171,12 +180,15 @@ public sealed class WidgetService(
         string PostTitle, string PostSlug);
     public sealed record WidgetRssItem(string Title, string Url, DateTimeOffset? PublishedAt);
 
-    /// <summary>公開小工具：僅可見項目；最新文章／評論與分類標籤只含已發布、未受保護且非私密的內容。</summary>
+    /// <summary>公開小工具：僅可見項目；停用小工具包的項目整包隱藏，管理者手動建立的項目不受影響。</summary>
     public async Task<List<PublicWidget>> PublicAsync(CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        var disabledPackages = await db.SitePackages.AsNoTracking()
+            .Where(x => x.Kind == PackageKind.Widgets && !x.IsEnabled)
+            .Select(x => x.Id).ToListAsync(ct);
         var widgets = await db.SiteWidgets.AsNoTracking()
-            .Where(x => x.IsVisible)
+            .Where(x => x.IsVisible && (x.PackageId == null || !disabledPackages.Contains(x.PackageId.Value)))
             .OrderBy(x => x.Area).ThenBy(x => x.Position).ThenBy(x => x.Id)
             .ToListAsync(ct);
 

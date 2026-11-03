@@ -271,6 +271,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         writer.WriteEndArray();
 
         // 受控小工具：以宣告資料原樣同行（區域、型別、組態 JSON 與順序），匯入時逐項驗證。
+        var packageSlugById = await db.SitePackages.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         writer.WriteStartArray("widgets");
         await foreach (var widget in db.SiteWidgets.AsNoTracking().OrderBy(x => x.Area).ThenBy(x => x.Position).ThenBy(x => x.Id)
             .AsAsyncEnumerable().WithCancellation(ct))
@@ -282,6 +283,26 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteString("configJson", widget.ConfigJson);
             writer.WriteBoolean("isVisible", widget.IsVisible);
             writer.WriteNumber("position", widget.Position);
+            // 包建立的小工具標記來源代稱；匯入時據此重建與包的關聯。
+            if (widget.PackageId is { } packageId && packageSlugById.TryGetValue(packageId, out var packageSlug))
+                writer.WriteString("packageSlug", packageSlug);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        // 受控包：安裝記錄與驗證後的 manifest 同行；匯入時重跑驗證，失敗的包跳過且其小工具保留為獨立項目。
+        writer.WriteStartArray("packages");
+        await foreach (var package in db.SitePackages.AsNoTracking().OrderBy(x => x.Kind).ThenBy(x => x.Slug)
+            .AsAsyncEnumerable().WithCancellation(ct))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("kind", package.Kind == PackageKind.Theme ? "theme" : "widgets");
+            writer.WriteString("slug", package.Slug);
+            writer.WriteString("name", package.Name);
+            writer.WriteString("manifest", package.ManifestJson);
+            writer.WriteString("source", package.Source == PackageSource.BuiltIn ? "builtin" : "upload");
+            writer.WriteBoolean("enabled", package.IsEnabled);
+            writer.WriteString("installedAt", package.InstalledAt);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();

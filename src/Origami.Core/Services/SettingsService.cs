@@ -18,8 +18,11 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             throw new CmsException($"每頁文章數須為 1–{Limits.MaxPageSize}，或留空使用預設值。");
         if (input.FeedItems is { } feed && (feed < 1 || feed > Limits.MaxFeedItems))
             throw new CmsException($"Feed 條數上限為 {Limits.MaxFeedItems}，或留空使用預設值。");
-        // 受控版型：預設必須來自內建清單，色碼與欄寬皆須通過檢查，避免注入樣式。
-        var preset = ThemePresets.Find(input.ThemePreset) ?? throw new CmsException("版型預設無效。");
+        // 受控版型：預設必須來自內建清單或已安裝的主題包（pkg: 前綴），色碼與欄寬皆須通過檢查，避免注入樣式。
+        var presetName = (input.ThemePreset ?? "").Trim().ToLowerInvariant();
+        var preset = ThemePresets.Find(presetName);
+        if (preset is null && !MarketplaceRules.IsPackagePreset(presetName))
+            throw new CmsException("版型預設無效。");
         if (!ThemePresets.IsValidColor(input.AccentColor)) throw new CmsException("版型色碼須為 # 加三或六位十六進位數字。");
         if (!ThemePresets.IsValidReadingWidth(input.ReadingWidth)) throw new CmsException("正文欄寬須為 48–96 字。");
         if (input.CardStyle is not (ThemePresets.CardStyleList or ThemePresets.CardStyleGrid))
@@ -69,6 +72,17 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             throw new CmsException("網站標誌不存在，請重新選擇。");
         var entity = await db.Settings.SingleAsync(x => x.Id == 1, ct);
         db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
+        // pkg: 前綴的預設指向已安裝主題包：安裝存在性與儲存宣告都在此重驗（DB 值視為不可信）。
+        string? selectedPackageSlug = null;
+        if (preset is null)
+        {
+            selectedPackageSlug = MarketplaceRules.SlugOfPreset(presetName);
+            var package = await db.SitePackages
+                .SingleOrDefaultAsync(x => x.Kind == PackageKind.Theme && x.Slug == selectedPackageSlug, ct);
+            if (package is null)
+                throw new CmsException("版型預設無效：主題包尚未安裝。");
+            MarketplaceRules.Validate(package.ManifestJson);
+        }
         entity.Name = input.Name.Trim();
         entity.Description = input.Description?.Trim() ?? "";
         entity.PostsPerPage = input.PostsPerPage;
@@ -90,7 +104,7 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.CommentAutoApprove = input.CommentAutoApprove;
         entity.CommentBlockedWords = (input.CommentBlockedWords ?? "").Trim();
         entity.CommentCloseDays = input.CommentCloseDays;
-        entity.ThemePreset = preset.Name;
+        entity.ThemePreset = preset?.Name ?? presetName;
         entity.AccentColor = input.AccentColor.Trim().ToLowerInvariant();
         entity.ReadingWidth = input.ReadingWidth;
         entity.ShowByline = input.ShowByline;
@@ -107,6 +121,15 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.WebhookSecret = (input.WebhookSecret ?? "").Trim();
         entity.CustomCss = customCss;
         entity.Version = Guid.NewGuid();
+        // 主題包啟用狀態鏡像：設定頁選擇 pkg: 預設與市場頁啟用共用同一份狀態，不各自為政。
+        var themePackages = await db.SitePackages.Where(x => x.Kind == PackageKind.Theme).ToListAsync(ct);
+        foreach (var themePackage in themePackages)
+        {
+            var shouldBeEnabled = themePackage.Slug == selectedPackageSlug;
+            if (themePackage.IsEnabled == shouldBeEnabled) continue;
+            themePackage.IsEnabled = shouldBeEnabled;
+            themePackage.Version = Guid.NewGuid();
+        }
         db.AuditLogs.Add(new AuditLog
         {
             SiteId = db.CurrentSiteId,

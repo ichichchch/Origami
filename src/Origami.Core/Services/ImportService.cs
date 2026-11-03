@@ -30,29 +30,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         return preview;
     }
 
-    private static async Task<MemoryStream> BufferAsync(Stream input, CancellationToken ct)
-    {
-        var buffer = new MemoryStream();
-        await input.CopyToAsync(buffer, ct);
-        if (buffer.Length is 0 or > Limits.ArchiveMaxBytes)
-            throw new CmsException($"匯入檔大小須為 1 位元組至 {Limits.ArchiveMaxBytes} 位元組。");
-        return buffer;
-    }
-
-    /// <summary>逐區塊複製並累計解壓後位元組數，超過封裝上限立即中止；ZipArchive 條目宣稱的大小不可信。</summary>
-    private static async Task<long> CopyBoundedAsync(Stream source, Stream target, long totalBytes, CancellationToken ct)
-    {
-        var buffer = new byte[81920];
-        while (true)
-        {
-            var read = await source.ReadAsync(buffer.AsMemory(), ct);
-            if (read == 0) return totalBytes;
-            totalBytes += read;
-            if (totalBytes > Limits.ArchiveMaxBytes)
-                throw new CmsException($"封裝解壓後總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB 上限，請確認檔案由本站匯出且未遭竄改。");
-            await target.WriteAsync(buffer.AsMemory(0, read), ct);
-        }
-    }
+    private static Task<MemoryStream> BufferAsync(Stream input, CancellationToken ct) =>
+        ArchiveGuard.BufferAsync(input, Limits.ArchiveMaxBytes,
+            $"匯入檔大小須為 1 位元組至 {Limits.ArchiveMaxBytes} 位元組。", ct);
 
     private sealed class ParsedImport(JsonDocument document, ZipArchive? archive) : IDisposable
     {
@@ -78,7 +58,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             await using var json = entry.Open();
             // 高壓縮比的偽造條目可能在解壓時爆炸；JSON 條目解壓後同受封裝上限約束。
             using var expanded = new MemoryStream();
-            await CopyBoundedAsync(json, expanded, 0, ct);
+            await ArchiveGuard.CopyBoundedAsync(json, expanded, 0, Limits.ArchiveMaxBytes,
+                $"封裝解壓後總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB 上限，請確認檔案由本站匯出且未遭竄改。", ct);
             expanded.Position = 0;
             return new(await ParseJsonAsync(expanded, ct), archive);
         }
@@ -134,7 +115,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 var temp = Path.Combine(stagingRoot, name);
                 await using (var source = entry.Open())
                 await using (var target = File.Create(temp))
-                    totalBytes = await CopyBoundedAsync(source, target, totalBytes, ct);
+                    totalBytes = await ArchiveGuard.CopyBoundedAsync(source, target, totalBytes, Limits.ArchiveMaxBytes,
+                        $"封裝解壓後總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB 上限，請確認檔案由本站匯出且未遭竄改。", ct);
                 staged.Add((temp, Path.Combine(images, name)));
             }
             // 解壓全部成功後才覆寫正式檔案；單檔失敗會回報但資料庫還原不受影響。
@@ -199,7 +181,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await db.MediaAssets.ExecuteDeleteAsync(ct);
         // 導覽項目隨內容一併取代；舊項目引用的頁面已不存在，留著只會是死連結。
         await db.SiteNavItems.ExecuteDeleteAsync(ct);
+        // 小工具先於受控包刪除（Restrict FK 由包指向小工具的方向是小工具→包，先刪依賴端）。
         await db.SiteWidgets.ExecuteDeleteAsync(ct);
+        await db.SitePackages.ExecuteDeleteAsync(ct);
         // 評論隨內容級聯刪除，此處明確清理以避免複合鍵殘留。
         await db.Comments.ExecuteDeleteAsync(ct);
 
@@ -480,6 +464,39 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             entity.ParentId = parent.Id;
         }
 
+        // 受控包：匯入檔的 manifest 一律重跑驗證（匯出檔不可信）；失敗的包跳過，
+        // 其小工具仍保留為獨立項目。啟用鏡像延後到設定還原時統一修正。
+        Dictionary<string, SitePackage> packagesBySlug = [];
+        if (document.RootElement.TryGetProperty("packages", out var packagesNode) && packagesNode.ValueKind == JsonValueKind.Array)
+        {
+            if (packagesNode.GetArrayLength() > Limits.MaxInstalledPackages)
+                throw new CmsException($"匯入的受控包數量超過 {Limits.MaxInstalledPackages} 上限。");
+            foreach (var node in packagesNode.EnumerateArray())
+            {
+                try
+                {
+                    var manifest = MarketplaceRules.Validate(Bounded(node, "manifest", Limits.PackageManifestJson, "包宣告"));
+                    var package = new SitePackage
+                    {
+                        SiteId = db.CurrentSiteId,
+                        Kind = manifest.Kind,
+                        Slug = manifest.Slug,
+                        Name = manifest.Name,
+                        ManifestJson = MarketplaceRules.Canonicalize(manifest),
+                        Source = node.GetString("source") == "upload" ? PackageSource.Upload : PackageSource.BuiltIn,
+                        IsEnabled = false,
+                        InstalledAt = Date(node, "installedAt") ?? now
+                    };
+                    if (!packagesBySlug.TryAdd(package.Slug, package)) continue; // 同代稱重複：留第一個
+                    db.SitePackages.Add(package);
+                }
+                catch (CmsException)
+                {
+                    // 單一包宣告無效不阻止整份匯入；其小工具會以獨立項目保留。
+                }
+            }
+        }
+
         var settings = await db.Settings.SingleAsync(x => x.Id == 1, ct);
         settings.Name = Bounded(site, "name", Limits.SiteName, "網站名稱");
         settings.Description = Bounded(site, "description", Limits.Description, "網站說明", optional: true);
@@ -525,6 +542,15 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         // 匯入的自訂 CSS 同樣走清理；清理不過即丟棄，不讓匯入檔成為繞過儲存驗證的管道。
         var importedCss = Bounded(site, "customCss", Limits.CustomCss, "自訂 CSS", optional: true);
         settings.CustomCss = CssSanitizer.TryClean(importedCss, out var cleanCss) ? cleanCss : "";
+        // 主題包啟用鏡像與懸空引用修正：pkg: 預設指向的包若未隨匯入還原，退回閱讀預設。
+        if (MarketplaceRules.IsPackagePreset(settings.ThemePreset))
+        {
+            var selectedSlug = MarketplaceRules.SlugOfPreset(settings.ThemePreset);
+            if (packagesBySlug.TryGetValue(selectedSlug, out var selected) && selected.Kind == PackageKind.Theme)
+                selected.IsEnabled = true;
+            else
+                settings.ThemePreset = ThemePresets.Fallback.Name;
+        }
         settings.Version = Guid.NewGuid();
 
         // 已發布的公開內容與全新發布一樣，重新進入嵌入管道；站點僅由伺服器指定。
@@ -583,6 +609,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 var type = node.GetString("type") is { } t && Enum.TryParse<WidgetType>(t, ignoreCase: true, out var parsedType)
                     && WidgetTypes.IsValid(parsedType) ? parsedType : (WidgetType?)null;
                 if (area is null || type is null) continue;
+                // 包來源代稱對應到本次匯入重建的包；對應不上（包被跳過）則保留為獨立小工具。
+                var packageSlug = node.GetString("packageSlug");
                 db.SiteWidgets.Add(new SiteWidget
                 {
                     SiteId = db.CurrentSiteId,
@@ -591,7 +619,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                     Title = Bounded(node, "title", Limits.WidgetTitle, "小工具標題", optional: true),
                     ConfigJson = Bounded(node, "configJson", Limits.WidgetConfig, "小工具組態", optional: true),
                     IsVisible = !node.TryGetProperty("isVisible", out var widgetVisible) || widgetVisible.ValueKind != JsonValueKind.False,
-                    Position = position++
+                    Position = position++,
+                    PackageId = packageSlug is { Length: > 0 } && packagesBySlug.TryGetValue(packageSlug, out var package)
+                        ? package.Id : null
                 });
             }
         }

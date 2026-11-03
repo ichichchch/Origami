@@ -18,6 +18,19 @@ public static class ThemePresets
 
     private const string SansStack = "\"Segoe UI\", \"Microsoft JhengHei\", \"PingFang TC\", sans-serif";
     private const string SerifStack = "\"Noto Serif TC\", \"PMingLiU\", Georgia, serif";
+    private const string MonoStack = "\"Cascadia Code\", Consolas, \"Courier New\", monospace";
+
+    /// <summary>字體棧白名單：受控包只能引用這些鍵，原始 CSS 字體棧字串一律來自內建常數，
+    /// 輸入側不存在自由字串路徑。</summary>
+    public static readonly IReadOnlyDictionary<string, string> FontStacks =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sans"] = SansStack,
+            ["serif"] = SerifStack,
+            ["mono"] = MonoStack
+        };
+
+    public static bool IsValidFontStackKey(string? key) => key is not null && FontStacks.ContainsKey(key);
 
     /// <summary>找不到預設名稱時的退回對象（reading）。</summary>
     public static Preset Fallback => All[0];
@@ -54,19 +67,31 @@ public static class ThemePresets
         color is { Length: 4 or 7 } && color[0] == '#'
         && color[1..].All(Uri.IsHexDigit);
 
-    /// <summary>組出受控版型的 inline CSS 變數：品牌基色、欄寬與預設的字體／密度變數。
-    /// 色碼與欄寬先驗證；版面變數全來自內建預設常數，使用者無法注入任意值。</summary>
-    public static string StyleVariables(string? accentColor, int readingWidth, string? presetName)
+    /// <summary>組出受控版型的 inline CSS 變數：品牌基色（--accent-base）與預設版面變數；
+    /// 明暗模式各自在其上派生填充與前景色。</summary>
+    public static string StyleVariables(string? accentColor, int readingWidth, string? presetName) =>
+        StyleVariables(accentColor, readingWidth, Find(presetName) ?? Fallback);
+
+    /// <summary>以驗證過的預設物件組出變數；內建預設與受控主題包共用同一輸出路徑，
+    /// 預設物件的字體棧值只能來自內建常數或白名單對應結果。</summary>
+    public static string StyleVariables(string? accentColor, int readingWidth, Preset preset)
     {
         var color = IsValidColor(accentColor) ? accentColor! : "#2f6f4e";
         var width = IsValidReadingWidth(readingWidth) ? readingWidth : 68;
-        var preset = Find(presetName) ?? Fallback;
         return $"--accent-base:{color};--reading-width:{width}ch"
             + $";--font-body:{preset.FontBody};--font-heading:{preset.FontHeading}"
             + $";--prose-line:{preset.ProseLine.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
             + $";--list-gap:{preset.ListGap.ToString(System.Globalization.CultureInfo.InvariantCulture)}rem"
             + $";--heading-scale:{preset.HeadingScale.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
     }
+
+    /// <summary>受控主題包的變數輸出：色碼與欄寬仍來自站台設定，字體與密度來自
+    /// 公開投影帶回的內建常數值（白名單鍵在 Api 端已解析，非自由字串）。</summary>
+    public static string StyleVariables(string? accentColor, int readingWidth, string fontBody, string fontHeading,
+        double proseLine, double listGap, double headingScale) =>
+        StyleVariables(accentColor, readingWidth,
+            new Preset("pkg", "", accentColor ?? "#2f6f4e", readingWidth, true, true, CardStyleList,
+                fontBody, fontHeading, proseLine, listGap, headingScale));
 
     /// <summary>可讀範圍內的欄寬；超出即視為無效。</summary>
     public static bool IsValidReadingWidth(int width) => width is >= 48 and <= 96;

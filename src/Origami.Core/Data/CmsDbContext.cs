@@ -10,6 +10,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public DbSet<SiteMembership> SiteMemberships => Set<SiteMembership>();
     public DbSet<SiteNavItem> SiteNavItems => Set<SiteNavItem>();
     public DbSet<SiteWidget> SiteWidgets => Set<SiteWidget>();
+    public DbSet<SitePackage> SitePackages => Set<SitePackage>();
     public DbSet<ApiCredential> ApiCredentials => Set<ApiCredential>();
     public DbSet<LoginSessionRecord> LoginSessions => Set<LoginSessionRecord>();
     public DbSet<Content> Contents => Set<Content>();
@@ -116,11 +117,31 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Title).HasMaxLength(Limits.WidgetTitle).IsRequired();
             e.Property(x => x.ConfigJson).HasMaxLength(Limits.WidgetConfig).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
+            // 受控包物化的小工具：複合 FK 指向本站包；解除包時由服務先刪小工具再刪包。
+            e.HasOne(x => x.Package).WithMany().HasForeignKey(x => new { x.SiteId, x.PackageId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SiteId, x.PackageId });
             e.HasIndex(x => new { x.SiteId, x.Area, x.Position, x.Id });
             e.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_SiteWidget_Area", "\"Area\" IN (0, 1)");
                 t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6)");
+            });
+        });
+        builder.Entity<SitePackage>(e =>
+        {
+            ConfigureSiteEntity(e, nameof(SitePackage.Site));
+            e.HasAlternateKey(x => new { x.SiteId, x.Id });
+            e.Property(x => x.Slug).HasMaxLength(Limits.PackageSlug).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(Limits.PackageName).IsRequired();
+            e.Property(x => x.ManifestJson).HasMaxLength(Limits.PackageManifestJson).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.SiteId, x.Slug }).IsUnique();
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_SitePackage_Kind", "\"Kind\" IN (0, 1)");
+                t.HasCheckConstraint("CK_SitePackage_Source", "\"Source\" IN (0, 1)");
+                t.HasCheckConstraint("CK_SitePackage_Slug", "length(btrim(\"Slug\")) > 0");
             });
         });
         builder.Entity<ApiCredential>(e =>        {
@@ -473,6 +494,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         ["SiteMemberships"] = "站点成员表：用户在站点内的角色与署名。",
         ["SiteNavItems"] = "站点导航表：前台自定义导航项。",
         ["SiteWidgets"] = "站点小工具表：侧栏与页尾的声明式内容区块。",
+        ["SitePackages"] = "站点受控包表：主题包与小组件包的安装记录与声明。",
         ["ApiCredentials"] = "API 凭据表：站点级访问密钥（仅存摘要）。",
         ["Contents"] = "内容主表：文章/页面及其发布状态。",
         ["ContentRevisions"] = "内容修订表：内容历史快照。",
@@ -614,7 +636,17 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 ["Type"] = "小工具类型（内置声明式）。",
                 ["Title"] = "显示标题（空时用类型默认标题）。",
                 ["ConfigJson"] = "类型配置 JSON。",
-                ["IsVisible"] = "是否显示于前台。"
+                ["IsVisible"] = "是否显示于前台。",
+                ["PackageId"] = "来源受控包 ID（空为手动创建）。"
+            },
+            ["SitePackages"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Kind"] = "包种类：主题包或小组件包。",
+                ["Slug"] = "包识别代称（站内唯一）。",
+                ["ManifestJson"] = "验证后标准化的声明 JSON。",
+                ["Source"] = "安装来源：内置目录或上传。",
+                ["IsEnabled"] = "启用状态（主题包为现行版型镜像）。",
+                ["InstalledAt"] = "安装时间。"
             },
             ["ApiCredentials"] = new(StringComparer.OrdinalIgnoreCase)
             {

@@ -20,6 +20,9 @@ public sealed class SiteWidget
     /// <summary>同區域內的顯示順序；數字越小越靠前。排序查詢一律以 Area 分組後依此排序。</summary>
     public int Position { get; set; }
     public bool IsVisible { get; set; } = true;
+    /// <summary>建立此小工具的受控包；空值表示管理者手動建立。</summary>
+    public Guid? PackageId { get; set; }
+    public SitePackage? Package { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public CmsSite Site { get; set; } = null!;
 }

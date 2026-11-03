@@ -1674,6 +1674,74 @@ namespace Origami.Core.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.SitePackage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<DateTimeOffset>("InstalledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("安装时间。");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean")
+                        .HasComment("启用状态（主题包为现行版型镜像）。");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasComment("包种类：主题包或小组件包。");
+
+                    b.Property<string>("ManifestJson")
+                        .IsRequired()
+                        .HasMaxLength(200000)
+                        .HasColumnType("character varying(200000)")
+                        .HasComment("验证后标准化的声明 JSON。");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasComment("包识别代称（站内唯一）。");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer")
+                        .HasComment("安装来源：内置目录或上传。");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "Slug")
+                        .IsUnique();
+
+                    b.ToTable("SitePackages", t =>
+                        {
+                            t.HasComment("站点受控包表：主题包与小组件包的安装记录与声明。");
+
+                            t.HasCheckConstraint("CK_SitePackage_Kind", "\"Kind\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_SitePackage_Slug", "length(btrim(\"Slug\")) > 0");
+
+                            t.HasCheckConstraint("CK_SitePackage_Source", "\"Source\" IN (0, 1)");
+                        });
+                });
+
             modelBuilder.Entity("Origami.Core.Models.SiteSettings", b =>
                 {
                     b.Property<Guid>("SiteId")
@@ -1845,8 +1913,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.Property<string>("ThemePreset")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(46)
+                        .HasColumnType("character varying(46)")
                         .HasComment("主题预设名称。");
 
                     b.Property<string>("TimeFormat")
@@ -1959,6 +2027,10 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("boolean")
                         .HasComment("是否显示于前台。");
 
+                    b.Property<Guid?>("PackageId")
+                        .HasColumnType("uuid")
+                        .HasComment("来源受控包 ID（空为手动创建）。");
+
                     b.Property<int>("Position")
                         .HasColumnType("integer")
                         .HasComment("排序位置（值越小越靠前）。");
@@ -1984,6 +2056,8 @@ namespace Origami.Core.Data.Migrations
                         .HasComment("并发版本号（乐观并发控制）。");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "PackageId");
 
                     b.HasIndex("SiteId", "Area", "Position", "Id");
 
@@ -2601,6 +2675,17 @@ namespace Origami.Core.Data.Migrations
                     b.Navigation("Site");
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.SitePackage", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Site");
+                });
+
             modelBuilder.Entity("Origami.Core.Models.SiteSettings", b =>
                 {
                     b.HasOne("Origami.Core.Models.CmsSite", null)
@@ -2641,6 +2726,14 @@ namespace Origami.Core.Data.Migrations
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.SitePackage", "Package")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "PackageId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Package");
 
                     b.Navigation("Site");
                 });
