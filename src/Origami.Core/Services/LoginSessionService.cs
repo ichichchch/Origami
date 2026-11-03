@@ -3,6 +3,9 @@ namespace Origami.Core.Services;
 /// <summary>登入工作階段管理：裝置清單與單一會話撤銷；「登出」仍以安全戳記輪替撤銷全部會話。</summary>
 public sealed class LoginSessionService(IDbContextFactory<CmsDbContext> factory, TimeProvider? clock = null)
 {
+    /// <summary>會話資料列的保留期：到期或撤銷超過此天數後由背景工作刪除。</summary>
+    public static readonly TimeSpan Retention = TimeSpan.FromDays(30);
+
     public sealed record SessionView(Guid Id, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt,
         string UserAgent, string RemoteIp, string Provider);
 
@@ -42,5 +45,17 @@ public sealed class LoginSessionService(IDbContextFactory<CmsDbContext> factory,
         await using var db = await factory.CreateDbContextAsync(ct);
         await db.LoginSessions.Where(x => x.UserId == userId && x.RevokedAt == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.RevokedAt, now), ct);
+    }
+
+    /// <summary>刪除逾期保留的會話資料列（到期或撤銷超過保留期）；回傳刪除筆數。
+    /// 識別網域作業，不套站點篩選，由背景工作全域執行一次即可。</summary>
+    public static async Task<int> CleanupAsync(IDbContextFactory<CmsDbContext> factory,
+        TimeProvider? clock = null, CancellationToken ct = default)
+    {
+        var cutoff = (clock ?? TimeProvider.System).GetUtcNow() - Retention;
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.LoginSessions
+            .Where(x => x.ExpiresAt < cutoff || (x.RevokedAt != null && x.RevokedAt < cutoff))
+            .ExecuteDeleteAsync(ct);
     }
 }

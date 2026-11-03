@@ -72,6 +72,35 @@ public sealed class LoginSessionTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.False(await ValidateAsync(principal));
     }
 
+    [PostgresFact]
+    public async Task Cleanup_deletes_only_rows_past_retention()
+    {
+        var userId = await App.AdminUserIdAsync();
+        var now = TimeProvider.System.GetUtcNow();
+        var expiredOld = NewSession(userId, now.AddDays(-40), now.AddDays(-31));                 // 到期超過保留期：刪
+        var revokedOld = NewSession(userId, now.AddDays(-40), now.AddHours(8));              // 撤銷超過保留期（未到期）：刪
+        revokedOld.RevokedAt = now.AddDays(-35);
+        var expiredRecent = NewSession(userId, now.AddDays(-29), now.AddDays(-28));              // 到期仍在保留期：留
+        var revokedRecent = NewSession(userId, now.AddDays(-29), now.AddHours(8));               // 撤銷仍在保留期：留
+        revokedRecent.RevokedAt = now.AddDays(-28);
+        var active = NewSession(userId, now.AddMinutes(-1), now.AddHours(8));                    // 有效會話：留
+        await using (var db = await App.CreateContextAsync())
+        {
+            db.LoginSessions.AddRange(expiredOld, revokedOld, expiredRecent, revokedRecent, active);
+            await db.SaveChangesAsync();
+        }
+
+        var removed = await LoginSessionService.CleanupAsync(App.ContextFactory);
+
+        Assert.Equal(2, removed);
+        await using var verify = await App.CreateContextAsync();
+        var remaining = await verify.LoginSessions.AsNoTracking()
+            .Where(x => x.UserId == userId).Select(x => x.Id).ToListAsync();
+        Assert.Equal(3, remaining.Count);
+        Assert.DoesNotContain(expiredOld.Id, remaining);
+        Assert.DoesNotContain(revokedOld.Id, remaining);
+    }
+
     private async Task<ClaimsPrincipal> CreatePrincipalAsync(AdminUser user)
     {
         using var scope = App.Services.CreateScope();

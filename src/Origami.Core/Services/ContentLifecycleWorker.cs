@@ -1,7 +1,7 @@
 namespace Origami.Core.Services;
 
 /// <summary>
-/// 到期時發布排程草稿並清理逾期回收桶。兩者都是資料庫上的冪等系統工作；
+/// 到期時發布排程草稿、清理逾期回收桶與逾期登入會話。三者都是資料庫上的冪等系統工作；
 /// 失敗的輪次會在下個週期重試，絕不會拖垮主機。
 /// </summary>
 public sealed partial class ContentLifecycleWorker(
@@ -44,6 +44,14 @@ public sealed partial class ContentLifecycleWorker(
     public Task<int> PurgeAsync(CancellationToken ct = default) => SiteWorkRunner.RunAsync(services, "回收桶清理",
         (siteServices, _, token) => siteServices.GetRequiredService<ContentService>().PurgeExpiredTrashAsync(token), logger, ct);
 
+    /// <summary>刪除逾期保留的登入會話資料列（識別網域，全域執行一次）；供測試與單次執行使用。</summary>
+    public async Task<int> CleanupSessionsAsync(CancellationToken ct = default)
+    {
+        await using var scope = services.CreateAsyncScope();
+        return await LoginSessionService.CleanupAsync(
+            scope.ServiceProvider.GetRequiredService<IDbContextFactory<CmsDbContext>>(), clock, ct);
+    }
+
     private async Task RunPassAsync(CancellationToken ct)
     {
         try { await PromoteAsync(ct); }
@@ -60,6 +68,10 @@ public sealed partial class ContentLifecycleWorker(
         try { await PurgeAsync(ct); }
         catch (Exception error) when (error is not OperationCanceledException || !ct.IsCancellationRequested)
         { Log.PurgeFailed(logger, error.GetType().Name); }
+
+        try { await CleanupSessionsAsync(ct); }
+        catch (Exception error) when (error is not OperationCanceledException || !ct.IsCancellationRequested)
+        { Log.SessionPurgeFailed(logger, error.GetType().Name); }
     }
 
     private static partial class Log
@@ -69,6 +81,9 @@ public sealed partial class ContentLifecycleWorker(
 
         [LoggerMessage(LogLevel.Warning, "回收桶清理失敗（{ErrorType}），下次輪詢將重試。")]
         public static partial void PurgeFailed(ILogger logger, string errorType);
+
+        [LoggerMessage(LogLevel.Warning, "登入會話清理失敗（{ErrorType}），下次週期將重試。")]
+        public static partial void SessionPurgeFailed(ILogger logger, string errorType);
     }
 }
 
