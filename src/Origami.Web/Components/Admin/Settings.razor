@@ -116,8 +116,12 @@
                         {
                             <option value="@preset.Name">@preset.Label</option>
                         }
+                        @foreach (var package in _themePackages)
+                        {
+                            <option value="@("pkg:" + package.Slug)">@(package.Name + " · " + UiText.T("Admin.Marketplace.KindTheme", "主題包"))</option>
+                        }
                     </select>
-                    <span class="field-help">@UiText.T("Admin.Settings.ThemePresetHelp", "受控版型：只能選擇內建預設，不載入任何外部樣式或程式碼。")</span>
+                    <span class="field-help">@UiText.T("Admin.Settings.ThemePresetHelp", "受控版型：內建預設之外，也可選擇已安裝的主題包（於「主題與小工具包」頁安裝）；不載入任何外部樣式或程式碼。")</span>
                 </div>
                 <div class="field"><label for="theme-color">@UiText.T("Admin.Settings.ThemeColor", "強調色")</label><input id="theme-color" @bind="_model.AccentColor" @bind:event="oninput" maxlength="@Limits.ThemeColor" pattern="#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?" disabled="@Blocked" aria-describedby="theme-color-help" /><span id="theme-color-help" class="field-help">@UiText.T("Admin.Settings.ThemeColorHelp", "十六進位色碼，例如 #2f6f4e；影響連結、按鈕與標題的強調色。")</span></div>
                 <div class="field"><label for="theme-width">@UiText.T("Admin.Settings.ThemeWidth", "正文欄寬")</label><input id="theme-width" type="number" min="48" max="96" @bind="_model.ReadingWidth" disabled="@Blocked" aria-describedby="theme-width-help" /><span id="theme-width-help" class="field-help">@UiText.T("Admin.Settings.ThemeWidthHelp", "48–96 字；數值越小行長越短，閱讀越輕鬆。")</span></div>
@@ -324,6 +328,7 @@
     private bool _confirmReload;
     private List<PageOption> _homeOptions = [];
     private List<(Guid Id, string Label)> _iconOptions = [];
+    private List<MarketplaceService.PackageView> _themePackages = [];
     private bool Dirty => _model is not null && Snapshot(_model) != _baseline;
     private static string Snapshot(SiteSettings model) => System.Text.Json.JsonSerializer.Serialize(model);
     private string _exportKind = "";
@@ -366,6 +371,8 @@
             ?? new PagedResult<MediaItem>([], 0, 1, Limits.MaxPageSize);
         _iconOptions = [.. media.Items.Select(x => (x.Id, string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.MediaOptionLabel", "{0}（{1}×{2}）"), x.OriginalName, x.Width, x.Height)))];
         _categoryOptions = (await Api.ListTaxonomiesAsync(TaxonomyKind.Category, 1, Limits.MaxPageSize, ct: ct))?.Items.ToList() ?? [];
+        _themePackages = (await Api.ListInstalledPackagesAsync(ct) ?? [])
+            .Where(x => x.Kind == PackageKind.Theme).ToList();
         _baseline = Snapshot(_model);
     });
     private void HomeChanged(ChangeEventArgs args)
@@ -388,11 +395,24 @@
         if (_model is null) return;
         _model.LogoMediaId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
     }
-    /// <summary>切換版型預設時套用該預設的變數；使用者仍可再微調。</summary>
+    /// <summary>切換版型預設時套用該預設的變數；主題包同樣複製純量欄位，使用者仍可再微調。</summary>
     private void ThemePresetChanged(ChangeEventArgs args)
     {
         if (_model is null) return;
-        var preset = ThemePresets.Find(args.Value?.ToString());
+        var name = args.Value?.ToString() ?? "";
+        if (name.StartsWith("pkg:", StringComparison.Ordinal))
+        {
+            var package = _themePackages.FirstOrDefault(x => "pkg:" + x.Slug == name);
+            if (package?.Theme is not { } theme) return;
+            _model.ThemePreset = name;
+            _model.AccentColor = theme.AccentColor;
+            _model.ReadingWidth = theme.ReadingWidth;
+            _model.ShowByline = theme.ShowByline;
+            _model.ShowCover = theme.ShowCover;
+            _model.CardStyle = theme.CardStyle;
+            return;
+        }
+        var preset = ThemePresets.Find(name);
         if (preset is null) return;
         _model.ThemePreset = preset.Name;
         _model.AccentColor = preset.AccentColor;
@@ -412,9 +432,23 @@
         _model.ColorScheme = args.Value?.ToString() ?? ThemePresets.ColorSchemeAuto;
     }
 
-    /// <summary>即時預覽的樣式變數：與公開站 MainLayout 共用同一組受控版型變數，僅作用於預覽容器。</summary>
-    private string PreviewStyle =>
-        ThemePresets.StyleVariables(_model?.AccentColor, _model?.ReadingWidth ?? 68, _model?.ThemePreset);
+    /// <summary>即時預覽的樣式變數：與公開站 MainLayout 共用同一組受控版型變數，僅作用於預覽容器。
+    /// 主題包的字體棧以白名單鍵解析成內建常數後輸出。</summary>
+    private string PreviewStyle
+    {
+        get
+        {
+            if (_model?.ThemePreset is { Length: > 4 } presetName && presetName.StartsWith("pkg:", StringComparison.Ordinal)
+                && _themePackages.FirstOrDefault(x => "pkg:" + x.Slug == presetName)?.Theme is { } packageTheme
+                && ThemePresets.FontStacks.TryGetValue(packageTheme.FontBody, out var fontBody)
+                && ThemePresets.FontStacks.TryGetValue(packageTheme.FontHeading, out var fontHeading))
+            {
+                return ThemePresets.StyleVariables(_model.AccentColor, _model.ReadingWidth, fontBody, fontHeading,
+                    packageTheme.ProseLine, packageTheme.ListGap, packageTheme.HeadingScale);
+            }
+            return ThemePresets.StyleVariables(_model?.AccentColor, _model?.ReadingWidth ?? 68, _model?.ThemePreset);
+        }
+    }
     private ImportService.ImportPreview? _importPreview;
     private byte[]? _importFile;
     private string? _importError;

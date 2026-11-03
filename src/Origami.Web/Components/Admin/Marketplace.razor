@@ -1,0 +1,239 @@
+@page "/admin/marketplace"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Marketplace.PageTitle", "主題與小工具包 · 內容管理")</PageTitle>
+<UnsavedGuard Busy="Busy" />
+<div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Marketplace.Title", "受控包市場")</p><h1>@UiText.T("Admin.Marketplace.Heading", "主題與小工具包")</h1><p>@UiText.T("Admin.Marketplace.Introduction", "以宣告式擴充包安裝版型或小工具組合；來源僅內建目錄與 ZIP 匯入，所有宣告值經白名單與界限驗證，不載入任何程式碼。")</p></div></div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access?.CanRead == true && !CanAdminister)
+{
+    <p class="notice">@UiText.T("Admin.Marketplace.ReadOnlyNotice", "唯讀成員可瀏覽包市場；安裝、啟停與解除僅限管理員。")</p>
+}
+@if (_catalog is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@UiText.T("Admin.Marketplace.CatalogTitle", "內建目錄") <span class="count">@_catalog.Count</span></h2></div>
+        <div class="package-grid">
+            @foreach (var entry in _catalog)
+            {
+                <article class="package-card" data-package-slug="@entry.Slug">
+                    <header><span class="package-kind">@(entry.Kind == PackageKind.Theme ? UiText.T("Admin.Marketplace.KindTheme", "主題包") : UiText.T("Admin.Marketplace.KindWidgets", "小工具包"))</span><h3>@entry.Name</h3><p>@entry.Description</p></header>
+                    @if (entry.Theme is { } theme)
+                    {
+                        <section class="theme-preview site-shell" aria-label="@UiText.T("Admin.Marketplace.ThemePreview", "版型預覽")"
+                                 data-color-scheme="auto" data-card-style="@theme.CardStyle"
+                                 data-show-cover="@(theme.ShowCover ? "true" : "false")"
+                                 data-show-byline="@(theme.ShowByline ? "true" : "false")"
+                                 style="@PreviewStyleOf(theme)">
+                            <p class="theme-preview-body">@UiText.T("Admin.Marketplace.PreviewBody", "示範文字：字體、行距與欄寬來自主題包宣告。")</p>
+                        </section>
+                    }
+                    @if (entry.Widgets is { Count: > 0 })
+                    {
+                        <ul class="package-widget-list">
+                            @foreach (var widget in entry.Widgets)
+                            {
+                                <li>@(widget.Area == WidgetArea.Sidebar ? UiText.T("Admin.Widgets.AreaSidebar", "側欄") : UiText.T("Admin.Widgets.AreaFooter", "頁尾")) · @(widget.Title.Length > 0 ? widget.Title : TypeLabel(widget.Type))</li>
+                            }
+                        </ul>
+                    }
+                    @if (entry.IsInstalled)
+                    {
+                        <p class="package-installed">@UiText.T("Admin.Marketplace.AlreadyInstalled", "此包已安裝。")</p>
+                    }
+                    else
+                    {
+                        <button type="button" class="button" disabled="@AdministrationBlocked" @onclick="() => InstallFromCatalog(entry.Slug)">@UiText.T("Admin.Marketplace.Install", "安裝")</button>
+                    }
+                </article>
+            }
+        </div>
+    </section>
+}
+@if (_installed is not null)
+{
+    <section class="panel">
+        <div class="panel-toolbar"><h2>@UiText.T("Admin.Marketplace.InstalledTitle", "已安裝") <span class="count">@(_installed.Count)</span></h2></div>
+        @if (_installed.Count == 0)
+        {
+            <div class="empty-state"><span class="empty-symbol" aria-hidden="true">＋</span><h2>@UiText.T("Admin.Marketplace.InstalledEmpty", "尚未安裝任何包")</h2><p>@UiText.T("Admin.Marketplace.InstalledEmptyHelp", "從上方內建目錄安裝，或上傳 ZIP 包檔。")</p></div>
+        }
+        else
+        {
+            <div class="table-scroll"><table><caption class="sr-only">@UiText.T("Admin.Marketplace.InstalledTitle", "已安裝")</caption><thead><tr><th scope="col">@UiText.T("Admin.Marketplace.PackageName", "包")</th><th scope="col">@UiText.T("Admin.Marketplace.Source", "來源")</th><th scope="col">@UiText.T("Admin.Marketplace.Status", "狀態")</th><th scope="col">@UiText.T("Admin.Widgets.Actions", "操作")</th></tr></thead><tbody>
+            @foreach (var package in _installed)
+            {
+                <tr @key="package.Id" data-package-slug="@package.Slug">
+                    <td class="title-cell"><strong>@package.Name</strong><span class="slug-text">@(package.Kind == PackageKind.Theme ? UiText.T("Admin.Marketplace.KindTheme", "主題包") : UiText.T("Admin.Marketplace.KindWidgets", "小工具包") + $" · {package.WidgetCount}")</span></td>
+                    <td>@(package.IsBuiltIn ? UiText.T("Admin.Marketplace.SourceBuiltin", "內建") : UiText.T("Admin.Marketplace.SourceUpload", "上傳"))</td>
+                    <td>@(package.IsEnabled ? UiText.T("Admin.Marketplace.StatusEnabled", "啟用中") : UiText.T("Admin.Marketplace.StatusDisabled", "停用"))</td>
+                    <td><div class="table-actions">
+                        <button class="text-button" data-package-action="@(package.IsEnabled ? "disable" : "enable")" disabled="@AdministrationBlocked" @onclick="() => ToggleEnabled(package)">@(package.IsEnabled ? UiText.T("Admin.Marketplace.Disable", "停用") : UiText.T("Admin.Marketplace.Enable", "啟用"))<span class="sr-only"> @package.Name</span></button>
+                        <button class="text-danger" data-package-action="uninstall" disabled="@AdministrationBlocked" @onclick="() => _pendingUninstall = package">@UiText.T("Admin.Marketplace.Uninstall", "解除")<span class="sr-only"> @package.Name</span></button>
+                    </div></td>
+                </tr>
+            }
+            </tbody></table></div>
+        }
+    </section>
+}
+@if (!LoginRequired)
+{
+    <section class="panel settings-panel settings-width">
+        <h2>@UiText.T("Admin.Marketplace.UploadTitle", "上傳包檔（ZIP）")</h2>
+        <p class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Marketplace.UploadHelp", "ZIP 內須只有根目錄的 manifest.json；大小上限 {0} MB。主題包的宣告欄位（色碼、欄寬、字體棧鍵、密度）與小工具定義會逐項驗證，CSS 依自訂 CSS 同一套清理規則處理。"), Limits.PackageZipMaxBytes / 1024 / 1024)</p>
+        @if (_preview is not null && _packageFile is not null)
+        {
+            <section class="package-preview" aria-labelledby="package-preview-title">
+                <h3 id="package-preview-title">@UiText.T("Admin.Marketplace.PreviewTitle", "包內容預覽")</h3>
+                <p><strong>@_preview.Name</strong>（@( _preview.Kind == PackageKind.Theme ? UiText.T("Admin.Marketplace.KindTheme", "主題包") : UiText.T("Admin.Marketplace.KindWidgets", "小工具包")) · @_preview.Slug）</p>
+                <p>@_preview.Description</p>
+                @if (_preview.Widgets is { Count: > 0 })
+                {
+                    <ul class="package-widget-list">
+                        @foreach (var widget in _preview.Widgets)
+                        {
+                            <li>@(widget.Area == WidgetArea.Sidebar ? UiText.T("Admin.Widgets.AreaSidebar", "側欄") : UiText.T("Admin.Widgets.AreaFooter", "頁尾")) · @(widget.Title.Length > 0 ? widget.Title : TypeLabel(widget.Type))</li>
+                        }
+                    </ul>
+                }
+                <div class="button-row">
+                    <button type="button" class="button" disabled="@Blocked" @onclick="InstallUpload">@UiText.T("Admin.Marketplace.ConfirmInstall", "確認安裝")</button>
+                    <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelUpload">@UiText.T("Admin.Widgets.Cancel", "取消")</button>
+                </div>
+            </section>
+        }
+        else
+        {
+            <label class="button button-secondary" for="package-file">@UiText.T("Admin.Marketplace.ChooseFile", "選擇包檔（.zip）")</label>
+            <InputFile id="package-file" OnChange="ChoosePackage" accept=".zip,application/zip" class="import-file-input" />
+        }
+        @if (_packageError is not null)
+        {
+            <p class="notice notice-error" role="alert">@_packageError</p>
+        }
+    </section>
+}
+@if (_pendingUninstall is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="package-uninstall-title">
+        <h2 id="package-uninstall-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Marketplace.UninstallConfirm", "解除安裝「{0}」？"), _pendingUninstall.Name)</h2>
+        <p>@(_pendingUninstall.Kind == PackageKind.Theme
+            ? UiText.T("Admin.Marketplace.UninstallThemeWarning", "站台版型將退回「閱讀」內建預設。")
+            : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Marketplace.UninstallWidgetsWarning", "將一併刪除此包建立的 {0} 個小工具。"), _pendingUninstall.WidgetCount))</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="Uninstall">@UiText.T("Admin.Marketplace.ConfirmUninstall", "確認解除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingUninstall = null">@UiText.T("Admin.Widgets.Cancel", "取消")</button></div>
+    </section>
+}
+
+@code {
+    private List<MarketplaceService.CatalogEntryView>? _catalog;
+    private List<MarketplaceService.PackageView>? _installed;
+    private MarketplaceService.ManifestPreview? _preview;
+    private MarketplaceService.PackageView? _pendingUninstall;
+    private byte[]? _packageFile;
+    private string? _packageError;
+
+    protected override Task OnInitializedAsync() => RunAsync(LoadDataAsync);
+
+    /// <summary>載入目錄與已安裝清單；動作後於同一個 RunAsync 內重整，
+    /// 不再巢狀呼叫 RunAsync（忙碌狀態下巢狀呼叫會被直接略過）。</summary>
+    private async Task LoadDataAsync(CancellationToken ct)
+    {
+        _catalog = await Api.GetMarketplaceCatalogAsync(ct) ?? [];
+        _installed = await Api.ListInstalledPackagesAsync(ct) ?? [];
+    }
+
+    private Task InstallFromCatalog(string slug) => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Marketplace.InstallDenied", "安裝受控包僅限本站管理員。"));
+        await Api.InstallPackageFromCatalogAsync(slug, ct);
+        await LoadDataAsync(ct);
+    }, UiText.T("Admin.Marketplace.Installed", "包已安裝。"));
+
+    private Task ToggleEnabled(MarketplaceService.PackageView package) => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Marketplace.InstallDenied", "安裝受控包僅限本站管理員。"));
+        await Api.SetPackageEnabledAsync(package.Id, !package.IsEnabled, package.Version, ct);
+        await LoadDataAsync(ct);
+    }, package.IsEnabled
+        ? UiText.T("Admin.Marketplace.Disabled", "包已停用。")
+        : UiText.T("Admin.Marketplace.EnabledNotice", "包已啟用。"));
+
+    private async Task Uninstall()
+    {
+        if (_pendingUninstall is not { } package) return;
+        await RunAsync(async ct =>
+        {
+            if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Marketplace.InstallDenied", "安裝受控包僅限本站管理員。"));
+            await Api.UninstallPackageAsync(package.Id, package.Version, ct);
+            _pendingUninstall = null;
+            await LoadDataAsync(ct);
+        }, UiText.T("Admin.Marketplace.Uninstalled", "包已解除安裝。"));
+        _pendingUninstall = null;
+    }
+
+    private async Task ChoosePackage(InputFileChangeEventArgs args)
+    {
+        _packageError = null;
+        _preview = null;
+        _packageFile = null;
+        if (AdministrationBlocked) return;
+        try
+        {
+            await using (var stream = args.File.OpenReadStream(Limits.PackageZipMaxBytes))
+            using (var buffer = new MemoryStream())
+            {
+                await stream.CopyToAsync(buffer);
+                _packageFile = buffer.ToArray();
+            }
+            _preview = await Api.AnalyzePackageZipAsync(_packageFile);
+        }
+        catch (UnauthorizedAccessException) { _packageFile = null; RequireLogin(); }
+        catch (AccessDeniedException error) { _packageFile = null; _packageError = error.Message; }
+        catch (CmsException error) { _packageFile = null; _packageError = error.Message; }
+        catch (IOException) { _packageError = UiText.T("Admin.Marketplace.UploadTooLarge", "包檔超過大小上限。"); }
+    }
+
+    private Task InstallUpload() => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Marketplace.InstallDenied", "安裝受控包僅限本站管理員。"));
+        if (_packageFile is null) return;
+        await Api.InstallPackageZipAsync(_packageFile, ct);
+        _packageFile = null;
+        _preview = null;
+        await LoadDataAsync(ct);
+    }, UiText.T("Admin.Marketplace.Installed", "包已安裝。"));
+
+    private void CancelUpload()
+    {
+        _preview = null;
+        _packageFile = null;
+        _packageError = null;
+    }
+
+    /// <summary>目錄卡的主題預覽：白名單鍵解析為內建字體棧常數後輸出，與公開站同一組變數。</summary>
+    private static string PreviewStyleOf(MarketplaceService.ThemeSummary theme)
+    {
+        var body = ThemePresets.FontStacks.TryGetValue(theme.FontBody, out var fontBody) ? fontBody : null;
+        var heading = ThemePresets.FontStacks.TryGetValue(theme.FontHeading, out var fontHeading) ? fontHeading : null;
+        return body is not null && heading is not null
+            ? ThemePresets.StyleVariables(theme.AccentColor, theme.ReadingWidth, body, heading,
+                theme.ProseLine, theme.ListGap, theme.HeadingScale)
+            : ThemePresets.StyleVariables(theme.AccentColor, theme.ReadingWidth, (string?)null);
+    }
+
+    private static string TypeLabel(WidgetType type) => type switch
+    {
+        WidgetType.RecentPosts => UiText.T("Admin.Widgets.TypeRecentPosts", "最新文章"),
+        WidgetType.Categories => UiText.T("Admin.Widgets.TypeCategories", "分類"),
+        WidgetType.Tags => UiText.T("Admin.Widgets.TypeTags", "標籤"),
+        WidgetType.Search => UiText.T("Admin.Widgets.TypeSearch", "搜尋框"),
+        WidgetType.RecentComments => UiText.T("Admin.Widgets.TypeRecentComments", "最新評論"),
+        WidgetType.RssFeed => UiText.T("Admin.Widgets.TypeRssFeed", "外部文章（RSS／Atom）"),
+        _ => UiText.T("Admin.Widgets.TypeText", "文字（Markdown）")
+    };
+}

@@ -3548,7 +3548,7 @@
     <value>Theme preset</value>
   </data>
   <data name="Admin.Settings.ThemePresetHelp" xml:space="preserve">
-    <value>Controlled themes: only built-in presets are available, and no external stylesheet or code is loaded.</value>
+    <value>Controlled themes: besides built-in presets you can pick an installed theme pack (installed on the Themes &amp; widget packs page); no external stylesheet or code is loaded.</value>
   </data>
   <data name="Admin.Settings.ThemeWidth" xml:space="preserve">
     <value>Reading width</value>
@@ -4330,4 +4330,46 @@
   <data name="Admin.Widgets.FeedUrlHelp" xml:space="preserve"><value>Public absolute https URL (local or intranet hosts rejected); cached for 10 minutes, and hidden while the feed cannot be fetched.</value></data>
   <data name="Public.Widget.RecentComments" xml:space="preserve"><value>Recent comments</value></data>
   <data name="Public.Widget.RssFeed" xml:space="preserve"><value>External articles</value></data>
+  <data name="Admin.Marketplace.PageTitle" xml:space="preserve"><value>Themes &amp; widget packs · Content management</value></data>
+  <data name="Admin.Marketplace.Title" xml:space="preserve"><value>Controlled package market</value></data>
+  <data name="Admin.Marketplace.Heading" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
+  <data name="Admin.Marketplace.Introduction" xml:space="preserve"><value>Install layouts or widget combos via declarative packs; sources are the built-in catalog and ZIP import only, every declared value is validated against whitelists and bounds, and no code is ever loaded.</value></data>
+  <data name="Admin.Marketplace.ReadOnlyNotice" xml:space="preserve"><value>Read-only members can browse the market; installing, toggling and uninstalling require an administrator.</value></data>
+  <data name="Admin.Marketplace.CatalogTitle" xml:space="preserve"><value>Built-in catalog</value></data>
+  <data name="Admin.Marketplace.KindTheme" xml:space="preserve"><value>Theme pack</value></data>
+  <data name="Admin.Marketplace.KindWidgets" xml:space="preserve"><value>Widget pack</value></data>
+  <data name="Admin.Marketplace.ThemePreview" xml:space="preserve"><value>Layout preview</value></data>
+  <data name="Admin.Marketplace.PreviewBody" xml:space="preserve"><value>Sample text: the typeface, line height and column width come from the pack declaration.</value></data>
+  <data name="Admin.Marketplace.AlreadyInstalled" xml:space="preserve"><value>This pack is already installed.</value></data>
+  <data name="Admin.Marketplace.Install" xml:space="preserve"><value>Install</value></data>
+  <data name="Admin.Marketplace.InstalledTitle" xml:space="preserve"><value>Installed</value></data>
+  <data name="Admin.Marketplace.InstalledEmpty" xml:space="preserve"><value>No packs installed yet</value></data>
+  <data name="Admin.Marketplace.InstalledEmptyHelp" xml:space="preserve"><value>Install from the built-in catalog above, or upload a ZIP package.</value></data>
+  <data name="Admin.Marketplace.PackageName" xml:space="preserve"><value>Pack</value></data>
+  <data name="Admin.Marketplace.Source" xml:space="preserve"><value>Source</value></data>
+  <data name="Admin.Marketplace.SourceBuiltin" xml:space="preserve"><value>Built-in</value></data>
+  <data name="Admin.Marketplace.SourceUpload" xml:space="preserve"><value>Uploaded</value></data>
+  <data name="Admin.Marketplace.Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Admin.Marketplace.StatusEnabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="Admin.Marketplace.StatusDisabled" xml:space="preserve"><value>Disabled</value></data>
+  <data name="Admin.Marketplace.Enable" xml:space="preserve"><value>Enable</value></data>
+  <data name="Admin.Marketplace.Disable" xml:space="preserve"><value>Disable</value></data>
+  <data name="Admin.Marketplace.Uninstall" xml:space="preserve"><value>Uninstall</value></data>
+  <data name="Admin.Marketplace.UninstallConfirm" xml:space="preserve"><value>Uninstall “{0}”?</value></data>
+  <data name="Admin.Marketplace.UninstallThemeWarning" xml:space="preserve"><value>The site layout will fall back to the built-in Reading preset.</value></data>
+  <data name="Admin.Marketplace.UninstallWidgetsWarning" xml:space="preserve"><value>{0} widgets created by this pack will also be deleted.</value></data>
+  <data name="Admin.Marketplace.ConfirmUninstall" xml:space="preserve"><value>Confirm uninstall</value></data>
+  <data name="Admin.Marketplace.UploadTitle" xml:space="preserve"><value>Upload package (ZIP)</value></data>
+  <data name="Admin.Marketplace.UploadHelp" xml:space="preserve"><value>The ZIP must contain only a root manifest.json, with a size limit of {0} MB. Theme declarations (color, width, font stack keys, density) and widget definitions are validated item by item, and pack CSS follows the same cleaning rules as custom CSS.</value></data>
+  <data name="Admin.Marketplace.PreviewTitle" xml:space="preserve"><value>Package preview</value></data>
+  <data name="Admin.Marketplace.ChooseFile" xml:space="preserve"><value>Choose package (.zip)</value></data>
+  <data name="Admin.Marketplace.ConfirmInstall" xml:space="preserve"><value>Confirm install</value></data>
+  <data name="Admin.Marketplace.UploadTooLarge" xml:space="preserve"><value>The package file exceeds the size limit.</value></data>
+  <data name="Admin.Marketplace.Installed" xml:space="preserve"><value>Pack installed.</value></data>
+  <data name="Admin.Marketplace.EnabledNotice" xml:space="preserve"><value>Pack enabled.</value></data>
+  <data name="Admin.Marketplace.Disabled" xml:space="preserve"><value>Pack disabled.</value></data>
+  <data name="Admin.Marketplace.Uninstalled" xml:space="preserve"><value>Pack uninstalled.</value></data>
+  <data name="Admin.Marketplace.InstallDenied" xml:space="preserve"><value>Installing controlled packs requires the site administrator role.</value></data>
+  <data name="Admin.Widgets.PackageBadge" xml:space="preserve"><value>from pack</value></data>
+  <data name="Layout.Admin.Marketplace" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
 </root>

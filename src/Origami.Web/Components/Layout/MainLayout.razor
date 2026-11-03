@@ -13,9 +13,14 @@
      data-color-scheme="@ResolvedScheme"
      data-show-cover="@(_settings.ShowCover ? "true" : "false")"
      data-show-byline="@(_settings.ShowByline ? "true" : "false")">
+    @* 包 CSS 在前、站台自訂 CSS 在後：站台的自主權優先，自訂 CSS 可覆蓋包樣式。
+       兩者皆已在 Api 投影與儲存時清理；不放入 HeadContent 是因 layout 層不輸出 head 內容。 *@
+    @if (_settings.PackageTheme is { Css: { Length: > 0 } } package)
+    {
+        <style>@((MarkupString)package.Css)</style>
+    }
     @if (!string.IsNullOrWhiteSpace(_settings.CustomCss))
     {
-        @* 自訂 CSS 已在 Api 投影與儲存時兩度清理；不放入 HeadContent 是因 layout 層不輸出 head 內容。 *@
         <style>@((MarkupString)_settings.CustomCss)</style>
     }
     <header class="site-header">
@@ -153,10 +158,12 @@
         return "/pages/" + string.Join("/", parts);
     }
 
-    /// <summary>受控版型的樣式變數：品牌基色（--accent-base）與預設版面變數；
-    /// 明暗模式各自在其上派生填充與前景色。</summary>
-    private string ThemeStyle =>
-        ThemePresets.StyleVariables(_settings.AccentColor, _settings.ReadingWidth, _settings.ThemePreset);
+    /// <summary>受控版型的樣式變數：品牌基色（--accent-base）與版面變數；
+    /// 現行主題包的字體與密度來自公開投影（白名單解析後的內建常數），否則退內建預設。</summary>
+    private string ThemeStyle => _settings.PackageTheme is { } package
+        ? ThemePresets.StyleVariables(_settings.AccentColor, _settings.ReadingWidth,
+            package.FontBody, package.FontHeading, package.ProseLine, package.ListGap, package.HeadingScale)
+        : ThemePresets.StyleVariables(_settings.AccentColor, _settings.ReadingWidth, _settings.ThemePreset);
 
     /// <summary>站台設為 auto 時跟隨訪客系統；後台外觀切換寫入的 cookie 是訪客的明確意願，優先於系統探測。</summary>
     private string ResolvedScheme

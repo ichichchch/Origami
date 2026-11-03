@@ -41,9 +41,15 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public string TimeFormat { get; init; } = "HH:mm";
     /// <summary>受控清理後的自訂 CSS；空字串代表未設定。</summary>
     public string CustomCss { get; init; } = "";
+    /// <summary>現行受控主題包的字體與密度宣告；null 代表版型預設來自內建清單。</summary>
+    public PublicPackageTheme? PackageTheme { get; init; }
     /// <summary>Api 無法回應時的後備站名與說明；全站單一來源。</summary>
     public static PublicSiteSettings Default { get; } = new("Origami", "用文字，分享你的世界。", null, null, null, "", null, null);
 }
+
+/// <summary>現行主題包的公開投影：字體棧為內建常數值，CSS 已在輸出前再次清理。</summary>
+public sealed record PublicPackageTheme(string Slug, string FontBody, string FontHeading,
+    double ProseLine, double ListGap, double HeadingScale, string Css);
 
 public sealed record ApiPreview(PublicContent Content, string? PublishedKind, string? PublishedSlug);
 
@@ -122,6 +128,47 @@ public sealed class OrigamiClient
     public Task<List<BulkItemResult>?> ReorderWidgetsAsync(WidgetArea area, IReadOnlyList<(Guid Id, Guid Version)> items, CancellationToken ct = default) =>
         SendAsync<List<BulkItemResult>>(new(HttpMethod.Put, "api/v1/admin/widgets/order"),
             new { area, items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
+
+    // ---------- 受控包市場 ----------
+
+    public Task<List<MarketplaceService.CatalogEntryView>?> GetMarketplaceCatalogAsync(CancellationToken ct = default) =>
+        GetAsync<List<MarketplaceService.CatalogEntryView>>("api/v1/admin/marketplace/catalog", ct);
+
+    public Task<List<MarketplaceService.PackageView>?> ListInstalledPackagesAsync(CancellationToken ct = default) =>
+        GetAsync<List<MarketplaceService.PackageView>>("api/v1/admin/marketplace/packages", ct);
+
+    public Task<MarketplaceService.PackageView?> InstallPackageFromCatalogAsync(string slug, CancellationToken ct = default) =>
+        SendAsync<MarketplaceService.PackageView>(new(HttpMethod.Post, "api/v1/admin/marketplace/packages/from-catalog"),
+            new { slug }, ct);
+
+    public Task<MarketplaceService.ManifestPreview?> AnalyzePackageZipAsync(byte[] bytes, CancellationToken ct = default) =>
+        SendPackageFileAsync<MarketplaceService.ManifestPreview>("api/v1/admin/marketplace/packages/analyze", bytes, ct);
+
+    public Task<MarketplaceService.PackageView?> InstallPackageZipAsync(byte[] bytes, CancellationToken ct = default) =>
+        SendPackageFileAsync<MarketplaceService.PackageView>("api/v1/admin/marketplace/packages/install-upload", bytes, ct);
+
+    public Task<MarketplaceService.PackageView?> SetPackageEnabledAsync(Guid id, bool isEnabled, Guid version, CancellationToken ct = default) =>
+        SendAsync<MarketplaceService.PackageView>(new(HttpMethod.Put, $"api/v1/admin/marketplace/packages/{id}/enabled"),
+            new { isEnabled, version }, ct);
+
+    public async Task UninstallPackageAsync(Guid id, Guid version, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/v1/admin/marketplace/packages/{id}?version={version}", ct);
+        await EnsureSuccessAsync(response);
+    }
+
+    /// <summary>包 ZIP 上傳一律以 application/zip 送出；內容安全由 Api 端服務層把關。</summary>
+    private async Task<T?> SendPackageFileAsync<T>(string url, byte[] bytes, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
+        form.Add(file, "file", "package.zip");
+        using var response = await http.PostAsync(url, form, ct);
+        if (response.StatusCode == HttpStatusCode.NotFound) return default;
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<T>(Json, ct);
+    }
 
     public Task<PagedResult<CommentService.CommentView>?> GetPublicCommentsAsync(Guid contentId, int page = 1,
         CancellationToken ct = default) =>

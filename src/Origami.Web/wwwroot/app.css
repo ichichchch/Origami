@@ -464,3 +464,17 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .widget-text :where(a) { text-decoration: underline; }
 .footer-widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1.4rem 2rem; margin-bottom: 1.6rem; }
 .footer-widgets .widget { background: transparent; }
+
+/* 受控包市場（後台）：目錄卡片格狀排列；主題包卡內嵌即時預覽複用 theme-preview。 */
+.package-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1.4rem; align-items: start; }
+.package-card { display: grid; gap: .9rem; padding: 1.2rem 1.3rem 1.35rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+.package-card h3 { margin: .35rem 0 .1rem; font-size: 1.05rem; }
+.package-card p { margin: 0; font-size: .85rem; color: var(--muted); }
+.package-kind { display: inline-block; font-size: .72rem; font-weight: 650; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); }
+.package-kind + h3 { margin-top: .45rem; }
+.package-card .theme-preview { padding: 1rem 1.1rem; }
+.package-widget-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; }
+.package-installed { font-size: .82rem; color: var(--accent-ink); }
+.package-preview { display: grid; gap: .55rem; padding: 1rem 1.1rem; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.package-preview p { margin: 0; font-size: .85rem; }
+.package-preview h3 { font-size: .95rem; margin: 0; }
