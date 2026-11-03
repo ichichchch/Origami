@@ -5,6 +5,8 @@
 @layout AdminLayout
 @inherits AdminComponentBase
 @inject OrigamiClient Api
+@inject IJSRuntime JavaScript
+@inject NavigationManager Navigation
 
 <PageTitle>@UiText.T("Admin.Dashboard.PageTitle", "總覽儀表板 · 內容管理")</PageTitle>
 <div class="page-heading">
@@ -76,8 +78,11 @@ else
         }
         else
         {
+            <div class="chart-frame" hidden="@(!_chartsReady)">
+                <canvas id="trend-chart" role="img" aria-label="@UiText.T("Admin.Dashboard.TrendChartLabel", "每日瀏覽趨勢圖")"></canvas>
+            </div>
             var maxView = Math.Max(1, _summary.DailyViews.Max(x => x.Views));
-            <div class="trend-bars" role="list" aria-label="@UiText.T("Admin.Dashboard.TrendList", "每日瀏覽量")">
+            <div class="trend-bars" role="list" aria-label="@UiText.T("Admin.Dashboard.TrendList", "每日瀏覽量")" hidden="@_chartsReady">
                 @foreach (var point in _summary.DailyViews.TakeLast(14))
                 {
                     var pct = (int)Math.Round(point.Views * 100.0 / maxView);
@@ -102,7 +107,10 @@ else
             }
             else
             {
-                <div class="table-scroll">
+                <div class="chart-frame" hidden="@(!_chartsReady)">
+                    <canvas id="top-chart" role="img" aria-label="@UiText.T("Admin.Dashboard.TopChartLabel", "熱門內容圖表")"></canvas>
+                </div>
+                <div class="table-scroll" hidden="@_chartsReady">
                     <table>
                         <thead>
                             <tr>
@@ -152,6 +160,11 @@ else
 
 @code {
     private DashboardSummary? _summary;
+    // 圖表初始化成功後才隱藏 CSS 條與表格 fallback；JS 失敗時 fallback 永久保留。
+    private bool _chartsReady;
+    private bool _chartsInitializing;
+    private IJSObjectReference? _chartsModule;
+    private DotNetObjectReference<Dashboard>? _chartsRef;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -159,4 +172,104 @@ else
     {
         _summary = await Api.GetDashboardAsync(ct);
     });
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 資料可能在首次互動渲染後才載入完成（BFF 呼叫慢於電路首繪），不能只依賴 firstRender。
+        if (_chartsInitializing || _chartsModule is not null || _summary is null) return;
+        var trend = TrendChartData();
+        var top = TopContentsData();
+        if (trend is null && top is null) return;
+        _chartsInitializing = true;
+        try
+        {
+            _chartsModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Admin/Dashboard.razor.js");
+            _chartsRef = DotNetObjectReference.Create(this);
+            await _chartsModule.InvokeVoidAsync("initCharts", new
+            {
+                chartUrl = ChartScriptUrl(),
+                trend,
+                top,
+                texts = new
+                {
+                    legend30d = UiText.T("Admin.Dashboard.LegendViews30d", "近 30 日"),
+                    legendTotal = UiText.T("Admin.Dashboard.LegendViewsTotal", "累計"),
+                },
+                dotnetRef = _chartsRef,
+            });
+        }
+        catch (JSException) { /* JS 尚未就緒或已被處置；CSS 條與表格 fallback 保留。 */ }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+        finally { _chartsInitializing = false; }
+    }
+
+    [JSInvokable]
+    public void OnChartsReady()
+    {
+        _chartsReady = true;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void OpenContent(string id) => Navigation.NavigateTo($"/admin/content/{id}");
+
+    private object? TrendChartData()
+    {
+        if (_summary!.DailyViews.All(x => x.Views == 0)) return null;
+        return new
+        {
+            canvasId = "trend-chart",
+            labels = _summary.DailyViews.Select(p => p.Date.ToString("MM-dd", CultureInfo.CurrentCulture)).ToArray(),
+            dateTitles = _summary.DailyViews.Select(p => p.Date.ToString("yyyy-MM-dd ddd", CultureInfo.CurrentCulture)).ToArray(),
+            values = _summary.DailyViews.Select(p => p.Views).ToArray(),
+            valueLabels = _summary.DailyViews.Select(p => string.Format(CultureInfo.CurrentCulture,
+                UiText.T("Admin.Dashboard.ChartViewsCount", "{0:N0} 次瀏覽"), p.Views)).ToArray(),
+        };
+    }
+
+    private object? TopContentsData()
+    {
+        if (_summary!.TopContents.Count == 0) return null;
+        return new
+        {
+            canvasId = "top-chart",
+            items = _summary.TopContents.Select(t => new
+            {
+                id = t.Id.ToString(),
+                title = t.Title,
+                viewsPeriod = t.ViewsPeriod,
+                viewsPeriodLabel = t.ViewsPeriod.ToString("N0", CultureInfo.CurrentCulture),
+                viewsTotalLabel = t.ViewsTotal.ToString("N0", CultureInfo.CurrentCulture),
+            }).ToArray(),
+        };
+    }
+
+    private string ChartScriptUrl()
+    {
+        // 索引子取不到資產時回傳鍵本身；指紋未啟用，相對路徑與清單結果等價。
+        var url = Assets["lib/chart.umd.js"];
+        return string.IsNullOrEmpty(url) ? "lib/chart.umd.js" : url;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (!disposing) return;
+        if (_chartsModule is not null) _ = DisposeChartsAsync(_chartsModule);
+        _chartsModule = null;
+        _chartsRef?.Dispose();
+        _chartsRef = null;
+    }
+
+    private static async Task DisposeChartsAsync(IJSObjectReference module)
+    {
+        try
+        {
+            await module.InvokeVoidAsync("disposeCharts");
+            await module.DisposeAsync();
+        }
+        catch (JSException) { /* JS 執行階段已關閉；模組隨頁面釋放，下次 initCharts 會先拆掉舊狀態。 */ }
+        catch (ObjectDisposedException) { }
+    }
 }

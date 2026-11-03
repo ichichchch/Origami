@@ -4,6 +4,8 @@
    深色模式自動將前景提亮至可讀對比，填充色微調亮度。 */
 :root { color-scheme: light; --paper: #fafbf9; --surface: #fff; --surface-sunken: #f1f4ef; --surface-raised: #fff; --shadow-raised: 0 16px 70px #162d2426; --ink: #24342d; --muted: #5f6b63; --border: #e0e6df; --border-strong: #cdd7ce; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #eff2ec; --radius: 12px; }
 * { box-sizing: border-box; }
+/* 網格/弹性版型的 display 會疙過瀏親器預設的 [hidden]；fallback 切換依淸此規則。 */
+[hidden] { display: none !important; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; }
 a { color: var(--accent-ink); text-underline-offset: .23em; }
@@ -387,6 +389,7 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .trend-track { height: .6rem; background: var(--accent-soft); border-radius: 999px; overflow: hidden; }
 .trend-fill { height: 100%; background: var(--accent); border-radius: 999px; }
 .trend-count { text-align: right; font-variant-numeric: tabular-nums; }
+.chart-frame { position: relative; height: 300px; margin-top: .75rem; }
 .dashboard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
 .comment-reply { margin-left: 1.6rem; padding-left: .9rem; border-left: 2px solid var(--border); }
 .reply-box { margin-top: .6rem; display: grid; gap: .5rem; }

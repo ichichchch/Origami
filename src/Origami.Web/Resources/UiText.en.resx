@@ -3862,6 +3862,21 @@
   <data name="Admin.Dashboard.NoRecentDrafts" xml:space="preserve">
     <value>There are no drafts in progress or items pending review.</value>
   </data>
+  <data name="Admin.Dashboard.TrendChartLabel" xml:space="preserve">
+    <value>Daily views trend chart</value>
+  </data>
+  <data name="Admin.Dashboard.TopChartLabel" xml:space="preserve">
+    <value>Top content chart</value>
+  </data>
+  <data name="Admin.Dashboard.LegendViews30d" xml:space="preserve">
+    <value>Last 30 days</value>
+  </data>
+  <data name="Admin.Dashboard.LegendViewsTotal" xml:space="preserve">
+    <value>All time</value>
+  </data>
+  <data name="Admin.Dashboard.ChartViewsCount" xml:space="preserve">
+    <value>{0:N0} views</value>
+  </data>
   <data name="Admin.Media.KindFilter" xml:space="preserve">
     <value>Media type filter</value>
   </data>
