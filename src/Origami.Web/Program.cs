@@ -206,17 +206,29 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsync(UiText.T("Common.CredentialsExpired", "登入或網站服務憑證已失效，請重新登入；若持續失敗請聯絡管理者。"), context.RequestAborted);
     }
 });
-// 搜尋引擎可見度：Static SSR 的 layout 層無法輸出 head meta，改以回應標頭涵蓋所有公開頁面；
-// 設定經 PublicSettingsProvider 每請求快取，與版面共用同一次讀取。
+// 搜尋引擎可見度：Static SSR 的 layout 層無法輸出 head meta，改以回應標頭涵蓋公開頁面。
+// 標頭附加延後到回應啟動前且僅對 HTML 生效——靜態資源（css/js/媒體/favicon）不必付出
+// Api 設定讀取的成本；設定經 PublicSettingsProvider 每請求快取，與版面共用同一次讀取，
+// 因此關閉開關後立即生效。Api 讀取失敗時略過標頭，不讓可見度檢查拖垮任何回應。
 app.Use(async (context, next) =>
 {
     if (!context.Request.Path.StartsWithSegments("/_blazor")
         && (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)))
     {
-        var settings = await context.RequestServices.GetRequiredService<PublicSettingsProvider>()
-            .GetAsync(context.RequestAborted);
-        if (settings.SearchEngineBlocked)
-            context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+        context.Response.OnStarting(async () =>
+        {
+            if (context.Response.ContentType?.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) != true)
+                return;
+            try
+            {
+                var settings = await context.RequestServices.GetRequiredService<PublicSettingsProvider>()
+                    .GetAsync(context.RequestAborted);
+                if (settings.SearchEngineBlocked)
+                    context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { }
+            catch (Exception) { /* Api 不可用時不附加標頭；頁面本身另有降級處理。 */ }
+        });
     }
     await next(context);
 });
