@@ -237,6 +237,8 @@ public sealed class WebhookService(
             return false;
         if (IPAddress.TryParse(uri.Host, out var ip))
         {
+            // IPv4-mapped IPv6（如 [::ffff:10.0.0.1]）正規化回 IPv4 再套用同一組私網檢查。
+            if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
             if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) || ip.Equals(IPAddress.IPv6None))
                 return false;
             var bytes = ip.GetAddressBytes();

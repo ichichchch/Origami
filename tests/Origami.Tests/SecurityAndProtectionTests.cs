@@ -59,6 +59,33 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         Assert.StartsWith("otpauth://totp/", Totp.OtpAuthUri(fresh, "admin", "Origami"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Webhook_url_allowlist_blocks_private_addresses_and_ipv4_mapped_ipv6()
+    {
+        // 字面 IPv4 私網／保留位址與本機名稱一律拒絕（webhook 與 feed 小工具共用此驗證）。
+        foreach (var blocked in new[]
+                 {
+                     "https://localhost/feed", "https://site.internal/feed", "https://127.0.0.1/feed",
+                     "https://10.0.0.5/feed", "https://172.16.1.1/feed", "https://192.168.1.1/feed",
+                     "https://169.254.169.254/feed", "https://100.64.1.1/feed",
+                     "https://[::1]/feed", "https://[fe80::1]/feed", "https://[fc00::1]/feed",
+                     // IPv4-mapped IPv6：正規化回 IPv4 後同樣不得命中私網範圍。
+                     "https://[::ffff:127.0.0.1]/feed", "https://[::ffff:10.0.0.1]/feed",
+                     "https://[::ffff:192.168.1.1]/feed", "https://[::ffff:169.254.169.254]/feed",
+                     "http://example.com/feed", "ftp://example.com/feed"
+                 })
+        {
+            Assert.False(WebhookService.IsAllowedWebhookUrl(blocked), blocked);
+        }
+
+        // 公開位址（含正規化後為公開的 mapped 形式）與空值仍可用。
+        foreach (var allowed in new[] { "https://example.com/feed", "https://[2606:4700::6810:85e5]/feed",
+                     "https://[::ffff:8.8.8.8]/feed", null, "" })
+        {
+            Assert.True(WebhookService.IsAllowedWebhookUrl(allowed), allowed ?? "(null)");
+        }
+    }
+
     [PostgresFact]
     public async Task Two_factor_flow_enables_disables_and_admin_reset_recovers()
     {
