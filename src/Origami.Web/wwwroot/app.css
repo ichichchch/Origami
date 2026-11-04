@@ -2,7 +2,7 @@
 /* 設計令牌：--accent-base 為品牌基色（可由 inline style 覆寫）；
    --accent 用於填充（按鈕底色），--accent-ink 用於前景文字；
    深色模式自動將前景提亮至可讀對比，填充色微調亮度。 */
-:root { color-scheme: light; --paper: #fafbf9; --surface: #fff; --surface-sunken: #f1f4ef; --surface-raised: #fff; --shadow-raised: 0 16px 70px #162d2426; --ink: #24342d; --muted: #5f6b63; --border: #e0e6df; --border-strong: #cdd7ce; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #eff2ec; --radius: 12px; }
+:root { color-scheme: light; --paper: #fafbf9; --surface: #fff; --surface-sunken: #f1f4ef; --surface-raised: #fff; --shadow-raised: 0 16px 70px #162d2426; --ink: #24342d; --muted: #5f6b63; --border: #e0e6df; --border-strong: #cdd7ce; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #eff2ec; --radius: 12px; --paper-dark: #141916; --ink-dark: #e7ede9; }
 * { box-sizing: border-box; }
 /* 網格/彈性版型的 display 會蓋過瀏覽器預設的 [hidden]；fallback 切換依賴此規則。 */
 [hidden] { display: none !important; }
@@ -389,7 +389,10 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .trend-track { height: .6rem; background: var(--accent-soft); border-radius: 999px; overflow: hidden; }
 .trend-fill { height: 100%; background: var(--accent); border-radius: 999px; }
 .trend-count { text-align: right; font-variant-numeric: tabular-nums; }
-.chart-frame { position: relative; height: 300px; margin-top: .75rem; }
+/* 儀表板：熱門內容圖表需要較寬欄位；圖表以內嵌卡片呈現，底色與邊框跟隨主題。 */
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(250px, .65fr); gap: 1.5rem; align-items: start; }
+.chart-frame { position: relative; height: 320px; margin-top: .75rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-sunken); overflow: hidden; }
+@media (max-width: 1100px) { .dashboard-grid { grid-template-columns: minmax(0, 1fr); } }
 .dashboard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
 .comment-reply { margin-left: 1.6rem; padding-left: .9rem; border-left: 2px solid var(--border); }
 .reply-box { margin-top: .6rem; display: grid; gap: .5rem; }
@@ -415,7 +418,13 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .prose .file-download-link { font-weight: 600; text-decoration: none; }
 .footer-socials { display: inline-flex; gap: .8rem; margin: 0 .8rem; }
 /* 深色模式：任何帶 data-color-scheme 的外殼（公開站或後台）皆生效；
-   前景色（--accent-ink）以 oklab 向白提亮至可讀對比，填充色微調亮度維持白字對比。 */
+   前景色（--accent-ink）以 oklab 向白提亮至可讀對比，填充色微調亮度維持白字對比。
+   公開站內容容器為置中最大寬度，深色調色板若只落在容器上，body 仍為淺色而左右露出兩塊空白；
+   因此 body 以 :has() 跟隨同一個 data-color-scheme 屬性，取用同一組深色值。 */
+body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var(--ink-dark); }
+@media (prefers-color-scheme: dark) {
+    body:has([data-color-scheme="auto"]) { background: var(--paper-dark); color: var(--ink-dark); }
+}
 [data-color-scheme="dark"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --surface-sunken: #171e1a; --surface-raised: #232b26; --shadow-raised: 0 16px 70px #00000066; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --border-strong: #46524a; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #141916); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #10140f; background: var(--paper); color: var(--ink); min-height: 100vh; }
 @media (prefers-color-scheme: dark) {
     [data-color-scheme="auto"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --surface-sunken: #171e1a; --surface-raised: #232b26; --shadow-raised: 0 16px 70px #00000066; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --border-strong: #46524a; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #141916); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #10140f; background: var(--paper); color: var(--ink); min-height: 100vh; }
