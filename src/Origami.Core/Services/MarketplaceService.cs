@@ -12,8 +12,10 @@ public sealed class MarketplaceService(
     TimeProvider? clock = null,
     CmsEventBus? events = null)
 {
+    /// <summary>主題摘要：版型數值與受控 CSS；CSS 一律以 .site-shell 開頭，故可安全用於預覽容器而不外溢到後台。</summary>
     public sealed record ThemeSummary(string AccentColor, int ReadingWidth, bool ShowByline, bool ShowCover,
-        string CardStyle, string FontBody, string FontHeading, double ProseLine, double ListGap, double HeadingScale);
+        string CardStyle, string FontBody, string FontHeading, double ProseLine, double ListGap, double HeadingScale,
+        string Css = "");
 
     public sealed record WidgetItemSummary(WidgetArea Area, WidgetType Type, string Title, int? Count, string Markdown, string Url);
 
@@ -59,7 +61,8 @@ public sealed class MarketplaceService(
             new CatalogEntryView(x.Kind, x.Slug, x.Name, x.Description, installedSlugs.Contains(x.Slug),
                 x.Manifest.Theme is { } theme
                     ? new ThemeSummary(theme.AccentColor, theme.ReadingWidth, theme.ShowByline, theme.ShowCover,
-                        theme.CardStyle, theme.FontBody, theme.FontHeading, theme.ProseLine, theme.ListGap, theme.HeadingScale)
+                        theme.CardStyle, theme.FontBody, theme.FontHeading, theme.ProseLine, theme.ListGap, theme.HeadingScale,
+                        theme.Css ?? "")
                     : null,
                 [.. (x.Manifest.Widgets ?? []).Select(w => new WidgetItemSummary(w.Area, w.Type, w.Title ?? "",
                     w.Count, w.Markdown ?? "", w.Url ?? ""))]))];
@@ -397,7 +400,8 @@ public sealed class MarketplaceService(
             package.InstalledAt, package.Version,
             manifest?.Theme is { } theme
                 ? new ThemeSummary(theme.AccentColor, theme.ReadingWidth, theme.ShowByline, theme.ShowCover,
-                    theme.CardStyle, theme.FontBody, theme.FontHeading, theme.ProseLine, theme.ListGap, theme.HeadingScale)
+                    theme.CardStyle, theme.FontBody, theme.FontHeading, theme.ProseLine, theme.ListGap, theme.HeadingScale,
+                    theme.Css ?? "")
                 : null,
             widgetCount,
             [.. (manifest?.Widgets ?? []).Select(w => new WidgetItemSummary(w.Area, w.Type, w.Title ?? "",
@@ -408,7 +412,8 @@ public sealed class MarketplaceService(
         new(manifest.Kind, manifest.Slug, manifest.Name, manifest.Description,
             manifest.Theme is { } theme
                 ? new ThemeSummary(theme.AccentColor, theme.ReadingWidth, theme.ShowByline, theme.ShowCover,
-                    theme.CardStyle, theme.FontBody, theme.FontHeading, theme.ProseLine, theme.ListGap, theme.HeadingScale)
+                    theme.CardStyle, theme.FontBody, theme.FontHeading, theme.ProseLine, theme.ListGap, theme.HeadingScale,
+                    theme.Css ?? "")
                 : null,
             [.. (manifest.Widgets ?? []).Select(w => new WidgetItemSummary(w.Area, w.Type, w.Title ?? "",
                 w.Count, w.Markdown ?? "", w.Url ?? ""))]);
