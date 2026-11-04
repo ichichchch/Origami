@@ -304,6 +304,34 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.Empty(errors);
     }
 
+    [Fact]
+    public void Built_in_theme_packs_carry_distinct_controlled_layouts()
+    {
+        var themes = PackageCatalog.All.Where(x => x.Kind == PackageKind.Theme).ToList();
+        Assert.Equal(5, themes.Count);
+        Assert.All(themes, x =>
+        {
+            var css = x.Manifest.Theme!.Css;
+            Assert.False(string.IsNullOrWhiteSpace(css));
+            // 规则一律以 .site-shell 开头：既压得过作用域样式，也不会外溢到后台，并可用于预览容器。
+            Assert.StartsWith(".site-shell", css!.TrimStart(), StringComparison.Ordinal);
+        });
+        // 版式原型不可雷同：受控 CSS 与字体／卡片样式的组合皆须不同。
+        Assert.Equal(themes.Count, themes.Select(x => x.Manifest.Theme!.Css).Distinct().Count());
+        Assert.Equal(themes.Count, themes.Select(x =>
+            $"{x.Manifest.Theme!.FontBody}/{x.Manifest.Theme!.FontHeading}/{x.Manifest.Theme!.CardStyle}").Distinct().Count());
+    }
+
+    [PostgresFact]
+    public async Task Catalog_exposes_theme_css_for_the_marketplace_preview()
+    {
+        using var admin = await App.AdministratorAsync();
+        var catalog = await admin.Services.GetRequiredService<MarketplaceService>().CatalogAsync();
+        var themes = catalog.Where(x => x.Kind == PackageKind.Theme).ToList();
+        Assert.Equal(5, themes.Count);
+        Assert.All(themes, x => Assert.False(string.IsNullOrWhiteSpace(x.Theme!.Css)));
+    }
+
     [PostgresFact]
     public async Task WordPress_theme_is_converted_to_a_controlled_pack_without_keeping_code()
     {
