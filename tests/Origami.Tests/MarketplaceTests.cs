@@ -95,25 +95,25 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         using var admin = await App.AdministratorAsync();
         var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
 
-        var installed = await marketplace.InstallFromCatalogAsync("ink");
+        var installed = await marketplace.InstallFromCatalogAsync("inkwell");
         Assert.Equal(PackageKind.Theme, installed.Kind);
         Assert.False(installed.IsEnabled);
 
         // 重複安裝拒絕。
-        await Assert.ThrowsAsync<CmsException>(() => marketplace.InstallFromCatalogAsync("ink"));
+        await Assert.ThrowsAsync<CmsException>(() => marketplace.InstallFromCatalogAsync("inkwell"));
 
         // 啟用即套用版型：設定的版型預設改為 pkg: 前綴值，純量欄位複製自包宣告。
         var enabled = await marketplace.SetEnabledAsync(installed.Id, true, installed.Version);
         Assert.True(enabled.IsEnabled);
         var settings = await admin.Settings.GetAsync();
-        Assert.Equal("pkg:ink", settings.ThemePreset);
-        Assert.Equal("#1f3a5f", settings.AccentColor);
-        Assert.Equal(66, settings.ReadingWidth);
+        Assert.Equal("pkg:inkwell", settings.ThemePreset);
+        Assert.Equal("#2f4858", settings.AccentColor);
+        Assert.Equal(62, settings.ReadingWidth);
 
         // 公開投影帶出白名單字體棧（內建常數），不是包內的自由字串。
         var active = await marketplace.ActiveThemeAsync();
         Assert.NotNull(active);
-        Assert.Equal("ink", active!.Slug);
+        Assert.Equal("inkwell", active!.Slug);
         Assert.Contains("Noto Serif TC", active.FontBody, StringComparison.Ordinal);
 
         // 停用退回內建閱讀預設。
@@ -178,11 +178,11 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         using var editor = await App.UserAsync(await AdminUserIdFor("editor"));
         var editorMarketplace = editor.Services.GetRequiredService<MarketplaceService>();
         Assert.NotEmpty(await editorMarketplace.CatalogAsync());
-        await Assert.ThrowsAsync<AccessDeniedException>(() => editorMarketplace.InstallFromCatalogAsync("ink"));
+        await Assert.ThrowsAsync<AccessDeniedException>(() => editorMarketplace.InstallFromCatalogAsync("inkwell"));
 
         // 站點隔離：A 站安裝的主題包不影響 B 站。
         using var admin = await App.AdministratorAsync();
-        await admin.Services.GetRequiredService<MarketplaceService>().InstallFromCatalogAsync("ink");
+        await admin.Services.GetRequiredService<MarketplaceService>().InstallFromCatalogAsync("inkwell");
 
         var site = await CreateSiteAsync("marketsecond");
         using var otherAdmin = await App.AdministratorAsync(site.Id);
@@ -197,14 +197,14 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
     {
         using var admin = await App.AdministratorAsync();
         var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
-        var installed = await marketplace.InstallFromCatalogAsync("sunlit");
+        var installed = await marketplace.InstallFromCatalogAsync("headline");
 
         // 設定頁選擇已安裝的主題包：儲存成功並同步啟用鏡像。
         // 使用者微調值（強調色、欄寬等）由設定頁自行保留；包的字體與密度另由公開投影帶出。
         var settings = await admin.Settings.GetAsync();
-        settings.ThemePreset = "pkg:sunlit";
+        settings.ThemePreset = "pkg:headline";
         var saved = await admin.Settings.SaveAsync(settings);
-        Assert.Equal("pkg:sunlit", saved.ThemePreset);
+        Assert.Equal("pkg:headline", saved.ThemePreset);
         Assert.Equal(settings.AccentColor, saved.AccentColor);
         var packages = await marketplace.InstalledAsync();
         var package = Assert.Single(packages, x => x.Id == installed.Id);
@@ -213,8 +213,8 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         // 啟用主題包時，包的強調色與欄寬會套用進站台設定（市場頁路徑）。
         await marketplace.SetEnabledAsync(installed.Id, true, package.Version);
         var applied = await admin.Settings.GetAsync();
-        Assert.Equal("#b3541e", applied.AccentColor);
-        Assert.Equal(70, applied.ReadingWidth);
+        Assert.Equal("#b3261e", applied.AccentColor);
+        Assert.Equal(74, applied.ReadingWidth);
 
         // 未安裝的主題包不得被寫入設定（避免懸空引用）。
         settings = await admin.Settings.GetAsync();
@@ -229,7 +229,7 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
         var widgets = admin.Services.GetRequiredService<WidgetService>();
         await marketplace.InstallFromCatalogAsync("sidebar-starter");
-        var installed = await marketplace.InstallFromCatalogAsync("ink");
+        var installed = await marketplace.InstallFromCatalogAsync("inkwell");
         await marketplace.SetEnabledAsync(installed.Id, true, installed.Version);
 
         using var buffer = new MemoryStream();
@@ -243,7 +243,7 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.True(Assert.Single(restored, x => x.Kind == PackageKind.Theme).IsEnabled);
         var listed = await widgets.ListAsync();
         Assert.Equal(3, listed.Count(x => x.PackageSlug == "sidebar-starter"));
-        Assert.Equal("pkg:ink", (await admin.Settings.GetAsync()).ThemePreset);
+        Assert.Equal("pkg:inkwell", (await admin.Settings.GetAsync()).ThemePreset);
     }
 
     [PostgresFact]
@@ -275,11 +275,11 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
 
         // 市場頁：瀏覽內建目錄 → 安裝主題包 → 啟用。
         await page.GotoAsync("/admin/marketplace");
-        var card = page.Locator(".package-card[data-package-slug='ink']");
+        var card = page.Locator(".package-card[data-package-slug='inkwell']");
         await Expect(card).ToBeVisibleAsync();
         await card.GetByRole(AriaRole.Button, new() { Name = "Install", Exact = true }).ClickAsync();
 
-        var row = page.Locator("table tbody tr[data-package-slug='ink']");
+        var row = page.Locator("table tbody tr[data-package-slug='inkwell']");
         await Expect(row).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await row.Locator("button[data-package-action='enable']").ClickAsync();
 
@@ -290,17 +290,17 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         // 站台設定確實切換到主題包：版型預設改為 pkg: 前綴值，強調色與欄寬取自包宣告。
         using var admin = await App.AdministratorAsync();
         var settings = await admin.Settings.GetAsync();
-        Assert.Equal("pkg:ink", settings.ThemePreset);
-        Assert.Equal("#1f3a5f", settings.AccentColor);
+        Assert.Equal("pkg:inkwell", settings.ThemePreset);
+        Assert.Equal("#2f4858", settings.AccentColor);
 
         // 公開網站改用主題包的強調色、字體與密度變數。
         await page.GotoAsync("/");
         var shell = page.Locator(".site-shell");
         var style = await shell.GetAttributeAsync("style");
         Assert.NotNull(style);
-        Assert.Contains("--accent-base:#1f3a5f", style, StringComparison.Ordinal);
-        Assert.Contains("--prose-line:2.1", style, StringComparison.Ordinal);
-        Assert.Contains("--list-gap:2.4rem", style, StringComparison.Ordinal);
+        Assert.Contains("--accent-base:#2f4858", style, StringComparison.Ordinal);
+        Assert.Contains("--prose-line:2.2", style, StringComparison.Ordinal);
+        Assert.Contains("--list-gap:2.1rem", style, StringComparison.Ordinal);
         Assert.Empty(errors);
     }
 
@@ -354,7 +354,7 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
     {
         using var admin = await App.AdministratorAsync();
         var marketplace = admin.Services.GetRequiredService<MarketplaceService>();
-        var installed = await marketplace.InstallFromCatalogAsync("sunlit");
+        var installed = await marketplace.InstallFromCatalogAsync("headline");
 
         // 汇出为可分享的 ZIP：只含 manifest.json。
         var bytes = await marketplace.ExportAsync(installed.Id, installed.Version);
@@ -364,9 +364,9 @@ public sealed class MarketplaceTests(IsolatedPostgres postgres) : ServiceTestBas
         // 先解除原包，再以汇出的 ZIP 重新安装：内容一致。
         await marketplace.UninstallAsync(installed.Id, installed.Version);
         var restored = await marketplace.InstallFromZipAsync(new MemoryStream(bytes));
-        Assert.Equal("sunlit", restored.Slug);
+        Assert.Equal("headline", restored.Slug);
         Assert.Equal(PackageKind.Theme, restored.Kind);
-        Assert.Equal("#b3541e", restored.Theme!.AccentColor);
+        Assert.Equal("#b3261e", restored.Theme!.AccentColor);
     }
 
     private async Task<string> AdminUserIdFor(string userName)
