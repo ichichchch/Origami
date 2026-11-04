@@ -24,12 +24,25 @@
                     <header><span class="package-kind">@(entry.Kind == PackageKind.Theme ? UiText.T("Admin.Marketplace.KindTheme", "主題包") : UiText.T("Admin.Marketplace.KindWidgets", "小工具包"))</span><h3>@entry.Name</h3><p>@entry.Description</p></header>
                     @if (entry.Theme is { } theme)
                     {
+                        @* 預覽直接套用受控 CSS（規則一律以 .site-shell 開頭，故不會外溢到後台介面），
+                           並以較高特異度的預覽規則把多欄版面收成單欄，維持卡片可讀。 *@
                         <section class="theme-preview site-shell" aria-label="@UiText.T("Admin.Marketplace.ThemePreview", "版型預覽")"
                                  data-color-scheme="auto" data-card-style="@theme.CardStyle"
                                  data-show-cover="@(theme.ShowCover ? "true" : "false")"
                                  data-show-byline="@(theme.ShowByline ? "true" : "false")"
                                  style="@PreviewStyleOf(theme)">
-                            <p class="theme-preview-body">@UiText.T("Admin.Marketplace.PreviewBody", "示範文字：字體、行距與欄寬來自主題包宣告。")</p>
+                            <style>@((MarkupString)theme.Css)</style>
+                            <style>.site-shell .theme-preview .post-list{grid-template-columns:minmax(0,1fr);gap:.3rem}.site-shell .theme-preview .post-preview{grid-template-columns:minmax(0,1fr);gap:.25rem;padding:.7rem 0;text-align:left}.site-shell .theme-preview .read-link{text-align:left}.site-shell .theme-preview .post-preview time{grid-column:auto}</style>
+                            <div class="post-list">
+                                <article class="post-preview">
+                                    <time>2026.11.04</time>
+                                    <div class="post-summary">
+                                        <h2><a href="#" onclick="return false;">@UiText.T("Admin.Marketplace.PreviewPostTitle", "示範文章標題")</a></h2>
+                                        <p>@UiText.T("Admin.Marketplace.PreviewPostSummary", "示範摘要：字體、行距、卡片與標題樣式都來自主題包。")</p>
+                                    </div>
+                                    <a class="read-link" href="#" onclick="return false;">@UiText.T("Admin.Marketplace.PreviewRead", "閱讀全文")</a>
+                                </article>
+                            </div>
                         </section>
                     }
                     @if (entry.Widgets is { Count: > 0 })

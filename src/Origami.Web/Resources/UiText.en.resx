@@ -4378,4 +4378,7 @@
   <data name="Admin.Marketplace.ThemePreviewTitle" xml:space="preserve"><value>Theme conversion preview</value></data>
   <data name="Admin.Marketplace.ThemeDerived" xml:space="preserve"><value>Converted visual values: accent color {0}, font {1}.</value></data>
   <data name="Admin.Marketplace.ChooseThemeFile" xml:space="preserve"><value>Choose theme archive (.zip)</value></data>
+  <data name="Admin.Marketplace.PreviewPostTitle" xml:space="preserve"><value>Sample article title</value></data>
+  <data name="Admin.Marketplace.PreviewPostSummary" xml:space="preserve"><value>Sample summary: fonts, line height, cards and heading styles all come from the theme pack.</value></data>
+  <data name="Admin.Marketplace.PreviewRead" xml:space="preserve"><value>Read full article</value></data>
 </root>
