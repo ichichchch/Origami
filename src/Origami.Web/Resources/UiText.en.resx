@@ -4340,7 +4340,6 @@
   <data name="Admin.Marketplace.KindTheme" xml:space="preserve"><value>Theme pack</value></data>
   <data name="Admin.Marketplace.KindWidgets" xml:space="preserve"><value>Widget pack</value></data>
   <data name="Admin.Marketplace.ThemePreview" xml:space="preserve"><value>Layout preview</value></data>
-  <data name="Admin.Marketplace.PreviewBody" xml:space="preserve"><value>Sample text: the typeface, line height and column width come from the pack declaration.</value></data>
   <data name="Admin.Marketplace.AlreadyInstalled" xml:space="preserve"><value>This pack is already installed.</value></data>
   <data name="Admin.Marketplace.Install" xml:space="preserve"><value>Install</value></data>
   <data name="Admin.Marketplace.InstalledTitle" xml:space="preserve"><value>Installed</value></data>

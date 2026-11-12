@@ -2,7 +2,7 @@
 /* 設計令牌：--accent-base 為品牌基色（可由 inline style 覆寫）；
    --accent 用於填充（按鈕底色），--accent-ink 用於前景文字；
    深色模式自動將前景提亮至可讀對比，填充色微調亮度。 */
-:root { color-scheme: light; --paper: #fafbf9; --surface: #fff; --surface-sunken: #f1f4ef; --surface-raised: #fff; --shadow-raised: 0 16px 70px #162d2426; --ink: #24342d; --muted: #5f6b63; --border: #e0e6df; --border-strong: #cdd7ce; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #eff2ec; --radius: 12px; --paper-dark: #141916; --ink-dark: #e7ede9; }
+:root { color-scheme: light; --paper: #f7f7f8; --surface: #fff; --surface-sunken: #f1f1f3; --surface-raised: #fff; --shadow-raised: 0 16px 70px #0a0a0c29; --ink: #1b1b1f; --muted: #5d5d66; --border: #e5e5e8; --border-strong: #cfcfd6; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #f0f0f3; --radius: 12px; --paper-dark: #101013; --ink-dark: #e8e8ec; }
 * { box-sizing: border-box; }
 /* 網格/彈性版型的 display 會蓋過瀏覽器預設的 [hidden]；fallback 切換依賴此規則。 */
 /* 程式焦點環：Blazor 於導覽後會把焦點移至頁面標題（tabindex=-1）供螢幕閱讀器定位；
@@ -428,9 +428,9 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
 @media (prefers-color-scheme: dark) {
     body:has([data-color-scheme="auto"]) { background: var(--paper-dark); color: var(--ink-dark); }
 }
-[data-color-scheme="dark"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --surface-sunken: #171e1a; --surface-raised: #232b26; --shadow-raised: 0 16px 70px #00000066; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --border-strong: #46524a; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #141916); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #10140f; background: var(--paper); color: var(--ink); min-height: 100vh; }
+[data-color-scheme="dark"] { color-scheme: dark; --paper: #101013; --surface: #1a1a1e; --surface-sunken: #151518; --surface-raised: #212127; --shadow-raised: 0 16px 70px #00000066; --ink: #e8e8ec; --muted: #9c9ca6; --border: #2a2a30; --border-strong: #45454e; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #101013); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #0d0d10; background: var(--paper); color: var(--ink); min-height: 100vh; }
 @media (prefers-color-scheme: dark) {
-    [data-color-scheme="auto"] { color-scheme: dark; --paper: #141916; --surface: #1d2420; --surface-sunken: #171e1a; --surface-raised: #232b26; --shadow-raised: 0 16px 70px #00000066; --ink: #e7ede9; --muted: #9aa89f; --border: #2c3630; --border-strong: #46524a; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #141916); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #10140f; background: var(--paper); color: var(--ink); min-height: 100vh; }
+    [data-color-scheme="auto"] { color-scheme: dark; --paper: #101013; --surface: #1a1a1e; --surface-sunken: #151518; --surface-raised: #212127; --shadow-raised: 0 16px 70px #00000066; --ink: #e8e8ec; --muted: #9c9ca6; --border: #2a2a30; --border-strong: #45454e; --focus: #8fc39e; --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #101013); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #0d0d10; background: var(--paper); color: var(--ink); min-height: 100vh; }
 }
 
 /* 設定頁版型即時預覽：重用公開站 .site-shell 的變數派生與 data 屬性開關，
@@ -443,11 +443,11 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
 
 /* 高對比偏好：整體提高次要文字與邊界對比（WCAG 增強，非替代語義令牌）。 */
 @media (prefers-contrast: more) {
-    :root { --muted: #4a574e; --border: #c9d2c7; --border-strong: #b4c0b2; }
-    [data-color-scheme="dark"] { --muted: #c6d4ca; --border: #4a574f; --border-strong: #5c6b62; }
+    :root { --muted: #4b4b55; --border: #c6c6cd; --border-strong: #adadba; }
+    [data-color-scheme="dark"] { --muted: #c9c9d2; --border: #4d4d57; --border-strong: #606069; }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
-    [data-color-scheme="auto"] { --muted: #c6d4ca; --border: #4a574f; --border-strong: #5c6b62; }
+    [data-color-scheme="auto"] { --muted: #c9c9d2; --border: #4d4d57; --border-strong: #606069; }
 }
 
 /* 側欄與頁尾小工具（受控宣告式區塊）：寬螢幕側欄並排，窄螢幕堆疊於主內容之後；
@@ -490,3 +490,79 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
 .package-preview { display: grid; gap: .55rem; padding: 1rem 1.1rem; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 .package-preview p { margin: 0; font-size: .85rem; }
 .package-preview h3 { font-size: .95rem; margin: 0; }
+
+/* ═══ 後台黑白設計系統（2026-11-04 重新設計）═══
+   後台不再借用站台品牌色（--accent-base）：管理介面以墨黑／紙白建立獨立的中性識別，
+   淺色=紙白內容＋墨黑側欄，深色=近黑內容＋更深側欄；語義色（危險／成功／警告）沿用全域值。
+   本塊置於檔案末尾：同特異性時覆蓋前方規則；深色覆蓋以 .admin-shell[data-color-scheme]（0,2,0）
+   壓過全域深色塊（0,1,0）。圖表（Dashboard.razor.js）讀取本殼層計算樣式，自動跟隨黑白。 */
+.admin-shell { --accent: #18181b; --accent-hover: #000; --accent-ink: #18181b; --accent-ink-hover: #000; --accent-soft: #ececef; --focus: #18181b; }
+.admin-shell[data-color-scheme="dark"] { --paper: #101014; --surface: #1a1a1f; --surface-sunken: #151519; --surface-raised: #202027; --ink: #eaeaee; --muted: #9c9ca6; --border: #2a2a31; --border-strong: #44444d; --accent: #fafafa; --accent-hover: #fff; --accent-ink: #e4e4e9; --accent-ink-hover: #fff; --accent-soft: #26262e; --focus: #d4d4dc; --code-bg: #0d0d10; }
+@media (prefers-color-scheme: dark) {
+    .admin-shell[data-color-scheme="auto"] { --paper: #101014; --surface: #1a1a1f; --surface-sunken: #151519; --surface-raised: #202027; --ink: #eaeaee; --muted: #9c9ca6; --border: #2a2a31; --border-strong: #44444d; --accent: #fafafa; --accent-hover: #fff; --accent-ink: #e4e4e9; --accent-ink-hover: #fff; --accent-soft: #26262e; --focus: #d4d4dc; --code-bg: #0d0d10; }
+}
+/* 側欄＝墨黑錨點：兩種模式下皆為深色，文字令牌在側欄範圍內翻轉，
+   讓既有 nav 規則（color-mix 於 --ink/--surface）自動改以淺色呈現。 */
+.admin-sidebar { --ink: #ececef; --muted: #a0a0aa; --border: #27272e; --border-strong: #3a3a44; --surface: #1d1d22; --surface-sunken: #16161a; --accent-ink: #fff; --accent-ink-hover: #d4d4d8; --accent-soft: #26262d; background: linear-gradient(180deg, #131318, #101014); border-right-color: #0a0a0c; color: var(--ink); }
+.admin-shell[data-color-scheme="dark"] .admin-sidebar { background: #0b0b0e; }
+@media (prefers-color-scheme: dark) {
+    .admin-shell[data-color-scheme="auto"] .admin-sidebar { background: #0b0b0e; }
+}
+
+/* 品牌 3D 折紙立方體：純 CSS（無腳本、無依賴），六面三階灰模擬紙的明暗折面；
+   緩慢自轉是唯一的持續動畫，hover 時容器微放大；reduced-motion 下由全域規則靜止為定角呈現。 */
+.brand-mark { position: relative; width: 40px; height: 40px; border: 0; border-radius: 10px; background: #ffffff0f; display: grid; place-items: center; perspective: 160px; transition: transform .25s cubic-bezier(.22,1,.36,1), background .25s ease; }
+.admin-brand:hover .brand-mark { transform: scale(1.08); background: #ffffff1a; }
+.brand-cube { position: relative; width: 20px; height: 20px; transform-style: preserve-3d; animation: cube-spin 18s linear infinite; }
+.brand-cube i { position: absolute; inset: 0; background: #dcdce1; box-shadow: inset 0 0 0 .5px #0a0a0c33; }
+.brand-cube i:nth-child(1) { transform: rotateY(0deg) translateZ(10px); background: #fafafa; }
+.brand-cube i:nth-child(2) { transform: rotateY(90deg) translateZ(10px); background: #c8c8ce; }
+.brand-cube i:nth-child(3) { transform: rotateY(180deg) translateZ(10px); background: #8e8e98; }
+.brand-cube i:nth-child(4) { transform: rotateY(270deg) translateZ(10px); background: #dcdce1; }
+.brand-cube i:nth-child(5) { transform: rotateX(90deg) translateZ(10px); background: #f2f2f4; }
+.brand-cube i:nth-child(6) { transform: rotateX(-90deg) translateZ(10px); background: #52525b; }
+@keyframes cube-spin { from { transform: rotateX(-26deg) rotateY(0deg); } to { transform: rotateX(-26deg) rotateY(360deg); } }
+
+/* 導覽：hover 微亮、active 白膠囊黑字（深色側欄上的高對比指示），箭頭 hover 時輕推。 */
+.admin-nav a { border-radius: 8px; transition: background .16s ease, color .16s ease; }
+.admin-nav a span { transition: transform .16s ease, opacity .16s ease; opacity: .6; }
+.admin-nav a:hover span { transform: translate(1.5px, -1.5px); opacity: .95; }
+.admin-nav a.active { color: #101013; background: #fff; box-shadow: 0 1px 8px #0000004d; }
+.admin-nav a.active span { color: inherit; opacity: .55; }
+
+/* 頂欄吸頂＋毛玻璃：滾動長表格時保留定位資訊，背景半透明由既有 color-mix 提供。 */
+.admin-topbar { position: sticky; top: 0; z-index: 40; -webkit-backdrop-filter: blur(12px) saturate(1.3); backdrop-filter: blur(12px) saturate(1.3); }
+.workspace-label::before { animation: dot-breathe 2.6s ease-in-out infinite; }
+@keyframes dot-breathe { 0%, 100% { box-shadow: 0 0 0 0 #ffffff00; } 50% { box-shadow: 0 0 0 4px #ffffff1f; } }
+
+/* 內容進場：整頁導覽（data-enhance-nav=false）時 main 重建即重放；
+   僅 transform/opacity，互動電路內的局部更新不重建 main、不會閃動。 */
+.admin-main { animation: admin-enter .3s cubic-bezier(.22,1,.36,1) both; }
+.admin-main > * { animation: admin-enter .34s cubic-bezier(.22,1,.36,1) both; }
+.admin-main > :nth-child(2) { animation-delay: 45ms; }
+.admin-main > :nth-child(3) { animation-delay: 90ms; }
+.admin-main > :nth-child(4) { animation-delay: 135ms; }
+.admin-main > :nth-child(n+5) { animation-delay: 180ms; }
+@keyframes admin-enter { from { opacity: 0; transform: translateY(8px); } }
+
+/* 卡片與按鈕：中性分層陰影、hover 輕浮起、按壓回饋。 */
+.panel { box-shadow: 0 1px 2px #0a0a0c0d, 0 10px 28px -20px #0a0a0c59; }
+.admin-shell[data-color-scheme="dark"] .panel { box-shadow: 0 1px 2px #00000059, 0 10px 28px -20px #000000cc; }
+@media (prefers-color-scheme: dark) {
+    .admin-shell[data-color-scheme="auto"] .panel { box-shadow: 0 1px 2px #00000059, 0 10px 28px -20px #000000cc; }
+}
+.metric-card { transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s ease; }
+.metric-card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px #0a0a0c12, 0 18px 36px -22px #0a0a0c66; }
+.button { box-shadow: 0 1px 2px #0a0a0c1f; transition: background .15s, border-color .15s, color .15s, transform .12s ease, box-shadow .2s ease; }
+.button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 3px 8px -2px #0a0a0c2e; }
+.button:active:not(:disabled) { transform: translateY(0) scale(.985); box-shadow: 0 1px 2px #0a0a0c24; }
+.button-secondary, .button-small { box-shadow: none; }
+
+/* 表格與數字：行 hover 掃過、表頭字距放寬、指標使用等寬數字。 */
+.table-scroll tbody tr { transition: background .12s ease; }
+.table-scroll tbody tr:hover td { background: color-mix(in srgb, var(--ink) 3.5%, transparent); }
+th { letter-spacing: .07em; text-transform: uppercase; font-size: .68rem; }
+.metric-value { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.trend-fill { transform-origin: left; animation: trend-grow .7s cubic-bezier(.22,1,.36,1) both; }
+@keyframes trend-grow { from { transform: scaleX(0); } }
+
