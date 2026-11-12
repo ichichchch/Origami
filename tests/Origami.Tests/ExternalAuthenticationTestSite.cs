@@ -5,6 +5,8 @@ internal sealed class ExternalAuthenticationTestSite : IAsyncDisposable
 {
     private readonly WebApplication app;
     private readonly X509Certificate2 certificate;
+    private readonly string certificatePath;
+    private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly HttpClient backchannel;
     public Uri Address { get; }
     public TestClock Clock { get; } = new();
@@ -24,6 +26,10 @@ internal sealed class ExternalAuthenticationTestSite : IAsyncDisposable
         names.AddIpAddress(IPAddress.Loopback);
         request.CertificateExtensions.Add(names.Build());
         certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(2));
+        // Windows 的 SChannel 握手無法取用 CreateSelfSigned 的暫存 CNG 私鑰，記憶體證書會在
+        // TLS 握手期被伺服器中止（用戶端僅見 unexpected EOF）；比照 RunningSite 匯出 PFX 交給 Kestrel 載入。
+        certificatePath = Path.Combine(Path.GetTempPath(), "origami-extauth-" + Guid.NewGuid().ToString("N") + ".pfx");
+        File.WriteAllBytes(certificatePath, certificate.Export(X509ContentType.Pfx, certificatePassword));
         // 相對 API URL 也須能進入封閉 handler，不能先因缺少 BaseAddress 而失敗。
         backchannel = new HttpClient(Backchannel) { BaseAddress = new Uri("https://bff.invalid/") };
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
@@ -43,7 +49,8 @@ internal sealed class ExternalAuthenticationTestSite : IAsyncDisposable
             settings[prefix + "AllowedOrigins:0"] = Address.GetLeftPart(UriPartial.Authority);
         }
         builder.Configuration.AddInMemoryCollection(settings);
-        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, Address.Port, listen => listen.UseHttps(certificate)));
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, Address.Port,
+            listen => listen.UseHttps(certificatePath, certificatePassword)));
         builder.Services.AddScoped<SiteContext>();
         builder.Services.AddDbContextFactory<CmsDbContext>(options =>
         {
@@ -179,6 +186,7 @@ internal sealed class ExternalAuthenticationTestSite : IAsyncDisposable
         await app.DisposeAsync();
         backchannel.Dispose();
         certificate.Dispose();
+        if (File.Exists(certificatePath)) File.Delete(certificatePath);
     }
 
     public sealed class TestClock : TimeProvider

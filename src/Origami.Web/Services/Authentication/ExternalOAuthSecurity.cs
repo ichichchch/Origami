@@ -77,12 +77,15 @@ internal static class ExternalOAuthSecurity
 
     internal static ClaimsPrincipal MinimalPrincipal(ClaimsPrincipal? principal, string scheme)
     {
-        var identifiers = principal?.FindAll(ClaimTypes.NameIdentifier).ToArray();
-        if (identifiers is not { Length: 1 } || string.IsNullOrWhiteSpace(identifiers[0].Value) ||
-            identifiers[0].Value.Length > 512 || identifiers[0].Value.Any(char.IsControl))
+        // Google userinfo 同時攜帶 id 與 sub（同值），GoogleHandler 10.x 兩者都映射為
+        // NameIdentifier；先按值去重，多個「不同值」的識別仍拒絕，維持防混淆邊界。
+        var identifiers = principal?.FindAll(ClaimTypes.NameIdentifier)
+            .Select(claim => claim.Value).Distinct(StringComparer.Ordinal).ToArray();
+        if (identifiers is not { Length: 1 } || string.IsNullOrWhiteSpace(identifiers[0]) ||
+            identifiers[0].Length > 512 || identifiers[0].Any(char.IsControl))
             throw new AuthenticationFailureException(FailureMessage);
         return new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, identifiers[0].Value, ClaimValueTypes.String, scheme)], scheme));
+            [new Claim(ClaimTypes.NameIdentifier, identifiers[0], ClaimValueTypes.String, scheme)], scheme));
     }
 
     internal static async Task RejectAsync(HttpContext context)
