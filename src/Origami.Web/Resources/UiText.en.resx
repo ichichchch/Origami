@@ -2981,7 +2981,7 @@
     <value>Image deleted, including thumbnail variants.</value>
   </data>
   <data name="Admin.Media.Document" xml:space="preserve">
-    <value>Document (PDF)</value>
+    <value>Document</value>
   </data>
   <data name="Admin.Media.Draft" xml:space="preserve">
     <value>Draft</value>
@@ -3002,7 +3002,7 @@
     <value>{0} files</value>
   </data>
   <data name="Admin.Media.FormatsHelp" xml:space="preserve">
-    <value>Supports JPEG, PNG, and WebP (no animation). The server validates each file's actual format and image dimensions. SVG is not accepted.</value>
+    <value>Supports JPEG, PNG, and WebP (no animation); the server validates each file's actual format and image dimensions. SVG is not accepted. Documents (PDF, XLSX, CSV — CSV must be UTF-8) plus audio and video can also be uploaded, each validated by content.</value>
   </data>
   <data name="Admin.Media.Image" xml:space="preserve">
     <value>Image</value>

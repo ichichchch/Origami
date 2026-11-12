@@ -18,6 +18,26 @@ public sealed class MediaFileUploadTests(IsolatedPostgres postgres) : ServiceTes
 
     private static byte[] Webm() => [0x1A, 0x45, 0xDF, 0xA3, 0x01, 0x02, 0x03, 0x04];
 
+    private static byte[] Xlsx() => ZipPackage("[Content_Types].xml", "xl/workbook.xml");
+
+    /// <summary>以兩個未壓縮項目組出最小 OOXML 容器；項目名以明文出現在本地檔頭，供偵測邏輯判讀。</summary>
+    private static byte[] ZipPackage(string first, string second)
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, content) in new[] { (first, "<?xml version=\"1.0\"?><Types/>"), (second, "<workbook/>") })
+            {
+                var entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write(content);
+            }
+        }
+        return buffer.ToArray();
+    }
+
+    private static byte[] Csv() => [0xEF, 0xBB, 0xBF, .. "員工,日期\nAubrey,2026-10-28\n"u8];
+
     [PostgresFact]
     public async Task Allowed_file_types_are_stored_with_their_kind_and_original_bytes()
     {
@@ -65,6 +85,73 @@ public sealed class MediaFileUploadTests(IsolatedPostgres postgres) : ServiceTes
         var path = Path.Combine(directory.Create().Files, asset.FileName);
         Assert.True(File.Exists(path));
         Assert.Equal("%PDF-1.7", File.ReadAllText(path)[..8]);
+    }
+
+    [PostgresFact]
+    public async Task Spreadsheet_uploads_are_stored_as_documents()
+    {
+        using var admin = await App.AdministratorAsync();
+        using var directory = new TemporaryMediaStorage();
+        var media = CreateMediaService(admin, directory);
+
+        using (var stream = new MemoryStream(Xlsx()))
+        {
+            var item = await media.UploadFileAsync(stream, "sheet.xlsx");
+            Assert.Equal(MediaKind.Document, item.Kind);
+            Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", item.ContentType);
+            Assert.Equal(".xlsx", Path.GetExtension(item.FileName));
+            // 試算表與其他非圖片一樣以連結插入，不是圖片語法。
+            Assert.StartsWith("[", item.Markdown);
+            Assert.DoesNotContain("![", item.Markdown);
+        }
+        using (var stream = new MemoryStream(Csv()))
+        {
+            var item = await media.UploadFileAsync(stream, "attendance.csv");
+            Assert.Equal(MediaKind.Document, item.Kind);
+            Assert.Equal("text/csv", item.ContentType);
+            Assert.Equal(".csv", Path.GetExtension(item.FileName));
+        }
+
+        await using var db = await App.CreateContextAsync();
+        var xlsx = await db.MediaAssets.AsNoTracking().SingleAsync(x => x.OriginalName == "sheet.xlsx");
+        var path = Path.Combine(directory.Create().Files, xlsx.FileName);
+        Assert.True(File.Exists(path));
+        // 原樣儲存：首位元組仍為 ZIP 容器的 'P'。
+        Assert.Equal(0x50, File.ReadAllBytes(path)[0]);
+    }
+
+    [PostgresFact]
+    public async Task Spreadsheet_disguises_are_refused()
+    {
+        using var admin = await App.AdministratorAsync();
+        using var directory = new TemporaryMediaStorage();
+        var media = CreateMediaService(admin, directory);
+
+        // OOXML 但不是試算表（docx 的零件）。
+        using (var stream = new MemoryStream(ZipPackage("[Content_Types].xml", "word/document.xml")))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "doc.xlsx"));
+        // 一般 ZIP 沒有 OOXML 試算表特徵。
+        using (var stream = new MemoryStream(ZipPackage("hello.txt", "world.txt")))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "plain.xlsx"));
+        // 執行檔偽裝成 xlsx。
+        using (var stream = new MemoryStream([0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, .. new byte[100]]))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "evil.xlsx"));
+        // 巨集活頁簿副檔名不在白名單。
+        using (var stream = new MemoryStream(Xlsx()))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "macro.xlsm"));
+        // 副檔名與實際內容不符。
+        using (var stream = new MemoryStream(Csv()))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "table.xlsx"));
+        // CSV 限 UTF-8：Big5 內容通過前段掃描後仍被全檔複驗拒絕。
+        using (var stream = new MemoryStream([0xA4, 0xA4, 0xA4, 0xE5, 0x0A]))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "big5.csv"));
+        // 含 NUL 控制字元的二進位偽裝。
+        using (var stream = new MemoryStream([0x31, 0x2C, 0x00, 0x32, 0x0A]))
+            await Assert.ThrowsAsync<CmsException>(() => media.UploadFileAsync(stream, "binary.csv"));
+
+        // 失敗不得留下任何資料列。
+        await using var db = await App.CreateContextAsync();
+        Assert.Empty(await db.MediaAssets.AsNoTracking().ToListAsync());
     }
 
     [PostgresFact]

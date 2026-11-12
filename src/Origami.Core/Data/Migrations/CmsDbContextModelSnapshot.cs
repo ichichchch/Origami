@@ -1521,8 +1521,8 @@ namespace Origami.Core.Data.Migrations
 
                     b.Property<string>("ContentType")
                         .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
                         .HasComment("MIME 类型。");
 
                     b.Property<string>("FileName")

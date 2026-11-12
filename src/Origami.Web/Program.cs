@@ -252,8 +252,10 @@ app.MapGet("/media/{filename}", (string filename, StoragePaths paths) =>
         ".png" => ("image/png", "inline"),
         ".jpg" => ("image/jpeg", "inline"),
         ".webp" => ("image/webp", "inline"),
-        // 文件以附件下載，避免同源內嵌腳本風險；音訊影片可內嵌播放。
+        // 文件（PDF／XLSX／CSV）以附件下載，避免同源內嵌腳本風險；音訊影片可內嵌播放。
         ".pdf" => ("application/pdf", "attachment"),
+        ".xlsx" => ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "attachment"),
+        ".csv" => ("text/csv", "attachment"),
         ".mp3" => ("audio/mpeg", "inline"),
         ".m4a" => ("audio/mp4", "inline"),
         ".ogg" => ("audio/ogg", "inline"),

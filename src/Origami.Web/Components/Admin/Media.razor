@@ -16,11 +16,11 @@
     <p class="notice">@UiText.T("Admin.Media.ReadOnlyNotice", "本站唯讀成員可瀏覽圖片，但不能上傳、修改或刪除。")</p>
 }
 <section class="panel upload-panel">
-    <div><h2>@UiText.T("Admin.Media.UploadImage", "上傳新圖片")</h2><p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.UploadHelp", "選取或拖放即上傳。一次最多 {0} 張，單張上限 {1} MB。"), Limits.MediaBatchMax, Limits.UploadBytes / 1024 / 1024)</p><p class="field-help">@UiText.T("Admin.Media.FormatsHelp", "支援 JPEG、PNG、WebP（不含動畫）；實際格式與圖片大小由伺服器逐檔驗證。不接受 SVG。")</p></div>
+    <div><h2>@UiText.T("Admin.Media.UploadImage", "上傳新圖片")</h2><p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.UploadHelp", "選取或拖放即上傳。一次最多 {0} 張，單張上限 {1} MB。"), Limits.MediaBatchMax, Limits.UploadBytes / 1024 / 1024)</p><p class="field-help">@UiText.T("Admin.Media.FormatsHelp", "支援 JPEG、PNG、WebP（不含動畫）；實際格式與圖片大小由伺服器逐檔驗證。不接受 SVG。另可上傳文件（PDF、XLSX、CSV，CSV 需為 UTF-8）與音訊、影片，同樣逐檔驗證實際格式。")</p></div>
     <div class="upload-control">
         <div id="media-drop-zone" class="drop-zone" aria-describedby="media-drop-help">
             <label for="media-upload" class="sr-only">@UiText.T("Admin.Media.SelectImages", "選取要上傳的圖片（可多選）")</label>
-            <InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm" multiple disabled="@EditBlocked" />
+            <InputFile id="media-upload" OnChange="Upload" accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/mp4,audio/ogg,audio/wav,video/mp4,video/webm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,text/csv,.csv" multiple disabled="@EditBlocked" />
             <p id="media-drop-help" class="field-help">@UiText.T("Admin.Media.DropHelp", "把圖片拖到這裡，或點選選取多個檔案。")</p>
         </div>
         @if (_uploadName is not null) { <p role="status">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.Uploading", "正在上傳：{0}"), _uploadName)</p> }
@@ -72,7 +72,7 @@
     <div class="section-tabs content-filters" role="group" aria-label="@UiText.T("Admin.Media.KindFilter", "媒體類型篩選")">
         <button type="button" class="tab-button @(_kind is null ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(null)">@UiText.T("Admin.Media.AllKinds", "全部")</button>
         <button type="button" class="tab-button @(_kind == MediaKind.Image ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Image)">@UiText.T("Admin.Media.Image", "圖片")</button>
-        <button type="button" class="tab-button @(_kind == MediaKind.Document ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Document)">@UiText.T("Admin.Media.Document", "文件（PDF）")</button>
+        <button type="button" class="tab-button @(_kind == MediaKind.Document ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Document)">@UiText.T("Admin.Media.Document", "文件")</button>
         <button type="button" class="tab-button @(_kind == MediaKind.Audio ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Audio)">@UiText.T("Admin.Media.Audio", "音訊")</button>
         <button type="button" class="tab-button @(_kind == MediaKind.Video ? "active" : "")" disabled="@Blocked" @onclick="() => ChangeKind(MediaKind.Video)">@UiText.T("Admin.Media.Video", "影片")</button>
     </div>
@@ -264,7 +264,7 @@
     private static string Size(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.##} MB" : $"{bytes / 1024d:0.#} KB";
     private static string KindLabel(MediaKind kind) => kind switch
     {
-        MediaKind.Document => UiText.T("Admin.Media.Document", "文件（PDF）"),
+        MediaKind.Document => UiText.T("Admin.Media.Document", "文件"),
         MediaKind.Audio => UiText.T("Admin.Media.Audio", "音訊"),
         MediaKind.Video => UiText.T("Admin.Media.Video", "影片"),
         _ => UiText.T("Admin.Media.Image", "圖片")

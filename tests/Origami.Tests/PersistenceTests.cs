@@ -193,6 +193,10 @@ public sealed class PersistenceTests : ServiceTestBase
         Assert.Equal(post.Title, article.QuerySelector("h1")?.TextContent);
         Assert.Equal("Original content", article.QuerySelector("strong")?.TextContent);
         Assert.Equal(media.Url, article.QuerySelector("img")?.GetAttribute("src"));
+        // 文章頁對已登入管理員會渲染 _canEdit 編輯快捷入口（byline 段落內的 text-button），
+        // 屬登入態差異而非內容差異；持久化比對前連同外殼統一移除，登入與匿名讀取才可比。
+        foreach (var editLink in article.QuerySelectorAll("a.text-button").ToList())
+            (editLink.Closest(".byline") ?? editLink).Remove();
         // 比較整篇渲染後的文章位元組，排除文件中每次請求都不同的框架
         // 狀態／防偽 token；原始 Markdown 也已在 PostgreSQL 端比對。
         return Encoding.UTF8.GetBytes(article.OuterHtml);

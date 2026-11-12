@@ -125,7 +125,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(page.Locator(".notice-success")).ToContainTextAsync("已儲存標籤");
 
         await VisitAsync(page, "/admin/media");
-        await page.Locator("#media-upload").SetInputFilesAsync(new FilePayload { Name = "journey.png", MimeType = "image/png", Buffer = ImageBytes() });
+        await SetFileAndNotifyAsync(page.Locator("#media-upload"),
+            new FilePayload { Name = "journey.png", MimeType = "image/png", Buffer = ImageBytes() });
         await Expect(page.Locator("#uploaded-markdown")).ToBeVisibleAsync();
         var imageMarkdown = await page.Locator("#uploaded-markdown").InputValueAsync();
         Assert.Contains("/media/", imageMarkdown);
@@ -282,7 +283,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(page.Locator("form:has(#content-title) #new-taxonomy-Category")).ToHaveCountAsync(1);
         await Expect(page.Locator("fieldset.editor-grid form")).ToHaveCountAsync(0);
         await Expect(upload).ToBeEnabledAsync();
-        await upload.SetInputFilesAsync(new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = Encoding.UTF8.GetBytes("not a PNG") });
+        await SetFileAndNotifyAsync(upload,
+            new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = Encoding.UTF8.GetBytes("not a PNG") });
         await Expect(picker.GetByRole(AriaRole.Alert)).ToContainTextAsync("圖片無法解碼或格式不合法");
         await Expect(picker.Locator(".media-choice")).ToHaveCountAsync(0);
         await Expect(markdown).ToHaveValueAsync(body);
@@ -298,7 +300,7 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
             await using var hold = new NpgsqlCommand("LOCK TABLE \"MediaAssets\" IN SHARE MODE", connection, transaction);
             await hold.ExecuteNonQueryAsync();
             // 重用剛失敗的檔名，證明檔案控制項可以重試同一檔案。
-            await upload.SetInputFilesAsync(new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = ImageBytes() });
+            await SetFileAndNotifyAsync(upload, new FilePayload { Name = "inline.png", MimeType = "image/png", Buffer = ImageBytes() });
             await Expect(picker.GetByText("正在上傳：inline.png", new() { Exact = true })).ToBeVisibleAsync();
             await Expect(draft).ToBeDisabledAsync();
             await Expect(publish).ToBeDisabledAsync();
@@ -640,6 +642,25 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
 
     private static Task<IResponse?> VisitAsync(IPage page, string path) => page.GotoAsync(path, new() { WaitUntil = WaitUntilState.NetworkIdle });
     private static string BrowserChannel() => Environment.GetEnvironmentVariable("ORIGAMI_BROWSER_CHANNEL") ?? "msedge";
+
+    /// <summary>Playwright 的 CDP 設檔與 .NET 10 Blazor 對 file input 的委派 change 監聽存在競態，
+    /// 單獨補派事件也可能與原生路徑互踩。改為單次求值內以 DataTransfer 原子地注入檔案並派發 change
+    /// （與 Media.razor.js 的拖放轉發同一機制），上傳管線因此可被穩定驅動。</summary>
+    private static async Task SetFileAndNotifyAsync(ILocator input, FilePayload file)
+    {
+        var base64 = Convert.ToBase64String(file.Buffer);
+        const string script =
+            "(el, payload) => {" +
+            "const [name, mimeType, b64] = payload;" +
+            "const bytes = Uint8Array.from(atob(b64), ch => ch.charCodeAt(0));" +
+            "const transfer = new DataTransfer();" +
+            "transfer.items.add(new File([bytes], name, { type: mimeType }));" +
+            "el.files = transfer.files;" +
+            "el.dispatchEvent(new Event('change', { bubbles: true }));" +
+            "}";
+        await input.EvaluateAsync(script, new[] { file.Name, file.MimeType, base64 });
+    }
+
     private static async Task SaveScreenshotAsync(IPage page, string name)
     {
         var folder = Path.Combine(RunningSite.FindSolutionRoot(), ".artifacts", "screenshots");

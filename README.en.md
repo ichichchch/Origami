@@ -27,7 +27,7 @@ WordPress 7.1.3 in a modern .NET stack — no PHP, no `wp_*` table compatibility
 | Articles | List, create, edit, draft, publish, withdraw, sticky, scheduled publishing, excerpt, cover image, confirmed permanent delete, trash with restore, list bulk actions (trash/restore/delete many), list quick edit (title/slug/status in place) |
 | Pages | Standalone URLs, hierarchical navigation with hierarchical URLs (/pages/parent/child/, flat URLs redirect 301), cycle protection, usable as the fixed home page |
 | Categories & tags | Flat structure, many-to-many assignment, descriptions, deletion never removes articles, merge (reassign relations to a target, then remove the source) |
-| Media | Image upload, media library, insert as Markdown, alt text and caption, cover image assignment (posts and pages), reference-protected deletion, responsive variants with srcset, keyword search in the editor picker |
+| Media | Image and file upload (images re-encoded; PDF／audio／video／XLSX／CSV stored verbatim after magic-number and content validation), media library, insert as Markdown, alt text and caption, cover image assignment (posts and pages), reference-protected deletion, responsive variants with srcset, keyword search in the editor picker |
 | Public site | Article list with pagination and cover thumbnails, article and page detail with cover, caption and author byline, neighbour and related posts, monthly archives, paginated hybrid search, basic navigation, mobile-friendly |
 | Openness | RSS 2.0 and Atom 1.0 feeds (filterable by category/tag, optional full text), oEmbed provider (JSON + discovery links), sitemap.xml, robots.txt, article-level Open Graph (og:image prefers the cover, falls back to the first inline image) and canonical meta, 301 redirects for retired slugs, JSON data export and import, ZIP full backup (JSON + images) with restore, daily automatic backup (opt-in via configuration), `/health` database liveness, public read-only JSON API `/api/v1` and the MCP endpoint on a dedicated Api host, alongside restricted management APIs |
 | Editor safety net | Autosave every 60 s for existing drafts, revision history (20 per item with line-diff against the editor), trash with 30-day retention and restore, revocable draft preview links |
@@ -285,7 +285,7 @@ Admin area (Interactive Server, per page render mode):
 | `/admin/taxonomies` | Create, edit and delete categories and tags |
 | `/admin/widgets` | Create, edit, reorder, show/hide and delete sidebar and footer widgets (five built-in types) |
 | `/admin/marketplace` | Controlled package market: browse the built-in catalog with live theme previews (rendered with the theme's own layout styles), analyze and install uploaded ZIP packages, enable/disable and uninstall (uninstalling a widget pack also removes the widgets it created), export a pack as a shareable ZIP, and convert a third-party (WordPress) theme archive into a controlled theme pack |
-| `/admin/media` | Image upload, media library search, alt text, reference-protected deletion |
+| `/admin/media` | Image and file upload (images, PDF, audio, video, XLSX, CSV), media library search with kind filter, alt text, reference-protected deletion |
 | `/admin/settings` | Site name and description, articles per page, feed items, fixed home page, site icon, data export (JSON / ZIP full backup) with replace-style import |
 | `/admin/security` | Two-factor (TOTP) setup and removal for one's own account |
 | `/admin/sites` | First batch: accessible site list/switching; network admin creates and updates sites, Host mappings and active state |
@@ -340,6 +340,7 @@ the web tests exercise the full BFF chain.
 | `ProtectedServiceTests` | Every protected service refuses anonymous or revoked identities |
 | `DatabaseIntegrationTests` | Migrations, unique constraints, transactions, UTC storage, database-level rules |
 | `MediaServiceTests` | Upload, format spoofing, SVG rejection, size and dimension limits, path traversal, failure cleanup, persistence |
+| `MediaFileUploadTests` | Non-image file upload: PDF／audio／video／XLSX／CSV magic-number and content validation, disguise and extension-mismatch rejection, failure cleanup |
 | `MarkdownSecurityTests` | Disabled raw HTML, dangerous link and image protocols, XSS, concurrent rendering, editor preview |
 | `HttpSecurityTests` | Cookie attributes, antiforgery, lockout and throttling, security headers, public 404s, admin route guards |
 | `BrowserFlowTests` | Full publishing loop in a real browser, two-tab conflict, unsaved-change warning, disconnect recovery, mobile layout |
@@ -392,6 +393,9 @@ user's full batch regression; the batch is not claimed accepted before that pass
   no IPv6 literal registration); DNS/TLS/reverse proxy configuration remains an operations task.
 - All uploaded images are public, including those referenced only by drafts. Site directory
   isolation is not private-attachment authorization.
+- Non-image uploads accept whitelisted formats only (PDF, audio, video, XLSX, CSV). CSV must be
+  plain UTF-8 text (BOM allowed); other encodings such as Big5/GBK are rejected. XLSX is validated
+  by OOXML container signature only and stored verbatim; the server never parses cell contents.
 - The Data Protection key ring is encrypted with Windows DPAPI, so it can only be decrypted on the
   same machine by the same user. Recovery on another machine requires re-provisioning. Keys remain
   global and are not moved by this batch.

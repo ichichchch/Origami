@@ -372,7 +372,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasAlternateKey(x => new { x.SiteId, x.Id });
             e.Property(x => x.FileName).HasMaxLength(80).IsRequired();
             e.Property(x => x.OriginalName).HasMaxLength(200).IsRequired();
-            e.Property(x => x.ContentType).HasMaxLength(40).IsRequired();
+            e.Property(x => x.ContentType).HasMaxLength(80).IsRequired();
             e.Property(x => x.AltText).HasMaxLength(Limits.AltText).IsRequired();
             e.Property(x => x.Caption).HasMaxLength(Limits.Caption).IsRequired();
             e.HasIndex(x => new { x.SiteId, x.FileName }).IsUnique();

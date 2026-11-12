@@ -155,7 +155,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".jpeg" or ".webp";
 
     /// <summary>
-    /// 上傳非圖片媒體（PDF／音訊／影片）：以魔數判定實際格式，副檔名不符即拒絕；
+    /// 上傳非圖片媒體（PDF／XLSX／CSV／音訊／影片）：以魔數與內容特徵判定實際格式，副檔名不符即拒絕；
     /// 原樣儲存不重新編碼，檔名由伺服器產生，不含使用者提供的路徑。
     /// </summary>
     public async Task<MediaItem> UploadFileAsync(Stream stream, string originalName, CancellationToken ct = default)
@@ -166,7 +166,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         var read = await stream.ReadAsync(head, ct);
         var detected = DetectFileKind(head.AsSpan(0, read));
         if (detected is null)
-            throw new CmsException("不支援的檔案格式；僅接受 PDF、MP3、M4A、MP4、WebM、OGG、WAV。");
+            throw new CmsException("不支援的檔案格式；僅接受 PDF、XLSX、CSV、MP3、M4A、MP4、WebM、OGG、WAV。");
         var (kind, extension, contentType) = detected.Value;
         if (Path.GetExtension(safeName).ToLowerInvariant() != extension)
             throw new CmsException("檔案副檔名與實際格式不符。");
@@ -198,6 +198,8 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             var size = new FileInfo(path).Length;
             if (size is 0 or > Limits.FileUploadBytes)
                 throw new CmsException($"檔案大小須為 1 位元組至 {Limits.FileUploadBytes} 位元組。");
+            if (extension == ".csv" && !IsValidCsvFile(await File.ReadAllBytesAsync(path, ct)))
+                throw new CmsException("CSV 檔案必須是 UTF-8 純文字；不接受二進位內容、其他編碼或控制字元。");
             await using var db = await factory.CreateDbContextAsync(ct);
             var asset = new MediaAsset
             {
@@ -240,7 +242,44 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
                 return (MediaKind.Audio, ".m4a", "audio/mp4");
             return (MediaKind.Video, ".mp4", "video/mp4");
         }
+        // OOXML 試算表：ZIP 容器（PK\x03\x04）首項為 [Content_Types].xml，且前段可見 xl/workbook.xml 零件；
+        // 由此與 docx／pptx 及任意 ZIP 區別，巨集活頁簿（.xlsm）由副檔名不符拒絕。
+        if (head.Length >= 4 && head[..4].SequenceEqual(new byte[] { 0x50, 0x4B, 0x03, 0x04 })
+            && ZipFirstName(head) == "[Content_Types].xml" && head.IndexOf("xl/workbook.xml"u8) >= 0)
+            return (MediaKind.Document, ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        // CSV 沒有魔數：先以控制字元掃描剔除二進位偽裝；UTF-8 全檔驗證在寫入後執行。
+        if (LooksLikeCsvHead(head))
+            return (MediaKind.Document, ".csv", "text/csv");
         return null;
+    }
+
+    /// <summary>讀 ZIP 第一個本地檔頭的項目名稱；結構不完整時回 null。</summary>
+    private static string? ZipFirstName(ReadOnlySpan<byte> head)
+    {
+        if (head.Length < 30) return null;
+        var nameLength = head[26] | head[27] << 8;
+        var extraLength = head[28] | head[29] << 8;
+        if (nameLength is 0 || 30 + nameLength + extraLength > head.Length) return null;
+        return Encoding.ASCII.GetString(head.Slice(30, nameLength));
+    }
+
+    /// <summary>偵測階段的 CSV 前段檢查：除 TAB／LF／CR 外不得含控制字元（多位元組序列不會出現低於 0x20 的位元組）。</summary>
+    private static bool LooksLikeCsvHead(ReadOnlySpan<byte> head)
+    {
+        if (head.Length == 0) return false;
+        foreach (var b in head)
+            if ((b < 0x20 && b != 9 && b != 10 && b != 13) || b == 0x7F) return false;
+        return true;
+    }
+
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>CSV 全檔驗證：UTF-8（允許 BOM）且無控制字元；Big5／GBK 等其他編碼與二進位內容在此拒絕。</summary>
+    private static bool IsValidCsvFile(byte[] bytes)
+    {
+        if (!LooksLikeCsvHead(bytes)) return false;
+        try { _ = StrictUtf8.GetString(bytes); return true; }
+        catch (DecoderFallbackException) { return false; }
     }
 
     /// <summary>只做檔名安全檢查（不含副檔名白名單）；上傳檔案的副檔名由魔數決定。</summary>
