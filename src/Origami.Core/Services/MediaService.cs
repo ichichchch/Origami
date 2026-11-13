@@ -1,7 +1,7 @@
 namespace Origami.Core.Services;
 
 public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin,
-    StoragePaths storage, TimeProvider clock, ILogger<MediaService> logger)
+    StoragePaths storage, TimeProvider clock, ILogger<MediaService> logger, IHttpClientFactory httpClients)
 {
     private static readonly SemaphoreSlim DecodeSlots = new(2);
 
@@ -218,6 +218,73 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             Cleanup(path);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 從公開 https 網址匯入媒體（sideload）。安全邊界與外部 feed 小工具一致：
+    /// 僅公開 https 絕對網址（拒絕本機／內網與保留位址，含 IPv4-mapped IPv6）、不跟隨轉址、
+    /// 逾時與單檔位元組上限；下載內容仍走既有上傳白名單與格式驗證（圖片重編碼、文件以魔數驗證）。
+    /// </summary>
+    public async Task<MediaItem> ImportFromUrlAsync(string url, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        var trimmed = (url ?? "").Trim();
+        if (trimmed.Length == 0 || trimmed.Length > Limits.WidgetFeedUrl)
+            throw new CmsException($"請提供匯入網址（最長 {Limits.WidgetFeedUrl} 字）。");
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !WebhookService.IsAllowedWebhookUrl(trimmed))
+            throw new CmsException("匯入網址必須是公開 https 絕對網址（不接受本機或內網位址）。");
+        // 檔名取自網址路徑最後段，副檔名必須在上傳白名單內；實際內容格式仍由上傳管線驗證。
+        var lastSegment = Uri.UnescapeDataString(uri.AbsolutePath.Split('/').LastOrDefault() ?? "");
+        if (lastSegment.Length == 0 || !IsSideloadFileName(lastSegment))
+            throw new CmsException("網址結尾必須是帶支援副檔名的檔名（如 image.png 或 doc.pdf）。");
+        var limit = IsImageFileName(lastSegment) ? Limits.UploadBytes : Limits.FileUploadBytes;
+        try
+        {
+            var client = httpClients.CreateClient("OrigamiMediaSideload");
+            using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+            // 不跟隨轉址：3xx 一律拒絕，避免經重新導向繞過位址檢查。
+            if ((int)response.StatusCode is >= 300 and < 400)
+                throw new CmsException("匯入網址不得轉址；請改用最終目的網址。");
+            if (!response.IsSuccessStatusCode)
+                throw new CmsException($"來源伺服器回應 {((int)response.StatusCode)}，無法下載。");
+            if (response.Content.Headers.ContentLength is { } declared and > 0 && declared > limit)
+                throw new CmsException($"檔案宣告大小超過 {(int)(limit / 1024 / 1024)} MB 上限。");
+            await using var remote = await response.Content.ReadAsStreamAsync(ct);
+            using var bounded = new MemoryStream();
+            var buffer = new byte[81920];
+            int read;
+            // 邊下載邊設限：超過上限立即中止，不把超限內容整包讀進記憶體。
+            while ((read = await remote.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
+            {
+                await bounded.WriteAsync(buffer.AsMemory(0, read), ct);
+                if (bounded.Length > limit)
+                    throw new CmsException($"檔案下載超過 {(int)(limit / 1024 / 1024)} MB 上限。");
+            }
+            if (bounded.Length == 0)
+                throw new CmsException("來源沒有返回任何內容。");
+            bounded.Position = 0;
+            return IsImageFileName(lastSegment)
+                ? await UploadAsync(bounded, lastSegment, ct)
+                : await UploadFileAsync(bounded, lastSegment, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        // 網路層錯誤（含逾時）轉為友善訊息；逾時取消在丟回前先排除本身請求取消。
+        catch (Exception error) when (error is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
+        {
+            throw new CmsException("下載失敗：無法連線或逾時，請確認網址可公開存取後重試。");
+        }
+    }
+
+    /// <summary>sideload 檔名檢查：純檔名（無路徑）且副檔名在上傳白名單內。</summary>
+    private static bool IsSideloadFileName(string fileName)
+    {
+        if (fileName.Contains('/') || fileName.Contains('\\') || fileName.Contains('\0')) return false;
+        return IsImageFileName(fileName) || Path.GetExtension(fileName).ToLowerInvariant()
+            is ".pdf" or ".xlsx" or ".csv" or ".mp3" or ".m4a" or ".mp4" or ".webm" or ".ogg" or ".wav";
     }
 
     /// <summary>以魔數判定非圖片媒體的種類；不认识的內容一律視為不支援。</summary>

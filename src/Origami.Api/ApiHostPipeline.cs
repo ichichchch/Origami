@@ -82,6 +82,10 @@ public static class ApiHostPipeline
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         builder.Services.AddHttpClient("OrigamiWxrAttachment")
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+        // 從網址匯入媒體（sideload）的下載通道：較長逾時容納較大檔案、不跟隨轉址、不帶 cookie；
+        // 位址白名單與單檔大小上限由服務層把關。
+        builder.Services.AddHttpClient("OrigamiMediaSideload", client => client.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         builder.Services.AddScoped<WebhookService>();
         builder.Services.AddScoped<SiteHealthService>();
         builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));

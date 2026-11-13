@@ -25,6 +25,14 @@
         </div>
         @if (_uploadName is not null) { <p role="status">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.Uploading", "正在上傳：{0}"), _uploadName)</p> }
     </div>
+    <div class="field sideload-control">
+        <label for="media-import-url">@UiText.T("Admin.Media.ImportFromUrl", "從網址匯入")</label>
+        <div class="button-row">
+            <input id="media-import-url" type="url" maxlength="@Limits.WidgetFeedUrl" placeholder="https://example.com/image.png" @bind="_importUrl" @bind:event="oninput" disabled="@EditBlocked" />
+            <button type="button" class="button button-secondary" disabled="@(EditBlocked || string.IsNullOrWhiteSpace(_importUrl))" @onclick="ImportFromUrl">@UiText.T("Admin.Media.Import", "匯入")</button>
+        </div>
+        <span class="field-help">@UiText.T("Admin.Media.ImportHelp", "僅接受公開 https 網址（不接受本機或內網位址）、不跟隨轉址；下載內容仍逐一驗證實際格式。")</span>
+    </div>
 </section>
 @if (_uploaded is not null)
 {
@@ -128,6 +136,14 @@
     private PagedResult<MediaItem>? _result;
     private MediaItem? _uploaded;
     private string? _uploadName;
+    private string _importUrl = "";
+
+    private Task ImportFromUrl() => RunAsync(async ct =>
+    {
+        _uploaded = await Api.ImportMediaFromUrlAsync(_importUrl.Trim(), ct)
+            ?? throw new CmsException(UiText.T("Admin.Media.ImportFailed", "匯入失敗，請確認網址後重試。"));
+        _importUrl = "";
+    }, UiText.T("Admin.Media.Imported", "已從網址匯入媒體。"));
     private List<MediaBatchItem>? _batchResults;
     private IJSObjectReference? _dropModule;
     private readonly Dictionary<Guid, string> _altEdits = [];

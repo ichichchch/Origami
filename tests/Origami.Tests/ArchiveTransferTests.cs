@@ -28,7 +28,8 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
     {
         using var admin = await App.AdministratorAsync();
         var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
-            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance);
+            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
+            admin.Services.GetRequiredService<IHttpClientFactory>());
         MediaItem image;
         await using (var stream = new MemoryStream(Png(1200, 400)))
         {
@@ -67,7 +68,8 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
         using var admin = await App.AdministratorAsync();
         await admin.Content.SaveAsync(NewContent("既有內容"));
         var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
-            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance);
+            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
+            admin.Services.GetRequiredService<IHttpClientFactory>());
         await using (var stream = new MemoryStream(Png(900, 300)))
         {
             await media.UploadAsync(stream, "must-ship.png");

@@ -602,6 +602,10 @@ public sealed class OrigamiClient
         return await response.Content.ReadFromJsonAsync<MediaItem>(Json, ct);
     }
 
+    /// <summary>從公開 https 網址匯入媒體（sideload）；安全邊界由服務層把關。</summary>
+    public async Task<MediaItem?> ImportMediaFromUrlAsync(string url, CancellationToken ct = default) =>
+        await SendAsync<MediaItem>(new(HttpMethod.Post, "api/v1/admin/media/import-url"), new { url }, ct);
+
     /// <summary>批次上傳：逐檔回報結果，單檔失敗不影響其他檔案。</summary>
     public async Task<List<MediaBatchItem>?> UploadMediaBatchAsync(IReadOnlyList<IBrowserFile> files, CancellationToken ct = default)
     {

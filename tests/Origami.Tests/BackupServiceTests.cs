@@ -41,7 +41,7 @@ public sealed class BackupServiceTests(IsolatedPostgres postgres) : ServiceTestB
         var media = new MediaService(
             admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
             admin.Services.GetRequiredService<AdminAccess>(), admin.Storage, TimeProvider.System,
-            NullLogger<MediaService>.Instance);
+            NullLogger<MediaService>.Instance, admin.Services.GetRequiredService<IHttpClientFactory>());
         using (var stream = new MemoryStream("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray()))
             await media.UploadFileAsync(stream, "manual.pdf");
 

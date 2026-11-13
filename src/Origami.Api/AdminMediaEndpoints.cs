@@ -69,6 +69,15 @@ public static class AdminMediaEndpoints
             return Results.Ok(results);
         }).DisableAntiforgery();
 
+        // 從公開 https 網址匯入媒體（sideload）；位址白名單、不跟隨轉址與大小上限由服務層把關。
+        group.MapPost("/import-url", async (MediaImportUrlInput input, MediaService media, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(input?.Url))
+                return Results.BadRequest(new { message = "請提供匯入網址。" });
+            var item = await media.ImportFromUrlAsync(input.Url, ct);
+            return Results.Created($"/api/v1/admin/media/{item.Id}", item);
+        }).DisableAntiforgery();
+
         group.MapPut("/{id}/meta", async (Guid id, MediaMetaInput input, MediaService media, CancellationToken ct) =>
             Results.Ok(await media.UpdateMetaAsync(id, input.AltText, input.Caption, ct)));
 
@@ -85,6 +94,7 @@ public static class AdminMediaEndpoints
     }
 
     public sealed record MediaMetaInput(string? AltText, string? Caption);
+    public sealed record MediaImportUrlInput(string? Url);
 
     /// <summary>依檔型決定大小上限：圖片 5 MiB，其餘 20 MiB。</summary>
     private static long MediaSizeLimit(string fileName) =>

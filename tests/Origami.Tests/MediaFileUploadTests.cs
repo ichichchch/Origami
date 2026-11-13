@@ -6,9 +6,92 @@ public sealed class MediaFileUploadTests(IsolatedPostgres postgres) : ServiceTes
 {
     private static MediaService CreateMediaService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
-        actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance);
+        actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
+        actor.Services.GetRequiredService<IHttpClientFactory>());
 
     private static byte[] Pdf() => "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray();
+
+    /// <summary>
+    /// sideload（從網址匯入媒體）：模擬外網 CDN 的 loopback https 伺服器驗證成功路徑；
+    /// 位址白名單、轉址與副檔名邊界全部拒絕。fixture 的 OrigamiMediaSideload 通道把
+    /// 外部位址連線導向本機同埠（見 CmsTestApplication），服務層白名單仍以字面 hostname 把關。
+    /// </summary>
+    [PostgresFact]
+    public async Task Sideload_imports_public_https_media_and_rejects_unsafe_sources()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var media = CreateMediaService(admin, directory);
+
+        // 模擬外網 CDN：實際綁 127.0.0.1，但以 cdn.example.test 的字面 hostname 通過白名單。
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(options =>
+            options.Listen(System.Net.IPAddress.Loopback, 0, listen => listen.UseHttps()));
+        var png = Png(40, 30);
+        var app = builder.Build();
+        app.MapGet("/cover.png", () => Results.File(png, "image/png"));
+        app.MapGet("/moved.png", () => Results.Redirect("https://cdn.example.test/cover.png"));
+        app.MapGet("/notimage.png", () => Results.File(Pdf(), "application/pdf"));
+        await app.StartAsync();
+        try
+        {
+            var port = new Uri(app.Urls.Single()).Port;
+            var baseUrl = $"https://cdn.example.test:{port}";
+
+            // 成功：公開 https 圖片下載後走既有圖片重編碼管線入庫。
+            var item = await media.ImportFromUrlAsync($"{baseUrl}/cover.png");
+            Assert.Equal(MediaKind.Image, item.Kind);
+            Assert.Equal("cover.png", item.OriginalName);
+
+            // 內容與副檔名不符：下載成功但格式驗證拒絕。
+            await Assert.ThrowsAsync<CmsException>(() => media.ImportFromUrlAsync($"{baseUrl}/notimage.png"));
+
+            // 不跟隨轉址。
+            await Assert.ThrowsAsync<CmsException>(() => media.ImportFromUrlAsync($"{baseUrl}/moved.png"));
+
+            // 位址白名單與 URL 形態：全部在發起連線前拒絕。
+            foreach (var rejected in new[]
+                     {
+                         "http://cdn.example.test/cover.png",
+                         "ftp://cdn.example.test/cover.png",
+                         "https://localhost/cover.png",
+                         "https://127.0.0.1/cover.png",
+                         "https://192.168.1.10/cover.png",
+                         "https://10.0.0.5/cover.png",
+                         "https://[::ffff:10.0.0.1]/cover.png",
+                         "https://cdn.example.internal/cover.png",
+                         "not a url",
+                         $"{baseUrl}/noextension",
+                         $"{baseUrl}/image.svg",
+                         $"{baseUrl}/app.exe",
+                     })
+            {
+                await Assert.ThrowsAsync<CmsException>(() => media.ImportFromUrlAsync(rejected));
+            }
+
+            // 未登入不得使用。
+            using (var anonymous = App.Anonymous())
+            {
+                var anonymousMedia = CreateMediaService(anonymous, directory);
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                    () => anonymousMedia.ImportFromUrlAsync($"{baseUrl}/cover.png"));
+            }
+        }
+        finally
+        {
+            await app.StopAsync();
+        }
+    }
+
+    private static byte[] Png(int width, int height)
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(new SkiaSharp.SKImageInfo(width, height));
+        bitmap.Erase(SkiaSharp.SKColors.SteelBlue);
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var encoded = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 90)!;
+        return encoded.ToArray();
+    }
 
     private static byte[] Mp3() => [.. "ID3"u8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A];
 

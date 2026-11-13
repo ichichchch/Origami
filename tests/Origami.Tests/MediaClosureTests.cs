@@ -14,7 +14,8 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
 
     private static MediaService CreateService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
-        actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance);
+        actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
+        actor.Services.GetRequiredService<IHttpClientFactory>());
 
     [PostgresFact]
     public async Task Uploads_generate_variant_files_and_rendering_emits_srcset()

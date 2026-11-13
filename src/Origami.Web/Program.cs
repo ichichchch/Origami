@@ -85,6 +85,9 @@ builder.Services.AddHttpClient("OrigamiWidgetFeed", client => client.Timeout = T
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddHttpClient("OrigamiWxrAttachment")
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+// 從網址匯入媒體（sideload）的下載通道：與 Api 主機同一組邊界（30 秒逾時、不跟隨轉址、不帶 cookie）。
+builder.Services.AddHttpClient("OrigamiMediaSideload", client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddScoped<SiteHealthService>();
 builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));

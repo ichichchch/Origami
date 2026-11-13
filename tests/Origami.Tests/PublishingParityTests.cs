@@ -109,7 +109,8 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
         using var mediaDirectory = new TemporaryMediaStorage();
         var storage = mediaDirectory.Create();
         MediaService For(TestActor actor) => new(actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
-            actor.Services.GetRequiredService<AdminAccess>(), storage, TimeProvider.System, NullLogger<MediaService>.Instance);
+            actor.Services.GetRequiredService<AdminAccess>(), storage, TimeProvider.System, NullLogger<MediaService>.Instance,
+            actor.Services.GetRequiredService<IHttpClientFactory>());
         var service = For(admin);
 
         var updated = await service.UpdateMetaAsync(asset.Id, "  山林的清晨 [晨霧]  ", "  清晨五點的展望  ");

@@ -440,7 +440,7 @@ public sealed class MediaServiceTests(IsolatedPostgres postgres) : ServiceTestBa
 
     private MediaService CreateService(TestActor actor, StoragePaths storage, IDbContextFactory<CmsDbContext>? factory = null) =>
         new(factory ?? Factory, actor.Services.GetRequiredService<AdminAccess>(), storage,
-            TimeProvider.System, NullLogger<MediaService>.Instance);
+            TimeProvider.System, NullLogger<MediaService>.Instance, actor.Services.GetRequiredService<IHttpClientFactory>());
 
     private async Task RotateStampAsync()
     {

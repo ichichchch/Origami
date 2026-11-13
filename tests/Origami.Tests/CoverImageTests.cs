@@ -24,7 +24,8 @@ public sealed class CoverImageTests(IsolatedPostgres postgres) : ServiceTestBase
     /// <summary>指向暫存目錄的媒體服務；容器註冊的 StoragePaths 指向實際應用目錄，測試不可寫入。</summary>
     private static MediaService CreateMediaService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
-        actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance);
+        actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
+        actor.Services.GetRequiredService<IHttpClientFactory>());
 
     [PostgresFact]
     public async Task Cover_round_trips_through_edit_save_and_public_reads()

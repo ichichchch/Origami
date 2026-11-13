@@ -3001,6 +3001,21 @@
   <data name="Admin.Media.DropHelp" xml:space="preserve">
     <value>Drop images here, or click to select multiple files.</value>
   </data>
+  <data name="Admin.Media.ImportFromUrl" xml:space="preserve">
+    <value>Import from URL</value>
+  </data>
+  <data name="Admin.Media.Import" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="Admin.Media.ImportHelp" xml:space="preserve">
+    <value>Public absolute https URLs only (local or intranet hosts rejected); redirects are not followed, and downloaded content is still validated by actual format.</value>
+  </data>
+  <data name="Admin.Media.ImportFailed" xml:space="preserve">
+    <value>Import failed; please check the URL and try again.</value>
+  </data>
+  <data name="Admin.Media.Imported" xml:space="preserve">
+    <value>Media imported from URL.</value>
+  </data>
   <data name="Admin.Media.EmptyHelp" xml:space="preserve">
     <value>Upload your first image to start building your media library.</value>
   </data>

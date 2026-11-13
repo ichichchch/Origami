@@ -63,6 +63,26 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<NavigationService>();
         services.AddMemoryCache();
         services.AddHttpClient();
+        // sideload（從網址匯入媒體）的測試通道：把外部位址的連線導向本機同埠，並信任測試自簽憑證。
+        // 服務層的位址白名單仍以字面 hostname 判斷，對測試等同真實外網來源。
+        services.AddHttpClient("OrigamiMediaSideload")
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+                {
+                    RemoteCertificateValidationCallback = delegate { return true; }
+                },
+                ConnectCallback = async (context, cancellationToken) =>
+                {
+                    var socket = new System.Net.Sockets.Socket(
+                        System.Net.Sockets.AddressFamily.InterNetwork,
+                        System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+                    await socket.ConnectAsync(System.Net.IPAddress.Loopback, context.DnsEndPoint.Port, cancellationToken);
+                    return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+                }
+            });
         services.AddScoped<WidgetService>();
         services.AddScoped<MarketplaceService>();
         services.AddScoped<PasswordResetService>();
