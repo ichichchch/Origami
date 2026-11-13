@@ -60,6 +60,7 @@
   </resheader>
   <data name="Account.Brand" xml:space="preserve">
     <value>ORIGAMI · Content Studio</value>
+  </data>
   <data name="Account.ForgotPassword.BackToLogin" xml:space="preserve">
     <value>Back to sign in</value>
   </data>
@@ -1074,6 +1075,8 @@
   <data name="Layout.Admin.Security" xml:space="preserve">
     <value>Security settings</value>
   </data>
+  <data name="Layout.Admin.SiteHealth" xml:space="preserve">
+    <value>Site health &amp; webhooks</value>
   </data>
   <data name="Layout.Admin.Settings" xml:space="preserve">
     <value>Site settings</value>
@@ -4298,6 +4301,7 @@
   <data name="Admin.Security.ExternalLogins" xml:space="preserve"><value>Manage external sign-in accounts</value></data>
   <data name="Layout.Admin.Widgets" xml:space="preserve"><value>Sidebar &amp; footer widgets</value></data>
   <data name="Layout.Main.Sidebar" xml:space="preserve"><value>Sidebar</value></data>
+  <data name="Layout.Main.Privacy" xml:space="preserve"><value>Privacy policy</value></data>
   <data name="Public.Widget.RecentPosts" xml:space="preserve"><value>Recent posts</value></data>
   <data name="Public.Widget.Categories" xml:space="preserve"><value>Categories</value></data>
   <data name="Public.Widget.Tags" xml:space="preserve"><value>Tags</value></data>

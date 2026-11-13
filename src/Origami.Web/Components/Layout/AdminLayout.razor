@@ -27,7 +27,7 @@
             {
                 <NavLink href="/admin/members">@UiText.T("Layout.Admin.Members", "站點成員")</NavLink>
                 <NavLink href="/admin/audit">@UiText.T("Layout.Admin.AuditLogs", "審計日誌")</NavLink>
-                <NavLink href="/admin/site-health">系統健康與 Webhook</NavLink>
+                <NavLink href="/admin/site-health">@UiText.T("Layout.Admin.SiteHealth", "系統健康與 Webhook")</NavLink>
             }
             @if (_access?.CanRead == true)
             {
@@ -60,11 +60,13 @@
         <main id="main-content" class="admin-main" tabindex="-1">@Body</main>
         <footer class="admin-footer">@UiText.T("Layout.Admin.Footer", "專注內容，從這裡開始。")</footer>
     </div>
-</div>
-<div id="blazor-error-ui" role="alert" data-nosnippet>
-    @UiText.T("Layout.Admin.Error", "介面發生錯誤。未儲存的變更可能遺失，請先複製輸入再重新載入。")
-    <a href="" class="reload">@UiText.T("Common.Reload", "重新載入")</a>
-    <button type="button" class="dismiss" aria-label="@UiText.T("Layout.Admin.DismissError", "關閉錯誤提示")">×</button>
+    @* 對話框與錯誤條放在殼層內：黑白與深色令牌隨 .admin-shell 解析，深色後台不再露出淺色面板。 *@
+    <ReconnectModal />
+    <div id="blazor-error-ui" role="alert" data-nosnippet>
+        @UiText.T("Layout.Admin.Error", "介面發生錯誤。未儲存的變更可能遺失，請先複製輸入再重新載入。")
+        <a href="" class="reload">@UiText.T("Common.Reload", "重新載入")</a>
+        <button type="button" class="dismiss" aria-label="@UiText.T("Layout.Admin.DismissError", "關閉錯誤提示")">×</button>
+    </div>
 </div>
 
 @code {

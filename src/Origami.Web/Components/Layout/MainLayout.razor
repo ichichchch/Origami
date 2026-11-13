@@ -32,15 +32,15 @@
             @_settings.Name
         </a>
         <nav class="site-nav" aria-label="@UiText.T("Layout.Main.Navigation", "網站導覽")">
-            <a href="/">@UiText.T("Layout.Main.02", "首頁")</a>
+            <a href="/" aria-current="@(IsCurrentNav("/") ? "page" : null)">@UiText.T("Layout.Main.02", "首頁")</a>
             @foreach (var (page, depth) in NavOrder())
             {
                 // 自訂導覽項目自帶網址；頁面項目仍依階層網址。
                 var href = page.Url ?? PageHref(page);
-                <a class="@(depth > 0 ? "nav-child" : "")" href="@href" target="@(page.IsExternal ? "_blank" : null)" rel="@(page.IsExternal ? "noopener" : null)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
+                <a class="@(depth > 0 ? "nav-child" : "")" href="@href" target="@(page.IsExternal ? "_blank" : null)" rel="@(page.IsExternal ? "noopener" : null)" aria-current="@(page.IsExternal ? null : IsCurrentNav(href) ? "page" : null)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
             }
-            <a href="/archives">@UiText.T("Layout.Main.03", "歸檔")</a>
-            <a href="/search">@UiText.T("Layout.Main.04", "搜尋文章")</a>
+            <a href="/archives" aria-current="@(IsCurrentNav("/archives") ? "page" : null)">@UiText.T("Layout.Main.03", "歸檔")</a>
+            <a href="/search" aria-current="@(IsCurrentNav("/search") ? "page" : null)">@UiText.T("Layout.Main.04", "搜尋文章")</a>
             <a href="/admin/posts" data-enhance-nav="false">@UiText.T("Layout.Main.05", "管理後台")</a>
         </nav>
     </header>
@@ -93,7 +93,7 @@
         <span>@(string.IsNullOrWhiteSpace(_settings.FooterText) ? $"© {DateTime.UtcNow.Year} {_settings.Name}" : _settings.FooterText)</span>
         @if (!string.IsNullOrWhiteSpace(_settings.PrivacyPageSlug))
         {
-            <a href="@("/pages/" + Uri.EscapeDataString(_settings.PrivacyPageSlug))">@(string.IsNullOrWhiteSpace(_settings.PrivacyPageTitle) ? "隱私權政策" : _settings.PrivacyPageTitle)</a>
+            <a href="@("/pages/" + Uri.EscapeDataString(_settings.PrivacyPageSlug))">@(string.IsNullOrWhiteSpace(_settings.PrivacyPageTitle) ? UiText.T("Layout.Main.Privacy", "隱私權政策") : _settings.PrivacyPageTitle)</a>
         }
         @if (!string.IsNullOrWhiteSpace(_settings.SocialGithubUrl) || !string.IsNullOrWhiteSpace(_settings.SocialXUrl) || !string.IsNullOrWhiteSpace(_settings.SocialMastodonUrl))
         {
@@ -115,6 +115,8 @@
         <a href="/account/login" data-enhance-nav="false">@UiText.T("Layout.Main.06", "網站管理")</a>
         <LanguageSwitcher />
     </footer>
+    @* 重新連線對話框放在殼層內：令牌（品牌色、明暗）隨殼層解析，而非 :root 預設值。 *@
+    <ReconnectModal />
 </div>
 
 @code {
@@ -124,6 +126,15 @@
     private List<WidgetService.PublicWidget> _sidebarWidgets = [];
     private List<WidgetService.PublicWidget> _footerWidgets = [];
     private bool _isMember;
+
+    /// <summary>導覽當前頁指示：以請求路徑（已解碼、去尾斜線）比對導覽href（解碼後）；
+    /// 僅供輔助呈現與 aria-current，不具授權意義。</summary>
+    private bool IsCurrentNav(string href)
+    {
+        if (!href.StartsWith('/')) return false;
+        var path = HttpContext?.Request.Path.Value?.TrimEnd('/') ?? "";
+        return string.Equals(path, Uri.UnescapeDataString(href).TrimEnd('/'), StringComparison.Ordinal);
+    }
 
     /// <summary>帶深度的平面排序：子頁面跟在父頁面之後；若父頁面不在已發布集合內，
     /// 子頁面改以頂層呈現而不會直接消失。</summary>
