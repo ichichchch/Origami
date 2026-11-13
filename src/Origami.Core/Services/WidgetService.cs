@@ -109,6 +109,13 @@ public sealed class WidgetService(
                 normalizedMarkdown = "";
                 normalizedUrl = "";
                 break;
+            case WidgetType.TagCloud:
+                normalizedCount ??= Limits.WidgetTagCloudMax;
+                if (normalizedCount is < 1 or > Limits.WidgetTagCloudMax)
+                    throw new CmsException($"標籤雲標籤數須為 1–{Limits.WidgetTagCloudMax}。");
+                normalizedMarkdown = "";
+                normalizedUrl = "";
+                break;
             case WidgetType.RssFeed:
                 normalizedCount ??= 5;
                 if (normalizedCount is < 1 or > Limits.WidgetRecentPosts)
@@ -173,12 +180,18 @@ public sealed class WidgetService(
 
     public sealed record PublicWidget(Guid Id, WidgetArea Area, WidgetType Type, string Title, int Count,
         string Markdown, List<WidgetPostLink> RecentPosts, List<WidgetTermLink> Categories, List<WidgetTermLink> Tags,
-        List<WidgetCommentLink> RecentComments, List<WidgetRssItem> RssItems);
+        List<WidgetCommentLink> RecentComments, List<WidgetRssItem> RssItems,
+        List<WidgetTagCloudItem>? TagCloud = null, WidgetCalendar? Calendar = null);
     public sealed record WidgetPostLink(string Title, string Slug, DateTimeOffset? PublishedAt);
     public sealed record WidgetTermLink(string Name, string Slug, int Depth);
     public sealed record WidgetCommentLink(string AuthorName, string Excerpt, DateTimeOffset CreatedAt,
         string PostTitle, string PostSlug);
     public sealed record WidgetRssItem(string Title, string Url, DateTimeOffset? PublishedAt);
+    /// <summary>標籤雲項目：已發布文章數供渲染端做字級加權。</summary>
+    public sealed record WidgetTagCloudItem(string Name, string Slug, int Count);
+    /// <summary>日曆小工具的單月投影：每天的已發布文章數（UTC，與彙整頁口徑一致）。</summary>
+    public sealed record WidgetCalendar(int Year, int Month, List<WidgetCalendarDay> Days);
+    public sealed record WidgetCalendarDay(int Day, int Count);
 
     /// <summary>公開小工具：僅可見項目；停用小工具包的項目整包隱藏，管理者手動建立的項目不受影響。</summary>
     public async Task<List<PublicWidget>> PublicAsync(CancellationToken ct = default)
@@ -248,6 +261,38 @@ public sealed class WidgetService(
                 new WidgetCommentLink(c.AuthorName, CommentExcerpt(c.Markdown), c.CreatedAt, c.Title, c.Slug))];
         }
 
+        // 標籤雲：取最熱門的前 N 個標籤（N 為所有標籤雲小工具的最大值），渲染端再按名稱排序與字級加權。
+        var tagCloudMax = widgets.Where(x => x.Type == WidgetType.TagCloud)
+            .Select(x => EffectiveTagCloudCount(WidgetTypes.ParseConfig(x.ConfigJson).Count))
+            .DefaultIfEmpty(Limits.WidgetTagCloudMax).Max();
+        List<WidgetTagCloudItem> tagCloud = [];
+        if (widgets.Any(x => x.Type == WidgetType.TagCloud))
+        {
+            tagCloud = await db.Tags.AsNoTracking()
+                .Where(x => x.Contents.Any(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published))
+                .Select(x => new WidgetTagCloudItem(x.Name, x.Slug,
+                    x.Contents.Count(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published)))
+                .ToListAsync(ct);
+            tagCloud = [.. tagCloud.OrderByDescending(x => x.Count).ThenBy(x => x.Name, StringComparer.CurrentCulture)
+                .ThenBy(x => x.Slug).Take(tagCloudMax).OrderBy(x => x.Name, StringComparer.CurrentCulture)];
+        }
+
+        // 日曆：當月（UTC）每天的已發布文章數；與公開彙整頁同一組可見性規則。所有日曆小工具共用。
+        WidgetCalendar? calendar = null;
+        if (widgets.Any(x => x.Type == WidgetType.Calendar))
+        {
+            var today = DateTimeOffset.UtcNow;
+            var monthStart = new DateTimeOffset(today.Year, today.Month, 1, 0, 0, 0, TimeSpan.Zero);
+            var monthEnd = monthStart.AddMonths(1);
+            var dayRows = await db.Contents.AsNoTracking()
+                .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published
+                    && !x.IsPrivate && !x.IsProtected && x.PublishedAt >= monthStart && x.PublishedAt < monthEnd)
+                .GroupBy(x => x.PublishedAt!.Value.Day)
+                .Select(g => new WidgetCalendarDay(g.Key, g.Count()))
+                .ToListAsync(ct);
+            calendar = new WidgetCalendar(today.Year, today.Month, dayRows);
+        }
+
         List<PublicWidget> result = new(widgets.Count);
         foreach (var x in widgets)
         {
@@ -257,7 +302,9 @@ public sealed class WidgetService(
                 rss = await FetchFeedItemsAsync(config.Url, EffectiveCount(config.Count), ct);
             result.Add(new PublicWidget(x.Id, x.Area, x.Type, x.Title, config.Count ?? 5, config.Markdown ?? "",
                 recent.Take(EffectiveCount(config.Count)).ToList(), categories, tags,
-                recentComments.Take(EffectiveCount(config.Count)).ToList(), rss));
+                recentComments.Take(EffectiveCount(config.Count)).ToList(), rss,
+                x.Type == WidgetType.TagCloud ? tagCloud.Take(EffectiveTagCloudCount(config.Count)).ToList() : null,
+                x.Type == WidgetType.Calendar ? calendar : null));
         }
         return result;
     }
@@ -304,6 +351,9 @@ public sealed class WidgetService(
 
     /// <summary>渲染端篇數夾持：組態來自資料庫（匯入檔可能未經服務層驗證），下界夾回 1 以免 Take 拋出例外。</summary>
     private static int EffectiveCount(int? count) => Math.Clamp(count ?? 5, 1, Limits.WidgetRecentPosts);
+
+    /// <summary>標籤雲的標籤數夾持；理由同上，資料庫組態可能未經服務層驗證。</summary>
+    private static int EffectiveTagCloudCount(int? count) => Math.Clamp(count ?? Limits.WidgetTagCloudMax, 1, Limits.WidgetTagCloudMax);
 
     /// <summary>解析 RSS 2.0 或 Atom feed；禁止 DTD 與外部實體，項目連結僅保留 http／https。</summary>
     internal static List<WidgetRssItem> ParseFeed(Stream stream, int count)

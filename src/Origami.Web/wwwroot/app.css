@@ -477,6 +477,26 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
 .widget-text :where(p, ul, ol) { margin: 0 0 .7rem; }
 .widget-text :where(p):last-child { margin-bottom: 0; }
 .widget-text :where(a) { text-decoration: underline; }
+/* 標籤雲：五級字階，字號隨熱門程度遞增；連結色與標籤小工具一致。 */
+.widget-tagcloud { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .55rem; }
+.widget-tagcloud .tag-cloud-item { color: var(--muted); text-decoration: none; line-height: 1.4; }
+.widget-tagcloud .tag-cloud-item:hover { color: var(--accent-ink); text-decoration: underline; }
+.widget-tagcloud .tag-l1 { font-size: .74rem; }
+.widget-tagcloud .tag-l2 { font-size: .82rem; }
+.widget-tagcloud .tag-l3 { font-size: .9rem; }
+.widget-tagcloud .tag-l4 { font-size: 1rem; }
+.widget-tagcloud .tag-l5 { font-size: 1.12rem; font-weight: 600; }
+/* 日曆小工具：7 欄月曆格；有文章的日期與今天以樣式區分。 */
+.widget-calendar { display: grid; gap: .4rem; }
+.widget-calendar-nav { display: flex; align-items: center; justify-content: space-between; gap: .4rem; }
+.widget-calendar-nav a { text-decoration: none; color: var(--accent-ink); padding: 0 .25rem; }
+.widget-calendar-nav a[rel="prev"], .widget-calendar-nav a[rel="next"] { font-size: 1rem; line-height: 1; }
+.widget-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: .74rem; }
+.widget-calendar-weekday { color: var(--muted); padding: .15rem 0; }
+.widget-calendar-day { display: flex; align-items: center; justify-content: center; min-height: 1.7rem; border-radius: 4px; color: inherit; text-decoration: none; }
+.widget-calendar-day.has-posts { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.widget-calendar-day.has-posts:hover { filter: brightness(.95); }
+.widget-calendar-day.today { outline: 1.5px solid var(--accent-ink); outline-offset: -1.5px; }
 .footer-widgets { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 1.4rem 2rem; margin-bottom: 1.6rem; }
 .footer-widgets .widget { background: transparent; }
 

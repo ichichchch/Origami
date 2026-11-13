@@ -30,6 +30,55 @@
                 }
             </ul>
             break;
+        case WidgetType.TagCloud:
+            <div class="widget-tagcloud">
+                @foreach (var tag in Widget.TagCloud ?? [])
+                {
+                    <a class="tag-cloud-item @TagCloudLevel(tag.Count)" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))">@tag.Name</a>
+                }
+            </div>
+            break;
+        case WidgetType.Calendar:
+            @if (Widget.Calendar is { } calendar)
+            {
+                var today = DateTimeOffset.UtcNow;
+                var first = new DateTimeOffset(calendar.Year, calendar.Month, 1, 0, 0, 0, TimeSpan.Zero);
+                var daysInMonth = DateTime.DaysInMonth(calendar.Year, calendar.Month);
+                // 週一起排：週一=0 … 週日=6；月曆首行前置空白格。
+                var leading = ((int)first.DayOfWeek + 6) % 7;
+                var counts = calendar.Days.ToDictionary(x => x.Day, x => x.Count);
+                <nav class="widget-calendar" aria-label="@Heading">
+                    <div class="widget-calendar-nav">
+                        <a href="@CalendarLink(calendar.Year, calendar.Month - 1)" rel="prev" aria-label="@UiText.T("Public.Widget.CalendarPrev", "上個月")">‹</a>
+                        <a href="@($"/archives/{calendar.Year}/{calendar.Month}")">@string.Format(CultureInfo.CurrentCulture, UiText.T("Public.Widget.CalendarTitle", "{0} 年 {1} 月"), calendar.Year, calendar.Month)</a>
+                        <a href="@CalendarLink(calendar.Year, calendar.Month + 1)" rel="next" aria-label="@UiText.T("Public.Widget.CalendarNext", "下個月")">›</a>
+                    </div>
+                    <div class="widget-calendar-grid" role="grid">
+                        @foreach (var weekDay in new[] { UiText.T("Public.Widget.CalendarMon", "一"), UiText.T("Public.Widget.CalendarTue", "二"), UiText.T("Public.Widget.CalendarWed", "三"), UiText.T("Public.Widget.CalendarThu", "四"), UiText.T("Public.Widget.CalendarFri", "五"), UiText.T("Public.Widget.CalendarSat", "六"), UiText.T("Public.Widget.CalendarSun", "日") })
+                        {
+                            <span class="widget-calendar-weekday" role="columnheader">@weekDay</span>
+                        }
+                        @for (var i = 0; i < leading; i++)
+                        {
+                            <span class="widget-calendar-day" aria-hidden="true"></span>
+                        }
+                        @for (var day = 1; day <= daysInMonth; day++)
+                        {
+                            var count = counts.GetValueOrDefault(day);
+                            var isToday = today.Year == calendar.Year && today.Month == calendar.Month && today.Day == day;
+                            if (count > 0)
+                            {
+                                <a class="widget-calendar-day has-posts @(isToday ? "today" : "")" href="@($"/archives/{calendar.Year}/{calendar.Month}")" aria-label="@string.Format(CultureInfo.CurrentCulture, UiText.T("Public.Widget.CalendarDayPosts", "{0} 日，{1} 篇文章"), day, count)">@day</a>
+                            }
+                            else
+                            {
+                                <span class="widget-calendar-day @(isToday ? "today" : "")">@day</span>
+                            }
+                        }
+                    </div>
+                </nav>
+            }
+            break;
         case WidgetType.Search:
             <form class="widget-search" method="get" action="/search" role="search">
                 <label class="sr-only" for="widget-search-q">@UiText.T("Public.Widget.SearchLabel", "搜尋文章")</label>
@@ -75,9 +124,31 @@
         WidgetType.RecentPosts => UiText.T("Public.Widget.RecentPosts", "最新文章"),
         WidgetType.Categories => UiText.T("Public.Widget.Categories", "分類"),
         WidgetType.Tags => UiText.T("Public.Widget.Tags", "標籤"),
+        WidgetType.TagCloud => UiText.T("Public.Widget.TagCloud", "標籤雲"),
+        WidgetType.Calendar => UiText.T("Public.Widget.Calendar", "日曆"),
         WidgetType.Search => UiText.T("Public.Widget.Search", "搜尋"),
         WidgetType.RecentComments => UiText.T("Public.Widget.RecentComments", "最新評論"),
         WidgetType.RssFeed => UiText.T("Public.Widget.RssFeed", "外部文章"),
         _ => UiText.T("Public.Widget.Text", "文字")
     };
+
+    /// <summary>標籤雲字級：依文章數在最小與最大值之間分五級；全部相同時用中間級。</summary>
+    private string TagCloudLevel(int count)
+    {
+        var items = Widget.TagCloud ?? [];
+        if (items.Count == 0) return "tag-l3";
+        var min = items.Min(x => x.Count);
+        var max = items.Max(x => x.Count);
+        if (max == min) return "tag-l3";
+        var ratio = (double)(count - min) / (max - min);
+        var level = (int)Math.Round(ratio * 4) + 1;
+        return $"tag-l{Math.Clamp(level, 1, 5)}";
+    }
+
+    private static string CalendarLink(int year, int month)
+    {
+        // 月份進位與借位交給 DateTime 正規化，避免手算跨年。
+        var normalized = new DateTime(year, 1, 1).AddMonths(month - 1);
+        return $"/archives/{normalized.Year}/{normalized.Month}";
+    }
 }

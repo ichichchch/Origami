@@ -4352,11 +4352,28 @@
   <data name="Admin.Security.Erased" xml:space="preserve"><value>Personal data erased; the account has been disabled.</value></data>
   <data name="Admin.Widgets.TypeRecentComments" xml:space="preserve"><value>Recent comments</value></data>
   <data name="Admin.Widgets.TypeRssFeed" xml:space="preserve"><value>External articles (RSS/Atom)</value></data>
+  <data name="Admin.Widgets.TypeTagCloud" xml:space="preserve"><value>Tag cloud</value></data>
+  <data name="Admin.Widgets.TypeCalendar" xml:space="preserve"><value>Calendar</value></data>
+  <data name="Admin.Widgets.TagCloudCount" xml:space="preserve"><value>Number of tags</value></data>
+  <data name="Admin.Widgets.TagCloudCountHelp" xml:space="preserve"><value>1–{0} tags, the most-used ones; font size is weighted by popularity.</value></data>
   <data name="Admin.Widgets.FeedUrl" xml:space="preserve"><value>Feed URL</value></data>
   <data name="Admin.Widgets.Required2" xml:space="preserve"><value>Required</value></data>
   <data name="Admin.Widgets.FeedUrlHelp" xml:space="preserve"><value>Public absolute https URL (local or intranet hosts rejected); cached for 10 minutes, and hidden while the feed cannot be fetched.</value></data>
   <data name="Public.Widget.RecentComments" xml:space="preserve"><value>Recent comments</value></data>
   <data name="Public.Widget.RssFeed" xml:space="preserve"><value>External articles</value></data>
+  <data name="Public.Widget.TagCloud" xml:space="preserve"><value>Tag cloud</value></data>
+  <data name="Public.Widget.Calendar" xml:space="preserve"><value>Calendar</value></data>
+  <data name="Public.Widget.CalendarPrev" xml:space="preserve"><value>Previous month</value></data>
+  <data name="Public.Widget.CalendarNext" xml:space="preserve"><value>Next month</value></data>
+  <data name="Public.Widget.CalendarTitle" xml:space="preserve"><value>{0}-{1}</value></data>
+  <data name="Public.Widget.CalendarMon" xml:space="preserve"><value>Mo</value></data>
+  <data name="Public.Widget.CalendarTue" xml:space="preserve"><value>Tu</value></data>
+  <data name="Public.Widget.CalendarWed" xml:space="preserve"><value>We</value></data>
+  <data name="Public.Widget.CalendarThu" xml:space="preserve"><value>Th</value></data>
+  <data name="Public.Widget.CalendarFri" xml:space="preserve"><value>Fr</value></data>
+  <data name="Public.Widget.CalendarSat" xml:space="preserve"><value>Sa</value></data>
+  <data name="Public.Widget.CalendarSun" xml:space="preserve"><value>Su</value></data>
+  <data name="Public.Widget.CalendarDayPosts" xml:space="preserve"><value>Day {0}, {1} posts</value></data>
   <data name="Layout.Admin.Marketplace" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
   <data name="Admin.Marketplace.PageTitle" xml:space="preserve"><value>Themes &amp; widget packs · Content management</value></data>
   <data name="Admin.Marketplace.Title" xml:space="preserve"><value>Controlled package market</value></data>

@@ -35,6 +35,8 @@
                     <option value="@WidgetType.Text">@UiText.T("Admin.Widgets.TypeText", "文字（Markdown）")</option>
                     <option value="@WidgetType.RecentComments">@UiText.T("Admin.Widgets.TypeRecentComments", "最新評論")</option>
                     <option value="@WidgetType.RssFeed">@UiText.T("Admin.Widgets.TypeRssFeed", "外部文章（RSS／Atom）")</option>
+                    <option value="@WidgetType.TagCloud">@UiText.T("Admin.Widgets.TypeTagCloud", "標籤雲")</option>
+                    <option value="@WidgetType.Calendar">@UiText.T("Admin.Widgets.TypeCalendar", "日曆")</option>
                 </select>
                 <span class="field-help">@UiText.T("Admin.Widgets.TypeHelp", "文字小工具與文章走同一條安全 Markdown 管線，不解析原始 HTML；外部文章由伺服器定期抓取公開 https feed。")</span>
             </div>
@@ -42,6 +44,10 @@
             @if (_edit.Type == WidgetType.RecentPosts || _edit.Type == WidgetType.RecentComments || _edit.Type == WidgetType.RssFeed)
             {
                 <div class="field"><label for="widget-count">@UiText.T("Admin.Widgets.Count", "顯示篇數")</label><input id="widget-count" type="number" min="1" max="@Limits.WidgetRecentPosts" @bind="_edit.Count" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.CountHelp", "1–{0} 篇。"), Limits.WidgetRecentPosts)</span></div>
+            }
+            else if (_edit.Type == WidgetType.TagCloud)
+            {
+                <div class="field"><label for="widget-count">@UiText.T("Admin.Widgets.TagCloudCount", "標籤數量")</label><input id="widget-count" type="number" min="1" max="@Limits.WidgetTagCloudMax" @bind="_edit.Count" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.TagCloudCountHelp", "1–{0} 個，取文章數最多的標籤；字級按熱門程度加權。"), Limits.WidgetTagCloudMax)</span></div>
             }
             @if (_edit.Type == WidgetType.RssFeed)
             {
@@ -121,6 +127,8 @@
         WidgetType.Search => UiText.T("Admin.Widgets.TypeSearch", "搜尋框"),
         WidgetType.RecentComments => UiText.T("Admin.Widgets.TypeRecentComments", "最新評論"),
         WidgetType.RssFeed => UiText.T("Admin.Widgets.TypeRssFeed", "外部文章（RSS／Atom）"),
+        WidgetType.TagCloud => UiText.T("Admin.Widgets.TypeTagCloud", "標籤雲"),
+        WidgetType.Calendar => UiText.T("Admin.Widgets.TypeCalendar", "日曆"),
         _ => UiText.T("Admin.Widgets.TypeText", "文字（Markdown）")
     };
 
@@ -134,7 +142,8 @@
         if (!Enum.TryParse<WidgetType>(args.Value?.ToString(), out var type)) return;
         _edit.Type = type;
         // 切換型別即重置組態欄位，避免把數字帶進文字、文字帶進其他型別。
-        _edit.Count = type is WidgetType.RecentPosts or WidgetType.RecentComments or WidgetType.RssFeed ? 5 : null;
+        _edit.Count = type is WidgetType.RecentPosts or WidgetType.RecentComments or WidgetType.RssFeed ? 5
+            : type is WidgetType.TagCloud ? Limits.WidgetTagCloudMax : null;
         if (type != WidgetType.Text) _edit.Markdown = "";
         if (type != WidgetType.RssFeed) _edit.Url = "";
     }

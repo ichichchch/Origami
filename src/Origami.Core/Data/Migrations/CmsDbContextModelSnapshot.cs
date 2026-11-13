@@ -2077,7 +2077,7 @@ namespace Origami.Core.Data.Migrations
 
                             t.HasCheckConstraint("CK_SiteWidget_Area", "\"Area\" IN (0, 1)");
 
-                            t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6)");
+                            t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6, 7, 8)");
                         });
                 });
 

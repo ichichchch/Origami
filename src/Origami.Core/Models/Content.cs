@@ -52,6 +52,8 @@ public static partial class Limits
     public const int MaxWidgetsPerArea = 20;
     /// <summary>最新文章小工具可顯示的篇數上限。</summary>
     public const int WidgetRecentPosts = 10;
+    /// <summary>標籤雲小工具可顯示的標籤數上限（比照 WordPress 預設 45）。</summary>
+    public const int WidgetTagCloudMax = 45;
     /// <summary>外部 feed 小工具的網址長度上限。</summary>
     public const int WidgetFeedUrl = 500;
     /// <summary>外部 feed 單次抓取的位元組上限；超過即放棄解析。</summary>

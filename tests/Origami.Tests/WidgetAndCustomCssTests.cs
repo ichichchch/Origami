@@ -111,6 +111,57 @@ public sealed class WidgetAndCustomCssTests(IsolatedPostgres postgres) : Service
     }
 
     [PostgresFact]
+    public async Task Tag_cloud_and_calendar_widgets_project_published_activity()
+    {
+        using var admin = await App.AdministratorAsync();
+        var hotTag = await admin.Taxonomy.SaveAsync(TaxonomyKind.Tag, new TaxonomyEdit { Name = "熱門標籤", Slug = "hot" });
+        var coldTag = await admin.Taxonomy.SaveAsync(TaxonomyKind.Tag, new TaxonomyEdit { Name = "冷門標籤", Slug = "cold" });
+        // 熱門標籤兩篇、冷門標籤一篇、一篇無標籤；草稿不計入。
+        for (var i = 1; i <= 2; i++)
+        {
+            var post = NewContent($"熱門文章 {i}", status: ContentStatus.Published);
+            post.TagIds = [hotTag.Id!.Value];
+            await admin.Content.SaveAsync(post);
+        }
+        var cold = NewContent("冷門文章", status: ContentStatus.Published);
+        cold.TagIds = [coldTag.Id!.Value];
+        await admin.Content.SaveAsync(cold);
+        await admin.Content.SaveAsync(NewContent("草稿文章"));
+
+        var widgets = admin.Services.GetRequiredService<WidgetService>();
+        // 標籤數上限驗證：0 與超過 45 都拒絕；日曆不需任何組態。
+        await Assert.ThrowsAsync<CmsException>(() => widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Sidebar, Type = WidgetType.TagCloud, Count = 0 }));
+        await Assert.ThrowsAsync<CmsException>(() => widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Sidebar, Type = WidgetType.TagCloud, Count = Limits.WidgetTagCloudMax + 1 }));
+        var cloud = await widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Sidebar, Type = WidgetType.TagCloud, Count = 1 });
+        Assert.Equal(1, cloud.Count);
+        var calendar = await widgets.SaveAsync(new WidgetService.WidgetInput
+            { Area = WidgetArea.Footer, Type = WidgetType.Calendar });
+        Assert.Null(calendar.Count);
+
+        var publicWidgets = await widgets.PublicAsync();
+        // 標籤雲：篇數上限取最熱門者，僅「熱門標籤」入選且帶文章數。
+        var publicCloud = Assert.Single(publicWidgets, x => x.Type == WidgetType.TagCloud);
+        var item = Assert.Single(publicCloud.TagCloud!);
+        Assert.Equal("hot", item.Slug);
+        Assert.Equal(2, item.Count);
+
+        // 日曆：當月（UTC）每天的已發布文章數；3 篇發布文章集中在同一天。
+        var publicCalendar = Assert.Single(publicWidgets, x => x.Type == WidgetType.Calendar);
+        Assert.NotNull(publicCalendar.Calendar);
+        Assert.Equal(DateTimeOffset.UtcNow.Year, publicCalendar.Calendar.Year);
+        Assert.Equal(DateTimeOffset.UtcNow.Month, publicCalendar.Calendar.Month);
+        Assert.Equal(3, publicCalendar.Calendar.Days.Sum(x => x.Count));
+        Assert.All(publicCalendar.Calendar.Days, x => Assert.InRange(x.Day, 1, 31));
+
+        // 其他型別不帶標籤雲／日曆資料。
+        Assert.All(publicWidgets.Where(x => x.Type != WidgetType.TagCloud), x => Assert.Null(x.TagCloud));
+        Assert.All(publicWidgets.Where(x => x.Type != WidgetType.Calendar), x => Assert.Null(x.Calendar));
+    }
+
+    [PostgresFact]
     public async Task Widgets_require_sign_in_and_are_isolated_per_site()
     {
         using (var anonymous = App.Anonymous())
