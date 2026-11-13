@@ -6,7 +6,8 @@ namespace Origami.Core.Services;
 /// </summary>
 public sealed partial class CommentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null)
 {
-    public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot, Guid? ParentId = null);
+    public sealed record CommentPostInput(string AuthorName, string? Url, string Markdown, bool Honeypot, Guid? ParentId = null,
+        string? Email = null, bool NotifyReplies = false);
     public sealed record CommentView(Guid Id, Guid ContentId, string ContentTitle, string AuthorName, string Url,
         string Markdown, CommentStatus Status, DateTimeOffset CreatedAt, Guid Version,
         Guid? ParentId = null, bool IsAdminReply = false, string ParentAuthorName = "");
@@ -28,6 +29,13 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         if (url.Length > Limits.CommentUrl) throw new CmsException($"網址最長 {Limits.CommentUrl} 字。");
         if (url.Length > 0 && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")))
             throw new CmsException("網址必須是 http 或 https 的絕對網址。");
+        // 回覆訂閱：勾選通知必須留 email；僅用於寄送回覆通知，不公開顯示。
+        var email = (input.Email ?? "").Trim();
+        if (email.Length > 256 || email.Any(char.IsControl))
+            throw new CmsException("電子郵件格式不正確。");
+        if (input.NotifyReplies && email.Length == 0)
+            throw new CmsException("勾選回覆通知時請留下電子郵件。");
+        if (email.Length > 0 && !input.NotifyReplies) email = "";
 
         await using var db = await factory.CreateDbContextAsync(ct);
         var settings = await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1, ct);
@@ -59,7 +67,10 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         {
             SiteId = db.CurrentSiteId, ContentId = contentId, ParentId = input.ParentId,
             AuthorName = name, Url = url, Markdown = body,
-            Status = status, CreatedAt = now
+            Status = status, CreatedAt = now,
+            // 垃圾評論不留訂閱資料；訂閱以不可猜測的一次性退訂識別配套。
+            SubscriberEmail = status != CommentStatus.Spam && email.Length > 0 ? email : "",
+            UnsubscribeToken = status != CommentStatus.Spam && email.Length > 0 ? Guid.NewGuid() : null
         };
         db.Comments.Add(entity);
         await ContentRules.SaveAsync(db, ct);
@@ -87,6 +98,50 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         if (status != CommentStatus.Spam && settings.EmailNotificationsEnabled && emailSender is { IsConfigured: true })
         {
             await NotifyNewCommentEmailAsync(db, settings.Name, content.Title, content.Slug, content.AuthorId, name, body, status, ct);
+        }
+        // 回覆訂閱：回覆已核可且被回覆者有訂閱時寄出通知；審核制下待審回覆改於審核通過時寄。
+        if (status == CommentStatus.Approved && input.ParentId is { } replyParentId)
+            await NotifyReplySubscriberAsync(db, replyParentId, name, body, ct);
+    }
+
+    /// <summary>以退訂識別清除回覆訂閱；識別不存在時不揭露任何資訊（冪等成功）。</summary>
+    public async Task UnsubscribeRepliesAsync(Guid token, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var comment = await db.Comments.SingleOrDefaultAsync(x => x.UnsubscribeToken == token, ct);
+        if (comment is null) return;
+        comment.SubscriberEmail = "";
+        comment.UnsubscribeToken = null;
+        await ContentRules.SaveAsync(db, ct);
+    }
+
+    /// <summary>回覆訂閱通知：寄給父評論的訂閱者，附一次性退訂連結；採盡力而為，不影響任何評論流程。</summary>
+    private async Task NotifyReplySubscriberAsync(CmsDbContext db, Guid parentCommentId, string replierName, string replyMarkdown, CancellationToken ct)
+    {
+        if (emailSender is not { IsConfigured: true }) return;
+        try
+        {
+            var parent = await db.Comments.AsNoTracking()
+                .Where(x => x.Id == parentCommentId && x.SubscriberEmail != "" && x.UnsubscribeToken != null)
+                .Select(x => new { x.SubscriberEmail, x.UnsubscribeToken, x.Content.Title, x.Content.Slug, x.ContentId })
+                .SingleOrDefaultAsync(ct);
+            if (parent is null) return;
+            var site = await db.Sites.AsNoTracking().Where(x => x.Id == db.CurrentSiteId)
+                .Select(x => new { x.Name, x.HostName }).SingleOrDefaultAsync(ct);
+            var siteName = site?.Name ?? "";
+            var unsubscribe = site?.HostName is { Length: > 0 } host
+                ? $"\n\n不想再收到回覆通知？前往退訂：https://{host}/comments/unsubscribe?token={parent.UnsubscribeToken:N}"
+                : "";
+            await emailSender.SendAsync(parent.SubscriberEmail,
+                $"[{siteName}] 你的評論有了新回覆：{parent.Title}",
+                $@"「{replierName}」回覆了你在文章「{parent.Title}」（/posts/{parent.Slug}）的評論：
+
+{replyMarkdown}{unsubscribe}",
+                ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 郵件通知採盡力而為。
         }
     }
 
@@ -207,6 +262,8 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         };
         db.Comments.Add(reply);
         await ContentRules.SaveAsync(db, ct);
+        // 管理員回覆自動核可：父評論訂閱者立即收到通知。
+        await NotifyReplySubscriberAsync(db, parent.Id, reply.AuthorName, body, ct);
         return new CommentView(reply.Id, reply.ContentId, parent.Content.Title, reply.AuthorName, reply.Url,
             reply.Markdown, reply.Status, reply.CreatedAt, reply.Version, reply.ParentId, reply.IsAdminReply, parent.AuthorName);
     }
@@ -285,6 +342,9 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         comment.Status = target;
         comment.Version = Guid.NewGuid();
         await ContentRules.SaveAsync(db, ct);
+        // 審核制下的回覆：通過審核的那一刻才通知父評論訂閱者。
+        if (target == CommentStatus.Approved && comment.ParentId is { } approvedParent)
+            await NotifyReplySubscriberAsync(db, approvedParent, comment.AuthorName, comment.Markdown, ct);
         if (events is not null && target == CommentStatus.Approved)
         {
             await events.PublishAsync("comment.approved", db.CurrentSiteId, new

@@ -880,6 +880,16 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("integer")
                         .HasComment("状态枚举值。");
 
+                    b.Property<string>("SubscriberEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComment("回复通知订阅邮箱。");
+
+                    b.Property<Guid?>("UnsubscribeToken")
+                        .HasColumnType("uuid")
+                        .HasComment("退订一次性标识。");
+
                     b.Property<string>("Url")
                         .IsRequired()
                         .HasMaxLength(500)

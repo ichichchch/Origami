@@ -2026,6 +2026,18 @@
   <data name="Admin.ContentEditor.AiSelectionLost" xml:space="preserve"><value>The original selection is gone; reselect and rewrite again.</value></data>
   <data name="Admin.ContentEditor.AiTitleApplied" xml:space="preserve"><value>Title applied; not saved yet.</value></data>
   <data name="Admin.ContentEditor.AiFailed" xml:space="preserve"><value>Writing assist is unavailable right now; please try again later.</value></data>
+  <data name="Public.ContentDetail.CommentEmail" xml:space="preserve"><value>Email (optional)</value></data>
+  <data name="Public.ContentDetail.CommentEmailHelp" xml:space="preserve"><value>Used for reply notifications only, never displayed publicly; every email includes an unsubscribe link.</value></data>
+  <data name="Public.ContentDetail.CommentEmailInvalid" xml:space="preserve"><value>Invalid email address.</value></data>
+  <data name="Public.ContentDetail.CommentEmailTooLong" xml:space="preserve"><value>Email must be at most 256 characters.</value></data>
+  <data name="Public.ContentDetail.CommentNotifyReplies" xml:space="preserve"><value>Notify me by email when someone replies</value></data>
+  <data name="Public.Unsubscribe.PageTitle" xml:space="preserve"><value>Unsubscribe from reply notifications</value></data>
+  <data name="Public.Unsubscribe.Title" xml:space="preserve"><value>Unsubscribe from reply notifications</value></data>
+  <data name="Public.Unsubscribe.Done" xml:space="preserve"><value>Unsubscribed; you will no longer receive replies to this comment.</value></data>
+  <data name="Public.Unsubscribe.Invalid" xml:space="preserve"><value>Invalid unsubscribe link; please open the full link from the notification email.</value></data>
+  <data name="Public.Unsubscribe.Confirm" xml:space="preserve"><value>Stop receiving reply notifications for this comment?</value></data>
+  <data name="Public.Unsubscribe.Submit" xml:space="preserve"><value>Confirm unsubscribe</value></data>
+  <data name="Public.Unsubscribe.BackHome" xml:space="preserve"><value>Back to home</value></data>
   <data name="Public.ContentDetail.Categories" xml:space="preserve">
     <value>Categories</value>
   </data>

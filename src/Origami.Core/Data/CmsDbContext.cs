@@ -666,7 +666,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 ["AuthorName"] = "评论作者显示名。",
                 ["Url"] = "评论作者网址。",
                 ["Markdown"] = "评论内容（Markdown）。",
-                ["IsAdminReply"] = "是否官方回复。"
+                ["IsAdminReply"] = "是否官方回复。",
+                ["SubscriberEmail"] = "回复通知订阅邮箱。",
+                ["UnsubscribeToken"] = "退订一次性标识。"
             },
             ["ContentEmbeddings"] = new(StringComparer.OrdinalIgnoreCase)
             {

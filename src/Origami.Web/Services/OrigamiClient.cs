@@ -189,9 +189,14 @@ public sealed class OrigamiClient
         CancellationToken ct = default) =>
         GetAsync<PagedResult<CommentService.CommentView>>($"api/v1/contents/{contentId}/comments?page={page}", ct);
 
-    public Task PostCommentAsync(Guid contentId, string authorName, string? url, string markdown, bool honeypot, Guid? parentId = null, CancellationToken ct = default) =>
+    public Task PostCommentAsync(Guid contentId, string authorName, string? url, string markdown, bool honeypot, Guid? parentId = null,
+        string? email = null, bool notifyReplies = false, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/contents/{contentId}/comments",
-            new { authorName, url, markdown, honeypot, parentId }, ct);
+            new { authorName, url, markdown, honeypot, parentId, email, notifyReplies }, ct);
+
+    /// <summary>回覆訂閱退訂；退訂識別即授權，冪等成功。</summary>
+    public Task UnsubscribeCommentRepliesAsync(Guid token, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, "api/v1/admin/comments/unsubscribe", new { token = token.ToString("N") }, ct);
 
     public Task<CommentService.CommentView?> ReplyCommentAsync(Guid id, string markdown, CancellationToken ct = default) =>
         SendAsync<CommentService.CommentView>(new(HttpMethod.Post, $"api/v1/admin/comments/{id}/reply"), new { markdown }, ct);

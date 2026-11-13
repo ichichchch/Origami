@@ -7,6 +7,7 @@ internal sealed class TestEmailSender : IEmailSender
 
     private readonly List<Sent> sent = [];
     public IReadOnlyList<Sent> Messages => sent;
+    public void Reset() => sent.Clear();
     public bool IsConfigured { get; set; } = true;
 
     public Task<bool> SendAsync(string to, string subject, string body, CancellationToken ct = default)

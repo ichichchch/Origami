@@ -19,6 +19,10 @@ public sealed class ContentComment
     public ContentComment? Parent { get; set; }
     /// <summary>是否為後台管理員／編輯者的官方回覆。</summary>
     public bool IsAdminReply { get; set; }
+    /// <summary>訂閱回覆通知的訪客電子郵件；空字串表示未訂閱（僅用於通知，不公開顯示）。</summary>
+    [StringLength(256)] public string SubscriberEmail { get; set; } = "";
+    /// <summary>退訂一次性識別；訂閱時產生，退訂後清除。不視為機密，但不可猜測。</summary>
+    public Guid? UnsubscribeToken { get; set; }
     public CommentStatus Status { get; set; } = CommentStatus.Pending;
     /// <summary>審核並發版本；兩個後台分頁同時處理同一則評論時，較舊的版本不得覆寫。</summary>
     public Guid Version { get; set; } = Guid.NewGuid();

@@ -269,6 +269,9 @@ else if (_content is not null)
                     <DataAnnotationsValidator />
                     <div class="field"><label for="comment-name">@UiText.T("Public.ContentDetail.CommentName", "名稱") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><input id="comment-name" name="CommentForm.AuthorName" maxlength="@Limits.CommentAuthor" required autocomplete="name" /></div>
                     <div class="field"><label for="comment-url">@UiText.T("Public.ContentDetail.CommentUrl", "網址（選填）")</label><input id="comment-url" name="CommentForm.Url" maxlength="@Limits.CommentUrl" autocomplete="url" placeholder="https://" /></div>
+                    <div class="field"><label for="comment-email">@UiText.T("Public.ContentDetail.CommentEmail", "電子郵件（選填）")</label><input id="comment-email" name="CommentForm.Email" type="email" maxlength="256" autocomplete="email" />
+                        <label class="checkbox-inline"><input type="checkbox" name="CommentForm.NotifyReplies" value="true" /> @UiText.T("Public.ContentDetail.CommentNotifyReplies", "有人回覆時以電子郵件通知我")</label>
+                        <span class="field-help">@UiText.T("Public.ContentDetail.CommentEmailHelp", "僅用於回覆通知，不公開顯示；郵件附退訂連結。")</span></div>
                     @* 蜜罐欄位對正常訪客隱藏；機器人填寫後該則評論靜默進入垃圾佇列。 *@
                     <div class="hp-field" aria-hidden="true"><label for="comment-website">@UiText.T("Public.ContentDetail.LeaveBlank", "請留空")</label><input id="comment-website" name="CommentForm.Honeypot" tabindex="-1" autocomplete="off" /></div>
                     <div class="field"><label for="comment-body">@UiText.T("Public.ContentDetail.CommentBody", "評論") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><textarea id="comment-body" name="CommentForm.Body" rows="4" maxlength="@Limits.CommentBody" required></textarea></div>
@@ -345,9 +348,16 @@ else
         public string? Url { get; set; }
         public string? Honeypot { get; set; }
         public Guid? ParentId { get; set; }
+        [EmailAddress(ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(EmailInvalid))]
+        [StringLength(256, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(EmailTooLong))]
+        public string? Email { get; set; }
+        public bool NotifyReplies { get; set; }
         [Required(ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyRequired))]
         [StringLength(Limits.CommentBody, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyTooLong))]
         public string Body { get; set; } = "";
+
+        public static string EmailInvalid => UiText.T("Public.ContentDetail.CommentEmailInvalid", "電子郵件格式不正確。");
+        public static string EmailTooLong => UiText.T("Public.ContentDetail.CommentEmailTooLong", "電子郵件最長 256 字。");
     }
     private string? _unlockError;
     [SupplyParameterFromForm(FormName = "content-unlock")]
@@ -719,7 +729,9 @@ else
         try
         {
             await Api.PostCommentAsync(_content.Id, CommentForm.AuthorName.Trim(), CommentForm.Url?.Trim(),
-                CommentForm.Body.Trim(), !string.IsNullOrEmpty(CommentForm.Honeypot), CommentForm.ParentId, HttpContext.RequestAborted);
+                CommentForm.Body.Trim(), !string.IsNullOrEmpty(CommentForm.Honeypot), CommentForm.ParentId,
+                string.IsNullOrWhiteSpace(CommentForm.Email) ? null : CommentForm.Email.Trim(),
+                CommentForm.NotifyReplies, HttpContext.RequestAborted);
             _commentPosted = true;
             _commentError = null;
             CommentForm = new CommentFormInput();

@@ -1,0 +1,62 @@
+@page "/comments/unsubscribe"
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Public.Unsubscribe.PageTitle", "退訂回覆通知")</PageTitle>
+<section class="empty-state">
+    <h1>@UiText.T("Public.Unsubscribe.Title", "退訂回覆通知")</h1>
+    @if (_done)
+    {
+        <p role="status">@UiText.T("Public.Unsubscribe.Done", "已取消訂閱；你將不再收到這則評論的回覆通知。")</p>
+    }
+    else if (_token is null)
+    {
+        <p role="alert">@UiText.T("Public.Unsubscribe.Invalid", "退訂連結無效，請確認你是從通知郵件中開啟完整連結。")</p>
+    }
+    else
+    {
+        <p>@UiText.T("Public.Unsubscribe.Confirm", "確認要取消這則評論的回覆通知嗎？")</p>
+        <EditForm Model="ConfirmForm" method="post" OnValidSubmit="UnsubscribeAsync" FormName="comment-unsubscribe" Enhance="false">
+            <DataAnnotationsValidator />
+            <input type="hidden" name="ConfirmForm.Token" value="@_token.Value.ToString("N")" />
+            <button type="submit" class="button">@UiText.T("Public.Unsubscribe.Submit", "確認退訂")</button>
+        </EditForm>
+    }
+    <p><a href="/">@UiText.T("Public.Unsubscribe.BackHome", "回到首頁")</a></p>
+</section>
+
+@code {
+    private sealed class ConfirmInput
+    {
+        public string? Token { get; set; }
+    }
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    [SupplyParameterFromForm(FormName = "comment-unsubscribe")]
+    private ConfirmInput ConfirmForm { get; set; } = default!;
+    private bool _done;
+    private Guid? _token;
+
+    protected override void OnInitialized()
+    {
+        _token = Guid.TryParseExact(Token, "N", out var parsed) ? parsed : null;
+        if (_token is null && Guid.TryParse(Token, out var loose)) _token = loose;
+    }
+
+    private async Task UnsubscribeAsync()
+    {
+        if (Guid.TryParseExact(ConfirmForm.Token, "N", out var posted) || Guid.TryParse(ConfirmForm.Token, out posted))
+        {
+            try
+            {
+                await Api.UnsubscribeCommentRepliesAsync(posted, HttpContext?.RequestAborted ?? default);
+                _done = true;
+            }
+            catch (Exception)
+            {
+                // 退訂失敗保持通用訊息；token 值不回顯。
+                _done = false;
+            }
+        }
+    }
+}

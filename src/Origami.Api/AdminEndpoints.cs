@@ -112,7 +112,17 @@ public static class AdminEndpoints
         group.MapPost("/contents/{id}/comments", async (Guid id, CommentPostEnvelope input, CommentService comments, CancellationToken ct) =>
         {
             await comments.PostAsync(id, new CommentService.CommentPostInput(
-                input.AuthorName ?? "", input.Url, input.Markdown ?? "", input.Honeypot == true, input.ParentId), ct);
+                input.AuthorName ?? "", input.Url, input.Markdown ?? "", input.Honeypot == true, input.ParentId,
+                input.Email, input.NotifyReplies == true), ct);
+            return Results.NoContent();
+        }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
+        // 回覆訂閱退訂：退訂識別本身即授權（郵件收件人專屬、不可猜測）；冪等成功，不揭露訂閱是否存在。
+        group.MapPost("/comments/unsubscribe", async (CommentUnsubscribeEnvelope input, CommentService comments, CancellationToken ct) =>
+        {
+            if (!Guid.TryParse(input.Token, out var token))
+                return Results.BadRequest(new { message = "退訂連結無效。" });
+            await comments.UnsubscribeRepliesAsync(token, ct);
             return Results.NoContent();
         }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
@@ -283,7 +293,9 @@ public static class AdminEndpoints
     public sealed record ProtectionUnlockInput(string? Password);
     public sealed record QuickEditInput(string? Title, string? Slug, ContentStatus Status, Guid Version);
     public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items, string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null);
-    public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot, Guid? ParentId = null);
+    public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot, Guid? ParentId = null,
+        string? Email = null, bool? NotifyReplies = null);
+    public sealed record CommentUnsubscribeEnvelope(string? Token);
     public sealed record CommentReplyInput(string? Markdown);
     public sealed record CommentModerateInput(string Status);
     public sealed record BulkContentItem(Guid Id, Guid Version);
