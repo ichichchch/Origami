@@ -29,6 +29,25 @@ public static class PublicEndpoints
             return Results.Text(ToXml(document), "application/xml", Encoding.UTF8);
         });
 
+        // OpenSearch 描述文件：讓瀏覽器／用戶端把站內搜尋註冊為搜尋引擎；與 robots 同步尊重站點索引開關。
+        app.MapGet("/opensearch.xml", async (OrigamiClient api, HttpContext http, CancellationToken ct) =>
+        {
+            var settings = await api.GetPublicSettingsAsync(ct);
+            if (settings?.SearchEngineBlocked == true) return Results.NotFound();
+            XNamespace ns = "http://a9.com/-/spec/opensearch/1.1/";
+            var document = new XDocument(new XDeclaration("1.0", "utf-8", null),
+                new XElement(ns + "OpenSearchDescription",
+                    new XElement(ns + "ShortName", (settings?.Name ?? "Origami")[..Math.Min(16, (settings?.Name ?? "Origami").Length)]),
+                    new XElement(ns + "Description", settings?.Description ?? ""),
+                    new XElement(ns + "InputEncoding", "UTF-8"),
+                    new XElement(ns + "OutputEncoding", "UTF-8"),
+                    new XElement(ns + "Url", new XAttribute("type", "text/html"),
+                        new XAttribute("template", BaseUrl(http) + "/search?q={searchTerms}")),
+                    new XElement(ns + "Url", new XAttribute("type", "application/opensearchdescription+xml"),
+                        new XAttribute("rel", "self"), new XAttribute("template", BaseUrl(http) + "/opensearch.xml"))));
+            return Results.Text(ToXml(document), "application/opensearchdescription+xml", Encoding.UTF8);
+        });
+
         // RSS 2.0：支援 ?category=、?tag=、?author=、?type=、?taxonomy=&term= 與 ?q= 過濾；不存在的分類、標籤、作者或類型回 404。
         // 設定開啟全文時，完整 HTML 放入 content:encoded，description 維持摘要。
         app.MapGet("/feed", async (OrigamiClient api, MarkdownService markdown,
@@ -155,7 +174,7 @@ public static class PublicEndpoints
             }
             else
             {
-                detail = await api.GetPublishedDetailAsync(ContentKind.Post, contentPath.Segments[0], ct);
+                detail = await api.GetPublishedDetailAsync(ContentKind.Post, contentPath.Segments[0], ct: ct);
                 path = "/posts/" + Uri.EscapeDataString(contentPath.Segments[0]);
             }
             if (detail is null || detail.IsProtected || detail.IsPrivate) return Results.NotFound();

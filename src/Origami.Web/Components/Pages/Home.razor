@@ -6,6 +6,7 @@
 <PageTitle>@HeadTitle</PageTitle>
 <HeadContent>
     <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
+    <link rel="search" type="application/opensearchdescription+xml" title="@_settings.Name" href="/opensearch.xml" />
     <meta name="description" content="@HomeDescription" />
     @* 帶篩選的列表以單純的首頁網址作為 canonical，避免產生重複內容的網址。 *@
     <link rel="canonical" href="@BaseUrl/" />

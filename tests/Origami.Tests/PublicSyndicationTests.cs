@@ -150,4 +150,33 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         // 最新的已發布文章排在頻道開頭。
         Assert.Contains("Feed 文章 " + (Limits.FeedItems + 3), rss);
     }
+
+    [PostgresFact]
+    public async Task OpenSearch_description_registers_site_search()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Content.SaveAsync(NewContent("OpenSearch 測試文章", status: ContentStatus.Published));
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync();
+        using var client = site.CreateClient();
+
+        var response = await client.GetAsync("/opensearch.xml");
+        Assert.True(response.IsSuccessStatusCode);
+        Assert.Equal("application/opensearchdescription+xml", response.Content.Headers.ContentType!.MediaType);
+        var xml = await response.Content.ReadAsStringAsync();
+        Assert.Contains("http://a9.com/-/spec/opensearch/1.1/", xml);
+        Assert.Contains("/search?q={searchTerms}", xml);
+        Assert.Contains("<ShortName>", xml);
+        Assert.Contains("UTF-8", xml);
+
+        // 首頁 head 帶自動探索連結（Static SSR 僅頁面級 HeadContent 會輸出）。
+        var home = await (await client.GetAsync("/")).Content.ReadAsStringAsync();
+        Assert.Contains("opensearchdescription+xml", System.Net.WebUtility.HtmlDecode(home));
+
+        // 站點關閉索引時不提供描述文件，與 robots.txt 的全站禁止同步。
+        var settings = await admin.Settings.GetAsync();
+        settings.SearchEngineBlocked = true;
+        await admin.Settings.SaveAsync(settings);
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, (await client.GetAsync("/opensearch.xml")).StatusCode);
+    }
 }
