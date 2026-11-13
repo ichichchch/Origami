@@ -262,7 +262,8 @@ public sealed class OrigamiClient
         GetAsync<PublicSearchService.Result>($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}&page={page}" + (includePages ? "&includePages=true" : ""), ct);
 
     public async Task<PagedResult<ContentSummary>?> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
-        string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null, CancellationToken ct = default)
+        string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null,
+        string? language = null, CancellationToken ct = default)
     {
         var query = $"api/v1/posts?page={page}&pageSize={pageSize}";
         if (category is not null) query += "&category=" + Uri.EscapeDataString(category);
@@ -270,6 +271,7 @@ public sealed class OrigamiClient
         if (author is not null) query += "&author=" + Uri.EscapeDataString(author);
         if (year is { } y) query += "&year=" + y;
         if (month is { } m) query += "&month=" + m;
+        if (!string.IsNullOrWhiteSpace(language)) query += "&lang=" + Uri.EscapeDataString(language);
         return await GetAsync<PagedResult<ContentSummary>>(query, ct);
     }
 
@@ -412,9 +414,11 @@ public sealed class OrigamiClient
     public Task<ContentEdit?> GetEditAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<ContentEdit>($"api/v1/admin/contents/{id}", ct);
 
-    /// <summary>網站渲染用的完整詳情：包含受保護與私密內容的旗標與本文（僅 BFF 通行證可達）。</summary>
-    public Task<PublicContent?> GetPublishedDetailAsync(ContentKind kind, string slug, CancellationToken ct = default) =>
-        GetAsync<PublicContent>($"api/v1/admin/contents/published/{kind.ToString().ToLowerInvariant()}/{Uri.EscapeDataString(slug)}", ct);
+    /// <summary>網站渲染用的完整詳情：包含受保護與私密內容的旗標與本文（僅 BFF 通行證可達）。
+    /// 指定 language 時切換到同組譯本；無譯本由回應的 FallbackFromLanguage 標記。</summary>
+    public Task<PublicContent?> GetPublishedDetailAsync(ContentKind kind, string slug, string? language = null, CancellationToken ct = default) =>
+        GetAsync<PublicContent>($"api/v1/admin/contents/published/{kind.ToString().ToLowerInvariant()}/{Uri.EscapeDataString(slug)}"
+            + (string.IsNullOrWhiteSpace(language) ? "" : "?lang=" + Uri.EscapeDataString(language)), ct);
 
     public Task<PublicContent?> GetPublishedPostByIdDetailAsync(Guid id, CancellationToken ct = default) =>
         GetAsync<PublicContent>($"api/v1/admin/contents/published-by-id/{id}", ct);

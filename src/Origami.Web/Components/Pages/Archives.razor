@@ -86,7 +86,7 @@ else
                 return;
             }
             var page = int.TryParse(Page, out var parsed) && parsed > 0 ? parsed : 1;
-            _result = await Api.ListPublishedAsync(page, Limits.MaxPageSize, year: Year, month: Month, ct: ct);
+            _result = await Api.ListPublishedAsync(page, Limits.MaxPageSize, year: Year, month: Month, language: CultureInfo.CurrentUICulture.Name, ct: ct);
         }
         catch (CmsException)
         {

@@ -135,7 +135,7 @@ else
                 if (_tag is null) { Missing(); return; }
                 _taxonomyDescription ??= _tag.Description != "" ? _tag.Description : null;
             }
-            _result = await Api.ListPublishedAsync(page, PageSize, _category?.Slug, _tag?.Slug, ct: ct);
+            _result = await Api.ListPublishedAsync(page, PageSize, _category?.Slug, _tag?.Slug, language: CultureInfo.CurrentUICulture.Name, ct: ct);
             if (_result is null || page > _result.TotalPages) { Missing(); return; }
             _categories = await Api.GetPopularCategoriesAsync(ct) ?? [];
         }

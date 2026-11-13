@@ -28,7 +28,7 @@ public sealed class McpReadTools(SemanticSearchService search, ContentService co
 
     private async Task<McpContentResult> GetAsync(ContentKind kind, string slug, CancellationToken ct)
     {
-        var found = await content.GetPublishedAsync(kind, slug, ct);
+        var found = await content.GetPublishedAsync(kind, slug, ct: ct);
         // 密碼保護的內文對人類也設有門檻，私密內容更僅限管理員；
         // 模型工具不得成為其中任何一者的側門。
         return new(found is not null && !found.IsProtected && !found.IsPrivate,

@@ -60,7 +60,6 @@
   </resheader>
   <data name="Account.Brand" xml:space="preserve">
     <value>ORIGAMI · Content Studio</value>
-  </data>
   <data name="Account.ForgotPassword.BackToLogin" xml:space="preserve">
     <value>Back to sign in</value>
   </data>
@@ -1075,6 +1074,7 @@
   <data name="Layout.Admin.Security" xml:space="preserve">
     <value>Security settings</value>
   </data>
+  </data>
   <data name="Layout.Admin.Settings" xml:space="preserve">
     <value>Site settings</value>
   </data>
@@ -1998,6 +1998,12 @@
   </data>
   <data name="Public.ContentDetail.Author" xml:space="preserve">
     <value>Author</value>
+  </data>
+  <data name="Public.ContentDetail.Translations" xml:space="preserve">
+    <value>Translations</value>
+  </data>
+  <data name="Public.ContentDetail.TranslationMissing" xml:space="preserve">
+    <value>This content has no {0} translation yet; showing another language below.</value>
   </data>
   <data name="Public.ContentDetail.Categories" xml:space="preserve">
     <value>Categories</value>

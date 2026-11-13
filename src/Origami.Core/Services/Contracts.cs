@@ -45,6 +45,14 @@ public sealed class ContentEdit
     public string AuthorName { get; set; } = "";
     /// <summary>自訂 meta 描述；空字串時使用文章摘要。</summary>
     [StringLength(Limits.MetaDescription)] public string MetaDescription { get; set; } = "";
+    /// <summary>內容語言鍵（BCP 47 簡式，如 zh-Hant、en；上限 16 字）；空字串表示未標記。</summary>
+    [StringLength(16)] public string Language { get; set; } = "";
+    /// <summary>把本內容併入指定內容的翻譯組；目標尚無組時同時為兩者建立新組。與 LeaveTranslationGroup 互斥。</summary>
+    public Guid? LinkTranslationTo { get; set; }
+    /// <summary>離開目前的翻譯組（其他譯本不受影響）。</summary>
+    public bool LeaveTranslationGroup { get; set; }
+    /// <summary>唯讀回報：所屬翻譯組識別；未加入翻譯組時為 null。</summary>
+    public Guid? TranslationGroupId { get; set; }
     /// <summary>是否排除搜尋引擎索引。</summary>
     public bool NoIndex { get; set; }
     /// <summary>唯讀回報：建立者的帳號識別；作者角色以此判斷能否編輯。</summary>
@@ -91,6 +99,8 @@ public sealed record BulkEditOptions(string? AuthorId = null, Guid? CategoryId =
 public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, string Slug,
     ContentStatus Status, DateTimeOffset UpdatedAt, DateTimeOffset? PublishedAt, Guid Version)
 {
+    /// <summary>內容語言鍵；空字串表示未標記。</summary>
+    public string Language { get; init; } = "";
     public string Excerpt { get; init; } = "";
     // 手動摘要依原樣渲染；自動產生的前綴仍需剝離 Markdown。
     public bool ExcerptIsManual { get; init; }
@@ -188,11 +198,22 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public DateTimeOffset UpdatedAt { get; init; }
     /// <summary>自訂欄位的公開值；依欄位宣告順序排列。</summary>
     public IReadOnlyList<PublicFieldValue> Fields { get; init; } = [];
+    /// <summary>內容語言鍵；空字串表示未標記。</summary>
+    public string Language { get; init; } = "";
+    /// <summary>所屬翻譯組；未加入翻譯組時為 null。</summary>
+    public Guid? TranslationGroupId { get; init; }
+    /// <summary>同組其他已發布譯本（語言鍵與代稱）；供前台譯本切換器。</summary>
+    public IReadOnlyList<PublicTranslationOption> AvailableTranslations { get; init; } = [];
+    /// <summary>請求的語言無譯本而回退顯示時，記錄該語言鍵供前台提示；未回退時為 null。</summary>
+    public string? FallbackFromLanguage { get; init; }
     /// <summary>自訂詞彙的公開清單（附所屬分類法代稱與名稱）。</summary>
     public IReadOnlyList<PublicCustomTerm> CustomTerms { get; init; } = [];
     /// <summary>自訂內容類型代稱；null 表示內建文章或頁面。</summary>
     public string? ContentTypeSlug { get; init; }
 }
+
+/// <summary>同組譯本的切換選項。</summary>
+public sealed record PublicTranslationOption(string Language, string Slug);
 public sealed record PublicCustomTerm(string TaxonomyName, string TaxonomySlug, string TermName, string TermSlug);
 public sealed record NavigationItem(string Title, string Slug);
 /// <summary>作者公開個人資料。</summary>

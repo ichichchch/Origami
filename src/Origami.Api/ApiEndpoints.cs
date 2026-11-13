@@ -58,16 +58,18 @@ public static class ApiEndpoints
         string? author = QueryValue(http, "author");
         if (!TryQueryInt(http, "year", null, minimum: 1, maximum: 9999, out var year, out error)) return error;
         if (!TryQueryInt(http, "month", null, minimum: 1, maximum: 12, out var month, out error)) return error;
-        return Results.Ok(await content.ListPublishedAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, category, tag, year, month, author));
+        var lang = http.Request.Query["lang"].ToString();
+        return Results.Ok(await content.ListPublishedAsync(page ?? 1, pageSize ?? Limits.PageSize, ct, category, tag, year, month, author,
+            lang.Length == 0 ? null : lang));
     }
 
     /// <summary>單篇已發布文章。</summary>
-    private static async Task<IResult> GetPostAsync(string slug, ContentService content, CancellationToken ct) =>
-        PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Post, slug, ct));
+    private static async Task<IResult> GetPostAsync(string slug, string? lang, ContentService content, CancellationToken ct) =>
+        PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Post, slug, lang, ct));
 
     /// <summary>單篇已發布獨立頁面。</summary>
-    private static async Task<IResult> GetPageAsync(string slug, ContentService content, CancellationToken ct) =>
-        PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Page, slug, ct));
+    private static async Task<IResult> GetPageAsync(string slug, string? lang, ContentService content, CancellationToken ct) =>
+        PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Page, slug, lang, ct));
 
     /// <summary>全站搜尋：缺少嵌入供應商時關鍵字比對仍可運作，僅語意搜尋這一環降級。</summary>
     private static async Task<IResult> SearchAsync(string? q, int? limit, int? page, bool? includePages,

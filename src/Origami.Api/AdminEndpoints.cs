@@ -235,11 +235,11 @@ public static class AdminEndpoints
             Results.Ok(await content.PageOptionsAsync(ct)));
 
         // 網站渲染用的完整詳情：機器端點會隱藏受保護與私密內容，網站需要旗標與本文才能呈現解鎖閘門。
-        group.MapGet("/contents/published/{kind}/{slug}", async (string kind, string slug, ContentService content, CancellationToken ct) =>
+        group.MapGet("/contents/published/{kind}/{slug}", async (string kind, string slug, string? lang, ContentService content, CancellationToken ct) =>
         {
             if (!Enum.TryParse<ContentKind>(kind, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
                 return Results.BadRequest(new { message = "參數 kind 無效。" });
-            return await content.GetPublishedAsync(parsed, slug, ct) is { } detail
+            return await content.GetPublishedAsync(parsed, slug, lang, ct) is { } detail
                 ? Results.Ok(detail)
                 : Results.NotFound();
         }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);

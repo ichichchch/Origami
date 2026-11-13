@@ -194,6 +194,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.HasIndex(x => x.AuthorId);
             // 編輯占用鎖只是提示性心跳，不參與並發控制（並發仍由 Version 樂觀檢查把關）。
             e.Property(x => x.EditingByName).HasMaxLength(Limits.AuthorName).IsRequired();
+            e.Property(x => x.Language).HasMaxLength(16).IsRequired();
+            e.HasIndex(x => new { x.SiteId, x.TranslationGroupId });
             e.HasMany(x => x.Categories).WithMany(x => x.Contents).UsingEntity<Dictionary<string, object>>(
                 "ContentCategories",
                 j => j.HasOne<Category>().WithMany().HasForeignKey("SiteId", "CategoriesId")
@@ -571,7 +573,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 ["AuthorSlug"] = "作者 URL 代称。",
                 ["EditingById"] = "当前编辑锁占用者 ID。",
                 ["EditingByName"] = "当前编辑锁占用者名称。",
-                ["EditingAt"] = "编辑锁最近心跳时间。"
+                ["EditingAt"] = "编辑锁最近心跳时间。",
+                ["TranslationGroupId"] = "平权翻译组标识；同组内容互为译本。",
+                ["Language"] = "内容语言键（如 zh-Hant、en）。"
             },
             ["ContentRevisions"] = new(StringComparer.OrdinalIgnoreCase)
             {

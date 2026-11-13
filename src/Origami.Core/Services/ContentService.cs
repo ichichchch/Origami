@@ -100,6 +100,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         {
             Id = x.Id, Kind = x.Kind, Title = x.Title, Slug = x.Slug, Markdown = x.Markdown, Excerpt = x.Excerpt,
             IsSticky = x.IsSticky, AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
+            Language = x.Language, TranslationGroupId = x.TranslationGroupId,
             IsProtected = x.IsProtected, IsPrivate = x.IsPrivate, HasProtectPassword = x.ProtectionHash != "",
             ParentId = x.ParentId, CoverMediaId = x.CoverMediaId,
             CoverFileName = x.Cover != null ? x.Cover.FileName : "",
@@ -379,6 +380,31 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 CreatedAt = now
             };
         }
+        // 一稿多譯：語言標記與平權翻譯組關聯（僅關聯，不自動翻譯）。
+        var language = (input.Language ?? "").Trim();
+        if (input.LinkTranslationTo is { } linkId)
+        {
+            if (linkId == entity.Id) throw new CmsException("翻譯組關聯目標不可是內容自身。");
+            var target = await db.Contents.AsNoTracking()
+                .Where(x => x.Id == linkId)
+                .Select(x => new { x.Kind, x.TranslationGroupId })
+                .SingleOrDefaultAsync(ct) ?? throw new CmsException("翻譯組關聯目標不存在，請重新載入。");
+            if (target.Kind != entity.Kind) throw new CmsException("翻譯組僅限同類型內容（文章對文章、頁面對頁面）。");
+            var groupId = target.TranslationGroupId ?? Guid.NewGuid();
+            // 同組同語言只能有一個譯本，避免前台語言切換出現二義。
+            if (language.Length > 0 && await db.Contents.AsNoTracking().AnyAsync(
+                    x => x.TranslationGroupId == groupId && x.Id != entity.Id && x.Language == language, ct))
+                throw new CmsException("翻譯組內已有相同語言的譯本。");
+            entity.TranslationGroupId = groupId;
+            if (target.TranslationGroupId is null)
+                await db.Contents.Where(x => x.Id == linkId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.TranslationGroupId, groupId), ct);
+        }
+        else if (input.LeaveTranslationGroup)
+        {
+            entity.TranslationGroupId = null;
+        }
+        entity.Language = language;
         entity.Title = input.Title.Trim();
         entity.Slug = slug;
         entity.Markdown = input.Markdown ?? "";
@@ -463,6 +489,10 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         input.Kind = entity.Kind;
         input.Slug = entity.Slug;
         input.Excerpt = entity.Excerpt;
+        input.Language = entity.Language;
+        input.TranslationGroupId = entity.TranslationGroupId;
+        input.LinkTranslationTo = null;
+        input.LeaveTranslationGroup = false;
         input.AuthorId = entity.AuthorId;
         input.AuthorName = entity.AuthorName;
         input.PublishAt = entity.PublishAt;
@@ -620,6 +650,19 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (input.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯，不能以儲存直接設定。");
         if (input.CategoryIds is null || input.TagIds is null || input.CategoryIds.Count > Limits.MaxTaxonomiesPerKind || input.TagIds.Count > Limits.MaxTaxonomiesPerKind)
             throw new CmsException($"每篇文章最多 {Limits.MaxTaxonomiesPerKind} 個分類與標籤。");
+        var language = (input.Language ?? "").Trim();
+        if (language.Length > 16 || !IsValidLanguageKey(language))
+            throw new CmsException("內容語言鍵格式無效（例如 zh-Hant、en、ja）。");
+        if (input.LinkTranslationTo is not null && input.LeaveTranslationGroup)
+            throw new CmsException("不可同時關聯翻譯組與離開翻譯組。");
+    }
+
+    /// <summary>語言鍵須為系統可辨識的文化特性名稱；空字串代表未標記。</summary>
+    private static bool IsValidLanguageKey(string language)
+    {
+        if (language.Length == 0) return true;
+        try { CultureInfo.GetCultureInfo(language); return true; }
+        catch (CultureNotFoundException) { return false; }
     }
 
     /// <summary>編輯占用鎖的現況回報；占用僅供提示，不阻止開啟或儲存（並發由版本檢查把關）。</summary>
@@ -1245,16 +1288,27 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     public async Task<PagedResult<ContentSummary>> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
-        CancellationToken ct = default, string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null)
+        CancellationToken ct = default, string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null,
+        string? language = null)
     {
         var offset = ContentRules.Offset(page, pageSize);
         if (category is not null) category = ContentRules.NormalizeSlug(category);
         if (tag is not null) tag = ContentRules.NormalizeSlug(tag);
         if (author is not null) author = ContentRules.NormalizeSlug(author);
         if (month is { } m && m is < 1 or > 12) throw new CmsException("月份無效。");
+        var requested = string.IsNullOrWhiteSpace(language) ? null : language.Trim();
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published
             && !x.IsPrivate && x.ContentTypeId == null);
+        // 一稿多譯：翻譯組在列表中只呈現一個代表——優先請求語言，其次站點預設語言、未標記者，最後最早發布。
+        var defaultLanguage = SupportedUiLanguages.All[0];
+        query = query.Where(x => x.TranslationGroupId == null
+            || x.Id == db.Contents
+                .Where(o => o.TranslationGroupId == x.TranslationGroupId && o.Kind == ContentKind.Post
+                    && o.Status == ContentStatus.Published && o.ContentTypeId == null && !o.IsPrivate)
+                .OrderBy(o => o.Language == requested ? 0 : o.Language == defaultLanguage ? 1 : o.Language == "" ? 2 : 3)
+                .ThenBy(o => o.PublishedAt).ThenBy(o => o.Id)
+                .Select(o => o.Id).First());
         if (category is not null)
         {
             var catIds = await CategorySubtreeIdsAsync(db, category, ct);
@@ -1271,13 +1325,14 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new
             {
                 x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version,
-                x.IsProtected, x.IsSticky, x.Excerpt,
+                x.IsProtected, x.IsSticky, x.Excerpt, x.Language,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 Preview = x.Markdown.Substring(0, x.Markdown.Length > ExcerptPreviewLength ? ExcerptPreviewLength : x.Markdown.Length)
             }).ToListAsync(ct);
         var items = rows.Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
         {
+            Language = x.Language,
             Excerpt = BuildExcerpt(x.IsProtected, x.Excerpt, x.Preview),
             ExcerptIsManual = x.IsProtected || x.Excerpt != "",
             IsSticky = x.IsSticky,
@@ -1418,11 +1473,36 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         return result;
     }
 
-    public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, CancellationToken ct = default)
+    /// <summary>
+    /// 依代稱讀取已發布內容。指定 language 時切換到同組該語言的已發布譯本；
+    /// 無譯本則回傳原內容並以 FallbackFromLanguage 記錄回退，供前台提示。
+    /// </summary>
+    public async Task<PublicContent?> GetPublishedAsync(ContentKind kind, string slug, string? language = null, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        var actualSlug = slug;
+        string? fallback = null;
+        var requested = string.IsNullOrWhiteSpace(language) ? null : language.Trim();
+        if (requested is not null)
+        {
+            var current = await db.Contents.AsNoTracking()
+                .Where(x => x.Kind == kind && x.Status == ContentStatus.Published && x.Slug == slug && x.ContentTypeId == null)
+                .Select(x => new { x.Id, x.Language, x.TranslationGroupId }).SingleOrDefaultAsync(ct);
+            if (current is not null && current.Language != requested)
+            {
+                var translatedSlug = current.TranslationGroupId is { } groupId
+                    ? await db.Contents.AsNoTracking()
+                        .Where(o => o.TranslationGroupId == groupId && o.Id != current.Id && o.Language == requested
+                            && o.Kind == kind && o.Status == ContentStatus.Published && o.ContentTypeId == null)
+                        .OrderBy(o => o.PublishedAt).ThenBy(o => o.Id)
+                        .Select(o => (string?)o.Slug).FirstOrDefaultAsync(ct)
+                    : null;
+                if (translatedSlug is not null) actualSlug = translatedSlug;
+                else fallback = requested;
+            }
+        }
         return await db.Contents.AsNoTracking().AsSplitQuery().Where(x => x.Kind == kind && x.Status == ContentStatus.Published
-                && x.Slug == slug && x.ContentTypeId == null)
+                && x.Slug == actualSlug && x.ContentTypeId == null)
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
@@ -1433,6 +1513,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
                 CoverAltText = x.Cover != null ? x.Cover.AltText : "",
                 CoverCaption = x.Cover != null ? x.Cover.Caption : "",
+                Language = x.Language, TranslationGroupId = x.TranslationGroupId,
+                FallbackFromLanguage = fallback,
+                AvailableTranslations = x.TranslationGroupId == null ? new List<PublicTranslationOption>() :
+                    db.Contents.Where(o => o.TranslationGroupId == x.TranslationGroupId && o.Id != x.Id
+                        && o.Kind == kind && o.Status == ContentStatus.Published && o.ContentTypeId == null)
+                    .OrderBy(o => o.Language).ThenBy(o => o.Slug)
+                    .Select(o => new PublicTranslationOption(o.Language, o.Slug)).ToList(),
                 Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
                     .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList() })
             .SingleOrDefaultAsync(ct);
@@ -1630,7 +1717,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         }
         chain.Reverse();
         nodes.Reverse();
-        var content = await GetPublishedAsync(ContentKind.Page, slug, ct);
+        var content = await GetPublishedAsync(ContentKind.Page, slug, ct: ct);
         if (content is null) return null;
         var crumbs = new List<BreadcrumbNode>();
         var currentSegments = new List<string>();

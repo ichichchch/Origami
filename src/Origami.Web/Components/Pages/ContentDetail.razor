@@ -91,6 +91,23 @@ else if (_content is not null)
         <header class="article-heading">
             <p class="eyebrow">@ContentLabel</p>
             <h1>@_content.Title</h1>
+            @if (_content.FallbackFromLanguage is { } missing)
+            {
+                <p class="translation-fallback" role="note">@string.Format(CultureInfo.CurrentCulture, UiText.T("Public.ContentDetail.TranslationMissing", "此內容尚無 {0} 譯本，以下顯示其他語言版本。"), missing)</p>
+            }
+            @if (_content.AvailableTranslations.Count > 0)
+            {
+                <nav class="translation-switch" aria-label="@UiText.T("Public.ContentDetail.Translations", "譯本")">
+                    @if (_content.Language.Length > 0)
+                    {
+                        <span class="translation-current" lang="@_content.Language">@LanguageLabel(_content.Language)</span>
+                    }
+                    @foreach (var option in _content.AvailableTranslations)
+                    {
+                        <a href="@TranslationHref(option)" lang="@option.Language">@LanguageLabel(option.Language)</a>
+                    }
+                </nav>
+            }
             @if (!_locked && _content.Kind == ContentKind.Post)
             {
                 // 逐篇作者快照優先；未署名時退回站點設定的作者名稱。有署名代稱者連向作者彙整頁。
@@ -522,6 +539,16 @@ else
             return new Dictionary<string, object> { ["srcset"] = string.Join(", ", candidates), ["sizes"] = "(min-width: 800px) 720px, 100vw" };
         }
     }
+    private string TranslationHref(PublicTranslationOption option) =>
+        Navigation.GetUriWithQueryParameter("lang", option.Language);
+
+    /// <summary>譯本切換器的顯示名稱：以該語言的母語名稱呈現（如「中文」、「English」）。</summary>
+    private static string LanguageLabel(string language)
+    {
+        try { return CultureInfo.GetCultureInfo(language).NativeName; }
+        catch (CultureNotFoundException) { return language; }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         // Static SSR 的 POST 會替換表單模型；單純瀏覽則從空的模型開始。
@@ -598,7 +625,7 @@ else
                 }
                 else
                 {
-                    _content = await Api.GetPublishedDetailAsync(ContentKind.Post, Slug, ct);
+                    _content = await Api.GetPublishedDetailAsync(ContentKind.Post, Slug, CultureInfo.CurrentUICulture.Name, ct);
                     if (_content is null)
                     {
                         // 已發布內容的汰換 slug 透過永久轉址持續可用。

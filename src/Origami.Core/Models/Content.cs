@@ -235,6 +235,10 @@ public sealed class Content
     [StringLength(Limits.AuthorName)] public string EditingByName { get; set; } = "";
     /// <summary>占用者最近一次心跳時間；超過 Limits.EditingLockSeconds 視同無人占用。</summary>
     public DateTimeOffset? EditingAt { get; set; }
+    /// <summary>平權翻譯組識別；同組內容互為譯本（一稿多譯，僅關聯不自動翻譯），未加入翻譯組時為 null。</summary>
+    public Guid? TranslationGroupId { get; set; }
+    /// <summary>內容語言鍵（BCP 47 簡式，如 zh-Hant、en、ja；上限 16 字）；空字串表示未標記。</summary>
+    [StringLength(16)] public string Language { get; set; } = "";
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Category> Categories { get; set; } = new List<Category>();
     public ICollection<Tag> Tags { get; set; } = new List<Tag>();

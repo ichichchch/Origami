@@ -68,7 +68,7 @@ else
         {
             var ct = HttpContext?.RequestAborted ?? default;
             var page = Math.Max(1, RequestedPage ?? 1);
-            _result = await Api.ListPublishedAsync(page, author: Slug, ct: ct);
+            _result = await Api.ListPublishedAsync(page, author: Slug, language: CultureInfo.CurrentUICulture.Name, ct: ct);
             _profile = await Api.GetPublicAuthorAsync(Slug, ct);
             if (!string.IsNullOrWhiteSpace(_profile?.DisplayName))
                 _authorName = _profile.DisplayName;

@@ -775,6 +775,10 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("character varying(200)")
                         .HasComment("标题。");
 
+                    b.Property<Guid?>("TranslationGroupId")
+                        .HasColumnType("uuid")
+                        .HasComment("平权翻译组标识；同组内容互为译本。");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasComment("更新时间。");
@@ -799,6 +803,8 @@ namespace Origami.Core.Data.Migrations
                         .IsUnique();
 
                     b.HasIndex("SiteId", "Status");
+
+                    b.HasIndex("SiteId", "TranslationGroupId");
 
                     b.HasIndex("SiteId", "AuthorSlug", "Status");
 
