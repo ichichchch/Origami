@@ -402,9 +402,9 @@ else if (_model is not null)
                             @if (_revisionDiff is { } diff)
                             {
                                 <div class="revision-diff">
-                                    <p><strong>@UiText.T("Admin.ContentEditor.DiffTitle", "與目前編輯器內容的差異")</strong></p>
-                                    <p class="field-help">@UiText.T("Admin.ContentEditor.DiffHelp", "紅色＝修訂版有、目前沒有（還原會加回）；綠色＝目前有、修訂版沒有（還原會移除）。")</p>
-                                    <div class="diff-output" role="region" aria-label="@UiText.T("Admin.ContentEditor.DiffRegion", "修訂與目前內容的行差異")">
+                                    <p><strong>@(_diffHeader ?? UiText.T("Admin.ContentEditor.DiffTitle", "與目前編輯器內容的差異"))</strong></p>
+                                    <p class="field-help">@UiText.T("Admin.ContentEditor.DiffHelp", "紅色＝左側（舊）有、右側（新）沒有；綠色＝右側（新）有、左側（舊）沒有。")</p>
+                                    <div class="diff-output" role="region" aria-label="@UiText.T("Admin.ContentEditor.DiffRegion", "選定兩個版本的行差異")">
                                         @foreach (var line in diff)
                                         {
                                             <span class="diff-line @(line.Kind switch { TextDiff.DiffKind.Added => "diff-added", TextDiff.DiffKind.Removed => "diff-removed", _ => "diff-same" })" data-mark="@(line.Kind switch { TextDiff.DiffKind.Added => "+", TextDiff.DiffKind.Removed => "−", _ => " " })">@line.Text</span>
@@ -423,12 +423,20 @@ else if (_model is not null)
                             }
                             else
                             {
+                                <p class="field-help">@UiText.T("Admin.ContentEditor.ABCompareHelp", "在清單勾選任兩個版本可比較其差異（A 為舊、B 為新；勾選後自動按時間排序）。")</p>
                                 <ul class="revision-list">
                                     @foreach (var revision in _revisions)
                                     {
-                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row"><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">@UiText.T("Admin.ContentEditor.View", "查看")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => CompareRevision(revision.Id)">@UiText.T("Admin.ContentEditor.Compare", "比較")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">@UiText.T("Admin.ContentEditor.Restore", "還原")</button></span></li>
+                                        <li><span>@revision.CreatedAt.ToString("MM.dd HH:mm") @revision.Title</span><span class="button-row">
+                                            <label class="inline-choice"><input type="radio" name="revision-diff-a" disabled="@Blocked" checked="@(DiffOldId == revision.Id)" @onclick="() => SelectDiffSide(revision.Id, false)" /> A</label>
+                                            <label class="inline-choice"><input type="radio" name="revision-diff-b" disabled="@Blocked" checked="@(DiffNewId == revision.Id)" @onclick="() => SelectDiffSide(revision.Id, true)" /> B</label>
+                                            <button type="button" class="text-button" disabled="@Blocked" @onclick="() => ViewRevision(revision.Id)">@UiText.T("Admin.ContentEditor.View", "查看")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => CompareRevision(revision.Id)">@UiText.T("Admin.ContentEditor.Compare", "比較")</button><button type="button" class="text-button" disabled="@Blocked" @onclick="() => RestoreRevisionById(revision.Id)">@UiText.T("Admin.ContentEditor.Restore", "還原")</button></span></li>
                                     }
                                 </ul>
+                                @if (DiffOldId is not null && DiffNewId is not null)
+                                {
+                                    <div class="button-row"><button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="CompareSelectedRevisions">@UiText.T("Admin.ContentEditor.CompareSelected", "比較選定的兩版")</button></div>
+                                }
                             }
                         }
                     </section>
@@ -823,6 +831,9 @@ else if (_model is not null)
         _revisionView = null;
         _revisionDiff = null;
         _diffTooLarge = false;
+        _diffSideA = null;
+        _diffSideB = null;
+        _diffHeader = null;
     });
     private Task ViewRevision(Guid revisionId) => RunAsync(async ct =>
     {
@@ -835,7 +846,60 @@ else if (_model is not null)
     {
         var revision = await Api.GetRevisionAsync(revisionId, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.RevisionNotFound", "修訂記錄不存在，請重新載入。"));
         _revisionView = null;
+        _diffHeader = UiText.T("Admin.ContentEditor.DiffTitle", "與目前編輯器內容的差異");
         _revisionDiff = TextDiff.Compare(revision.Markdown, _model?.Markdown ?? "");
+        _diffTooLarge = _revisionDiff is null;
+    });
+
+    // ── 任意兩版 A/B 比較：勾選兩個修訂後比較，較舊者為 A（舊）。 ──
+    private Guid? _diffSideA;
+    private Guid? _diffSideB;
+    private string? _diffHeader;
+    /// <summary>勾選值經時間排序正規化後的舊版（A）。</summary>
+    private Guid? DiffOldId
+    {
+        get
+        {
+            var (oldId, _) = OrderDiffSides();
+            return oldId;
+        }
+    }
+    /// <summary>勾選值經時間排序正規化後的新版（B）。</summary>
+    private Guid? DiffNewId
+    {
+        get
+        {
+            var (_, newId) = OrderDiffSides();
+            return newId;
+        }
+    }
+    private (Guid? OldId, Guid? NewId) OrderDiffSides()
+    {
+        if (_diffSideA is not { } a || _diffSideB is not { } b || a == b) return (null, null);
+        var timeA = _revisions.FirstOrDefault(x => x.Id == a)?.CreatedAt;
+        var timeB = _revisions.FirstOrDefault(x => x.Id == b)?.CreatedAt;
+        // 找不到時間（清單過期）時以勾選順序為準：先選為舊。
+        if (timeA is null || timeB is null || timeA <= timeB) return (a, b);
+        return (b, a);
+    }
+    private void SelectDiffSide(Guid revisionId, bool isSideB)
+    {
+        if (Blocked) return;
+        // 同一版不可同時作為兩側；勾選另一側時若已占據對側則自動讓位。
+        if (isSideB) { if (_diffSideA == revisionId) _diffSideA = null; _diffSideB = revisionId; }
+        else { if (_diffSideB == revisionId) _diffSideB = null; _diffSideA = revisionId; }
+    }
+    private Task CompareSelectedRevisions() => RunAsync(async ct =>
+    {
+        var (oldId, newId) = OrderDiffSides();
+        if (oldId is not { } a || newId is not { } b || a == b)
+            throw new CmsException(UiText.T("Admin.ContentEditor.DiffPickTwo", "請勾選兩個不同的版本。"));
+        var older = await Api.GetRevisionAsync(a, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.RevisionNotFound", "修訂記錄不存在，請重新載入。"));
+        var newer = await Api.GetRevisionAsync(b, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.RevisionNotFound", "修訂記錄不存在，請重新載入。"));
+        _revisionView = null;
+        _diffHeader = string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.DiffABTitle", "{0} → {1} 的差異"),
+            older.CreatedAt.ToString("MM.dd HH:mm"), newer.CreatedAt.ToString("MM.dd HH:mm"));
+        _revisionDiff = TextDiff.Compare(older.Markdown, newer.Markdown);
         _diffTooLarge = _revisionDiff is null;
     });
     private Task RestoreRevisionById(Guid revisionId) => RunAsync(async ct =>

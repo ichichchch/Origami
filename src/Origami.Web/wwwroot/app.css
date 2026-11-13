@@ -277,6 +277,8 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 .preview-banner span { font-size: .82rem; }
 .revisions-panel .revision-list { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .45rem; }
 .revisions-panel .revision-list li { display: flex; justify-content: space-between; align-items: center; gap: .6rem; font-size: .8rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+.revision-list .inline-choice { display: inline-flex; align-items: center; gap: .25rem; font-size: .78rem; color: var(--muted); cursor: pointer; }
+.revision-list .inline-choice input { accent-color: var(--accent-ink); }
 .revision-body { max-height: 320px; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem; font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .save-indicator.autosaved { color: var(--muted); }
 

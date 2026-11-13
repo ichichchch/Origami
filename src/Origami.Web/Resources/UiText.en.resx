@@ -2288,13 +2288,25 @@
     <value>Current status</value>
   </data>
   <data name="Admin.ContentEditor.DiffHelp" xml:space="preserve">
-    <value>Red: present only in the revision (restoring adds it back). Green: present only in the current content (restoring removes it).</value>
+    <value>Red: present only on the left (old). Green: present only on the right (new).</value>
   </data>
   <data name="Admin.ContentEditor.DiffRegion" xml:space="preserve">
-    <value>Line differences between the revision and current content</value>
+    <value>Line differences between the two selected versions</value>
   </data>
   <data name="Admin.ContentEditor.DiffTitle" xml:space="preserve">
     <value>Differences from the current editor content</value>
+  </data>
+  <data name="Admin.ContentEditor.DiffABTitle" xml:space="preserve">
+    <value>Differences {0} → {1}</value>
+  </data>
+  <data name="Admin.ContentEditor.DiffPickTwo" xml:space="preserve">
+    <value>Please pick two different revisions.</value>
+  </data>
+  <data name="Admin.ContentEditor.ABCompareHelp" xml:space="preserve">
+    <value>Pick any two revisions to compare (A is the older, B the newer; sides are ordered by time automatically).</value>
+  </data>
+  <data name="Admin.ContentEditor.CompareSelected" xml:space="preserve">
+    <value>Compare the two selected revisions</value>
   </data>
   <data name="Admin.ContentEditor.DiffTooLarge" xml:space="preserve">
     <value>There are too many lines for a line-by-line comparison. Use “View” to compare the full text instead.</value>
