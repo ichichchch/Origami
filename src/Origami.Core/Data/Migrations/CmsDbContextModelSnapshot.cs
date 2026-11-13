@@ -712,6 +712,12 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("integer")
                         .HasComment("内容类型：文章或页面。");
 
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasComment("内容语言键（如 zh-Hant、en）。");
+
                     b.Property<string>("Markdown")
                         .IsRequired()
                         .HasMaxLength(200000)
