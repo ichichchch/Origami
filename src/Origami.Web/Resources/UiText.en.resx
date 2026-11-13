@@ -3976,6 +3976,33 @@
   <data name="Admin.Security.AvatarUrl" xml:space="preserve">
     <value>Avatar URL (optional)</value>
   </data>
+  <data name="Admin.Security.AvatarTitle" xml:space="preserve">
+    <value>Avatar (choose from media library)</value>
+  </data>
+  <data name="Admin.Security.AvatarPreviewAlt" xml:space="preserve">
+    <value>Current avatar</value>
+  </data>
+  <data name="Admin.Security.AvatarExternalLegacy" xml:space="preserve">
+    <value>Currently using a legacy external avatar URL; picking a local avatar replaces it.</value>
+  </data>
+  <data name="Admin.Security.AvatarPick" xml:space="preserve">
+    <value>Choose from media library</value>
+  </data>
+  <data name="Admin.Security.AvatarClear" xml:space="preserve">
+    <value>Clear avatar</value>
+  </data>
+  <data name="Admin.Security.AvatarHelp" xml:space="preserve">
+    <value>Shown with your article bylines and on your author page; like the site logo, it must be uploaded to the media library first.</value>
+  </data>
+  <data name="Admin.Security.UiLanguage" xml:space="preserve">
+    <value>Interface language preference</value>
+  </data>
+  <data name="Admin.Security.UiLanguageNone" xml:space="preserve">
+    <value>Not set (follows the browser or site default)</value>
+  </data>
+  <data name="Admin.Security.UiLanguageHelp" xml:space="preserve">
+    <value>Interface language after sign-in; an explicit choice made on this device via the switcher still takes precedence.</value>
+  </data>
   <data name="Admin.Security.Bio" xml:space="preserve">
     <value>Author bio</value>
   </data>

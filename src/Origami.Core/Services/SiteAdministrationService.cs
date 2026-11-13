@@ -338,6 +338,10 @@ public sealed class SiteAdministrationService(
             .Where(x => x.UserId == user.Id)
             .Select(x => x.DisplayName)
             .SingleOrDefaultAsync(ct) ?? "";
+        var avatarFile = user.AvatarMediaId is { } mediaId
+            ? await db.MediaAssets.AsNoTracking().Where(x => x.Id == mediaId)
+                .Select(x => x.FileName).SingleOrDefaultAsync(ct)
+            : null;
         return new AccountProfileEdit
         {
             UserName = user.UserName ?? "",
@@ -345,7 +349,10 @@ public sealed class SiteAdministrationService(
             DisplayName = displayName,
             Bio = user.Bio,
             WebsiteUrl = user.WebsiteUrl,
-            AvatarUrl = user.AvatarUrl
+            AvatarUrl = user.AvatarUrl,
+            AvatarMediaId = user.AvatarMediaId,
+            AvatarMediaUrl = avatarFile is null ? "" : "/media/" + avatarFile,
+            UiLanguage = user.UiLanguage
         };
     }
 
@@ -376,6 +383,11 @@ public sealed class SiteAdministrationService(
             if (!isLocalMedia && !isHttpUrl)
                 throw new CmsException("頭像網址必須是 http／https 絕對網址或站內 /media/ 圖片路徑。");
         }
+        // 介面語言偏好：空字串表示清除偏好（跟隨訪客語言機制）；非空必須是支援的語言鍵。
+        var uiLanguage = (input.UiLanguage ?? "").Trim();
+        if (uiLanguage.Length > 0 && SupportedUiLanguages.Normalize(uiLanguage) is null)
+            throw new CmsException("不支援的介面語言偏好。");
+        uiLanguage = SupportedUiLanguages.Normalize(uiLanguage) ?? "";
         var email = (input.Email ?? "").Trim();
         if (email.Length > 0 && (email.Length > 256 || !email.Contains('@') || email.Any(char.IsControl)))
             throw new CmsException("電子郵件格式不正確。");
@@ -386,9 +398,18 @@ public sealed class SiteAdministrationService(
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             var user = await db.Users.SingleOrDefaultAsync(x => x.Id == sessionUser.Id, ct)
                 ?? throw new CmsException("帳號不存在。");
+            // 本機頭像：必須是媒體庫中現有的圖片（站點篩選器保證屬於目前站點）。
+            Guid? avatarMediaId = input.AvatarMediaId;
+            var avatarFile = avatarMediaId is null ? null : await db.MediaAssets.AsNoTracking()
+                .Where(x => x.Id == avatarMediaId && x.Kind == MediaKind.Image)
+                .Select(x => x.FileName).SingleOrDefaultAsync(ct);
+            if (avatarMediaId is not null && avatarFile is null)
+                throw new CmsException("本機頭像必須選擇媒體庫中現有的圖片。");
             user.Bio = bio;
             user.WebsiteUrl = website;
             user.AvatarUrl = avatar;
+            user.AvatarMediaId = avatarMediaId;
+            user.UiLanguage = uiLanguage;
             user.Email = email;
             user.NormalizedEmail = email.Length == 0 ? null : userManager.NormalizeEmail(email);
 
@@ -412,7 +433,10 @@ public sealed class SiteAdministrationService(
                 DisplayName = displayName,
                 Bio = user.Bio,
                 WebsiteUrl = user.WebsiteUrl,
-                AvatarUrl = user.AvatarUrl
+                AvatarUrl = user.AvatarUrl,
+                AvatarMediaId = user.AvatarMediaId,
+                AvatarMediaUrl = avatarFile is null ? "" : "/media/" + avatarFile,
+                UiLanguage = user.UiLanguage
             };
         });
     }
@@ -525,6 +549,8 @@ public sealed class SiteAdministrationService(
             user.Bio,
             user.WebsiteUrl,
             user.AvatarUrl,
+            user.AvatarMediaId,
+            user.UiLanguage,
             user.TwoFactorEnabled,
             timeProvider.GetUtcNow(),
             memberships,
@@ -610,6 +636,8 @@ public sealed class SiteAdministrationService(
             user.Bio = "";
             user.WebsiteUrl = "";
             user.AvatarUrl = "";
+            user.AvatarMediaId = null;
+            user.UiLanguage = "";
             user.TwoFactorEnabled = false;
             user.TwoFactorSecret = "";
             user.RecoveryCodeHashes = "";

@@ -42,6 +42,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Bio).HasMaxLength(Limits.UserBio).IsRequired();
             e.Property(x => x.WebsiteUrl).HasMaxLength(Limits.UserUrl).IsRequired();
             e.Property(x => x.AvatarUrl).HasMaxLength(Limits.UserUrl).IsRequired();
+            e.Property(x => x.UiLanguage).HasMaxLength(16).IsRequired();
             e.Property(x => x.RecoveryCodeHashes).HasMaxLength(1024).IsRequired();
             e.HasIndex(x => x.SingletonKey).IsUnique().HasFilter("\"SingletonKey\" IS NOT NULL");
             e.ToTable("AspNetUsers", t => t.HasCheckConstraint("CK_Admin_Singleton", "\"SingletonKey\" IS NULL OR \"SingletonKey\" = 1"));
@@ -701,7 +702,9 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
                 ["RecoveryCodeHashes"] = "恢复码哈希集合。",
                 ["Bio"] = "用户简介。",
                 ["WebsiteUrl"] = "个人网站地址。",
-                ["AvatarUrl"] = "头像地址。"
+                ["AvatarUrl"] = "头像地址。",
+                ["AvatarMediaId"] = "本机头像的媒体资产引用。",
+                ["UiLanguage"] = "每使用者界面语言偏好。"
             }
         };
 

@@ -303,6 +303,9 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             throw new CmsException("媒體檔名不合法，無法刪除。");
         if (await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && (s.SiteIconMediaId == mediaId || s.LogoMediaId == mediaId), ct))
             throw new CmsException("此圖片是目前的網站圖示或標誌，請先在網站設定改用其他圖片或清除後再刪除。");
+        // 使用者本機頭像也是長期引用；使用者屬識別網域（無站點篩選器），需跨站檢查。
+        if (await db.Users.AsNoTracking().AnyAsync(x => x.AvatarMediaId == mediaId, ct))
+            throw new CmsException("此圖片正被使用者選為本機頭像，請先在個人設定改用其他圖片或清除後再刪除。");
         var references = await QueryReferencesAsync(db, mediaId, asset.FileName, ct);
         if (references.Count > 0)
         {

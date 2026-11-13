@@ -159,6 +159,21 @@ public sealed class AdminUser : IdentityUser
     [StringLength(Limits.UserUrl)] public string WebsiteUrl { get; set; } = "";
     /// <summary>作者頭像網址（僅 http／https 或站內 /media/ 圖片）。</summary>
     [StringLength(Limits.UserUrl)] public string AvatarUrl { get; set; } = "";
+    /// <summary>從媒體庫選擇的本機頭像；優先於 AvatarUrl，未選擇時為 null。</summary>
+    public Guid? AvatarMediaId { get; set; }
+    /// <summary>每使用者介面語言偏好（UiTextLanguages 支援的鍵）；空字串表示未設定，跟隨訪客語言機制。</summary>
+    [StringLength(16)] public string UiLanguage { get; set; } = "";
+}
+
+/// <summary>介面語言鍵的單一真相來源；Web 的 UiTextLanguages 與服務層驗證共用。</summary>
+public static class SupportedUiLanguages
+{
+    public static readonly IReadOnlyList<string> All = Array.AsReadOnly(new[] { "zh-Hant", "en" });
+
+    /// <summary>正規化為支援的語言鍵；不支援時回 null（空字串視為未設定，回 null）。</summary>
+    public static string? Normalize(string? culture) =>
+        string.IsNullOrEmpty(culture) ? null
+            : All.FirstOrDefault(value => string.Equals(value, culture, StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed class Content

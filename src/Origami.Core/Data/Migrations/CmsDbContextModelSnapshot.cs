@@ -256,6 +256,10 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("integer")
                         .HasComment("业务字段：AccessFailedCount。");
 
+                    b.Property<Guid?>("AvatarMediaId")
+                        .HasColumnType("uuid")
+                        .HasComment("本机头像的媒体资产引用。");
+
                     b.Property<string>("AvatarUrl")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -338,6 +342,12 @@ namespace Origami.Core.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasComment("两步验证密钥。");
+
+                    b.Property<string>("UiLanguage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasComment("每使用者界面语言偏好。");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)

@@ -25,14 +25,26 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
     options.SetDefaultCulture(UiTextLanguages.Default)
         .AddSupportedCultures(UiTextLanguages.Supported.ToArray())
         .AddSupportedUICultures(UiTextLanguages.Supported.ToArray());
-    options.RequestCultureProviders = [new CustomRequestCultureProvider(context =>
+    options.RequestCultureProviders = [new CustomRequestCultureProvider(async context =>
     {
+        // 語言優先序：URL 查詢參數 > 裝置 Cookie > 已登入使用者偏好 > 預設值。
+        // 本中介註冊於驗證之後（見 UseRequestLocalization 位置），因此可讀取已驗證主體；
+        // 使用者偏好查詢走主機層 DbContextFactory 先例並帶短快取。
         var culture = UiTextLanguages.Normalize(context.Request.Query["lang"].ToString())
-            ?? UiTextLanguages.Normalize(context.Request.Cookies[UiTextLanguages.CookieName])
-            ?? UiTextLanguages.Default;
-        return Task.FromResult<ProviderCultureResult?>(new ProviderCultureResult(culture));
+            ?? UiTextLanguages.Normalize(context.Request.Cookies[UiTextLanguages.CookieName]);
+        if (culture is null)
+        {
+            var userId = context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+                culture = await context.RequestServices.GetRequiredService<UserLanguagePreferenceReader>()
+                    .GetAsync(userId, context.RequestAborted);
+        }
+        return new ProviderCultureResult(culture ?? UiTextLanguages.Default);
     })];
 });
+// AddDbContextFactory 以 Scoped 註冊工廠；Singleton 讀取器會形成 captive dependency，
+// 啟動驗證即失敗。快取經單例 IMemoryCache 共享，Scoped 註冊不影響跨請求快取與失效。
+builder.Services.AddScoped<UserLanguagePreferenceReader>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<SiteResolveThrottle>();
 builder.Services.AddSingleton<ContentUnlockThrottle>();
@@ -144,7 +156,7 @@ if (OperatingSystem.IsWindows()) protection.ProtectKeysWithDpapi();
 var app = builder.Build();
 if (isCommand) return await RunCommandAsync(args, app);
 
-app.UseRequestLocalization();
+// 語言 Cookie 種植：?lang= 同時記住裝置選擇（365 天）。
 app.Use(async (context, next) =>
 {
     var requested = UiTextLanguages.Normalize(context.Request.Query["lang"].ToString());
@@ -234,6 +246,9 @@ app.Use(async (context, next) =>
 });
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseAuthentication();
+// 要求文化放在驗證之後：使用者介面語言偏好需要已驗證主體；前面各中介（安全標頭、站點解析、
+// 可見度標頭）均不消費 CurrentCulture，順序調整不影響行為。
+app.UseRequestLocalization();
 app.UseAuthorization();
 app.UseAntiforgery();
 app.UseRateLimiter();

@@ -200,6 +200,9 @@ textarea.markdown-input { border: 0; border-radius: 0; padding: 1.5rem; min-heig
 .management-grid { display: grid; grid-template-columns: minmax(250px, .65fr) minmax(0, 1.35fr); gap: 1.5rem; align-items: start; }
 .settings-panel { padding: 1.7rem; }
 .settings-panel > h2 { margin-bottom: 1.3rem; }
+.avatar-control { display: flex; align-items: center; flex-wrap: wrap; gap: .8rem; margin-top: .4rem; }
+.avatar-control .avatar-preview { width: 4rem; height: 4rem; border-radius: 999px; object-fit: cover; border: 1px solid var(--border); }
+.avatar-control .field-help { flex-basis: 100%; margin: 0; }
 .settings-width { max-width: 760px; }
 .panel-intro { border-bottom: 1px solid var(--border); margin-bottom: 1.6rem; padding-bottom: .7rem; }
 .panel-intro h2 { margin-bottom: .4rem; }

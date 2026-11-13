@@ -1835,10 +1835,21 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         if (latest is null) return null;
         if (latest.AuthorId is { } userId)
         {
+            // 頭像解析：本機頭像（媒體資產）優先，退回外部網址；媒體檔名經路由 /media/{file} 公開。
             var user = await db.Users.AsNoTracking().Where(x => x.Id == userId)
-                .Select(x => new { x.Bio, x.WebsiteUrl, x.AvatarUrl }).SingleOrDefaultAsync(ct);
+                .Select(x => new
+                {
+                    x.Bio,
+                    x.WebsiteUrl,
+                    x.AvatarUrl,
+                    AvatarFile = db.MediaAssets.Where(m => m.Id == x.AvatarMediaId)
+                        .Select(m => m.FileName).FirstOrDefault()
+                }).SingleOrDefaultAsync(ct);
             if (user is not null)
-                return new PublicAuthorProfile(latest.AuthorName, normalized, user.Bio, user.WebsiteUrl, user.AvatarUrl);
+            {
+                var avatar = string.IsNullOrEmpty(user.AvatarFile) ? user.AvatarUrl : "/media/" + user.AvatarFile;
+                return new PublicAuthorProfile(latest.AuthorName, normalized, user.Bio, user.WebsiteUrl, avatar);
+            }
         }
         return new PublicAuthorProfile(latest.AuthorName, normalized, "", "", "");
     }

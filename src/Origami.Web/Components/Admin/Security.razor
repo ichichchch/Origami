@@ -8,6 +8,7 @@
 @inject AdminAccess Admin
 @inject AuthenticationStateProvider AuthenticationState
 @inject OrigamiClient Api
+@inject UserLanguagePreferenceReader LanguagePrefs
 
 <PageTitle>@UiText.T("Admin.Security.PageTitle", "個人資料與安全 · 內容管理")</PageTitle>
 <UnsavedGuard Busy="Busy" />
@@ -42,8 +43,39 @@
                         <input id="profile-website" type="url" maxlength="@Limits.UserUrl" @bind="_profile.WebsiteUrl" @bind:event="oninput" placeholder="https://" />
                     </div>
                     <div class="field">
-                        <label for="profile-avatar">@UiText.T("Admin.Security.AvatarUrl", "頭像網址（選填）")</label>
-                        <input id="profile-avatar" maxlength="@Limits.UserUrl" @bind="_profile.AvatarUrl" @bind:event="oninput" placeholder="@UiText.T("Admin.Security.AvatarPlaceholder", "/media/... 或 https://...")" />
+                        <span id="profile-avatar-label">@UiText.T("Admin.Security.AvatarTitle", "頭像（從媒體庫選擇）")</span>
+                        <div class="avatar-control" role="group" aria-labelledby="profile-avatar-label">
+                            @if (!string.IsNullOrEmpty(_profile.AvatarMediaUrl))
+                            {
+                                <img class="avatar-preview" src="@_profile.AvatarMediaUrl" alt="@UiText.T("Admin.Security.AvatarPreviewAlt", "目前頭像")" width="64" height="64" />
+                            }
+                            else if (!string.IsNullOrEmpty(_profile.AvatarUrl))
+                            {
+                                <img class="avatar-preview" src="@_profile.AvatarUrl" alt="@UiText.T("Admin.Security.AvatarPreviewAlt", "目前頭像")" width="64" height="64" loading="lazy" />
+                                <p class="field-help">@UiText.T("Admin.Security.AvatarExternalLegacy", "目前使用外部頭像網址；選擇本機頭像後即取代。")</p>
+                            }
+                            <div class="button-row">
+                                <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="OpenAvatarPicker">@UiText.T("Admin.Security.AvatarPick", "從媒體庫選擇")</button>
+                                @if (_profile.AvatarMediaId is not null || !string.IsNullOrEmpty(_profile.AvatarUrl))
+                                {
+                                    <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearAvatar">@UiText.T("Admin.Security.AvatarClear", "清除頭像")</button>
+                                }
+                            </div>
+                        </div>
+                        <span class="field-help">@UiText.T("Admin.Security.AvatarHelp", "顯示於你的文章署名與作者彙整頁；與網站標誌相同，須先上傳至媒體庫。")</span>
+                    </div>
+                    @if (_pickerOpen)
+                    {
+                        <MediaPicker Disabled="Blocked" Select="PickAvatar" Close="CloseAvatarPicker" BusyChanged="_ => { }" />
+                    }
+                    <div class="field">
+                        <label for="profile-ui-language">@UiText.T("Admin.Security.UiLanguage", "介面語言偏好")</label>
+                        <select id="profile-ui-language" @bind="_profile.UiLanguage" disabled="@Blocked">
+                            <option value="">@UiText.T("Admin.Security.UiLanguageNone", "未設定（跟隨瀏覽器或網站預設）")</option>
+                            <option value="zh-Hant">繁體中文</option>
+                            <option value="en">English</option>
+                        </select>
+                        <span class="field-help">@UiText.T("Admin.Security.UiLanguageHelp", "登入後的介面語言；裝置上以切換器做出的明確選擇仍優先。")</span>
                     </div>
                     <div class="field">
                         <label for="profile-bio">@UiText.T("Admin.Security.Bio", "作者簡介（Bio）")</label>
@@ -318,7 +350,36 @@
     {
         if (_profile is null) return;
         _profile = await Api.UpdateMyProfileAsync(_profile, ct);
+        // 偏好（語言/頭像）已寫入；讓文化中介的偏好快取立即失效，下一個請求即生效。
+        var user = await Admin.RequireUserAsync(ct);
+        LanguagePrefs.Evict(user.Id);
     }, UiText.T("Admin.Security.ProfileSaved", "個人資料已更新。"));
+
+    private bool _pickerOpen;
+    private void OpenAvatarPicker()
+    {
+        if (!Blocked) _pickerOpen = true;
+    }
+    private Task CloseAvatarPicker()
+    {
+        _pickerOpen = false;
+        return Task.CompletedTask;
+    }
+    private Task PickAvatar(MediaItem item)
+    {
+        _pickerOpen = false;
+        if (_profile is null) return Task.CompletedTask;
+        _profile.AvatarMediaId = item.Id;
+        _profile.AvatarMediaUrl = "/media/" + item.FileName;
+        return Task.CompletedTask;
+    }
+    private void ClearAvatar()
+    {
+        if (_profile is null || Blocked) return;
+        _profile.AvatarMediaId = null;
+        _profile.AvatarMediaUrl = "";
+        _profile.AvatarUrl = "";
+    }
     private async Task ChangePasswordAsync()
     {
         if (Blocked) return;

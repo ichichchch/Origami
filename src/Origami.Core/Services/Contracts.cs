@@ -263,6 +263,12 @@ public sealed class AccountProfileEdit
     [StringLength(Limits.UserBio)] public string Bio { get; set; } = "";
     [StringLength(Limits.UserUrl)] public string WebsiteUrl { get; set; } = "";
     [StringLength(Limits.UserUrl)] public string AvatarUrl { get; set; } = "";
+    /// <summary>本機頭像（媒體庫圖片）；設定時優先於 AvatarUrl。</summary>
+    public Guid? AvatarMediaId { get; set; }
+    /// <summary>本機頭像的公開路徑（唯讀投影，如 /media/xxx.png）；由服務端填入，用戶端值不採信。</summary>
+    [StringLength(Limits.UserUrl)] public string AvatarMediaUrl { get; set; } = "";
+    /// <summary>介面語言偏好鍵（SupportedUiLanguages）；空字串表示未設定。</summary>
+    [StringLength(16)] public string UiLanguage { get; set; } = "";
     [StringLength(256)] public string Email { get; set; } = "";
     public string UserName { get; set; } = "";
 }
@@ -300,6 +306,8 @@ public sealed record PersonalDataExport(
     string Bio,
     string WebsiteUrl,
     string AvatarUrl,
+    Guid? AvatarMediaId,
+    string UiLanguage,
     bool TwoFactorEnabled,
     DateTimeOffset ExportedAt,
     IReadOnlyList<PersonalSiteMembershipItem> Memberships,
