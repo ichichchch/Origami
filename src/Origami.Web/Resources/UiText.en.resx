@@ -2005,6 +2005,27 @@
   <data name="Public.ContentDetail.TranslationMissing" xml:space="preserve">
     <value>This content has no {0} translation yet; showing another language below.</value>
   </data>
+  <data name="Admin.ContentEditor.AiWritingTitle" xml:space="preserve"><value>AI writing assist</value></data>
+  <data name="Admin.ContentEditor.AiWritingHelp" xml:space="preserve"><value>Suggestions only: nothing is inserted until you confirm in the preview, and you still save manually — nothing is auto-saved or published.</value></data>
+  <data name="Admin.ContentEditor.AiInstruction" xml:space="preserve"><value>Extra instruction (optional)</value></data>
+  <data name="Admin.ContentEditor.AiInstructionPlaceholder" xml:space="preserve"><value>Tone, audience, focus…</value></data>
+  <data name="Admin.ContentEditor.AiOutline" xml:space="preserve"><value>Outline</value></data>
+  <data name="Admin.ContentEditor.AiDraft" xml:space="preserve"><value>Draft</value></data>
+  <data name="Admin.ContentEditor.AiRewrite" xml:space="preserve"><value>Rewrite selection</value></data>
+  <data name="Admin.ContentEditor.AiContinue" xml:space="preserve"><value>Continue</value></data>
+  <data name="Admin.ContentEditor.AiTitles" xml:space="preserve"><value>Title ideas</value></data>
+  <data name="Admin.ContentEditor.AiNeedSelection" xml:space="preserve"><value>Select the text to rewrite in the body first.</value></data>
+  <data name="Admin.ContentEditor.AiGenerated" xml:space="preserve"><value>Suggestion ready — preview, then insert.</value></data>
+  <data name="Admin.ContentEditor.AiConfirmInsert" xml:space="preserve"><value>Confirming inserts at the cursor position:</value></data>
+  <data name="Admin.ContentEditor.AiConfirmReplace" xml:space="preserve"><value>Confirming replaces the current selection:</value></data>
+  <data name="Admin.ContentEditor.AiConfirmTitle" xml:space="preserve"><value>Pick a line as the title:</value></data>
+  <data name="Admin.ContentEditor.AiApply" xml:space="preserve"><value>Insert</value></data>
+  <data name="Admin.ContentEditor.AiDiscard" xml:space="preserve"><value>Discard</value></data>
+  <data name="Admin.ContentEditor.AiInserted" xml:space="preserve"><value>Inserted into the body; not saved yet — review and save manually.</value></data>
+  <data name="Admin.ContentEditor.AiInsertFailed" xml:space="preserve"><value>Could not insert into the body; copy the preview manually.</value></data>
+  <data name="Admin.ContentEditor.AiSelectionLost" xml:space="preserve"><value>The original selection is gone; reselect and rewrite again.</value></data>
+  <data name="Admin.ContentEditor.AiTitleApplied" xml:space="preserve"><value>Title applied; not saved yet.</value></data>
+  <data name="Admin.ContentEditor.AiFailed" xml:space="preserve"><value>Writing assist is unavailable right now; please try again later.</value></data>
   <data name="Public.ContentDetail.Categories" xml:space="preserve">
     <value>Categories</value>
   </data>

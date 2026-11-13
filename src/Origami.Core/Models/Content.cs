@@ -143,6 +143,10 @@ public static partial class Limits
     public static readonly int[] ImageVariantWidths = [480, 960, 1600];
     public const int AssistantQuestionMax = 8_000;
     public const int AssistantHistoryLimit = 20;
+    /// <summary>寫作輔助單欄輸入（選取文字／大綱）的字數上限。</summary>
+    public const int AiWritingInputMax = 20_000;
+    /// <summary>寫作輔助輸出的字數上限；插入前由作者確認，仍受本文上限約束。</summary>
+    public const int AiWritingOutputMax = 50_000;
 }
 
 public sealed class AdminUser : IdentityUser

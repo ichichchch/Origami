@@ -102,6 +102,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
             new StubAssistantChatClientFactory(provider.GetRequiredService<FakeChatClient>()));
         services.AddScoped<McpReadTools>();
         services.AddScoped<SiteAssistant>();
+        services.AddScoped<Origami.Core.Intelligence.Agents.AiWritingService>();
         Services = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         defaultScope = Services.CreateAsyncScope();
     }

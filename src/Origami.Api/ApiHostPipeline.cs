@@ -95,6 +95,7 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<McpReadTools>();
         builder.Services.AddSingleton<IAssistantChatClientFactory, AssistantChatClientFactory>();
         builder.Services.AddScoped<SiteAssistant>();
+        builder.Services.AddScoped<AiWritingService>();
         builder.Services.AddHealthChecks().AddCheck<CmsHealthCheck>("database");
         // 機器流量（/api、/mcp）沿用網站主機的做法，依來源 IP 共用同一個供應商成本預算。
         ConfigureRateLimiter(builder.Services);

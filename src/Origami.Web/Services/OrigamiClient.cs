@@ -523,6 +523,10 @@ public sealed class OrigamiClient
     public Task<AiContentSuggestion?> SuggestSummaryAsync(string? title, string? markdown, CancellationToken ct = default) =>
         SendAsync<AiContentSuggestion>(new(HttpMethod.Post, "api/v1/admin/ai/suggest-summary"), new { title, markdown }, ct);
 
+    /// <summary>寫作輔助側欄：大綱／草稿／改寫／續寫／標題建議；產出僅為建議文字，不落地。</summary>
+    public Task<AiWritingResult?> AiWritingAsync(AiWritingInput input, CancellationToken ct = default) =>
+        SendAsync<AiWritingResult>(new(HttpMethod.Post, "api/v1/admin/ai/writing"), input, ct);
+
     // ---------- 編輯占用鎖（提示性心跳） ----------
 
     public async Task<ContentService.EditingLockState?> TouchEditingAsync(Guid contentId, bool takeOver = false, CancellationToken ct = default)

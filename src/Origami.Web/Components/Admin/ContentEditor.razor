@@ -244,6 +244,51 @@ else if (_model is not null)
                 }
             </div>
             <aside class="editor-aside">
+                <section class="panel ai-writing-panel">
+                    <div class="panel-toolbar"><h2>@UiText.T("Admin.ContentEditor.AiWritingTitle", "AI 寫作輔助")</h2><button type="button" class="text-button" disabled="@Blocked" @onclick="() => _aiPanelOpen = !_aiPanelOpen">@(_aiPanelOpen ? UiText.T("Admin.ContentEditor.Collapse", "收起") : UiText.T("Admin.ContentEditor.View", "查看"))</button></div>
+                    @if (_aiPanelOpen)
+                    {
+                        <p class="field-help">@UiText.T("Admin.ContentEditor.AiWritingHelp", "產出僅為建議：預覽確認後才插入編輯器，且仍須手動儲存；不會自動儲存或發布。")</p>
+                        <div class="field">
+                            <label for="ai-instruction">@UiText.T("Admin.ContentEditor.AiInstruction", "補充指示（選填）")</label>
+                            <input id="ai-instruction" maxlength="2000" @bind="_aiInstruction" @bind:event="oninput" placeholder="@UiText.T("Admin.ContentEditor.AiInstructionPlaceholder", "語氣、受眾、重點…")" disabled="@Blocked" />
+                        </div>
+                        <div class="button-row">
+                            <button type="button" class="button button-secondary button-small" disabled="@(Blocked || AiBusy)" @onclick="() => RunAiWriting(AiWritingTask.Outline)">@UiText.T("Admin.ContentEditor.AiOutline", "生成大綱")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@(Blocked || AiBusy)" @onclick="() => RunAiWriting(AiWritingTask.Draft)">@UiText.T("Admin.ContentEditor.AiDraft", "生成草稿")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@(Blocked || AiBusy)" @onclick="() => RunAiWriting(AiWritingTask.RewriteSelection)">@UiText.T("Admin.ContentEditor.AiRewrite", "改寫選取")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@(Blocked || AiBusy)" @onclick="() => RunAiWriting(AiWritingTask.Continue)">@UiText.T("Admin.ContentEditor.AiContinue", "續寫")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@(Blocked || AiBusy)" @onclick="() => RunAiWriting(AiWritingTask.TitleSuggestions)">@UiText.T("Admin.ContentEditor.AiTitles", "標題建議")</button>
+                        </div>
+                        @if (_aiResult is { } result)
+                        {
+                            <div class="ai-writing-result">
+                                <p class="field-help">@(_aiTask == AiWritingTask.RewriteSelection
+                                    ? UiText.T("Admin.ContentEditor.AiConfirmReplace", "確認後將取代目前的選取範圍：")
+                                    : _aiTask == AiWritingTask.TitleSuggestions
+                                        ? UiText.T("Admin.ContentEditor.AiConfirmTitle", "點選一行作為標題：")
+                                        : UiText.T("Admin.ContentEditor.AiConfirmInsert", "確認後插入本文游標位置："))</p>
+                                @if (_aiTask == AiWritingTask.TitleSuggestions)
+                                {
+                                    <ul class="ai-title-list">
+                                        @foreach (var line in result.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(l => l.Length > 0).Take(10))
+                                        {
+                                            <li><button type="button" class="text-button" disabled="@Blocked" @onclick="() => ApplyAiTitleAsync(line)">@line</button></li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <pre class="ai-writing-preview">@result.Text</pre>
+                                    <div class="button-row">
+                                        <button type="button" class="button button-small" disabled="@Blocked" @onclick="ApplyAiResultAsync">@UiText.T("Admin.ContentEditor.AiApply", "確認插入")</button>
+                                        <button type="button" class="text-button" disabled="@Blocked" @onclick="() => _aiResult = null">@UiText.T("Admin.ContentEditor.AiDiscard", "捨棄")</button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </section>
                 <section class="panel publish-panel">
                     <h2>@UiText.T("Admin.ContentEditor.PublishSettings", "發布設定")</h2><div class="status-line"><span>@UiText.T("Admin.ContentEditor.CurrentStatus", "目前狀態")</span><span class="status-badge @(_model.Status == ContentStatus.Published ? "published" : "draft")">@(_model.Status == ContentStatus.Published ? UiText.T("Admin.ContentEditor.Published", "已發布") : UiText.T("Admin.ContentEditor.Draft", "草稿"))</span></div>
                     @if (CanEdit && _authors.Count > 0)
@@ -1241,6 +1286,69 @@ else if (_model is not null)
     /// 以本文目前的選取範圍作為手寫摘要（WP「more 切點」的在地化形式）：
     /// 選取文字先轉為純文字，超過上限時截斷。沒有選取時提示而非猜測。
     /// </summary>
+    // ── AI 寫作輔助側欄（D 批）：產出僅為建議，確認後才插入，且仍須人工儲存。 ──
+    private bool _aiPanelOpen;
+    private string _aiInstruction = "";
+    private AiWritingTask _aiTask;
+    private AiWritingResult? _aiResult;
+    private bool AiBusy => Busy;
+    private async Task<string> GetEditorSelectionAsync()
+    {
+        if (_editorUploadModule is null) return "";
+        try { return await _editorUploadModule.InvokeAsync<string?>("getSelection", "content-markdown") ?? ""; }
+        catch (JSException) { return ""; }
+    }
+    private Task RunAiWriting(AiWritingTask task) => RunAsync(async ct =>
+    {
+        if (_model is null) return;
+        var selection = task is AiWritingTask.RewriteSelection or AiWritingTask.Draft
+            ? await GetEditorSelectionAsync() : "";
+        if (task == AiWritingTask.RewriteSelection && selection.Length == 0)
+            throw new CmsException(UiText.T("Admin.ContentEditor.AiNeedSelection", "請先在本文選取要改寫的文字。"));
+        _aiTask = task;
+        _aiResult = await Api.AiWritingAsync(new AiWritingInput
+        {
+            Task = task,
+            Title = _model.Title ?? "",
+            Selection = selection,
+            Markdown = _model.Markdown ?? "",
+            Instruction = _aiInstruction
+        }, ct) ?? throw new CmsException(UiText.T("Admin.ContentEditor.AiFailed", "寫作輔助暫時無法回覆，請稍後再試。"));
+    }, UiText.T("Admin.ContentEditor.AiGenerated", "已產生建議，請預覽確認後插入。"));
+    private async Task ApplyAiResultAsync()
+    {
+        if (_model is null || _aiResult is null || Blocked) return;
+        if (_editorUploadModule is null)
+        {
+            Error = UiText.T("Admin.ContentEditor.AiInsertFailed", "無法插入本文，請手動複製預覽內容。");
+            return;
+        }
+        try
+        {
+            if (_aiTask == AiWritingTask.RewriteSelection && (await GetEditorSelectionAsync()).Length == 0)
+            {
+                Error = UiText.T("Admin.ContentEditor.AiSelectionLost", "原選取範圍已不存在，請重新選取後再改寫。");
+                return;
+            }
+            var value = await _editorUploadModule.InvokeAsync<string?>("replaceSelection", "content-markdown", _aiResult.Text);
+            if (value is not null) _model.Markdown = value;
+            _aiResult = null;
+            Notice = UiText.T("Admin.ContentEditor.AiInserted", "已插入本文；尚未儲存，請檢查後手動儲存。");
+        }
+        catch (JSException)
+        {
+            Error = UiText.T("Admin.ContentEditor.AiInsertFailed", "無法插入本文，請手動複製預覽內容。");
+        }
+    }
+    private Task ApplyAiTitleAsync(string line)
+    {
+        if (_model is null || Blocked) return Task.CompletedTask;
+        _model.Title = line.Length > Limits.Title ? line[..Limits.Title] : line;
+        _aiResult = null;
+        Notice = UiText.T("Admin.ContentEditor.AiTitleApplied", "已套用標題；尚未儲存。");
+        return Task.CompletedTask;
+    }
+
     private async Task ExcerptFromSelection()
     {
         if (_model is null || Blocked) return;

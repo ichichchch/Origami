@@ -94,6 +94,11 @@ public static class AdminEndpoints
             Results.Ok(await assistant.SuggestSummaryAsync(input.Title, input.Markdown, markdown, ct)))
             .RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
+        // AI 寫作輔助側欄：大綱／草稿／改寫選取／續寫／標題建議；產出僅為建議，不落地任何內容（僅 BFF）。
+        group.MapPost("/ai/writing", async (AiWritingInput input, AiWritingService writing, CancellationToken ct) =>
+            Results.Ok(await writing.GenerateAsync(input, ct)))
+            .RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
+
         // 列表快速編輯：只改標題、代稱與草稿／待審／發布狀態；並發版本檢查與完整儲存相同。
         group.MapPut("/contents/{id}/quick", async (Guid id, QuickEditInput input, ContentService content, CancellationToken ct) =>
         {
