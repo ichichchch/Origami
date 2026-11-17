@@ -37,6 +37,8 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             throw new CmsException("Webhook 網址必須是公開 https 絕對網址（不允許本機或內網位址）。");
         if (input.CommentCloseDays is < 0 or > 3650)
             throw new CmsException("自動關閉評論天數須為 0–3650 天（0 表示不自動關閉）。");
+        if (input.IndexNowEnabled && !IndexNowService.IsValidKey(input.IndexNowKey))
+            throw new CmsException("IndexNow 金鑰須為 8–128 個十六進位字元。");
         var permalinkScheme = string.IsNullOrWhiteSpace(input.PermalinkScheme) ? PermalinkRules.PostName : input.PermalinkScheme.Trim().ToLowerInvariant();
         if (!PermalinkRules.IsValidScheme(permalinkScheme))
             throw new CmsException("永久連結結構方案無效。");
@@ -93,6 +95,9 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.PrivacyPageContentId = input.PrivacyPageContentId;
         entity.EmailNotificationsEnabled = input.EmailNotificationsEnabled;
         entity.SearchEngineBlocked = input.SearchEngineBlocked;
+        entity.ShowViewCounts = input.ShowViewCounts;
+        entity.IndexNowEnabled = input.IndexNowEnabled;
+        entity.IndexNowKey = (input.IndexNowKey ?? "").Trim();
         entity.PermalinkScheme = permalinkScheme;
         entity.TimeZoneId = timeZoneId;
         entity.DateFormat = dateFormat;

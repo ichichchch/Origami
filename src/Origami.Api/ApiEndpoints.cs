@@ -107,6 +107,8 @@ public static class ApiEndpoints
             SocialGithubUrl = value.SocialGithubUrl, SocialXUrl = value.SocialXUrl, SocialMastodonUrl = value.SocialMastodonUrl,
             MaintenanceMode = value.MaintenanceMode, MaintenanceMessage = value.MaintenanceMessage,
             SearchEngineBlocked = value.SearchEngineBlocked,
+            ShowViewCounts = value.ShowViewCounts,
+            IndexNowKey = value.IndexNowKey,
             PrivacyPageContentId = value.PrivacyPageContentId, PrivacyPageSlug = privacySlug, PrivacyPageTitle = privacyTitle,
             PermalinkScheme = value.PermalinkScheme, TimeZoneId = value.TimeZoneId, DateFormat = value.DateFormat, TimeFormat = value.TimeFormat,
             // 輸出前再次清理：即使資料列被改寫，也絕不把未清理的樣式送到瀏覽器。
@@ -287,6 +289,10 @@ public static class ApiEndpoints
         public bool MaintenanceMode { get; init; }
         /// <summary>要求搜尋引擎不要索引本站。</summary>
         public bool SearchEngineBlocked { get; init; }
+        /// <summary>前台是否顯示瀏覽次數。</summary>
+        public bool ShowViewCounts { get; init; }
+        /// <summary>IndexNow 金鑰；金鑰本身即公開驗證用值，空字串表示未設定。</summary>
+        public string IndexNowKey { get; init; } = "";
         /// <summary>維護模式下顯示給訪客的提示訊息。</summary>
         public string MaintenanceMessage { get; init; } = "";
         /// <summary>隱私權頁面的內容識別碼。</summary>

@@ -129,6 +129,10 @@ else if (_content is not null)
                 var (_, readingMins) = Markdown.WordCountAndReadingTime(_content.Markdown);
                 <time datetime="@_content.PublishedAt?.ToString("O")">@_content.PublishedAt?.ToString(UiText.T("Public.ContentDetail.PublishedDateFormat", "yyyy 年 MM 月 dd 日"), CultureInfo.CurrentUICulture) <span class="sr-only">UTC</span></time>
                 <span class="muted"> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Public.ContentDetail.ReadingTime", "約 {0} 分鐘讀完"), readingMins)</span>
+                @if (_settings.ShowViewCounts)
+                {
+                    <span class="muted"> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Public.ContentDetail.ViewCount", "瀏覽 {0:N0} 次"), _content.Views)</span>
+                }
                 @if (_content.Categories.Count > 0)
                 {
                     <div class="chip-list" aria-label="@UiText.T("Public.ContentDetail.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>

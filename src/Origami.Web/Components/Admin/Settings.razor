@@ -89,6 +89,15 @@
                     <label for="search-engine-blocked"><input id="search-engine-blocked" type="checkbox" @bind="_model.SearchEngineBlocked" disabled="@Blocked" /> @UiText.T("Admin.Settings.SearchEngineBlocked", "要求搜尋引擎不要收錄本站")</label>
                     <p class="field-help">@UiText.T("Admin.Settings.SearchEngineBlockedHelp", "開啟後 robots.txt 改為全站禁止，並在所有公開回應附上 noindex 標頭；搜尋引擎既有的收錄不會因此立即移除。")</p>
                 </div>
+                <div class="field checkbox-field">
+                    <label for="show-view-counts"><input id="show-view-counts" type="checkbox" @bind="_model.ShowViewCounts" disabled="@Blocked" /> @UiText.T("Admin.Settings.ShowViewCounts", "前台顯示瀏覽次數")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.ShowViewCountsHelp", "開啟後文章詳情的作者列顯示累積瀏覽次數。")</p>
+                </div>
+                <div class="field checkbox-field">
+                    <label for="indexnow-enabled"><input id="indexnow-enabled" type="checkbox" @bind="_model.IndexNowEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.IndexNowEnabled", "啟用 IndexNow 搜尋引擎推送")</label>
+                    <p class="field-help">@UiText.T("Admin.Settings.IndexNowEnabledHelp", "內容發布時把公開網址提交到 IndexNow（Bing 等採用）；需要同時填寫金鑰。")</p>
+                </div>
+                <div class="field"><label for="indexnow-key">@UiText.T("Admin.Settings.IndexNowKey", "IndexNow 金鑰（8–128 個十六進位字元）")</label><input id="indexnow-key" @bind="_model.IndexNowKey" @bind:event="oninput" maxlength="128" disabled="@Blocked" aria-describedby="indexnow-key-help" placeholder="a1b2c3d4..." /><span id="indexnow-key-help" class="field-help">@UiText.T("Admin.Settings.IndexNowKeyHelp", "自行產生一段隨機十六進位字串即可；本站會自動在根目錄提供 /{金鑰}.txt 驗證檔。")</span></div>
                 <div class="field"><label for="author-name">@UiText.T("Admin.Settings.AuthorDisplayName", "作者顯示名稱（選填）")</label><input id="author-name" @bind="_model.AuthorDisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" disabled="@Blocked" aria-describedby="author-name-help" placeholder="@UiText.T("Admin.Settings.AuthorPlaceholder", "例如：單文浩")" /><span id="author-name-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.AuthorDisplayNameHelp", "最多 {0} 字；顯示於文章詳情的作者列與 feed 作者欄位，留空不顯示。"), Limits.AuthorName)</span></div>
                 <div class="field checkbox-field">
                     <label for="comments-enabled"><input id="comments-enabled" type="checkbox" @bind="_model.CommentsEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.EnableComments", "開放訪客評論")</label>

@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null)
+public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null, IndexNowService? indexNow = null)
 {
     // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
@@ -469,6 +469,11 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 publishedAt = entity.PublishedAt
             }, ct);
         }
+        // IndexNow 推送（盡力而為）：與 Webhook 同一發布點觸發，失敗不影響發布。
+        if (entity.Status == ContentStatus.Published && !wasPublished && indexNow is not null)
+        {
+            await indexNow.NotifyPublishedAsync(db.CurrentSiteId, entity.Kind, entity.Slug, ct);
+        }
         // 受控擴充點：發布與撤回在同一落庫點通知訂閱者（事件名稱與 Webhook 對齊）。
         if (events is not null && entity.Status == ContentStatus.Published && !wasPublished)
         {
@@ -629,7 +634,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+            { Views = x.Views.Sum(v => v.Count), Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
@@ -1270,7 +1275,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt,
+            { Views = x.Views.Sum(v => v.Count), Excerpt = x.Excerpt,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
@@ -1506,7 +1511,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+            { Views = x.Views.Sum(v => v.Count), Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
@@ -1649,7 +1654,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            { Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
+            { Views = x.Views.Sum(v => v.Count), Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,
                 AuthorName = x.AuthorName, AuthorSlug = x.AuthorSlug,
                 CoverFileName = x.Cover != null ? x.Cover.FileName : "",
@@ -1672,7 +1677,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Select(x => new PublicContent(x.Id, x.Kind, x.Title, x.Slug, x.Markdown, x.PublishedAt,
                 x.Categories.OrderBy(c => c.Name).Select(c => new NavigationItem(c.Name, c.Slug)).ToList(),
                 x.Tags.OrderBy(t => t.Name).Select(t => new NavigationItem(t.Name, t.Slug)).ToList())
-            {
+            { Views = x.Views.Sum(v => v.Count),
                 Excerpt = x.Excerpt, IsProtected = x.IsProtected, IsPrivate = x.IsPrivate,
                 AllowComments = x.AllowComments, MenuOrder = x.MenuOrder,
                 MetaDescription = x.MetaDescription, NoIndex = x.NoIndex, UpdatedAt = x.UpdatedAt,

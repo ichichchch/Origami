@@ -4042,9 +4042,6 @@
   <data name="Admin.Security.WebsiteUrl" xml:space="preserve">
     <value>Website (optional)</value>
   </data>
-  <data name="Admin.Security.AvatarUrl" xml:space="preserve">
-    <value>Avatar URL (optional)</value>
-  </data>
   <data name="Admin.Security.AvatarTitle" xml:space="preserve">
     <value>Avatar (choose from media library)</value>
   </data>
@@ -4361,6 +4358,15 @@
   <data name="Admin.Widgets.Reordered" xml:space="preserve"><value>Widget order updated.</value></data>
   <data name="Admin.Settings.SearchEngineBlocked" xml:space="preserve"><value>Ask search engines not to index this site</value></data>
   <data name="Admin.Settings.SearchEngineBlockedHelp" xml:space="preserve"><value>When enabled, robots.txt disallows the entire site and every public response carries a noindex header. Pages already indexed by search engines are not removed immediately.</value></data>
+  <data name="Admin.Settings.ShowViewCounts" xml:space="preserve"><value>Show view counts on the public site</value></data>
+  <data name="Admin.Settings.ShowViewCountsHelp" xml:space="preserve"><value>When enabled, article pages show the cumulative view count next to the byline.</value></data>
+  <data name="Admin.Settings.IndexNowEnabled" xml:space="preserve"><value>Enable IndexNow search engine pings</value></data>
+  <data name="Admin.Settings.IndexNowEnabledHelp" xml:space="preserve"><value>Submits the public URL to IndexNow (used by Bing and others) when content is published; requires a key.</value></data>
+  <data name="Admin.Settings.IndexNowKey" xml:space="preserve"><value>IndexNow key (8–128 hexadecimal characters)</value></data>
+  <data name="Admin.Settings.IndexNowKeyHelp" xml:space="preserve"><value>Generate any random hexadecimal string; this site automatically serves the /{key}.txt verification file at the site root.</value></data>
+  <data name="Admin.Taxonomies.SortOrder" xml:space="preserve"><value>Sort weight</value></data>
+  <data name="Admin.Taxonomies.SortOrderHelp" xml:space="preserve"><value>Lower numbers come first; 0 falls back to name order. Public category menus and widgets follow this order.</value></data>
+  <data name="Public.ContentDetail.ViewCount" xml:space="preserve"><value>{0:N0} views</value></data>
   <data name="Public.ContentDetail.CommentsPagination" xml:space="preserve"><value>Comment pagination</value></data>
   <data name="Public.ContentDetail.CommentsPrev" xml:space="preserve"><value>Previous</value></data>
   <data name="Public.ContentDetail.CommentsNext" xml:space="preserve"><value>Next</value></data>
@@ -4410,7 +4416,6 @@
   <data name="Admin.Security.RevokeSession" xml:space="preserve"><value>Sign out remotely</value></data>
   <data name="Admin.Security.SessionRevoked" xml:space="preserve"><value>That session has been signed out.</value></data>
   <data name="Admin.Security.UnknownDevice" xml:space="preserve"><value>Unknown device</value></data>
-  <data name="Admin.Security.AvatarPlaceholder" xml:space="preserve"><value>/media/... or https://...</value></data>
   <data name="Admin.Security.PrivacyTitle" xml:space="preserve"><value>Privacy and personal data tools</value></data>
   <data name="Admin.Security.PrivacyHelp" xml:space="preserve"><value>Download your account's personal data (memberships, authored content list, and recent activity), or request erasure that anonymizes your published content.</value></data>
   <data name="Admin.Security.DownloadData" xml:space="preserve"><value>Download personal data (JSON)</value></data>

@@ -11,20 +11,21 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         if (kind == TaxonomyKind.Category)
         {
             var total = await db.Categories.CountAsync(ct);
-            var items = await db.Categories.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
+            var items = await db.Categories.AsNoTracking().OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
                 .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version)
                 {
                     Description = x.Description,
                     ParentId = x.ParentId,
-                    ParentName = x.Parent != null ? x.Parent.Name : ""
+                    ParentName = x.Parent != null ? x.Parent.Name : "",
+                    SortOrder = x.SortOrder
                 }).ToListAsync(ct);
             return new(items, total, page, pageSize);
         }
         else
         {
             var total = await db.Tags.CountAsync(ct);
-            var items = await db.Tags.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
-                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version) { Description = x.Description }).ToListAsync(ct);
+            var items = await db.Tags.AsNoTracking().OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).Skip(offset).Take(pageSize)
+                .Select(x => new TaxonomyItem(x.Id, x.Name, x.Slug, x.Version) { Description = x.Description, SortOrder = x.SortOrder }).ToListAsync(ct);
             return new(items, total, page, pageSize);
         }
     }
@@ -64,6 +65,7 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             entity.Slug = slug;
             entity.Description = (input.Description ?? "").Trim();
             entity.ParentId = input.ParentId;
+            entity.SortOrder = input.SortOrder;
             entity.Version = version;
             id = entity.Id;
         }
@@ -78,6 +80,7 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             entity.Name = input.Name.Trim();
             entity.Slug = slug;
             entity.Description = (input.Description ?? "").Trim();
+            entity.SortOrder = input.SortOrder;
             entity.Version = version;
             id = entity.Id;
         }

@@ -87,6 +87,7 @@ public static class ApiHostPipeline
         builder.Services.AddHttpClient("OrigamiMediaSideload", client => client.Timeout = TimeSpan.FromSeconds(30))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         builder.Services.AddScoped<WebhookService>();
+        builder.Services.AddScoped<IndexNowService>();
         builder.Services.AddScoped<SiteHealthService>();
         builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));
         builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());

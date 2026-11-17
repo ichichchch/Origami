@@ -92,6 +92,7 @@
                     </div>
                 }
                 <div class="field"><label for="taxonomy-description">@UiText.T("Admin.Taxonomies.Description", "描述")</label><textarea id="taxonomy-description" @bind="_edit.Description" @bind:event="oninput" rows="3" maxlength="@Limits.TaxonomyDescription" aria-describedby="taxonomy-description-help"></textarea><span id="taxonomy-description-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.DescriptionHelp", "顯示於前台分類或標籤篩選頁的說明文字，最多 {0} 字。"), Limits.TaxonomyDescription)</span></div>
+                <div class="field"><label for="taxonomy-sort-order">@UiText.T("Admin.Taxonomies.SortOrder", "排序權重")</label><input id="taxonomy-sort-order" type="number" step="1" @bind="_edit.SortOrder" aria-describedby="taxonomy-sort-order-help" /><span id="taxonomy-sort-order-help" class="field-help">@UiText.T("Admin.Taxonomies.SortOrderHelp", "數字越小越靠前；0 按名稱排序。前台分類選單與小工具跟隨此排序。")</span></div>
                 <div class="button-row"><button type="submit" class="button">@(Busy ? UiText.T("Admin.Taxonomies.Processing", "處理中…") : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Save", "儲存{0}"), Label))</button>@if (_edit.Id is not null) { <button type="button" class="button button-secondary" @onclick="() => RequestChange(NewEdit)">@UiText.T("Admin.Taxonomies.AddAnother", "新增另一個")</button> }</div>
                 <p class="field-help">@(Dirty ? UiText.T("Admin.Taxonomies.UnsavedChanges", "有未儲存的變更。") : UiText.T("Admin.Taxonomies.ManualSaveHelp", "修改後請按儲存，不會自動儲存。"))</p>
             </fieldset>
@@ -200,7 +201,7 @@
     });
     private Task Edit(TaxonomyItem item) => RequestChange(() =>
     {
-        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Description = item.Description, ParentId = item.ParentId, Version = item.Version };
+        _edit = new TaxonomyEdit { Id = item.Id, Name = item.Name, Slug = item.Slug, Description = item.Description, ParentId = item.ParentId, SortOrder = item.SortOrder, Version = item.Version };
         _baseline = Snapshot();
         _delete = null;
         return Task.CompletedTask;
@@ -243,7 +244,7 @@
         ContentRules.Validate(_edit);
         var input = new TaxonomyEdit
         {
-            Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Description = _edit.Description, Version = _edit.Version
+            Id = _edit.Id, Name = _edit.Name, Slug = _edit.Slug, Description = _edit.Description, SortOrder = _edit.SortOrder, Version = _edit.Version
         };
         _edit = await Api.SaveTaxonomyAsync(_kind, input, ct) ?? _edit;
         _baseline = Snapshot();

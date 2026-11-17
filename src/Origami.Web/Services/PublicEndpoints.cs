@@ -48,6 +48,16 @@ public static class PublicEndpoints
             return Results.Text(ToXml(document), "application/opensearchdescription+xml", Encoding.UTF8);
         });
 
+        // IndexNow 金鑰驗證檔：路徑等於目前站點設定的金鑰時回傳金鑰內容；未設定或不符合一律 404。
+        // 金鑰規範上就是公開值（驗證檔本身即金鑰文字），不構成機密外洩。
+        app.MapGet("/{keyFile}.txt", async (string keyFile, OrigamiClient api, CancellationToken ct) =>
+        {
+            var settings = await api.GetPublicSettingsAsync(ct);
+            var key = settings?.IndexNowKey ?? "";
+            if (!IndexNowService.IsValidKey(key) || keyFile != key) return Results.NotFound();
+            return Results.Text(key, "text/plain", Encoding.UTF8);
+        });
+
         // RSS 2.0：支援 ?category=、?tag=、?author=、?type=、?taxonomy=&term= 與 ?q= 過濾；不存在的分類、標籤、作者或類型回 404。
         // 設定開啟全文時，完整 HTML 放入 content:encoded，description 維持摘要。
         app.MapGet("/feed", async (OrigamiClient api, MarkdownService markdown,

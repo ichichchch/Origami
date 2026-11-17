@@ -286,6 +286,8 @@ public sealed class Category
     /// <summary>父分類識別；最上層分類為 null。</summary>
     public Guid? ParentId { get; set; }
     public Category? Parent { get; set; }
+    /// <summary>手動排序權重（數字越小越靠前）；0 按名稱排序。</summary>
+    public int SortOrder { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Content> Contents { get; set; } = new List<Content>();
 }
@@ -297,6 +299,8 @@ public sealed class Tag
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string Description { get; set; } = "";
+    /// <summary>手動排序權重（數字越小越靠前）；0 按名稱排序。</summary>
+    public int SortOrder { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
     public ICollection<Content> Contents { get; set; } = new List<Content>();
 }
@@ -418,6 +422,12 @@ public sealed class SiteSettings
     public bool EmailNotificationsEnabled { get; set; }
     /// <summary>要求搜尋引擎不要索引本站；開啟時 robots.txt 全站禁止，公開回應附 X-Robots-Tag: noindex。</summary>
     public bool SearchEngineBlocked { get; set; }
+    /// <summary>前台文章頁顯示累積瀏覽次數。</summary>
+    public bool ShowViewCounts { get; set; }
+    /// <summary>啟用 IndexNow 搜尋引擎推送（內容發布時提交網址，Bing 等採用）。</summary>
+    public bool IndexNowEnabled { get; set; }
+    /// <summary>IndexNow 金鑰（8–128 個十六進位字元）；網站主機依此動態提供 {key}.txt 驗證檔。</summary>
+    [StringLength(128)] public string IndexNowKey { get; set; } = "";
     /// <summary>文章永久連結結構方案：post-name（/posts/{slug}）、day-and-name、month-and-name、numeric。</summary>
     [StringLength(Limits.PermalinkScheme)] public string PermalinkScheme { get; set; } = "post-name";
     /// <summary>站點預設顯示時區（IANA 或 Windows 時區 ID，預設 UTC）。</summary>

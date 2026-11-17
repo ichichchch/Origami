@@ -538,6 +538,10 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("character varying(160)")
                         .HasComment("URL 代称（站内唯一或局部唯一）。");
 
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：SortOrder。");
+
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()
                         .HasColumnType("uuid")
@@ -1871,6 +1875,16 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("uuid")
                         .HasComment("首页绑定内容 ID。");
 
+                    b.Property<bool>("IndexNowEnabled")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：IndexNowEnabled。");
+
+                    b.Property<string>("IndexNowKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasComment("业务字段：IndexNowKey。");
+
                     b.Property<Guid?>("LogoMediaId")
                         .HasColumnType("uuid")
                         .HasComment("站点 Logo 媒体 ID。");
@@ -1920,6 +1934,10 @@ namespace Origami.Core.Data.Migrations
                     b.Property<bool>("ShowCover")
                         .HasColumnType("boolean")
                         .HasComment("是否显示封面图。");
+
+                    b.Property<bool>("ShowViewCounts")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：ShowViewCounts。");
 
                     b.Property<Guid?>("SiteIconMediaId")
                         .HasColumnType("uuid")
@@ -2018,6 +2036,8 @@ namespace Origami.Core.Data.Migrations
                             Description = "用文字，分享你的世界。",
                             EmailNotificationsEnabled = false,
                             FooterText = "",
+                            IndexNowEnabled = false,
+                            IndexNowKey = "",
                             MaintenanceMessage = "",
                             MaintenanceMode = false,
                             Name = "Origami",
@@ -2026,6 +2046,7 @@ namespace Origami.Core.Data.Migrations
                             SearchEngineBlocked = false,
                             ShowByline = true,
                             ShowCover = true,
+                            ShowViewCounts = false,
                             SocialGithubUrl = "",
                             SocialMastodonUrl = "",
                             SocialXUrl = "",
@@ -2132,6 +2153,10 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)")
                         .HasComment("URL 代称（站内唯一或局部唯一）。");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：SortOrder。");
 
                     b.Property<Guid>("Version")
                         .IsConcurrencyToken()

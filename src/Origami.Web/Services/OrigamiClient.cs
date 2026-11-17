@@ -31,6 +31,10 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public bool MaintenanceMode { get; init; }
     /// <summary>要求搜尋引擎不要索引本站；robots.txt 與 X-Robots-Tag 標頭的開關。</summary>
     public bool SearchEngineBlocked { get; init; }
+    /// <summary>前台是否顯示瀏覽次數。</summary>
+    public bool ShowViewCounts { get; init; }
+    /// <summary>IndexNow 金鑰；公開驗證用值，空字串表示未設定。</summary>
+    public string IndexNowKey { get; init; } = "";
     public string MaintenanceMessage { get; init; } = "";
     public Guid? PrivacyPageContentId { get; init; }
     public string PrivacyPageSlug { get; init; } = "";

@@ -86,6 +86,8 @@ public sealed record TaxonomyEdit
     [StringLength(Limits.TaxonomyDescription)] public string? Description { get; set; }
     /// <summary>父分類識別；標籤固定為 null。</summary>
     public Guid? ParentId { get; set; }
+    /// <summary>手動排序權重；數字越小越靠前，0 按名稱排序。</summary>
+    public int SortOrder { get; set; }
     public Guid Version { get; set; }
 }
 
@@ -164,6 +166,8 @@ public sealed record TaxonomyItem(Guid Id, string Name, string Slug, Guid Versio
     public string Description { get; init; } = "";
     public Guid? ParentId { get; init; }
     public string ParentName { get; init; } = "";
+    /// <summary>手動排序權重；數字越小越靠前。</summary>
+    public int SortOrder { get; init; }
 }
 /// <summary>帶作者描述的公開分類或標籤，供篩選列表使用。</summary>
 public sealed record TaxonomyView(string Title, string Slug, string Description = "")
@@ -194,6 +198,8 @@ public sealed record PublicContent(Guid Id, ContentKind Kind, string Title, stri
     public string MetaDescription { get; init; } = "";
     /// <summary>是否排除搜尋引擎索引。</summary>
     public bool NoIndex { get; init; }
+    /// <summary>累積瀏覽次數；供前台顯示。</summary>
+    public int Views { get; init; }
     /// <summary>最後更新時間；供結構化資料使用。</summary>
     public DateTimeOffset UpdatedAt { get; init; }
     /// <summary>自訂欄位的公開值；依欄位宣告順序排列。</summary>
