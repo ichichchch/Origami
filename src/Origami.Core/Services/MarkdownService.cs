@@ -59,6 +59,11 @@ public sealed partial class MarkdownService
             if (!IsAllowedUrl(e.SanitizedUrl)) e.SanitizedUrl = null;
         };
         var html = sanitizer.Sanitize(Markdown.ToHtml(markdown, pipeline));
+        // fenced code block 服務端著色：sanitize 之後處理，輸出僅含自產 tok-* span；不支援的語言保留原樣。
+        html = FencedCodeBlock().Replace(html, match =>
+            CodeHighlighter.Highlight(match.Groups[1].Value, WebUtility.HtmlDecode(match.Groups[2].Value)) ?? match.Value);
+        // 內容圖片燈箱：包一層指向 :target overlay 的錨點，純 CSS 開合；overlay 附在文末。
+        html = WrapContentImagesWithLightbox(html);
         // ::: details 標題 -> 轉換為原生可摺疊 <details><summary> 面板
         html = DetailsContainer().Replace(html, match =>
         {
@@ -123,6 +128,48 @@ public sealed partial class MarkdownService
         var minutes = Math.Max(1, (int)Math.Ceiling(count / 300.0));
         return (count, minutes);
     }
+
+    /// <summary>
+    /// 內容圖片燈箱：每張 Markdown 圖片包一層錨點，並在文末追加 :target overlay（純 CSS 開合）。
+    /// overlay id 由圖片網址的 SHA-256 前 12 hex 決定：同一張圖在多次渲染間 id 一致且穩定。
+    /// </summary>
+    private static string WrapContentImagesWithLightbox(string html)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var overlays = new StringBuilder();
+        var wrapped = ContentImgTag().Replace(html, match =>
+        {
+            var tag = match.Value;
+            var srcMatch = ImgSrcAttribute().Match(tag);
+            if (!srcMatch.Success) return tag;
+            var src = srcMatch.Groups[1].Value;
+            if (src.Length == 0 || src.StartsWith('#')) return tag;
+            var alt = ImgAltAttribute().Match(tag).Groups[1].Value;
+            var id = "lb-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(src)))[..12].ToLowerInvariant();
+            if (seen.Add(id))
+            {
+                overlays.Append("<div class=\"lightbox\" id=\"").Append(id)
+                    .Append("\" role=\"dialog\" aria-modal=\"true\" aria-label=\"").Append(WebUtility.HtmlEncode(alt.Length > 0 ? alt : "圖片"))
+                    .Append("\"><a class=\"lightbox-backdrop\" href=\"#_\" aria-label=\"關閉\"></a>")
+                    .Append("<img class=\"lightbox-figure\" src=\"").Append(WebUtility.HtmlEncode(src))
+                    .Append("\" alt=\"").Append(WebUtility.HtmlEncode(alt)).Append("\"></div>");
+            }
+            return "<a class=\"img-lightbox\" href=\"#" + id + "\" aria-label=\"打開大圖\">" + tag + "</a>";
+        });
+        return overlays.Length == 0 ? wrapped : wrapped + overlays.ToString();
+    }
+
+    [GeneratedRegex(@"<img\s[^>]*>", RegexOptions.CultureInvariant)]
+    private static partial Regex ContentImgTag();
+
+    [GeneratedRegex(@"\bsrc=""([^""]*)""", RegexOptions.CultureInvariant)]
+    private static partial Regex ImgSrcAttribute();
+
+    [GeneratedRegex(@"\balt=""([^""]*)""", RegexOptions.CultureInvariant)]
+    private static partial Regex ImgAltAttribute();
+
+    [GeneratedRegex(@"<pre><code class=""language-([\w#+-]+)"">([\s\S]*?)</code></pre>", RegexOptions.CultureInvariant)]
+    private static partial Regex FencedCodeBlock();
 
     private static string? LocalMediaEmbed(string label, string fileName)
     {

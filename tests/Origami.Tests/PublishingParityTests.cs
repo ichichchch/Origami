@@ -93,7 +93,8 @@ public sealed class PublishingParityTests(IsolatedPostgres postgres) : ServiceTe
     {
         var markdown = new MarkdownService();
         var html = markdown.Render("開頭\n\n![封面](/media/cover.png)\n\n![第二張](https://example.org/pic.png)");
-        Assert.Equal(2, html.Split(["loading=\"lazy\" decoding=\"async\""], StringSplitOptions.None).Length - 1);
+        // 內容圖 + 燈箱 overlay 圖（每張內容圖對應一張 overlay）都延後載入。
+        Assert.Equal(4, html.Split(["loading=\"lazy\" decoding=\"async\""], StringSplitOptions.None).Length - 1);
         Assert.Contains("<img loading=\"lazy\" decoding=\"async\" src=\"/media/cover.png\"", html);
     }
 

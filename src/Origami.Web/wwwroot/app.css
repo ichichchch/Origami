@@ -2,7 +2,7 @@
 /* 設計令牌：--accent-base 為品牌基色（可由 inline style 覆寫）；
    --accent 用於填充（按鈕底色），--accent-ink 用於前景文字；
    深色模式自動將前景提亮至可讀對比，填充色微調亮度。 */
-:root { color-scheme: light; --paper: #f7f7f8; --surface: #fff; --surface-sunken: #f1f1f3; --surface-raised: #fff; --shadow-raised: 0 16px 70px #0a0a0c29; --ink: #1b1b1f; --muted: #5d5d66; --border: #e5e5e8; --border-strong: #cfcfd6; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #f0f0f3; --radius: 12px; --paper-dark: #101013; --ink-dark: #e8e8ec; }
+:root { color-scheme: light; --paper: #f7f7f8; --surface: #fff; --surface-sunken: #f1f1f3; --surface-raised: #fff; --shadow-raised: 0 16px 70px #0a0a0c29; --ink: #1b1b1f; --muted: #5d5d66; --border: #e5e5e8; --border-strong: #cfcfd6; --focus: #699d78; --accent-base: #315d48; --accent: #315d48; --accent-hover: #244837; --accent-ink: #315d48; --accent-ink-hover: #244837; --accent-soft: #eaf1e9; --danger: #a43e35; --danger-hover: #843129; --danger-ink: #a43e35; --danger-soft: #fff2ef; --success-ink: #49703e; --success-soft: #edf4e8; --warning-ink: #7d6027; --warning-soft: #f3efdf; --code-bg: #f0f0f3; --tok-kw: #0550ae; --tok-str: #116329; --tok-cm: #6e7781; --tok-num: #953800; --tok-typ: #8250df; --radius: 12px; --paper-dark: #101013; --ink-dark: #e8e8ec; }
 * { box-sizing: border-box; }
 /* 網格/彈性版型的 display 會蓋過瀏覽器預設的 [hidden]；fallback 切換依賴此規則。 */
 /* 程式焦點環：Blazor 於導覽後會把焦點移至頁面標題（tabindex=-1）供螢幕閱讀器定位；
@@ -112,6 +112,23 @@ input[type="file"]::file-selector-button { border: 1px solid var(--border); back
 .prose pre { overflow-x: auto; padding: 1.2rem; border-radius: 8px; background: var(--code-bg); font-size: .85rem; }
 .prose code { font-family: Consolas, monospace; font-size: .9em; background: var(--code-bg); padding: .1rem .25rem; border-radius: 3px; }
 .prose pre code { padding: 0; }
+/* 服務端代碼高亮：figure 由 Markdown 服務產生，語言標籤與行號純 CSS 呈現，僅 tok-* class。 */
+.prose figure.code-block { position: relative; margin: 1.5rem 0; }
+.prose figure.code-block pre { margin: 0; padding: 2.7rem 1.2rem 1.2rem; counter-reset: codeline; }
+.prose figure.code-block::before { content: attr(data-lang); position: absolute; top: .55rem; right: .9rem; font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-family: "Segoe UI", sans-serif; }
+.prose figure.code-block .cl { display: block; counter-increment: codeline; }
+.prose figure.code-block .cl::before { content: counter(codeline); display: inline-block; width: 2rem; margin-right: 1.1rem; text-align: right; color: var(--muted); opacity: .55; font-variant-numeric: tabular-nums; -webkit-user-select: none; user-select: none; }
+.tok-kw { color: var(--tok-kw); }
+.tok-str { color: var(--tok-str); }
+.tok-cm { color: var(--tok-cm); font-style: italic; }
+.tok-num { color: var(--tok-num); }
+.tok-typ { color: var(--tok-typ); }
+/* 內容圖片燈箱（:target 純 CSS 開合，無腳本）：錨點包圖，overlay 對話框附於文末。 */
+a.img-lightbox { display: block; }
+.lightbox { display: none; }
+.lightbox:target { display: flex; position: fixed; inset: 0; z-index: 3000; align-items: center; justify-content: center; background: rgb(0 0 0 / .82); }
+.lightbox .lightbox-backdrop { position: absolute; inset: 0; }
+.lightbox .lightbox-figure { position: relative; max-width: min(94vw, 1500px); max-height: 92vh; width: auto; height: auto; border-radius: 6px; }
 .prose table { display: block; overflow-x: auto; margin: 1.5rem 0; }
 .prose hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
 .error-page { padding: 3rem 0; }
@@ -465,9 +482,9 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
 @media (prefers-color-scheme: dark) {
     body:has([data-color-scheme="auto"]) { background: var(--paper-dark); color: var(--ink-dark); }
 }
-[data-color-scheme="dark"] { color-scheme: dark; --paper: #101013; --surface: #1a1a1e; --surface-sunken: #151518; --surface-raised: #212127; --shadow-raised: 0 16px 70px #00000066; --ink: #e8e8ec; --muted: #9c9ca6; --border: #2a2a30; --border-strong: #45454e; --focus: color-mix(in oklab, var(--accent-base) 60%, white); --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #101013); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #0d0d10; background: var(--paper); color: var(--ink); min-height: 100vh; }
+[data-color-scheme="dark"] { color-scheme: dark; --paper: #101013; --surface: #1a1a1e; --surface-sunken: #151518; --surface-raised: #212127; --shadow-raised: 0 16px 70px #00000066; --ink: #e8e8ec; --muted: #9c9ca6; --border: #2a2a30; --border-strong: #45454e; --focus: color-mix(in oklab, var(--accent-base) 60%, white); --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #101013); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #0d0d10; --tok-kw: #79c0ff; --tok-str: #7ee787; --tok-cm: #8b949e; --tok-num: #ffa657; --tok-typ: #d2a8ff; background: var(--paper); color: var(--ink); min-height: 100vh; }
 @media (prefers-color-scheme: dark) {
-    [data-color-scheme="auto"] { color-scheme: dark; --paper: #101013; --surface: #1a1a1e; --surface-sunken: #151518; --surface-raised: #212127; --shadow-raised: 0 16px 70px #00000066; --ink: #e8e8ec; --muted: #9c9ca6; --border: #2a2a30; --border-strong: #45454e; --focus: color-mix(in oklab, var(--accent-base) 60%, white); --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #101013); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #0d0d10; background: var(--paper); color: var(--ink); min-height: 100vh; }
+    [data-color-scheme="auto"] { color-scheme: dark; --paper: #101013; --surface: #1a1a1e; --surface-sunken: #151518; --surface-raised: #212127; --shadow-raised: 0 16px 70px #00000066; --ink: #e8e8ec; --muted: #9c9ca6; --border: #2a2a30; --border-strong: #45454e; --focus: color-mix(in oklab, var(--accent-base) 60%, white); --accent: color-mix(in oklab, var(--accent-base) 86%, white); --accent-hover: color-mix(in srgb, var(--accent) 85%, #fff); --accent-ink: color-mix(in oklab, var(--accent-base) 60%, white); --accent-ink-hover: color-mix(in srgb, var(--accent-ink) 82%, #fff); --accent-soft: color-mix(in srgb, var(--accent-ink) 17%, #101013); --danger: #b25b53; --danger-hover: #bf7871; --danger-ink: #d19892; --danger-soft: #302c28; --success-ink: #a7baa2; --success-soft: #1c261c; --warning-ink: #c4b79d; --warning-soft: #242418; --code-bg: #0d0d10; --tok-kw: #79c0ff; --tok-str: #7ee787; --tok-cm: #8b949e; --tok-num: #ffa657; --tok-typ: #d2a8ff; background: var(--paper); color: var(--ink); min-height: 100vh; }
 }
 
 /* 設定頁版型即時預覽：重用公開站 .site-shell 的變數派生與 data 屬性開關，
@@ -480,11 +497,11 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
 
 /* 高對比偏好：整體提高次要文字與邊界對比（WCAG 增強，非替代語義令牌）。 */
 @media (prefers-contrast: more) {
-    :root { --muted: #4b4b55; --border: #c6c6cd; --border-strong: #adadba; }
-    [data-color-scheme="dark"] { --muted: #c9c9d2; --border: #4d4d57; --border-strong: #606069; }
+    :root { --muted: #4b4b55; --border: #c6c6cd; --border-strong: #adadba; --tok-cm: #4b4b55; }
+    [data-color-scheme="dark"] { --muted: #c9c9d2; --border: #4d4d57; --border-strong: #606069; --tok-cm: #c9c9d2; }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
-    [data-color-scheme="auto"] { --muted: #c9c9d2; --border: #4d4d57; --border-strong: #606069; }
+    [data-color-scheme="auto"] { --muted: #c9c9d2; --border: #4d4d57; --border-strong: #606069; --tok-cm: #c9c9d2; }
 }
 
 /* 側欄與頁尾小工具（受控宣告式區塊）：寬螢幕側欄並排，窄螢幕堆疊於主內容之後；
@@ -554,9 +571,9 @@ body:has([data-color-scheme="dark"]) { background: var(--paper-dark); color: var
    本塊置於檔案末尾：同特異性時覆蓋前方規則；深色覆蓋以 .admin-shell[data-color-scheme]（0,2,0）
    壓過全域深色塊（0,1,0）。圖表（Dashboard.razor.js）讀取本殼層計算樣式，自動跟隨黑白。 */
 .admin-shell { --accent: #18181b; --accent-hover: #000; --accent-ink: #18181b; --accent-ink-hover: #000; --accent-soft: #ececef; --focus: #18181b; }
-.admin-shell[data-color-scheme="dark"] { --paper: #101014; --surface: #1a1a1f; --surface-sunken: #151519; --surface-raised: #202027; --ink: #eaeaee; --muted: #9c9ca6; --border: #2a2a31; --border-strong: #44444d; --accent: #fafafa; --accent-hover: #fff; --accent-ink: #e4e4e9; --accent-ink-hover: #fff; --accent-soft: #26262e; --focus: #d4d4dc; --code-bg: #0d0d10; }
+.admin-shell[data-color-scheme="dark"] { --paper: #101014; --surface: #1a1a1f; --surface-sunken: #151519; --surface-raised: #202027; --ink: #eaeaee; --muted: #9c9ca6; --border: #2a2a31; --border-strong: #44444d; --accent: #fafafa; --accent-hover: #fff; --accent-ink: #e4e4e9; --accent-ink-hover: #fff; --accent-soft: #26262e; --focus: #d4d4dc; --code-bg: #0d0d10; --tok-kw: #79c0ff; --tok-str: #7ee787; --tok-cm: #8b949e; --tok-num: #ffa657; --tok-typ: #d2a8ff; }
 @media (prefers-color-scheme: dark) {
-    .admin-shell[data-color-scheme="auto"] { --paper: #101014; --surface: #1a1a1f; --surface-sunken: #151519; --surface-raised: #202027; --ink: #eaeaee; --muted: #9c9ca6; --border: #2a2a31; --border-strong: #44444d; --accent: #fafafa; --accent-hover: #fff; --accent-ink: #e4e4e9; --accent-ink-hover: #fff; --accent-soft: #26262e; --focus: #d4d4dc; --code-bg: #0d0d10; }
+    .admin-shell[data-color-scheme="auto"] { --paper: #101014; --surface: #1a1a1f; --surface-sunken: #151519; --surface-raised: #202027; --ink: #eaeaee; --muted: #9c9ca6; --border: #2a2a31; --border-strong: #44444d; --accent: #fafafa; --accent-hover: #fff; --accent-ink: #e4e4e9; --accent-ink-hover: #fff; --accent-soft: #26262e; --focus: #d4d4dc; --code-bg: #0d0d10; --tok-kw: #79c0ff; --tok-str: #7ee787; --tok-cm: #8b949e; --tok-num: #ffa657; --tok-typ: #d2a8ff; }
 }
 /* 側欄＝墨黑錨點：兩種模式下皆為深色，文字令牌在側欄範圍內翻轉，
    讓既有 nav 規則（color-mix 於 --ink/--surface）自動改以淺色呈現。 */
