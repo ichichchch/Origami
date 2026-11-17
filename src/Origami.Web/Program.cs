@@ -89,6 +89,7 @@ builder.Services.AddHttpClient("OrigamiWxrAttachment")
 builder.Services.AddHttpClient("OrigamiMediaSideload", client => client.Timeout = TimeSpan.FromSeconds(30))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
 builder.Services.AddScoped<WebhookService>();
+builder.Services.AddScoped<IndexNowService>();
 builder.Services.AddScoped<SiteHealthService>();
 builder.Services.AddHttpClient<OpenAiEmbeddingGateway>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<IEmbeddingGateway>(provider => provider.GetRequiredService<OpenAiEmbeddingGateway>());
@@ -112,6 +113,15 @@ builder.Services.AddHostedService<MediaVariantBackfillService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<BackupService>();
 builder.Services.AddOptions<BackupOptions>().BindConfiguration("Backup");
+// 匿名頁面輸出快取：僅無 Cookie 的 GET/HEAD 白名單路徑（見 PublicPageCachePolicy）。
+// Web 與 Api 是不同進程（BFF），發布事件只在 Api 進程內分發、沒有跨進程失效信號，
+// 因此以短 TTL（3 分鐘）約束新鮮度；含防偽表單的詳情頁不進快取，改走 ETag 條件請求。
+builder.Services.AddOutputCache(options => options.AddBasePolicy(policy => policy
+    .With(PublicPageCachePolicy.Cacheable)
+    .Expire(TimeSpan.FromMinutes(3))
+
+    .SetVaryByHost(true)
+    .SetVaryByQuery("*")));
 builder.Services.AddHostedService<BackupWorker>();
 // 匿名公開搜尋對每個來源 IP 維持一份供應商成本預算；MCP 端點
 // 現位於 Origami.Api 主機，並在該主機自帶速率限制器。
@@ -255,6 +265,9 @@ app.UseRequestLocalization();
 app.UseAuthorization();
 app.UseAntiforgery();
 app.UseRateLimiter();
+// 輸出快取放在限流之後：命中同樣計入限流；詳情頁另以 ETag/304 支援條件請求。
+app.UseOutputCache();
+app.UseMiddleware<DetailPageEtagMiddleware>();
 app.MapStaticAssets();
 app.MapCmsIdentity();
 app.MapPublicEndpoints();
