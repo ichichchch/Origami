@@ -3,6 +3,10 @@ namespace Origami.Core.Services;
 /// <summary>每日自動備份的設定；全部由外部組態提供，預設關閉。</summary>
 public sealed class BackupOptions
 {
+    /// <summary>備份完成後的異地上傳網址（僅 https；相容 WebDAV PUT 與 S3 預簽名 URL）。空字串不上傳。</summary>
+    public string UploadUrl { get; set; } = "";
+    /// <summary>異地上傳的 Bearer 權杖；可為空（如 S3 預簽名網址已含授權）。</summary>
+    public string UploadToken { get; set; } = "";
     /// <summary>是否啟用每日自動備份；預設關閉。</summary>
     public bool Enabled { get; set; }
     /// <summary>保留份數上限，超出時刪除最舊；至少保留 1 份。</summary>
@@ -17,7 +21,7 @@ public sealed record BackupResult(string Path, long TotalBytes, int Retained);
 /// 把「JSON＋媒體」完整封裝寫入當站儲存目錄下的 backups/，先落暫存檔再原子改名，
 /// 並保留最新幾份。備份屬系統操作，不經管理員授權（匯出核心不帶授權檢查）。
 /// </summary>
-public sealed partial class BackupService(ExportService export, StoragePaths storage, TimeProvider clock, ILogger<BackupService> logger)
+public sealed partial class BackupService(ExportService export, StoragePaths storage, TimeProvider clock, ILogger<BackupService> logger, IHttpClientFactory? httpClients = null)
 {
     public string BackupsDirectory => Path.Combine(storage.SiteRoot, "backups");
 
@@ -52,6 +56,25 @@ public sealed partial class BackupService(ExportService export, StoragePaths sto
             catch (IOException ex) { Log.TrimFailed(logger, ex.GetType().Name); }
         }
         var kept = retained.Take(keep).ToList();
+        // 異地備份（盡力而為）：上傳本地完成的最新封裝；失敗僅記錄，本地備份與保留不受影響。
+        if (Uri.TryCreate(options.UploadUrl, UriKind.Absolute, out var uploadUri) && uploadUri.Scheme == Uri.UriSchemeHttps)
+        {
+            try
+            {
+                using var client = httpClients?.CreateClient("OrigamiBackupUpload") ?? new HttpClient();
+                client.Timeout = TimeSpan.FromMinutes(10);
+                if (options.UploadToken.Length > 0)
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.UploadToken);
+                using var content = new StreamContent(File.OpenRead(path));
+                using var response = await client.PutAsync(uploadUri, content, ct);
+                if (!response.IsSuccessStatusCode)
+                    Log.UploadFailed(logger, "HTTP " + ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                Log.UploadFailed(logger, error.GetType().Name);
+            }
+        }
         return new(path, kept.Sum(x => new FileInfo(x).Length), kept.Count);
     }
 
@@ -59,6 +82,9 @@ public sealed partial class BackupService(ExportService export, StoragePaths sto
     {
         [LoggerMessage(LogLevel.Warning, "無法刪除逾期的備份檔（{ErrorType}），將於下次備份再試。")]
         public static partial void TrimFailed(ILogger logger, string errorType);
+
+        [LoggerMessage(LogLevel.Warning, "備份異地上傳未完成（{ErrorType}）；本地備份不受影響。")]
+        public static partial void UploadFailed(ILogger logger, string errorType);
     }
 }
 
