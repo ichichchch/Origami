@@ -253,6 +253,17 @@ public sealed class WxrImportService(
             {
                 await ContentRules.SaveAsync(db, ct);
                 imported++;
+                // 舊固定連結 /archives/{post_id} 相容：記錄 wp-{id} 轉址，供前台 /archives/{id} 路由 301。
+                var legacyPostId = Text(item, "post_id");
+                if (legacyPostId.Length is > 0 and <= 10 && legacyPostId.All(char.IsAsciiDigit)
+                    && !await db.SlugRedirects.AsNoTracking().AnyAsync(x => x.OldSlug == "wp-" + legacyPostId, ct))
+                {
+                    db.SlugRedirects.Add(new ContentSlugRedirect
+                    {
+                        SiteId = db.CurrentSiteId, OldSlug = "wp-" + legacyPostId,
+                        ContentId = content.Id, CreatedAt = clock.GetUtcNow()
+                    });
+                }
                 // 已發布內容與一般發布一樣重新進入嵌入管道。
                 if (content.Status == ContentStatus.Published)
                 {
@@ -261,8 +272,8 @@ public sealed class WxrImportService(
                         SiteId = db.CurrentSiteId, ContentId = content.Id,
                         EnqueuedAt = clock.GetUtcNow(), NextAttemptAt = clock.GetUtcNow()
                     });
-                    await ContentRules.SaveAsync(db, ct);
                 }
+                if (db.ChangeTracker.HasChanges()) await ContentRules.SaveAsync(db, ct);
             }
             catch (CmsException error)
             {

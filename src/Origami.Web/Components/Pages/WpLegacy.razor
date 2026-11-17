@@ -1,0 +1,62 @@
+@page "/archives/{LegacyId:int}"
+@page "/archives/category/{Slug}"
+@page "/archives/author/{Slug}"
+@page "/page/{PageNumber:int}"
+@inject OrigamiClient Api
+@inject NavigationManager Navigation
+@inject ILogger<WpLegacy> Logger
+
+@* WordPress 舊網址相容層（301）：/archives/{post_id}、/archives/category/{slug}、
+   /archives/author/{slug} 與首頁分頁 /page/{n}。WXR 匯入時記錄的 wp-{id} 轉址
+   決定數位舊網址的去向；分類／作者／分頁為確定性改寫，無需查詢。 *@
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    [Parameter] public int LegacyId { get; set; }
+    [Parameter] public string? Slug { get; set; }
+    [Parameter] public int PageNumber { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (LegacyId > 0)
+        {
+            SlugRedirectTarget? target = null;
+            try
+            {
+                target = await Api.ResolveRedirectAsync("wp-" + LegacyId.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception error)
+            {
+                Logger.LogWarning(error, "舊網址轉址查詢失敗：/archives/{LegacyId}", LegacyId);
+            }
+            if (target is null) { ServeNotFound(); return; }
+            RedirectMovedPermanently(target.PublicPath);
+            return;
+        }
+        if (PageNumber > 0)
+        {
+            RedirectMovedPermanently(PageNumber == 1 ? "/" : "/?page=" + PageNumber.ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+        if (string.IsNullOrEmpty(Slug)) { ServeNotFound(); return; }
+        var escaped = Uri.EscapeDataString(Slug);
+        if (HttpContext?.Request.Path.StartsWithSegments("/archives/author") == true)
+            RedirectMovedPermanently("/author/" + escaped);
+        else
+            RedirectMovedPermanently("/?category=" + escaped);
+    }
+
+    private void RedirectMovedPermanently(string location)
+    {
+        if (HttpContext is not null && !HttpContext.Response.HasStarted)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+            HttpContext.Response.Headers.Location = location;
+        }
+    }
+
+    private void ServeNotFound()
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        Navigation.NotFound();
+    }
+}
