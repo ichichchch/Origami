@@ -61,6 +61,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<ImportService>();
         services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
+        services.AddScoped<WritingAssetsService>();
         services.AddScoped<NavigationService>();
         services.AddMemoryCache();
         services.AddHttpClient();
@@ -210,6 +211,7 @@ public sealed class TestActor(IServiceScope scope) : IDisposable
     public MutableAuthenticationStateProvider Authentication => Services.GetRequiredService<MutableAuthenticationStateProvider>();
     public ContentService Content => Services.GetRequiredService<ContentService>();
     public TaxonomyService Taxonomy => Services.GetRequiredService<TaxonomyService>();
+    public WritingAssetsService Writing => Services.GetRequiredService<WritingAssetsService>();
     public SettingsService Settings => Services.GetRequiredService<SettingsService>();
     public SemanticSearchService Semantic => Services.GetRequiredService<SemanticSearchService>();
     public SiteAssistant Assistant => Services.GetRequiredService<SiteAssistant>();

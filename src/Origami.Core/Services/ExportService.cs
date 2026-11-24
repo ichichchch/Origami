@@ -179,6 +179,33 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
                 ? typeSlugById.GetValueOrDefault(fieldTypeId, "")
                 : field.BuiltinKind == ContentKind.Page ? "builtin:page" : "builtin:post");
             writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteStartArray("templates");
+        await foreach (var template in db.ContentTemplates.AsNoTracking()
+            .OrderBy(x => x.Position).ThenBy(x => x.Name).ThenBy(x => x.Id).AsAsyncEnumerable().WithCancellation(ct))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", template.Name);
+            writer.WriteString("kind", template.Kind == ContentKind.Page ? "page" : "post");
+            if (template.ContentTypeId is { } templateTypeId)
+                writer.WriteString("contentType", typeSlugById.GetValueOrDefault(templateTypeId, ""));
+            writer.WriteString("title", template.Title);
+            writer.WriteString("markdown", template.Markdown);
+            writer.WriteNumber("position", template.Position);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+
+        writer.WriteStartArray("snippets");
+        await foreach (var snippet in db.ContentSnippets.AsNoTracking()
+            .OrderBy(x => x.Position).ThenBy(x => x.Name).ThenBy(x => x.Id).AsAsyncEnumerable().WithCancellation(ct))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("name", snippet.Name);
+            writer.WriteString("markdown", snippet.Markdown);
+            writer.WriteNumber("position", snippet.Position);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();

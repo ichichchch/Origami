@@ -670,6 +670,31 @@ public sealed class OrigamiClient
     public Task<TaxonomyItem?> ConvertTagToCategoryAsync(Guid id, Guid version, CancellationToken ct = default) =>
         SendAsync<TaxonomyItem>(new(HttpMethod.Post, $"api/v1/admin/taxonomies/tags/{id}/to-category?version={version}"), new { }, ct);
 
+    /// <summary>內容範本與可重複片段；建立走 POST、更新走 PUT，刪除須攜帶並發版本。</summary>
+    public async Task<List<WritingAssetsService.TemplateView>> ListTemplatesAsync(CancellationToken ct = default) =>
+        await GetAsync<List<WritingAssetsService.TemplateView>>("api/v1/admin/templates", ct) ?? [];
+
+    public async Task<List<WritingAssetsService.SnippetView>> ListSnippetsAsync(CancellationToken ct = default) =>
+        await GetAsync<List<WritingAssetsService.SnippetView>>("api/v1/admin/snippets", ct) ?? [];
+
+    public async Task<WritingAssetsService.TemplateView> SaveTemplateAsync(WritingAssetsService.TemplateEdit input, CancellationToken ct = default) =>
+        await SendAsync<WritingAssetsService.TemplateView>(new(
+            input.Id is null ? HttpMethod.Post : HttpMethod.Put,
+            input.Id is null ? "api/v1/admin/templates" : $"api/v1/admin/templates/{input.Id}"), input, ct)
+        ?? throw new CmsException("無法儲存內容範本。");
+
+    public async Task<WritingAssetsService.SnippetView> SaveSnippetAsync(WritingAssetsService.SnippetEdit input, CancellationToken ct = default) =>
+        await SendAsync<WritingAssetsService.SnippetView>(new(
+            input.Id is null ? HttpMethod.Post : HttpMethod.Put,
+            input.Id is null ? "api/v1/admin/snippets" : $"api/v1/admin/snippets/{input.Id}"), input, ct)
+        ?? throw new CmsException("無法儲存文字片段。");
+
+    public async Task DeleteTemplateAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/templates/{id}?version={version}", null, ct);
+
+    public async Task DeleteSnippetAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Delete, $"api/v1/admin/snippets/{id}?version={version}", null, ct);
+
     public async Task<PagedResult<MediaItem>?> ListMediaAsync(int page = 1, int pageSize = Limits.PageSize,
         string? search = null, MediaKind? kind = null, CancellationToken ct = default) =>
         await GetAsync<PagedResult<MediaItem>>(

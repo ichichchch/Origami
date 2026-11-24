@@ -71,6 +71,7 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<ContentService>();
         builder.Services.AddScoped<ContentTypeService>();
         builder.Services.AddScoped<TaxonomyService>();
+        builder.Services.AddScoped<WritingAssetsService>();
         builder.Services.AddScoped<NavigationService>();
         builder.Services.AddScoped<WidgetService>();
         builder.Services.AddScoped<MarketplaceService>();
@@ -145,6 +146,7 @@ public static class ApiHostPipeline
         app.MapAdminApiV1();
         app.MapContentTypeApiV1();
         app.MapAdminTaxonomyApiV1();
+        app.MapAdminWritingApiV1();
         app.MapAdminMediaApiV1();
         app.MapAdminSettingsApiV1();
         app.MapAdminTransferApiV1();

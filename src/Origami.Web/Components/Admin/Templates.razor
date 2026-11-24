@@ -1,0 +1,214 @@
+﻿@page "/admin/templates"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@layout AdminLayout
+@inherits AdminComponentBase
+@inject OrigamiClient Api
+
+<PageTitle>@UiText.T("Admin.Templates.PageTitle", "範本與片段 · 內容管理")</PageTitle>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">@UiText.T("Admin.Templates.Eyebrow", "寫作資產")</p>
+        <h1>@UiText.T("Admin.Templates.Title", "範本與片段")</h1>
+        <p>@UiText.T("Admin.Templates.Introduction", "內容範本提供建立新內容時的 Markdown 骨架；文字片段可在編輯器插入到游標位置。兩者都不改動既有內容。")</p>
+    </div>
+</div>
+<AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+@if (Access?.CanRead == true && !CanEdit)
+{
+    <p class="notice">@UiText.T("Admin.Templates.ReadOnlyNotice", "唯讀成員可檢視範本與片段，但不能新增或修改。")</p>
+}
+
+<div class="management-grid">
+    <section class="panel settings-panel">
+        <h2>@(_template.Id is null ? UiText.T("Admin.Templates.AddTemplate", "新增內容範本") : UiText.T("Admin.Templates.EditTemplate", "編輯內容範本"))</h2>
+        <EditForm Model="_template" OnSubmit="SaveTemplate" FormName="template-editor">
+            <fieldset disabled="@EditBlocked">
+                <div class="field">
+                    <label for="template-name">@UiText.T("Admin.Templates.TemplateName", "範本名稱") <span class="required">@UiText.T("Common.Required", "必填")</span></label>
+                    <input id="template-name" @bind="_template.Name" @bind:event="oninput" maxlength="@Limits.TemplateName" required />
+                </div>
+                <div class="field">
+                    <label for="template-target">@UiText.T("Admin.Templates.TemplateTarget", "適用對象")</label>
+                    <select id="template-target" value="@TargetValue" @onchange="TargetChanged" disabled="@EditBlocked">
+                        <option value="post">@UiText.T("Admin.Templates.TargetPost", "文章")</option>
+                        <option value="page">@UiText.T("Admin.Templates.TargetPage", "獨立頁面")</option>
+                        @foreach (var type in _types)
+                        {
+                            <option value="@("type:" + type.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Templates.TargetType", "自訂類型：{0}"), type.Name)</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="template-title">@UiText.T("Admin.Templates.TemplateTitle", "建議標題（選填）")</label>
+                    <input id="template-title" @bind="_template.Title" @bind:event="oninput" maxlength="@Limits.Title" disabled="@EditBlocked" />
+                    <span class="field-help">@UiText.T("Admin.Templates.TemplateTitleHelp", "套用範本時，新內容的標題為空才會預填。")</span>
+                </div>
+                <div class="field">
+                    <label for="template-body">@UiText.T("Admin.Templates.TemplateBody", "Markdown 骨架") <span class="required">@UiText.T("Common.Required", "必填")</span></label>
+                    <textarea id="template-body" @bind="_template.Markdown" @bind:event="oninput" maxlength="@Limits.TemplateBody" rows="10" class="markdown-input" required></textarea>
+                </div>
+                <div class="field"><label for="template-position">@UiText.T("Admin.Templates.Position", "顯示順序")</label><input id="template-position" type="number" min="0" max="999" @bind="_template.Position" disabled="@EditBlocked" /></div>
+                <div class="button-row">
+                    <button type="submit" class="button">@UiText.T("Admin.Templates.SaveTemplate", "儲存範本")</button>
+                    @if (_template.Id is not null) { <button type="button" class="button button-secondary" disabled="@EditBlocked" @onclick="ResetTemplate">@UiText.T("Admin.Templates.CancelOrAdd", "取消 / 新增")</button> }
+                </div>
+            </fieldset>
+        </EditForm>
+    </section>
+    <section class="panel">
+        <h2>@UiText.T("Admin.Templates.TemplatesList", "內容範本清單")</h2>
+        @if (_templates is not null && _templates.Count == 0)
+        {
+            <p class="field-help">@UiText.T("Admin.Templates.NoTemplates", "尚無內容範本。")</p>
+        }
+        <ul class="plain-list">
+            @foreach (var template in _templates ?? [])
+            {
+                <li @key="template.Id"><strong>@template.Name</strong> <span class="slug-text">@TargetLabel(template.Kind, template.ContentTypeId)</span>
+                    <div class="button-row">
+                        <button type="button" class="text-button" disabled="@EditBlocked" @onclick="() => EditTemplate(template)">@UiText.T("Admin.Templates.Edit", "編輯")<span class="sr-only"> @template.Name</span></button>
+                        <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDeleteTemplate = template">@UiText.T("Admin.Templates.Delete", "刪除")<span class="sr-only"> @template.Name</span></button>
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+</div>
+
+<div class="management-grid">
+    <section class="panel settings-panel">
+        <h2>@(_snippet.Id is null ? UiText.T("Admin.Templates.AddSnippet", "新增文字片段") : UiText.T("Admin.Templates.EditSnippet", "編輯文字片段"))</h2>
+        <EditForm Model="_snippet" OnSubmit="SaveSnippet" FormName="snippet-editor">
+            <fieldset disabled="@EditBlocked">
+                <div class="field">
+                    <label for="snippet-name">@UiText.T("Admin.Templates.SnippetName", "片段名稱") <span class="required">@UiText.T("Common.Required", "必填")</span></label>
+                    <input id="snippet-name" @bind="_snippet.Name" @bind:event="oninput" maxlength="@Limits.TemplateName" required />
+                </div>
+                <div class="field">
+                    <label for="snippet-body">@UiText.T("Admin.Templates.SnippetBody", "Markdown 片段") <span class="required">@UiText.T("Common.Required", "必填")</span></label>
+                    <textarea id="snippet-body" @bind="_snippet.Markdown" @bind:event="oninput" maxlength="@Limits.SnippetBody" rows="6" class="markdown-input" required></textarea>
+                </div>
+                <div class="field"><label for="snippet-position">@UiText.T("Admin.Templates.Position", "顯示順序")</label><input id="snippet-position" type="number" min="0" max="999" @bind="_snippet.Position" disabled="@EditBlocked" /></div>
+                <div class="button-row">
+                    <button type="submit" class="button">@UiText.T("Admin.Templates.SaveSnippet", "儲存片段")</button>
+                    @if (_snippet.Id is not null) { <button type="button" class="button button-secondary" disabled="@EditBlocked" @onclick="() => _snippet = new()">@UiText.T("Admin.Templates.CancelOrAdd", "取消 / 新增")</button> }
+                </div>
+            </fieldset>
+        </EditForm>
+    </section>
+    <section class="panel">
+        <h2>@UiText.T("Admin.Templates.SnippetsList", "文字片段清單")</h2>
+        @if (_snippets is not null && _snippets.Count == 0)
+        {
+            <p class="field-help">@UiText.T("Admin.Templates.NoSnippets", "尚無文字片段。")</p>
+        }
+        <ul class="plain-list">
+            @foreach (var snippet in _snippets ?? [])
+            {
+                <li @key="snippet.Id"><strong>@snippet.Name</strong>
+                    <div class="button-row">
+                        <button type="button" class="text-button" disabled="@EditBlocked" @onclick="() => EditSnippet(snippet)">@UiText.T("Admin.Templates.Edit", "編輯")<span class="sr-only"> @snippet.Name</span></button>
+                        <button type="button" class="text-danger" disabled="@EditBlocked" @onclick="() => _pendingDeleteSnippet = snippet">@UiText.T("Admin.Templates.Delete", "刪除")<span class="sr-only"> @snippet.Name</span></button>
+                    </div>
+                </li>
+            }
+        </ul>
+    </section>
+</div>
+
+@if (_pendingDeleteTemplate is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="template-delete-title">
+        <h2 id="template-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Templates.DeleteTemplateTitle", "刪除內容範本「{0}」？"), _pendingDeleteTemplate.Name)</h2>
+        <p>@UiText.T("Admin.Templates.DeleteTemplateWarning", "已依範本建立的內容不受影響；此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteTemplate">@UiText.T("Admin.Templates.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDeleteTemplate = null">@UiText.T("Common.Cancel", "取消")</button></div>
+    </section>
+}
+@if (_pendingDeleteSnippet is not null)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="snippet-delete-title">
+        <h2 id="snippet-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Templates.DeleteSnippetTitle", "刪除文字片段「{0}」？"), _pendingDeleteSnippet.Name)</h2>
+        <p>@UiText.T("Admin.Templates.DeleteSnippetWarning", "已插入內容的文字不受影響；此動作無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="DeleteSnippet">@UiText.T("Admin.Templates.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingDeleteSnippet = null">@UiText.T("Common.Cancel", "取消")</button></div>
+    </section>
+}
+
+@code {
+    private WritingAssetsService.TemplateEdit _template = new();
+    private List<WritingAssetsService.TemplateView>? _templates;
+    private WritingAssetsService.SnippetEdit _snippet = new();
+    private List<WritingAssetsService.SnippetView>? _snippets;
+    private List<ContentTypeService.TypeView> _types = [];
+    private WritingAssetsService.TemplateView? _pendingDeleteTemplate;
+    private WritingAssetsService.SnippetView? _pendingDeleteSnippet;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private Task Load() => RunAsync(async ct =>
+    {
+        _templates = await Api.ListTemplatesAsync(ct);
+        _snippets = await Api.ListSnippetsAsync(ct);
+        _types = await Api.ListContentTypesAsync(ct);
+    });
+
+    private string TargetValue => _template.ContentTypeId is { } typeId ? "type:" + typeId : _template.Kind == ContentKind.Page ? "page" : "post";
+
+    private string TargetLabel(ContentKind kind, Guid? contentTypeId)
+    {
+        if (contentTypeId is { } typeId) return _types.FirstOrDefault(x => x.Id == typeId)?.Name ?? UiText.T("Admin.Templates.TargetType", "自訂類型：{0}");
+        return kind == ContentKind.Page ? UiText.T("Admin.Templates.TargetPage", "獨立頁面") : UiText.T("Admin.Templates.TargetPost", "文章");
+    }
+
+    private void TargetChanged(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString() ?? "post";
+        _template.ContentTypeId = value.StartsWith("type:", StringComparison.Ordinal) && Guid.TryParse(value["type:".Length..], out var id) ? id : null;
+        _template.Kind = value == "page" ? ContentKind.Page : ContentKind.Post;
+    }
+
+    private void ResetTemplate() => _template = new();
+
+    private void EditTemplate(WritingAssetsService.TemplateView template) => _template = new()
+    {
+        Id = template.Id, Name = template.Name, Kind = template.Kind, ContentTypeId = template.ContentTypeId,
+        Title = template.Title, Markdown = template.Markdown, Position = template.Position, Version = template.Version
+    };
+
+    private Task SaveTemplate() => RunEditAsync(async ct =>
+    {
+        await Api.SaveTemplateAsync(_template, ct);
+        _template = new();
+        _templates = await Api.ListTemplatesAsync(ct);
+    }, UiText.T("Admin.Templates.TemplateSaved", "內容範本已儲存。"));
+
+    private Task DeleteTemplate() => RunEditAsync(async ct =>
+    {
+        if (_pendingDeleteTemplate is not { } template) return;
+        await Api.DeleteTemplateAsync(template.Id, template.Version, ct);
+        _pendingDeleteTemplate = null;
+        if (_template.Id == template.Id) _template = new();
+        _templates = await Api.ListTemplatesAsync(ct);
+    }, UiText.T("Admin.Templates.TemplateDeleted", "內容範本已刪除。"));
+
+    private void EditSnippet(WritingAssetsService.SnippetView snippet) => _snippet = new()
+    {
+        Id = snippet.Id, Name = snippet.Name, Markdown = snippet.Markdown, Position = snippet.Position, Version = snippet.Version
+    };
+
+    private Task SaveSnippet() => RunEditAsync(async ct =>
+    {
+        await Api.SaveSnippetAsync(_snippet, ct);
+        _snippet = new();
+        _snippets = await Api.ListSnippetsAsync(ct);
+    }, UiText.T("Admin.Templates.SnippetSaved", "文字片段已儲存。"));
+
+    private Task DeleteSnippet() => RunEditAsync(async ct =>
+    {
+        if (_pendingDeleteSnippet is not { } snippet) return;
+        await Api.DeleteSnippetAsync(snippet.Id, snippet.Version, ct);
+        _pendingDeleteSnippet = null;
+        if (_snippet.Id == snippet.Id) _snippet = new();
+        _snippets = await Api.ListSnippetsAsync(ct);
+    }, UiText.T("Admin.Templates.SnippetDeleted", "文字片段已刪除。"));
+}

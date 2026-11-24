@@ -218,6 +218,7 @@ else if (_model is not null)
                     var insertBlockLabel = UiText.T("Admin.ContentEditor.InsertBlock", "插入區塊…");
                     var findLabel = UiText.T("Admin.ContentEditor.FindReplace", "尋找取代");
                     var focusLabel = UiText.T("Admin.ContentEditor.FocusMode", "專注模式");
+                    var templateLabel = UiText.T("Admin.ContentEditor.ApplyTemplate", "從範本開始…");
                 }
                 <section class="panel markdown-panel" id="markdown-panel">
                     <div class="panel-toolbar editor-toolbar">
@@ -229,6 +230,16 @@ else if (_model is not null)
                             @if (_focus)
                             {
                                 <span class="field-help editor-focus-hint">@UiText.T("Admin.ContentEditor.FocusModeHelp", "專注模式：按 Esc 離開，Ctrl／Cmd＋S 儲存。")</span>
+                            }
+                            @if (_model.Id is null && ApplicableTemplates.Count > 0)
+                            {
+                                <select id="editor-template" class="insert-select" aria-label="@templateLabel" disabled="@Blocked" @bind="_templateChoice" @bind:after="ApplyTemplateAsync">
+                                    <option value="">@templateLabel</option>
+                                    @foreach (var template in ApplicableTemplates)
+                                    {
+                                        <option value="@template.Id">@template.Name</option>
+                                    }
+                                </select>
                             }
                         </div>
                         <div class="button-row editor-tools" role="toolbar" aria-label="@UiText.T("Admin.ContentEditor.FormatToolbar", "格式與插入工具列")">
@@ -254,6 +265,15 @@ else if (_model is not null)
                                 <option value="tabs">@UiText.T("Admin.ContentEditor.InsertTabs", "頁籤")</option>
                                 <option value="gallery">@UiText.T("Admin.ContentEditor.InsertGallery", "圖庫")</option>
                                 <option value="hr">@UiText.T("Admin.ContentEditor.InsertHorizontalRule", "水平線")</option>
+                                @if (_snippets.Count > 0)
+                                {
+                                    <optgroup label="@UiText.T("Admin.ContentEditor.SnippetGroup", "插入文字片段")">
+                                        @foreach (var snippet in _snippets)
+                                        {
+                                            <option value="@("snippet:" + snippet.Id)">@snippet.Name</option>
+                                        }
+                                    </optgroup>
+                                }
                             </select>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertCallout">@UiText.T("Admin.ContentEditor.InsertCallout", "插入提示框")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertDetails">@UiText.T("Admin.ContentEditor.InsertDetails", "插入摺疊塊")</button>
@@ -637,6 +657,12 @@ else if (_model is not null)
     private bool _findCase;
     private string _findMessage = "";
     private string _insertChoice = "";
+    private string _templateChoice = "";
+    private List<WritingAssetsService.TemplateView> _templates = [];
+    private List<WritingAssetsService.SnippetView> _snippets = [];
+    /// <summary>只列出適用於目前內容種類（與自訂類型）的範本。</summary>
+    private List<WritingAssetsService.TemplateView> ApplicableTemplates =>
+        [.. _templates.Where(t => t.Kind == _model?.Kind && t.ContentTypeId == _model?.ContentTypeId)];
     private sealed record FindResult(int Index, int Total);
     private sealed record ReplaceResult(string? Value, bool Replaced, bool Found);
     private sealed record ReplaceAllResult(string? Value, int Count);
@@ -1124,6 +1150,8 @@ else if (_model is not null)
             : await Api.ListBuiltinFieldsAsync(loaded.Kind, ct);
         _fieldValues = loaded.FieldValues.ToDictionary(x => x.FieldId, x => x.Value);
         await LoadRelationOptionsAsync(ct);
+        _templates = await Api.ListTemplatesAsync(ct);
+        _snippets = await Api.ListSnippetsAsync(ct);
         _editingHeldByOther = loaded.EditingByOther;
         _editingHolderName = loaded.EditingByName;
         if (CanEdit) _authors = await Api.AuthorOptionsAsync(ct) ?? [];
@@ -1160,6 +1188,8 @@ else if (_model is not null)
         _fields = parsed is { } fieldTypeId ? await Api.ListCustomFieldsAsync(fieldTypeId, ct) : await Api.ListBuiltinFieldsAsync(_model.Kind, ct);
         _fieldValues = [];
         await LoadRelationOptionsAsync(ct);
+        _templates = await Api.ListTemplatesAsync(ct);
+        _snippets = await Api.ListSnippetsAsync(ct);
     });
 
     private void FieldChanged(Guid fieldId, ChangeEventArgs args)
@@ -1448,7 +1478,24 @@ else if (_model is not null)
         var choice = _insertChoice;
         _insertChoice = "";
         if (choice.Length == 0) return Task.CompletedTask;
+        if (choice.StartsWith("snippet:", StringComparison.Ordinal) && Guid.TryParse(choice["snippet:".Length..], out var snippetId))
+        {
+            var snippet = _snippets.FirstOrDefault(x => x.Id == snippetId);
+            return snippet is null ? Task.CompletedTask : InsertBlockAsync(snippet.Markdown);
+        }
         return InsertBlockAsync(BlockSnippet(choice));
+    }
+
+    /// <summary>套用範本：標題為空才預填；本文以游標位置插入（空白時等同從頭開始），不覆寫既有文字。</summary>
+    private Task ApplyTemplateAsync()
+    {
+        var choice = _templateChoice;
+        _templateChoice = "";
+        if (!Guid.TryParse(choice, out var id) || _model is null || Blocked) return Task.CompletedTask;
+        var template = _templates.FirstOrDefault(t => t.Id == id);
+        if (template is null) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(_model.Title) && template.Title.Length > 0) _model.Title = template.Title;
+        return InsertBlockAsync(template.Markdown);
     }
 
     /// <summary>插入選單的區塊骨架；容器語法見 MarkdownService.Layout.cs。</summary>

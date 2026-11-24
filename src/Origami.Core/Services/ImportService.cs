@@ -195,6 +195,11 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await db.SitePackages.ExecuteDeleteAsync(ct);
         // 評論隨內容級聯刪除，此處明確清理以避免複合鍵殘留。
         await db.Comments.ExecuteDeleteAsync(ct);
+        // 寫作資產只在檔案帶有對應節點時取代；舊檔未宣告的資產不主動清除（自訂類型範本仍隨類型取代）。
+        if (document.RootElement.TryGetProperty("templates", out var exportedTemplates) && exportedTemplates.ValueKind == JsonValueKind.Array)
+            await db.ContentTemplates.ExecuteDeleteAsync(ct);
+        if (document.RootElement.TryGetProperty("snippets", out var exportedSnippets) && exportedSnippets.ValueKind == JsonValueKind.Array)
+            await db.ContentSnippets.ExecuteDeleteAsync(ct);
 
         var site = document.RootElement.GetProperty("site");
         Dictionary<string, Category> categoriesBySlug = [];
@@ -343,7 +348,62 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 db.CustomFields.Add(field);
             }
         }
-        Dictionary<string, MediaAsset> mediaByFileName = [];        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
+        if (document.RootElement.TryGetProperty("templates", out var templateNodes) && templateNodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in templateNodes.EnumerateArray())
+            {
+                var name = Bounded(node, "name", Limits.TemplateName, "內容範本名稱");
+                var markdown = Bounded(node, "markdown", Limits.TemplateBody, "內容範本本文");
+                if (name.Trim().Length == 0 || markdown.Trim().Length == 0)
+                    throw new CmsException("內容範本的名稱與本文不可空白。");
+                var kind = node.GetString("kind") switch
+                {
+                    "post" => ContentKind.Post,
+                    "page" => ContentKind.Page,
+                    _ => throw new CmsException("內容範本的內容種類無效。")
+                };
+                Guid? contentTypeId = null;
+                if (node.GetString("contentType") is { Length: > 0 } typeSlug)
+                {
+                    if (!typesBySlug.TryGetValue(typeSlug, out var owner))
+                        throw new CmsException($"內容範本「{name}」所屬的內容類型不在匯入資料中：{typeSlug}。");
+                    contentTypeId = owner.Id;
+                    kind = ContentKind.Post;
+                }
+                db.ContentTemplates.Add(new ContentTemplate
+                {
+                    SiteId = db.CurrentSiteId,
+                    Name = name.Trim(),
+                    Kind = kind,
+                    ContentTypeId = contentTypeId,
+                    Title = Bounded(node, "title", Limits.Title, "內容範本建議標題", optional: true).Trim(),
+                    Markdown = markdown.Trim(),
+                    Position = node.TryGetProperty("position", out var position) && position.ValueKind == JsonValueKind.Number ? position.GetInt32() : 0,
+                    Version = Guid.NewGuid()
+                });
+            }
+        }
+        if (document.RootElement.TryGetProperty("snippets", out var snippetNodes) && snippetNodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in snippetNodes.EnumerateArray())
+            {
+                var name = Bounded(node, "name", Limits.TemplateName, "文字片段名稱");
+                var markdown = Bounded(node, "markdown", Limits.SnippetBody, "文字片段本文");
+                if (name.Trim().Length == 0 || markdown.Trim().Length == 0)
+                    throw new CmsException("文字片段的名稱與本文不可空白。");
+                db.ContentSnippets.Add(new ContentSnippet
+                {
+                    SiteId = db.CurrentSiteId,
+                    Name = name.Trim(),
+                    Markdown = markdown.Trim(),
+                    Position = node.TryGetProperty("position", out var position) && position.ValueKind == JsonValueKind.Number ? position.GetInt32() : 0,
+                    Version = Guid.NewGuid()
+                });
+            }
+        }
+
+        Dictionary<string, MediaAsset> mediaByFileName = [];
+        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
         {
             var fileName = Bounded(node, "fileName", 80, "媒體檔名");
             // 儲存檔名稍後會變成檔案路徑；僅允許匯入單純的圖片檔名。

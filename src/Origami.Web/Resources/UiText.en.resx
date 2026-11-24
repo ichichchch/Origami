@@ -4283,7 +4283,6 @@
   <data name="Account.External.RevocationHelp" xml:space="preserve"><value>Linking or unlinking revokes all existing sessions and API credentials. You will need to sign in again.</value></data>
   <data name="Account.External.ConfirmTitle" xml:space="preserve"><value>Confirm linking the verified external account</value></data>
   <data name="Account.External.Confirm" xml:space="preserve"><value>Confirm link and sign in again</value></data>
-  <data name="Common.Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="Account.External.Linked" xml:space="preserve"><value>Linked accounts</value></data>
   <data name="Account.External.NoLinks" xml:space="preserve"><value>No external accounts are linked.</value></data>
   <data name="Account.External.CodeHelp" xml:space="preserve"><value>Authenticator or recovery code, if two-factor authentication is enabled</value></data>
@@ -4351,6 +4350,9 @@
   <data name="Admin.Widgets.Reordered" xml:space="preserve"><value>Widget order updated.</value></data>
   <data name="Admin.Settings.SearchEngineBlocked" xml:space="preserve"><value>Ask search engines not to index this site</value></data>
   <data name="Admin.Settings.SearchEngineBlockedHelp" xml:space="preserve"><value>When enabled, robots.txt disallows the entire site and every public response carries a noindex header. Pages already indexed by search engines are not removed immediately.</value></data>
+  <data name="Common.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
   <data name="Admin.Widgets.Required" xml:space="preserve">
     <value>Required</value>
   </data>
@@ -4695,6 +4697,126 @@
   <data name="Admin.ContentTypes.PostFields" xml:space="preserve">
     <value>Post fields</value>
   </data>
+  <data name="Admin.ContentEditor.ApplyTemplate" xml:space="preserve">
+    <value>Start from a template…</value>
+  </data>
+  <data name="Admin.ContentEditor.SnippetGroup" xml:space="preserve">
+    <value>Insert snippet</value>
+  </data>
+  <data name="Admin.Templates.AddSnippet" xml:space="preserve">
+    <value>New snippet</value>
+  </data>
+  <data name="Admin.Templates.AddTemplate" xml:space="preserve">
+    <value>New content template</value>
+  </data>
+  <data name="Admin.Templates.CancelOrAdd" xml:space="preserve">
+    <value>Cancel / New</value>
+  </data>
+  <data name="Admin.Templates.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.Templates.DeleteSnippetTitle" xml:space="preserve">
+    <value>Delete snippet "{0}"?</value>
+  </data>
+  <data name="Admin.Templates.DeleteSnippetWarning" xml:space="preserve">
+    <value>Text already inserted into content is not affected. This cannot be undone.</value>
+  </data>
+  <data name="Admin.Templates.DeleteTemplateTitle" xml:space="preserve">
+    <value>Delete template "{0}"?</value>
+  </data>
+  <data name="Admin.Templates.DeleteTemplateWarning" xml:space="preserve">
+    <value>Content already created from this template is not affected. This cannot be undone.</value>
+  </data>
+  <data name="Admin.Templates.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.Templates.EditSnippet" xml:space="preserve">
+    <value>Edit snippet</value>
+  </data>
+  <data name="Admin.Templates.EditTemplate" xml:space="preserve">
+    <value>Edit content template</value>
+  </data>
+  <data name="Admin.Templates.Eyebrow" xml:space="preserve">
+    <value>Writing assets</value>
+  </data>
+  <data name="Admin.Templates.Introduction" xml:space="preserve">
+    <value>Templates provide a Markdown skeleton for new content; snippets are reusable text inserted at the cursor. Neither changes existing content.</value>
+  </data>
+  <data name="Admin.Templates.NoSnippets" xml:space="preserve">
+    <value>No snippets yet.</value>
+  </data>
+  <data name="Admin.Templates.NoTemplates" xml:space="preserve">
+    <value>No content templates yet.</value>
+  </data>
+  <data name="Admin.Templates.PageTitle" xml:space="preserve">
+    <value>Templates &amp; snippets · Content</value>
+  </data>
+  <data name="Admin.Templates.Position" xml:space="preserve">
+    <value>Display order</value>
+  </data>
+  <data name="Admin.Templates.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can view templates and snippets but cannot add or change them.</value>
+  </data>
+  <data name="Admin.Templates.SaveSnippet" xml:space="preserve">
+    <value>Save snippet</value>
+  </data>
+  <data name="Admin.Templates.SaveTemplate" xml:space="preserve">
+    <value>Save template</value>
+  </data>
+  <data name="Admin.Templates.SnippetBody" xml:space="preserve">
+    <value>Markdown snippet</value>
+  </data>
+  <data name="Admin.Templates.SnippetDeleted" xml:space="preserve">
+    <value>Snippet deleted.</value>
+  </data>
+  <data name="Admin.Templates.SnippetName" xml:space="preserve">
+    <value>Snippet name</value>
+  </data>
+  <data name="Admin.Templates.SnippetSaved" xml:space="preserve">
+    <value>Snippet saved.</value>
+  </data>
+  <data name="Admin.Templates.SnippetsList" xml:space="preserve">
+    <value>Snippets</value>
+  </data>
+  <data name="Admin.Templates.TargetPage" xml:space="preserve">
+    <value>Pages</value>
+  </data>
+  <data name="Admin.Templates.TargetPost" xml:space="preserve">
+    <value>Posts</value>
+  </data>
+  <data name="Admin.Templates.TargetType" xml:space="preserve">
+    <value>Custom type: {0}</value>
+  </data>
+  <data name="Admin.Templates.TemplateBody" xml:space="preserve">
+    <value>Markdown skeleton</value>
+  </data>
+  <data name="Admin.Templates.TemplateDeleted" xml:space="preserve">
+    <value>Template deleted.</value>
+  </data>
+  <data name="Admin.Templates.TemplateName" xml:space="preserve">
+    <value>Template name</value>
+  </data>
+  <data name="Admin.Templates.TemplateSaved" xml:space="preserve">
+    <value>Template saved.</value>
+  </data>
+  <data name="Admin.Templates.TemplateTarget" xml:space="preserve">
+    <value>Applies to</value>
+  </data>
+  <data name="Admin.Templates.TemplateTitle" xml:space="preserve">
+    <value>Suggested title (optional)</value>
+  </data>
+  <data name="Admin.Templates.TemplateTitleHelp" xml:space="preserve">
+    <value>The title is pre-filled only when the new content has no title yet.</value>
+  </data>
+  <data name="Admin.Templates.TemplatesList" xml:space="preserve">
+    <value>Content templates</value>
+  </data>
+  <data name="Admin.Templates.Title" xml:space="preserve">
+    <value>Templates &amp; snippets</value>
+  </data>
+  <data name="Layout.Admin.Templates" xml:space="preserve">
+    <value>Templates &amp; snippets</value>
+  </data>
   <data name="Admin.ContentList.AllTypes" xml:space="preserve">
     <value>All content types</value>
   </data>
@@ -4907,6 +5029,9 @@
   </data>
   <data name="Public.Search.MonthFilter" xml:space="preserve">
     <value>Month filter</value>
+  </data>
+  <data name="Admin.Templates.ConfirmDelete" xml:space="preserve">
+    <value>Confirm delete</value>
   </data>
   <data name="Admin.Comments.AuthorOf" xml:space="preserve">
     <value>comment by {0}</value>

@@ -82,6 +82,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<LoginThrottle>(provider => new LoginThrottle(provider.GetRequiredService<TimeProvider>()));
 builder.Services.AddScoped<ContentService>();
 builder.Services.AddScoped<TaxonomyService>();
+builder.Services.AddScoped<WritingAssetsService>();
 builder.Services.AddScoped<NavigationService>();
 builder.Services.AddScoped<WidgetService>();
 builder.Services.AddScoped<WxrImportService>();
