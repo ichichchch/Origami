@@ -32,6 +32,10 @@
                     @if (IsNetworkAdmin)
                     {
                         <button disabled="@Blocked" @onclick="() => EditSite(site)">@UiText.T("Admin.Sites.Edit", "編輯")</button>
+                        @if (site.Id != SiteDefaults.DefaultSiteId && site.Id != Access?.SiteId)
+                        {
+                            <button class="button button-danger" disabled="@Blocked" @onclick="() => AskDelete(site)">@UiText.T("Admin.Sites.Delete", "刪除")</button>
+                        }
                     }
                 </div></td>
             </tr>
@@ -68,6 +72,20 @@
             </EditForm>
         </section>
     }
+    @if (_deleting is { } deleting)
+    {
+        <section class="panel settings-panel settings-width">
+            <h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Sites.DeleteTitle", "永久刪除站點：{0}"), deleting.Name)</h2>
+            <p class="notice">@UiText.T("Admin.Sites.DeleteWarning", "此操作無法復原，會刪除該站點的全部內容、成員、設定與媒體檔案。")</p>
+            <EditForm Model="_delete" OnSubmit="Delete" FormName="site-delete">
+                <fieldset disabled="@Blocked">
+                    <div class="field"><label for="delete-site-confirm">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Sites.DeleteConfirm", "請輸入固定代稱 {0} 以確認"), deleting.Slug)</label><input id="delete-site-confirm" @bind="_delete.ConfirmSlug" maxlength="@Limits.SiteSlug" autocomplete="off" required /></div>
+                    <button class="button button-danger" type="submit">@UiText.T("Admin.Sites.DeleteForever", "永久刪除站點")</button>
+                    <button class="button button-secondary" type="button" @onclick="() => _deleting = null">@UiText.T("Admin.Sites.Cancel", "取消")</button>
+                </fieldset>
+            </EditForm>
+        </section>
+    }
 }
 
 @code {
@@ -76,6 +94,8 @@
     private SiteCreateInput _create = new();
     private SiteUpdateInput _update = new();
     private SiteSummary? _editing;
+    private SiteSummary? _deleting;
+    private SiteDeleteInput _delete = new();
     private string CurrentAuthority => new Uri(Navigation.Uri).Authority;
     protected override Task OnInitializedAsync() => Load();
     private Task Load() => RunAsync(async ct => { _sites = await Api.ListSitesAsync(ct); });
@@ -97,6 +117,24 @@
         _editing = site;
         _update = new() { Name = site.Name, HostName = site.HostName, IsActive = site.IsActive, Version = site.Version };
     }
+    private void AskDelete(SiteSummary site)
+    {
+        if (Blocked || !IsNetworkAdmin || site.Id == SiteDefaults.DefaultSiteId || site.Id == Access?.SiteId) return;
+        _editing = null;
+        _deleting = site;
+        _delete = new() { Version = site.Version };
+    }
+    private Task Delete() => RunAsync(async ct =>
+    {
+        if (!IsNetworkAdmin) throw new AccessDeniedException(UiText.T("Admin.Sites.DeleteDenied", "刪除站點僅限全站管理者。"));
+        if (_deleting is not { } site) return;
+        if (!string.Equals(_delete.ConfirmSlug.Trim(), site.Slug, StringComparison.Ordinal))
+            throw new CmsException(UiText.T("Admin.Sites.DeleteMismatch", "輸入的代稱不符合，未刪除任何資料。"));
+        await Api.DeleteSiteAsync(site.Id, _delete, ct);
+        _sites = _sites?.Where(x => x.Id != site.Id).ToList();
+        _deleting = null;
+        _delete = new();
+    }, UiText.T("Admin.Sites.Deleted", "站點及其內容、設定與媒體已永久刪除。"));
     private Task Create() => RunAsync(async ct =>
     {
         if (!IsNetworkAdmin) throw new AccessDeniedException(UiText.T("Admin.Sites.CreateDenied", "建立站點僅限全站管理者。"));

@@ -42,6 +42,12 @@ public sealed class SiteUpdateInput
     public Guid Version { get; set; }
 }
 
+public sealed class SiteDeleteInput
+{
+    public string ConfirmSlug { get; set; } = "";
+    public Guid Version { get; set; }
+}
+
 public sealed record UserSummary(string Id, string UserName, bool IsDisabled, bool IsNetworkAdmin)
 {
     public bool TwoFactorEnabled { get; init; }

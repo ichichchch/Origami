@@ -156,6 +156,7 @@ public static class OpenApiDocumentBuilder
             ["get /api/v1/admin/sites"] = ("列出多站點網路中的所有站點", "管理"),
             ["post /api/v1/admin/sites"] = ("建立新的站點", "管理"),
             ["put /api/v1/admin/sites/{id}"] = ("更新指定站點的名稱與主機設定", "管理"),
+            ["delete /api/v1/admin/sites/{id}"] = ("永久刪除非預設且非目前站點（需版本與固定代稱確認）", "管理"),
             ["get /api/v1/admin/users"] = ("分頁列出系統使用者帳號", "管理"),
             ["post /api/v1/admin/users"] = ("建立新的系統使用者帳號", "管理"),
             ["put /api/v1/admin/users/{id}/state"] = ("啟用或停用指定的使用者帳號", "管理"),

@@ -366,6 +366,15 @@ public sealed class OrigamiClient
         await SendAsync<SiteSummary>(new(HttpMethod.Put, $"api/v1/admin/sites/{id}"), input, ct)
         ?? throw new CmsException("站點不存在，請重新載入。");
 
+    public async Task DeleteSiteAsync(Guid id, SiteDeleteInput input, CancellationToken ct = default)
+    {
+        using var response = await http.SendAsync(new(HttpMethod.Delete, $"api/v1/admin/sites/{id}")
+        {
+            Content = JsonContent.Create(input)
+        }, ct);
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task<PagedResult<UserSummary>> ListUsersAsync(int page = 1, string? search = null, CancellationToken ct = default) =>
         await GetAsync<PagedResult<UserSummary>>($"api/v1/admin/users?page={page}" +
             (string.IsNullOrWhiteSpace(search) ? "" : "&search=" + Uri.EscapeDataString(search.Trim())), ct)

@@ -288,6 +288,7 @@ public sealed class TenancyApiTests(IsolatedPostgres postgres) : ServiceTestBase
             Name = "第三站改名", HostName = site.HostName, IsActive = true, Version = site.Version
         }, Json);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        site = await updated.Content.ReadFromJsonAsync<SiteSummary>(Json) ?? site;
 
         // 建立使用者、停用、再啟用（戳記輪替由服務層負責）。
         using var userResponse = await bff.PostAsJsonAsync("/api/v1/admin/users", new UserCreateInput
@@ -323,6 +324,19 @@ public sealed class TenancyApiTests(IsolatedPostgres postgres) : ServiceTestBase
             .Where(row => row.SiteId == site.Id && row.Role == SiteRole.Administrator).ToListAsync());
         Assert.Empty(await db.SiteMemberships.IgnoreQueryFilters()
             .Where(row => row.UserId == user.Id).ToListAsync());
+
+        using (var wrongConfirmation = await bff.SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/admin/sites/{site.Id}")
+        {
+            Content = JsonContent.Create(new SiteDeleteInput { ConfirmSlug = "wrong", Version = site.Version }, options: Json)
+        }))
+            Assert.Equal(HttpStatusCode.BadRequest, wrongConfirmation.StatusCode);
+        using (var deleted = await bff.SendAsync(new HttpRequestMessage(HttpMethod.Delete, $"/api/v1/admin/sites/{site.Id}")
+        {
+            Content = JsonContent.Create(new SiteDeleteInput { ConfirmSlug = site.Slug, Version = site.Version }, options: Json)
+        }))
+            Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+        Assert.Single(await db.Sites.ToListAsync());
+        Assert.Empty(await db.SiteMemberships.IgnoreQueryFilters().Where(row => row.SiteId == site.Id).ToListAsync());
     }
 
     [PostgresFact]

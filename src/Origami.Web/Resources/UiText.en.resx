@@ -5246,6 +5246,30 @@
   <data name="Admin.Users.DeletedTransferred" xml:space="preserve">
     <value>Account deleted; its content is now attributed to the selected account.</value>
   </data>
+  <data name="Admin.Sites.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.Sites.DeleteConfirm" xml:space="preserve">
+    <value>Type the slug {0} to confirm</value>
+  </data>
+  <data name="Admin.Sites.DeleteDenied" xml:space="preserve">
+    <value>Only network administrators can delete sites.</value>
+  </data>
+  <data name="Admin.Sites.DeleteForever" xml:space="preserve">
+    <value>Delete site permanently</value>
+  </data>
+  <data name="Admin.Sites.DeleteMismatch" xml:space="preserve">
+    <value>The slug does not match. No data was deleted.</value>
+  </data>
+  <data name="Admin.Sites.DeleteTitle" xml:space="preserve">
+    <value>Permanently delete site: {0}</value>
+  </data>
+  <data name="Admin.Sites.DeleteWarning" xml:space="preserve">
+    <value>This cannot be undone. All content, members, settings, and media files for this site will be deleted.</value>
+  </data>
+  <data name="Admin.Sites.Deleted" xml:space="preserve">
+    <value>The site and its content, settings, and media have been permanently deleted.</value>
+  </data>
   <data name="Admin.Settings.ChoosePortable" xml:space="preserve">
     <value>Choose a Markdown / Medium file (.md, .html, or ZIP)</value>
   </data>

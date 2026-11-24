@@ -139,6 +139,88 @@ public sealed class SiteAdministrationService(
         });
     }
 
+    public async Task DeleteSiteAsync(Guid id, SiteDeleteInput input, CancellationToken ct = default)
+    {
+        var actor = await admin.RequireNetworkAdminAsync(ct);
+        ArgumentNullException.ThrowIfNull(input);
+        if (id == SiteDefaults.DefaultSiteId) throw new CmsException("預設站點不可刪除。");
+        if (id == (await admin.GetCurrentAccessAsync(ct)).SiteId)
+            throw new CmsException("不可刪除目前所在的站點，請先切換到其他站點。");
+        await WriteSafelyAsync(async () =>
+        {
+            await using var mutation = await storageMutations.AcquireAsync(id, ct);
+            await using var template = await factory.CreateDbContextAsync(ct);
+            var options = (DbContextOptions<CmsDbContext>)template.GetService<IDbContextOptions>();
+            await using var db = new CmsDbContext(options, new SiteContext { SiteId = id });
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var site = await LockSiteAsync(db, id, ct);
+            await admin.RequireNetworkAdminAsync(ct);
+            if (id == (await admin.GetCurrentAccessAsync(ct)).SiteId)
+                throw new CmsException("不可刪除目前所在的站點，請先切換到其他站點。");
+            if (site.Version != input.Version) throw VersionConflict();
+            if (!string.Equals(input.ConfirmSlug.Trim(), site.Slug, StringComparison.Ordinal))
+                throw new CmsException("請輸入與站點固定代稱完全相同的文字以確認刪除。");
+            await DeleteSiteDataAsync(db, ct);
+            const string action = "site.deleted";
+            var auditTarget = $"站點 {site.Name}（{site.Slug}）及其內容與媒體已刪除";
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO \"AuditLogs\" (\"Id\", \"SiteId\", \"UserId\", \"UserName\", \"Action\", \"Target\", \"CreatedAt\") VALUES ({Guid.NewGuid()}, {SiteDefaults.DefaultSiteId}, {actor.Id}, {actor.UserName ?? ""}, {action}, {auditTarget}, {timeProvider.GetUtcNow()})", ct);
+            db.Sites.Remove(site);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            await CleanupSiteStorageAsync(id);
+            return true;
+        });
+    }
+
+    private static async Task DeleteSiteDataAsync(CmsDbContext db, CancellationToken ct)
+    {
+        await db.SiteWidgets.ExecuteDeleteAsync(ct);
+        await db.SitePackages.ExecuteDeleteAsync(ct);
+        await db.SiteNavItems.ExecuteDeleteAsync(ct);
+        await db.ApiCredentials.ExecuteDeleteAsync(ct);
+        await db.SiteMemberships.ExecuteDeleteAsync(ct);
+        await db.ContentViews.ExecuteDeleteAsync(ct);
+        await db.EmailLogs.ExecuteDeleteAsync(ct);
+        await db.ContentRevisions.ExecuteDeleteAsync(ct);
+        await db.Comments.ExecuteDeleteAsync(ct);
+        await db.ContentFieldValues.ExecuteDeleteAsync(ct);
+        await db.ContentCustomTerms.ExecuteDeleteAsync(ct);
+        await db.ContentEmbeddings.ExecuteDeleteAsync(ct);
+        await db.EmbeddingJobs.ExecuteDeleteAsync(ct);
+        await db.SlugRedirects.ExecuteDeleteAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"ContentTags\" WHERE \"SiteId\" = {db.CurrentSiteId}", ct);
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"ContentCategories\" WHERE \"SiteId\" = {db.CurrentSiteId}", ct);
+        await db.Contents.ExecuteDeleteAsync(ct);
+        await db.CustomTaxonomyTerms.ExecuteDeleteAsync(ct);
+        await db.CustomTaxonomies.ExecuteDeleteAsync(ct);
+        await db.ContentTypes.ExecuteDeleteAsync(ct);
+        await db.CustomFields.ExecuteDeleteAsync(ct);
+        await db.ContentTemplates.ExecuteDeleteAsync(ct);
+        await db.ContentSnippets.ExecuteDeleteAsync(ct);
+        await db.Categories.ExecuteDeleteAsync(ct);
+        await db.Tags.ExecuteDeleteAsync(ct);
+        await db.Settings.ExecuteDeleteAsync(ct);
+        await db.MediaAssets.ExecuteDeleteAsync(ct);
+        await db.WebhookDeliveries.ExecuteDeleteAsync(ct);
+        await db.AuditLogs.ExecuteDeleteAsync(ct);
+    }
+
+    private async Task CleanupSiteStorageAsync(Guid siteId)
+    {
+        var sitesRoot = Path.GetFullPath(Path.Combine(storage.Root, "sites"));
+        var siteRoot = Path.GetFullPath(Path.Combine(sitesRoot, siteId.ToString("N")));
+        if (!siteRoot.StartsWith(sitesRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return;
+        try
+        {
+            if (Directory.Exists(siteRoot)) await Task.Run(() => Directory.Delete(siteRoot, true));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 資料已刪除且站台路由不再公開；保留失敗路徑供維運重試，不誤報實體刪除失敗。
+        }
+    }
+
     public async Task<PagedResult<UserSummary>> ListUsersAsync(int page = 1, string? search = null, CancellationToken ct = default)
     {
         await admin.RequireNetworkAdminAsync(ct);

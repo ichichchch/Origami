@@ -1,4 +1,4 @@
-namespace Origami.Api;
+﻿namespace Origami.Api;
 
 /// <summary>公開主機名稱解析，以及僅供 BFF 使用的站點、帳號、成員與外部憑證管理。</summary>
 public static class TenancyEndpoints
@@ -80,6 +80,12 @@ public static class TenancyEndpoints
 
         group.MapPut("/sites/{id}", async (Guid id, SiteUpdateInput input, SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.UpdateSiteAsync(id, input, ct)));
+
+        group.MapDelete("/sites/{id}", async (Guid id, [FromBody] SiteDeleteInput input, SiteAdministrationService sites, CancellationToken ct) =>
+        {
+            await sites.DeleteSiteAsync(id, input, ct);
+            return Results.NoContent();
+        });
 
         group.MapGet("/users", async (HttpContext http, SiteAdministrationService sites, CancellationToken ct) =>
         {

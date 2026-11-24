@@ -219,6 +219,184 @@ public sealed class SiteAccessTests(IsolatedPostgres postgres) : ServiceTestBase
             .Where(row => row.UserId == outsider.Id).ToListAsync());
     }
 
+    [PostgresFact]
+    public async Task Site_deletion_requires_network_admin_current_site_exclusion_and_exact_confirmation()
+    {
+        var target = await CreateSiteAsync();
+        using var network = await App.AdministratorAsync();
+        using var current = await App.AdministratorAsync(target.Id);
+        var siteAdmin = await CreateMemberAsync(SiteRole.Administrator, name: "site-admin");
+        using var limited = await App.UserAsync(siteAdmin.Id);
+        var defaults = (await network.Sites.ListSitesAsync()).Single(x => x.Id == SiteDefaults.DefaultSiteId);
+
+        await Assert.ThrowsAsync<CmsException>(() => network.Sites.DeleteSiteAsync(defaults.Id,
+            new SiteDeleteInput { ConfirmSlug = defaults.Slug, Version = defaults.Version }));
+        await Assert.ThrowsAsync<CmsException>(() => current.Sites.DeleteSiteAsync(target.Id,
+            new SiteDeleteInput { ConfirmSlug = target.Slug, Version = target.Version }));
+        await Assert.ThrowsAsync<AccessDeniedException>(() => limited.Sites.DeleteSiteAsync(target.Id,
+            new SiteDeleteInput { ConfirmSlug = target.Slug, Version = target.Version }));
+        await Assert.ThrowsAsync<CmsException>(() => network.Sites.DeleteSiteAsync(target.Id,
+            new SiteDeleteInput { ConfirmSlug = "wrong", Version = target.Version }));
+        var renamed = await network.Sites.UpdateSiteAsync(target.Id, new SiteUpdateInput
+        {
+            Name = target.Name, HostName = target.HostName, IsActive = true, Version = target.Version
+        });
+        await Assert.ThrowsAsync<CmsException>(() => network.Sites.DeleteSiteAsync(target.Id,
+            new SiteDeleteInput { ConfirmSlug = target.Slug, Version = target.Version }));
+        Assert.NotNull(renamed);
+    }
+
+    [PostgresFact]
+    public async Task Deleting_a_site_removes_its_relational_data_media_and_host_without_touching_other_sites()
+    {
+        using var network = await App.AdministratorAsync();
+        var kept = await network.Content.SaveAsync(NewContent("Default stays", status: ContentStatus.Published));
+        Assert.True(await network.Services.GetRequiredService<IEmailSender>()
+            .SendAsync("keep@example.test", "Default mail", "body"));
+        var target = await CreateSiteAsync("deleteme");
+        string siteRoot;
+        using (var actor = await App.AdministratorAsync(target.Id))
+        {
+            var targetContent = await actor.Content.SaveAsync(NewContent("Target goes", status: ContentStatus.Published));
+            var renamed = await actor.Content.GetEditAsync(targetContent.Id!.Value);
+            renamed.Slug = "target-goes-renamed";
+            await actor.Content.UpdateAsync(renamed);
+            await actor.Taxonomy.SaveAsync(TaxonomyKind.Category, new TaxonomyEdit { Name = "Target category", Slug = "target-category" });
+            await actor.Services.GetRequiredService<WidgetService>().SaveAsync(new WidgetService.WidgetInput
+            {
+                Area = WidgetArea.Sidebar, Type = WidgetType.Text, Title = "Target widget", Markdown = "text"
+            });
+            await actor.Writing.SaveTemplateAsync(new WritingAssetsService.TemplateEdit
+            {
+                Name = "Target template", Markdown = "# Template"
+            });
+            await actor.Writing.SaveSnippetAsync(new WritingAssetsService.SnippetEdit
+            {
+                Name = "Target snippet", Markdown = "Snippet"
+            });
+            await actor.Credentials.CreateAsync(new CredentialCreateInput
+            {
+                Name = "Target credential", Scope = ApiCredentialScope.Read,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1)
+            });
+            var settings = await actor.Settings.GetAsync();
+            settings.CommentsEnabled = true;
+            settings.CommentAutoApprove = true;
+            await actor.Settings.SaveAsync(settings);
+            await actor.Services.GetRequiredService<CommentService>().PostAsync(targetContent.Id.Value,
+                new CommentService.CommentPostInput("Target visitor", null, "Target comment", false));
+            var types = actor.Services.GetRequiredService<ContentTypeService>();
+            var type = await types.SaveAsync(new ContentTypeService.TypeEdit { Name = "Target type", Slug = "target-type" });
+            var taxonomy = await types.SaveTaxonomyAsync(new ContentTypeService.TaxonomyEdit
+            {
+                ContentTypeId = type.Id, Name = "Target taxonomy", Slug = "target-taxonomy"
+            });
+            var term = await types.SaveTermAsync(new ContentTypeService.TermEdit
+            {
+                TaxonomyId = taxonomy.Id, Name = "Target term", Slug = "target-term"
+            });
+            var field = await types.SaveFieldAsync(new ContentTypeService.FieldEdit
+            {
+                ContentTypeId = type.Id, Name = "Target field", Key = "target-field", FieldType = CustomFieldTypes.Text
+            });
+            var typed = NewContent("Typed target", status: ContentStatus.Published);
+            typed.ContentTypeId = type.Id;
+            typed.CustomTermIds = [term.Id];
+            typed.FieldValues = [new FieldValueInput(field.Id, "target value")];
+            var typedContent = await actor.Content.SaveAsync(typed);
+            Assert.True(await actor.Services.GetRequiredService<IEmailSender>()
+                .SendAsync("delete@example.test", "Target mail", "body"));
+            using var bitmap = new SKBitmap(32, 24);
+            bitmap.Erase(SKColors.Green);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var encoded = image.Encode(SKEncodedImageFormat.Png, 90)!;
+            await using var stream = new MemoryStream(encoded.ToArray());
+            await actor.Media.UploadAsync(stream, "target.png");
+            siteRoot = Path.Combine(App.Storage.Root, "sites", target.Id.ToString("N"));
+            Assert.True(Directory.Exists(siteRoot));
+
+            await using var db = await App.CreateContextAsync(target.Id);
+            var now = DateTimeOffset.UtcNow;
+            db.ContentViews.Add(new ContentView { ContentId = targetContent.Id.Value, Date = DateOnly.FromDateTime(now.UtcDateTime), Count = 1 });
+            db.ContentRevisions.Add(new ContentRevision { ContentId = targetContent.Id.Value, Title = "Target revision", CreatedAt = now });
+            db.ContentEmbeddings.Add(new ContentEmbedding
+            {
+                ContentId = typedContent.Id!.Value, ChunkIndex = 0, ChunkText = "Target embedding",
+                Embedding = new Vector(FakeEmbeddingGateway.Basis(0))
+            });
+            Assert.NotEmpty(await db.EmbeddingJobs.ToListAsync());
+            db.WebhookDeliveries.Add(new WebhookDeliveryRecord
+            {
+                Event = "content.published", TargetUrl = "https://example.test/hook", PayloadJson = "{}",
+                CreatedAt = now, NextAttemptAt = now
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await network.Sites.DeleteSiteAsync(target.Id, new SiteDeleteInput
+        {
+            ConfirmSlug = target.Slug, Version = target.Version
+        });
+
+        Assert.False(Directory.Exists(siteRoot));
+        Assert.Null(await network.Sites.ResolveHostAsync(target.HostName!));
+        await using var deleted = await App.CreateContextAsync(target.Id);
+        Assert.Empty(await deleted.Contents.ToListAsync());
+        Assert.Empty(await deleted.MediaAssets.ToListAsync());
+        Assert.Empty(await deleted.SiteMemberships.ToListAsync());
+        Assert.Empty(await deleted.SiteWidgets.ToListAsync());
+        Assert.Empty(await deleted.ContentTemplates.ToListAsync());
+        Assert.Empty(await deleted.ContentSnippets.ToListAsync());
+        Assert.Empty(await deleted.EmailLogs.ToListAsync());
+        Assert.Empty(await deleted.ApiCredentials.ToListAsync());
+        Assert.Empty(await deleted.Comments.ToListAsync());
+        Assert.Empty(await deleted.ContentRevisions.ToListAsync());
+        Assert.Empty(await deleted.ContentEmbeddings.ToListAsync());
+        Assert.Empty(await deleted.EmbeddingJobs.ToListAsync());
+        Assert.Empty(await deleted.ContentFieldValues.ToListAsync());
+        Assert.Empty(await deleted.ContentCustomTerms.ToListAsync());
+        Assert.Empty(await deleted.CustomFields.ToListAsync());
+        Assert.Empty(await deleted.ContentTypes.ToListAsync());
+        Assert.Empty(await deleted.CustomTaxonomies.ToListAsync());
+        Assert.Empty(await deleted.CustomTaxonomyTerms.ToListAsync());
+        Assert.Empty(await deleted.WebhookDeliveries.ToListAsync());
+
+        await deleted.Database.OpenConnectionAsync();
+        await using var command = deleted.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "SELECT table_name FROM information_schema.columns " +
+            "WHERE table_schema = 'public' AND column_name = 'SiteId' " +
+            "AND table_name IN (SELECT table_name FROM information_schema.tables " +
+            "WHERE table_schema = 'public' AND table_type = 'BASE TABLE') ORDER BY table_name";
+        var remaining = new List<string>();
+        var siteTables = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var table = reader.GetString(0);
+                Assert.True(table.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'));
+                siteTables.Add(table);
+            }
+        }
+        foreach (var table in siteTables)
+        {
+            command.CommandText = $"SELECT COUNT(*) FROM \"{table}\" WHERE \"SiteId\" = @site";
+            command.Parameters.Clear();
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@site";
+            parameter.Value = target.Id;
+            command.Parameters.Add(parameter);
+            var count = Convert.ToInt32(await command.ExecuteScalarAsync());
+            if (count != 0) remaining.Add($"{table}: {count}");
+        }
+        Assert.Empty(remaining);
+
+        await using var defaults = await App.CreateContextAsync();
+        Assert.Equal(kept.Id, Assert.Single(await defaults.Contents.ToListAsync()).Id);
+        Assert.Equal("Default mail", Assert.Single(await defaults.EmailLogs.ToListAsync()).Subject);
+        Assert.Contains(await defaults.AuditLogs.ToListAsync(), x => x.Action == "site.deleted" && x.Target.Contains(target.Slug));
+    }
+
     [Theory]
     [InlineData("https://second.example.test")]
     [InlineData("second.example.test:443")]
