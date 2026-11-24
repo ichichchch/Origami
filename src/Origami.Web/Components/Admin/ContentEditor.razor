@@ -310,7 +310,7 @@ else if (_model is not null)
                     }
                     @if (_preview)
                     {
-                        <div class="prose editor-preview" aria-label="@UiText.T("Admin.ContentEditor.UnsavedPreview", "尚未儲存的內容預覽")">@((MarkupString)_previewHtml)</div>
+                        <div class="prose editor-preview" @ref="_previewRef" aria-label="@UiText.T("Admin.ContentEditor.UnsavedPreview", "尚未儲存的內容預覽")">@((MarkupString)_previewHtml)</div>
                         <p class="editor-footnote">@UiText.T("Admin.ContentEditor.PreviewHelp", "這是目前輸入的預覽，不代表已儲存或已發布。")</p>
                     }
                     else
@@ -768,6 +768,14 @@ else if (_model is not null)
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_previewEnhance && _preview)
+        {
+            // 預覽是互動渲染，需重新套用頁籤與程式碼高亮（見 wwwroot/prose.js）。
+            _previewEnhance = false;
+            try { await JavaScript.InvokeVoidAsync("origamiProse.enhance", _previewRef); }
+            catch (JSException) { }
+            catch (InvalidOperationException) { }
+        }
         if (!firstRender)
         {
             await WireEditorScriptAsync();
@@ -1309,6 +1317,7 @@ else if (_model is not null)
     {
         _previewHtml = MarkdownRenderer.Render(_model?.Markdown ?? "");
         _preview = true;
+        _previewEnhance = true;
         return Task.CompletedTask;
     });
     private async Task InsertMedia(MediaItem item)

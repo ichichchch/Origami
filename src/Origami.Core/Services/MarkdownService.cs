@@ -1,4 +1,4 @@
-namespace Origami.Core.Services;
+﻿namespace Origami.Core.Services;
 
 public sealed partial class MarkdownService
 {
@@ -20,11 +20,7 @@ public sealed partial class MarkdownService
         var hasToc = TocMarker().IsMatch(markdown);
         if (hasToc)
             markdown = TocMarker().Replace(markdown, "\n\nTOC-ORIGAMI-MARKER\n\n");
-        markdown = DetailsFenceStart().Replace(markdown, match =>
-        {
-            var title = match.Groups[1].Value.Trim();
-            return title.Length > 0 ? $"::: details\n{title}\n\n" : "::: details\n";
-        });
+        markdown = NormalizeLayoutFences(markdown);
         // 白名單影片連結（獨立一行）與站內音訊／影片／文件連結先換成自製佔位段落；渲染後以同樣由本服務
         // 構造的標籤取代。佔位與輸出都不含作者輸入的原始字串，無法偽造任意網域或屬性。
         var embeds = new List<string>();
@@ -62,25 +58,12 @@ public sealed partial class MarkdownService
         // fenced code block 服務端著色：sanitize 之後處理，輸出僅含自產 tok-* span；不支援的語言保留原樣。
         html = FencedCodeBlock().Replace(html, match =>
             CodeHighlighter.Highlight(match.Groups[1].Value, WebUtility.HtmlDecode(match.Groups[2].Value)) ?? match.Value);
+        // 摺疊塊、卡片、頁籤、圖庫與圖說都在消毒後的 HTML 上重組，見 MarkdownService.Layout.cs。
+        html = TransformDetails(html);
+        html = TransformLayout(html);
         // 內容圖片燈箱：包一層指向 :target overlay 的錨點，純 CSS 開合；overlay 附在文末。
+        // 燈箱必須排在版面重組之後：圖說與圖庫以原始 <img> 標籤辨識圖片，先包錨點會使重組失效。
         html = WrapContentImagesWithLightbox(html);
-        // ::: details 標題 -> 轉換為原生可摺疊 <details><summary> 面板
-        html = DetailsContainer().Replace(html, match =>
-        {
-            var inner = match.Groups[1].Value.Trim();
-            var summary = "詳細內容";
-            var firstP = FirstParagraph().Match(inner);
-            if (firstP.Success)
-            {
-                var text = StripHtmlTags().Replace(firstP.Groups[1].Value, "").Trim();
-                if (text.Length > 0 && text.Length <= 120)
-                {
-                    summary = WebUtility.HtmlEncode(text);
-                    inner = inner[firstP.Length..].Trim();
-                }
-            }
-            return $"<details class=\"details-block\"><summary>{summary}</summary>{inner}</details>";
-        });
         if (hasToc)
         {
             var tocHtml = BuildTocHtml(html);
@@ -192,9 +175,6 @@ public sealed partial class MarkdownService
     [GeneratedRegex(@"(?im)^[\t ]*\[([^\]]*)\]\(/media/([a-f0-9]{32}\.(?:mp3|m4a|ogg|wav|mp4|webm|pdf))\)[\t ]*(?:\r?\n|$)", RegexOptions.CultureInvariant)]
     private static partial Regex MediaLinkLine();
 
-    [GeneratedRegex(@"<div class=""details"">(.*?)</div>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex DetailsContainer();
-
     [GeneratedRegex(@"^\s*<p>(.*?)</p>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex FirstParagraph();
 
@@ -211,7 +191,7 @@ public sealed partial class MarkdownService
             if (inner.Length == 0 || id.Length == 0) continue;
             sb.Append("<li class=\"toc-h").Append(level).Append("\"><a href=\"#")
               .Append(WebUtility.HtmlEncode(id)).Append("\">")
-              .Append(WebUtility.HtmlEncode(inner)).Append("</a></li>");
+              .Append(inner).Append("</a></li>");
         }
         sb.Append("</ul></nav>");
         return sb.ToString();
@@ -219,9 +199,6 @@ public sealed partial class MarkdownService
 
     [GeneratedRegex(@"(?im)^[\t ]*\[toc\][\t ]*(?:\r?\n|$)", RegexOptions.CultureInvariant)]
     private static partial Regex TocMarker();
-
-    [GeneratedRegex(@"(?im)^[\t ]*:::[\t ]*details(?:[\t ]+([^\r\n]+))?[\t ]*\r?\n", RegexOptions.CultureInvariant)]
-    private static partial Regex DetailsFenceStart();
 
     [GeneratedRegex(@"<h([2-4])\s+[^>]*?id=""([^""]+)""[^>]*>(.*?)</h\1>", RegexOptions.Singleline | RegexOptions.CultureInvariant)]
     private static partial Regex HeadingTag();
@@ -286,7 +263,7 @@ public sealed partial class MarkdownService
     private static partial Regex NextPageSeparator();
 
     /// <summary>獨立一行的白名單影片網址；行內提及或非白名單網域都不轉換。</summary>
-    [GeneratedRegex(@"(?im)^[\t ]*(https?://(?:www\.youtube\.com/watch\?v=|m\.youtube\.com/watch\?v=|youtu\.be/|vimeo\.com/|player\.vimeo\.com/video/)[^\s]+)[\t ]*$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?im)^[\t ]*(https?://(?:www\.youtube\.com/watch\?v=|m\.youtube\.com/watch\?v=|youtu\.be/|vimeo\.com/|player\.vimeo\.com/video/|(?:www\.|m\.)?bilibili\.com/video/)[^\s]+)[\t ]*$", RegexOptions.CultureInvariant)]
     private static partial Regex VideoLinkLine();
 
     [GeneratedRegex(@"^[A-Za-z0-9_-]{5,20}$", RegexOptions.CultureInvariant)]
@@ -298,7 +275,9 @@ public sealed partial class MarkdownService
     /// </summary>
     private static string? VideoEmbed(string url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Query.Length > 100 || uri.Fragment.Length > 0)
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+        if (uri.Host is "bilibili.com" or "www.bilibili.com" or "m.bilibili.com") return BilibiliEmbed(uri);
+        if (uri.Query.Length > 100 || uri.Fragment.Length > 0)
             return null;
         var query = ParseQuery(uri.Query);
         string html;
@@ -325,6 +304,24 @@ public sealed partial class MarkdownService
         }
         return html;
     }
+
+    /// <summary>
+    /// Bilibili 嵌入只取路徑上的 BV 號與分 P 編號；分享連結常帶的追蹤參數一律丟棄，不進嵌入網址。
+    /// </summary>
+    private static string? BilibiliEmbed(Uri uri)
+    {
+        var match = BilibiliPath().Match(uri.AbsolutePath);
+        if (!match.Success || uri.Fragment.Length > 0 || uri.Query.Length > 300) return null;
+        var page = 1;
+        var part = ParseQuery(uri.Query).GetValueOrDefault("p");
+        if (!string.IsNullOrEmpty(part) &&
+            (part.Length > 4 || !part.All(char.IsAsciiDigit) || !int.TryParse(part, out page) || page < 1))
+            return null;
+        return $"<iframe class=\"video-embed\" src=\"https://player.bilibili.com/player.html?bvid={match.Groups[1].Value}&page={page}&autoplay=0&danmaku=0\" title=\"嵌入的 Bilibili 影片\" loading=\"lazy\" allow=\"fullscreen; autoplay; clipboard-write\" allowfullscreen scrolling=\"no\"></iframe>";
+    }
+
+    [GeneratedRegex(@"^/video/(BV[0-9A-Za-z]{10})/?$", RegexOptions.CultureInvariant)]
+    private static partial Regex BilibiliPath();
 
     private static Dictionary<string, string> ParseQuery(string query)
     {
