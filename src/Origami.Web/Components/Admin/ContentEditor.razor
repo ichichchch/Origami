@@ -1372,6 +1372,7 @@ else if (_model is not null)
                 italic = UiText.T("Admin.ContentEditor.ItalicPlaceholder", "斜體文字"),
                 link = UiText.T("Admin.ContentEditor.LinkPlaceholder", "連結文字")
             });
+            await _editorUploadModule.InvokeVoidAsync("wireEditorPaste", "content-markdown", _editorRef);
             await _editorUploadModule.InvokeVoidAsync("wireFindPanel", "editor-find");
         }
         catch (JSException) { }
@@ -1544,6 +1545,15 @@ else if (_model is not null)
         _findOpen = true;
         await FindNextAsync();
     });
+
+    /// <summary>貼上的 HTML 只做純計算轉換；超過上限或沒有內容時回 null，腳本端退回純文字貼上。</summary>
+    [JSInvokable]
+    public Task<string?> ConvertPastedHtmlAsync(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html) || html.Length > Limits.PastedHtml) return Task.FromResult<string?>(null);
+        var markdown = HtmlToMarkdown.Convert(html);
+        return Task.FromResult(markdown.Length == 0 ? null : markdown);
+    }
 
     private async Task SetFocusModeAsync(bool on)
     {

@@ -1,3 +1,5 @@
+global using AngleSharp.Dom;
+global using AngleSharp.Html.Parser;
 global using System.ComponentModel;
 global using System.ComponentModel.DataAnnotations;
 global using System.Data.Common;

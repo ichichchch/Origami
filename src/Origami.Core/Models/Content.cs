@@ -12,6 +12,8 @@ public static partial class Limits
     public const int Title = 200;
     public const int Slug = 160;
     public const int Body = 200_000;
+    /// <summary>編輯器貼上時接受轉換的 HTML 長度上限；超過者退回純文字貼上。</summary>
+    public const int PastedHtml = 500_000;
     public const int Excerpt = 500;
     public const int AltText = 300;
     public const int Caption = 300;

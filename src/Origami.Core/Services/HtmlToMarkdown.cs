@@ -12,8 +12,8 @@ public static class HtmlToMarkdown
     {
         if (string.IsNullOrWhiteSpace(html)) return "";
         var text = html.Trim();
-        // WordPress 匯出多為 XHTML；以容錯方式解析，遇到非 XML 內容則退回純文字。
-        var root = ParseFragment(text) ?? new XElement("div", text);
+        // WordPress 匯出多為 XHTML；以容錯方式解析，遇到非 XML 內容則改用 HTML 解析器。
+        var root = ParseFragment(text) ?? ParseHtml(text) ?? new XElement("div", text);
         var builder = new System.Text.StringBuilder();
         Write(root, builder, 0);
         var result = builder.ToString();
@@ -34,6 +34,33 @@ public static class HtmlToMarkdown
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// 剪貼簿與網頁來源的 HTML 多半不是合法 XML（未閉合的 br／img、&amp;nbsp; 等）；
+    /// 以容錯的 HTML 解析器讀成 DOM，再轉成 XML 樹沿用同一套轉換規則。
+    /// 轉換只用到 href／src／alt 三個屬性，因此只複製這三個，不受非法屬性名稱影響。
+    /// </summary>
+    private static XElement? ParseHtml(string html)
+    {
+        var body = new HtmlParser().ParseDocument(html).Body;
+        return body is null ? null : ToXml(body);
+    }
+
+    private static XElement ToXml(IElement element)
+    {
+        var result = new XElement(element.LocalName.ToLowerInvariant());
+        foreach (var name in new[] { "href", "src", "alt" })
+        {
+            var value = element.GetAttribute(name);
+            if (value is not null) result.SetAttributeValue(name, value);
+        }
+        foreach (var child in element.ChildNodes)
+        {
+            if (child is IText text) result.Add(new XText(text.Data));
+            else if (child is IElement childElement) result.Add(ToXml(childElement));
+        }
+        return result;
     }
 
     private static void Write(XElement node, System.Text.StringBuilder builder, int depth)

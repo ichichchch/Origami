@@ -429,6 +429,7 @@
       "origami.core": {
         "type": "Project",
         "dependencies": {
+          "AngleSharp": "[1.7.2, )",
           "HtmlSanitizer": "[9.2.1039, )",
           "Markdig": "[1.4.2, )",
           "Microsoft.Agents.AI": "[1.25.0, )",
