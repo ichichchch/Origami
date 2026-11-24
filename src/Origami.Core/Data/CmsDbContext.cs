@@ -102,16 +102,22 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             ConfigureSiteEntity(e, nameof(SiteNavItem.Site));
             e.Property(x => x.Title).HasMaxLength(Limits.NavTitle).IsRequired();
             e.Property(x => x.Url).HasMaxLength(Limits.NavUrl).IsRequired();
+            e.Property(x => x.AuthorSlug).HasMaxLength(Limits.Slug).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             // 站內頁面項目：目標必須是本站的已發布頁面；頁面被永久刪除時連帶移除該導覽項目。
             e.HasOne(x => x.Content).WithMany().HasForeignKey(x => new { x.SiteId, x.ContentId })
                 .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+            // 上層導覽項目：不隨上層刪除（刪除時由服務把子項目上移），也不串聯。
+            e.HasOne(x => x.Parent).WithMany().HasForeignKey(x => new { x.SiteId, x.ParentId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Restrict).IsRequired(false);
             e.HasIndex(x => new { x.SiteId, x.Position, x.Id });
             e.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_SiteNavItem_Title", "length(btrim(\"Title\")) > 0");
+                // 目標恰有 one：站內頁面、外部連結、分類、標籤、歸檔或作者；頁面項目不帶外部網址。
                 t.HasCheckConstraint("CK_SiteNavItem_Target",
-                    "(\"ContentId\" IS NOT NULL AND \"Url\" = '') OR (\"ContentId\" IS NULL AND \"Url\" <> '')");
+                    "(\"ContentId\" IS NULL OR \"Url\" = '') AND ((\"ContentId\" IS NOT NULL)::int + (\"CategoryId\" IS NOT NULL)::int + (\"TagId\" IS NOT NULL)::int + \"ToArchives\"::int + (length(btrim(\"AuthorSlug\")) > 0)::int + (length(\"Url\") > 0)::int) = 1");
+                t.HasCheckConstraint("CK_SiteNavItem_Location", "\"Location\" IN (0, 1)");
             });
         });
         builder.Entity<SiteWidget>(e =>
@@ -128,7 +134,7 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_SiteWidget_Area", "\"Area\" IN (0, 1)");
-                t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6, 7, 8)");
+                t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)");
             });
         });
         builder.Entity<SitePackage>(e =>

@@ -43,10 +43,23 @@ public sealed class SiteNavItem
     public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
     /// <summary>導覽顯示文字。</summary>
     [Required, StringLength(Limits.NavTitle)] public string Title { get; set; } = "";
-    /// <summary>指向的站內頁面；外部連結時為 null。</summary>
+    /// <summary>指向的站內頁面；其他目標類型時為 null。</summary>
     public Guid? ContentId { get; set; }
     public Content? Content { get; set; }
-    /// <summary>外部連結的絕對網址（僅 http／https）；站內頁面項目為空字串。</summary>
+    /// <summary>上層導覽項目；最上層為 null。導覽最多兩層，子項目不可再有子項目。</summary>
+    public Guid? ParentId { get; set; }
+    public SiteNavItem? Parent { get; set; }
+    /// <summary>顯示位置：0 = 頁首、1 = 頁尾。</summary>
+    public int Location { get; set; }
+    /// <summary>指向的分類（目標類型為分類時）。</summary>
+    public Guid? CategoryId { get; set; }
+    /// <summary>指向的標籤（目標類型為標籤時）。</summary>
+    public Guid? TagId { get; set; }
+    /// <summary>是否指向月度歸檔頁。</summary>
+    public bool ToArchives { get; set; }
+    /// <summary>指向作者彙整頁時的作者代稱。</summary>
+    public string AuthorSlug { get; set; } = "";
+    /// <summary>外部連結的絕對網址（僅 http／https）；其他目標類型為空字串。</summary>
     [StringLength(Limits.NavUrl)] public string Url { get; set; } = "";
     /// <summary>顯示順序；數字越小越靠前。</summary>
     public int Position { get; set; }

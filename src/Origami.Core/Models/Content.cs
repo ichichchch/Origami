@@ -30,6 +30,9 @@ public static partial class Limits
     public const int TemplateBody = 50_000;
     /// <summary>可重複片段 Markdown 的長度上限。</summary>
     public const int SnippetBody = 20_000;
+    public const int NotFoundTitle = 200;
+    public const int NotFoundBody = 1000;
+    public const int UiLanguage = 16;
     /// <summary>自訂內容類型的路由代稱上限。</summary>
     public const int ContentTypeSlug = 80;
     /// <summary>自訂分類法的名稱上限。</summary>
@@ -404,6 +407,14 @@ public sealed class SiteSettings
     [StringLength(Limits.ThemeColorScheme)] public string ColorScheme { get; set; } = ThemePresets.ColorSchemeAuto;
     /// <summary>自訂頁尾版權或補充說明文字；空字串時顯示預設版權。</summary>
     [StringLength(Limits.FooterText)] public string FooterText { get; set; } = "";
+    /// <summary>找不到頁面（404）的標題；空字串時使用預設文字。</summary>
+    [StringLength(Limits.NotFoundTitle)] public string NotFoundTitle { get; set; } = "";
+    /// <summary>找不到頁面（404）的說明文字；空字串時使用預設文字。</summary>
+    [StringLength(Limits.NotFoundBody)] public string NotFoundBody { get; set; } = "";
+    /// <summary>站點預設介面語言（未登入訪客與未設定偏好的成員）；空字串時使用產品預設。</summary>
+    [StringLength(Limits.UiLanguage)] public string DefaultUiLanguage { get; set; } = "";
+    /// <summary>訪客評論巢狀顯示的最大深度（1–10）；回覆超過深度者附在最深一層之下。</summary>
+    public int CommentMaxDepth { get; set; } = 3;
     /// <summary>頁尾 GitHub 連結（僅 http／https）。</summary>
     [StringLength(Limits.SocialUrl)] public string SocialGithubUrl { get; set; } = "";
     /// <summary>頁尾 X / Twitter 連結（僅 http／https）。</summary>

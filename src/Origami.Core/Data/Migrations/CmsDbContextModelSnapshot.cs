@@ -871,6 +871,10 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("boolean")
                         .HasComment("是否官方回复。");
 
+                    b.Property<bool>("IsEdited")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：IsEdited。");
+
                     b.Property<string>("Markdown")
                         .IsRequired()
                         .HasMaxLength(4000)
@@ -1771,6 +1775,16 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("uuid")
                         .HasComment("主键 ID。");
 
+                    b.Property<string>("AuthorSlug")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasComment("业务字段：AuthorSlug。");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：CategoryId。");
+
                     b.Property<Guid?>("ContentId")
                         .HasColumnType("uuid")
                         .HasComment("内容 ID。");
@@ -1778,6 +1792,14 @@ namespace Origami.Core.Data.Migrations
                     b.Property<bool>("IsVisible")
                         .HasColumnType("boolean")
                         .HasComment("业务字段：IsVisible。");
+
+                    b.Property<int>("Location")
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：Location。");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasComment("父级对象 ID。");
 
                     b.Property<int>("Position")
                         .HasColumnType("integer")
@@ -1788,11 +1810,19 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("uuid")
                         .HasComment("所属站点 ID（租户隔离键）。");
 
+                    b.Property<Guid?>("TagId")
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：TagId。");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)")
                         .HasComment("标题。");
+
+                    b.Property<bool>("ToArchives")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：ToArchives。");
 
                     b.Property<string>("Url")
                         .IsRequired()
@@ -1809,13 +1839,17 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasIndex("SiteId", "ContentId");
 
+                    b.HasIndex("SiteId", "ParentId");
+
                     b.HasIndex("SiteId", "Position", "Id");
 
                     b.ToTable("SiteNavItems", t =>
                         {
                             t.HasComment("站点导航表：前台自定义导航项。");
 
-                            t.HasCheckConstraint("CK_SiteNavItem_Target", "(\"ContentId\" IS NOT NULL AND \"Url\" = '') OR (\"ContentId\" IS NULL AND \"Url\" <> '')");
+                            t.HasCheckConstraint("CK_SiteNavItem_Location", "\"Location\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_SiteNavItem_Target", "(\"ContentId\" IS NULL OR \"Url\" = '') AND ((\"ContentId\" IS NOT NULL)::int + (\"CategoryId\" IS NOT NULL)::int + (\"TagId\" IS NOT NULL)::int + \"ToArchives\"::int + (length(btrim(\"AuthorSlug\")) > 0)::int + (length(\"Url\") > 0)::int) = 1");
 
                             t.HasCheckConstraint("CK_SiteNavItem_Title", "length(btrim(\"Title\")) > 0");
                         });
@@ -1938,6 +1972,10 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("integer")
                         .HasComment("发布后自动关闭评论天数。");
 
+                    b.Property<int>("CommentMaxDepth")
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：CommentMaxDepth。");
+
                     b.Property<bool>("CommentsEnabled")
                         .HasColumnType("boolean")
                         .HasComment("是否启用评论系统。");
@@ -1957,6 +1995,12 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasComment("日期显示格式。");
+
+                    b.Property<string>("DefaultUiLanguage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasComment("业务字段：DefaultUiLanguage。");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -2015,6 +2059,18 @@ namespace Origami.Core.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasComment("名称。");
+
+                    b.Property<string>("NotFoundBody")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasComment("业务字段：NotFoundBody。");
+
+                    b.Property<string>("NotFoundTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasComment("业务字段：NotFoundTitle。");
 
                     b.Property<string>("PermalinkScheme")
                         .IsRequired()
@@ -2140,10 +2196,12 @@ namespace Origami.Core.Data.Migrations
                             CommentAutoApprove = false,
                             CommentBlockedWords = "",
                             CommentCloseDays = 0,
+                            CommentMaxDepth = 3,
                             CommentsEnabled = false,
                             CustomCss = "",
                             CustomNavigationEnabled = false,
                             DateFormat = "yyyy.MM.dd",
+                            DefaultUiLanguage = "",
                             Description = "用文字，分享你的世界。",
                             EmailNotificationsEnabled = false,
                             FooterText = "",
@@ -2152,6 +2210,8 @@ namespace Origami.Core.Data.Migrations
                             MaintenanceMessage = "",
                             MaintenanceMode = false,
                             Name = "Origami",
+                            NotFoundBody = "",
+                            NotFoundTitle = "",
                             PermalinkScheme = "post-name",
                             ReadingWidth = 68,
                             SearchEngineBlocked = false,
@@ -2231,7 +2291,7 @@ namespace Origami.Core.Data.Migrations
 
                             t.HasCheckConstraint("CK_SiteWidget_Area", "\"Area\" IN (0, 1)");
 
-                            t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6, 7, 8)");
+                            t.HasCheckConstraint("CK_SiteWidget_Type", "\"Type\" IN (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)");
                         });
                 });
 
@@ -2861,7 +2921,15 @@ namespace Origami.Core.Data.Migrations
                         .HasPrincipalKey("SiteId", "Id")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.HasOne("Origami.Core.Models.SiteNavItem", "Parent")
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ParentId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Content");
+
+                    b.Navigation("Parent");
 
                     b.Navigation("Site");
                 });

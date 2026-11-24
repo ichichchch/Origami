@@ -135,6 +135,27 @@ public sealed class DatabaseIntegrationTests(IsolatedPostgres postgres) : Servic
     }
 
     [PostgresFact]
+    public async Task Adding_comment_depth_backfills_existing_settings_with_the_model_default()
+    {
+        var connection = await Postgres.CreateEmptyDatabaseAsync();
+        try
+        {
+            var options = new DbContextOptionsBuilder<CmsDbContext>()
+                .UseNpgsql(connection, o => o.UseVector()).Options;
+            const string previous = "20261123022548_AddBuiltinFieldsAndWritingAssets";
+            await using (var db = new CmsDbContext(options))
+                await db.Database.MigrateAsync(previous);
+            await using (var db = new CmsDbContext(options))
+                await db.Database.MigrateAsync();
+
+            await using var check = new CmsDbContext(options);
+            var settings = await check.Settings.AsNoTracking().IgnoreQueryFilters().SingleAsync();
+            Assert.Equal(3, settings.CommentMaxDepth);
+        }
+        finally { await Postgres.DropDatabaseAsync(connection); }
+    }
+
+    [PostgresFact]
     public async Task An_incorrect_random_password_cannot_connect_to_the_owned_cluster()
     {
         var invalid = new NpgsqlConnectionStringBuilder(App.ConnectionString) { Password = IsolatedPostgres.NewPassword() };

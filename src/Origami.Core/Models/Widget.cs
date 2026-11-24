@@ -1,7 +1,11 @@
 namespace Origami.Core.Models;
 
 public enum WidgetArea { Sidebar = 0, Footer = 1 }
-public enum WidgetType { RecentPosts = 0, Categories = 1, Tags = 2, Search = 3, Text = 4, RecentComments = 5, RssFeed = 6, TagCloud = 7, Calendar = 8 }
+public enum WidgetType
+{
+    RecentPosts = 0, Categories = 1, Tags = 2, Search = 3, Text = 4, RecentComments = 5, RssFeed = 6, TagCloud = 7, Calendar = 8,
+    PageList = 9, MonthlyArchives = 10, Image = 11, NavigationMenu = 12, SocialLinks = 13, AudioVideo = 14
+}
 
 /// <summary>
 /// 受控小工具：以宣告方式組成側欄與頁尾的內容區塊，只有內建型別、不載入任何程式碼。
@@ -31,7 +35,9 @@ public static class WidgetTypes
 {
     public static readonly IReadOnlyList<WidgetType> All =
         [WidgetType.RecentPosts, WidgetType.Categories, WidgetType.Tags, WidgetType.Search, WidgetType.Text,
-            WidgetType.RecentComments, WidgetType.RssFeed, WidgetType.TagCloud, WidgetType.Calendar];
+            WidgetType.RecentComments, WidgetType.RssFeed, WidgetType.TagCloud, WidgetType.Calendar,
+            WidgetType.PageList, WidgetType.MonthlyArchives, WidgetType.Image, WidgetType.NavigationMenu,
+            WidgetType.SocialLinks, WidgetType.AudioVideo];
 
     public static bool IsValid(WidgetType type) => All.Contains(type);
 
