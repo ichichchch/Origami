@@ -63,9 +63,10 @@
         </section>
     }
     <div class="section-tabs content-filters" role="group" aria-label="@UiText.T("Admin.ContentList.StatusFilter", "內容狀態篩選")">
-        <button type="button" class="tab-button @(_status is null ? "active" : "")" aria-pressed="@((_status is null).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(null)">@UiText.T("Admin.ContentList.All", "全部") <span class="count">@_counts.Total</span></button>
+        <button type="button" class="tab-button @(_status is null && !_scheduled ? "active" : "")" aria-pressed="@((_status is null && !_scheduled).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(null)">@UiText.T("Admin.ContentList.All", "全部") <span class="count">@_counts.Total</span></button>
         <button type="button" class="tab-button @(_status == ContentStatus.Draft ? "active" : "")" aria-pressed="@((_status == ContentStatus.Draft).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Draft)">@UiText.T("Admin.ContentList.Draft", "草稿") <span class="count">@_counts.Drafts</span></button>
         <button type="button" class="tab-button @(_status == ContentStatus.Published ? "active" : "")" aria-pressed="@((_status == ContentStatus.Published).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Published)">@UiText.T("Admin.ContentList.Published", "已發布") <span class="count">@_counts.Published</span></button>
+        <button type="button" class="tab-button @(_scheduled ? "active" : "")" aria-pressed="@(_scheduled.ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="ShowScheduled">@UiText.T("Admin.ContentList.Scheduled", "排程")</button>
         @if (_counts.Pending > 0)
         {
             <button type="button" class="tab-button @(_status == ContentStatus.Pending ? "active" : "")" aria-pressed="@((_status == ContentStatus.Pending).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => ChangeStatus(ContentStatus.Pending)">@UiText.T("Admin.ContentList.Pending", "待審") <span class="count">@_counts.Pending</span></button>
@@ -109,13 +110,39 @@
         <input id="filter-date-from" type="date" value="@(_filterDateFrom?.ToString("yyyy-MM-dd") ?? "")" @onchange="DateFromChanged" disabled="@Blocked" title="起始日期" />
         <label class="sr-only" for="filter-date-to">結束日期</label>
         <input id="filter-date-to" type="date" value="@(_filterDateTo?.ToString("yyyy-MM-dd") ?? "")" @onchange="DateToChanged" disabled="@Blocked" title="結束日期" />
+        @if (Kind == ContentKind.Post && _types.Count > 0)
+        {
+            <label class="sr-only" for="filter-type">@UiText.T("Admin.ContentList.TypeFilter", "內容類型篩選")</label>
+            <select id="filter-type" value="@_typeFilter" @onchange="TypeFilterChanged" disabled="@Blocked">
+                <option value="">@UiText.T("Admin.ContentList.AllTypes", "全部內容類型")</option>
+                <option value="builtin">@UiText.T("Admin.ContentList.BuiltinPost", "一般文章")</option>
+                @foreach (var type in _types)
+                {
+                    <option value="@type.Id">@type.Name</option>
+                }
+            </select>
+        }
+        <label class="sr-only" for="filter-sort">@UiText.T("Admin.ContentList.Sort", "排序")</label>
+        <select id="filter-sort" value="@_sort" @onchange="SortChanged" disabled="@Blocked">
+            <option value="">@UiText.T("Admin.ContentList.SortUpdated", "依最後更新")</option>
+            <option value="title">@UiText.T("Admin.ContentList.SortTitle", "依標題")</option>
+            <option value="published">@UiText.T("Admin.ContentList.SortPublished", "依發布時間")</option>
+            <option value="views">@UiText.T("Admin.ContentList.SortViews", "依瀏覽數")</option>
+        </select>
+        <label class="sr-only" for="filter-page-size">@UiText.T("Admin.ContentList.PageSize", "每頁筆數")</label>
+        <select id="filter-page-size" value="@_pageSize" @onchange="PageSizeChanged" disabled="@Blocked">
+            @foreach (var size in PageSizes)
+            {
+                <option value="@size">@size</option>
+            }
+        </select>
         @if (HasActiveFilters)
         {
             <button type="button" class="text-button" disabled="@Blocked" @onclick="ClearSearch">@UiText.T("Admin.ContentList.Clear", "清除")</button>
         }
     </div>
     <section class="panel" aria-busy="@Busy.ToString().ToLowerInvariant()">
-        <div class="panel-toolbar"><h2>@FilterLabel <span class="count">@_result.Total</span></h2><span class="muted">@UiText.T("Admin.ContentList.SortOrder", "依最後更新排序 · UTC")</span></div>
+        <div class="panel-toolbar"><h2>@FilterLabel <span class="count">@_result.Total</span></h2><span class="muted">@SortLabel</span></div>
         @if (_selected.Count > 0)
         {
             <div class="bulk-bar" role="group" aria-label="@UiText.T("Admin.ContentList.BulkActions", "批次操作")">
@@ -150,6 +177,7 @@
                                 }
                             </select>
                             <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkCategoryId is null)" @onclick="() => BulkAsync(BulkAction.AddCategory, new BulkEditOptions(CategoryId: _bulkCategoryId))">批次加分類</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkCategoryId is null)" @onclick="() => BulkAsync(BulkAction.RemoveCategory, new BulkEditOptions(CategoryId: _bulkCategoryId))">@UiText.T("Admin.ContentList.BulkRemoveCategory", "批次移除分類")</button>
                         }
                         @if (Kind == ContentKind.Post && _tags.Count > 0)
                         {
@@ -161,9 +189,22 @@
                                 }
                             </select>
                             <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkTagId is null)" @onclick="() => BulkAsync(BulkAction.AddTag, new BulkEditOptions(TagId: _bulkTagId))">批次加標籤</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkTagId is null)" @onclick="() => BulkAsync(BulkAction.RemoveTag, new BulkEditOptions(TagId: _bulkTagId))">@UiText.T("Admin.ContentList.BulkRemoveTag", "批次移除標籤")</button>
                         }
                         <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.EnableComments)">開放評論</button>
                         <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.DisableComments)">關閉評論</button>
+                        <select aria-label="@UiText.T("Admin.ContentList.BulkStatus", "批次變更狀態")" value="@_bulkStatus" @onchange="e => _bulkStatus = e.Value?.ToString() ?? string.Empty" disabled="@EditBlocked">
+                            <option value="">@UiText.T("Admin.ContentList.BulkStatusPlaceholder", "變更狀態…")</option>
+                            <option value="Published">@UiText.T("Admin.ContentList.BulkPublish", "發布")</option>
+                            <option value="Draft">@UiText.T("Admin.ContentList.BulkWithdraw", "撤回為草稿")</option>
+                            <option value="Pending">@UiText.T("Admin.ContentList.BulkSubmitReview", "提交待審")</option>
+                        </select>
+                        <button type="button" class="button button-secondary button-small" disabled="@(EditBlocked || _bulkStatus.Length == 0)" @onclick="BulkChangeStatus">@UiText.T("Admin.ContentList.BulkApplyStatus", "批次套用狀態")</button>
+                        @if (Kind == ContentKind.Post)
+                        {
+                            <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Sticky)">@UiText.T("Admin.ContentList.BulkSticky", "批次置頂")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(BulkAction.Unsticky)">@UiText.T("Admin.ContentList.BulkUnsticky", "批次取消置頂")</button>
+                        }
                     }
                     <button type="button" class="text-button" disabled="@EditBlocked" @onclick="ClearSelection">@UiText.T("Admin.ContentList.ClearSelection", "取消選取")</button>
                 </div>
@@ -231,8 +272,23 @@
     private string _bulkAuthorId = "";
     private Guid? _bulkCategoryId;
     private Guid? _bulkTagId;
+    private string _bulkStatus = "";
+    // 排序、每頁筆數、內容類型篩選與排程頁籤；排程以「草稿＋未來發布時間」表示，不是獨立狀態。
+    private static readonly int[] PageSizes = [Limits.PageSize, 20, Limits.MaxPageSize];
+    private int _pageSize = Limits.PageSize;
+    private string _sort = "";
+    private string _typeFilter = "";
+    private bool _scheduled;
+    private List<ContentTypeService.TypeView> _types = [];
     private bool HasActiveFilters => _search.Length > 0 || _filterAuthorId.Length > 0 || _filterCategoryId is not null
-        || _filterTagId is not null || _filterDateFrom is not null || _filterDateTo is not null;
+        || _filterTagId is not null || _filterDateFrom is not null || _filterDateTo is not null || _typeFilter.Length > 0;
+    private string SortLabel => _sort switch
+    {
+        "title" => UiText.T("Admin.ContentList.SortTitle", "依標題"),
+        "published" => UiText.T("Admin.ContentList.SortPublished", "依發布時間"),
+        "views" => UiText.T("Admin.ContentList.SortViews", "依瀏覽數"),
+        _ => UiText.T("Admin.ContentList.SortUpdated", "依最後更新")
+    };
     private ContentCounts? _counts;
     private string FilterLabel => string.Format(CultureInfo.CurrentCulture, _status switch
     {
@@ -240,6 +296,7 @@
         ContentStatus.Published => UiText.T("Admin.ContentList.PublishedItems", "已發布{0}"),
         ContentStatus.Pending => UiText.T("Admin.ContentList.PendingItems", "待審{0}"),
         ContentStatus.Trashed => UiText.T("Admin.ContentList.TrashedItems", "回收桶{0}"),
+        _ when _scheduled => UiText.T("Admin.ContentList.ScheduledItems", "排程{0}"),
         _ => UiText.T("Admin.ContentList.AllItems", "全部{0}")
     }, Label);
     private PagedResult<ContentSummary>? _result;
@@ -259,6 +316,10 @@
         Kind = Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/pages", StringComparison.OrdinalIgnoreCase) ? ContentKind.Page : ContentKind.Post;
         _page = 1;
         _status = null;
+        _scheduled = false;
+        _sort = "";
+        _typeFilter = "";
+        _pageSize = Limits.PageSize;
         _filterAuthorId = "";
         _filterCategoryId = null;
         _filterTagId = null;
@@ -277,16 +338,19 @@
     {
         var search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
         var authorId = string.IsNullOrWhiteSpace(_filterAuthorId) ? null : _filterAuthorId.Trim();
-        var result = await Api.ListAdminAsync(Kind, _page, status: _status, search: search, ct: ct,
-            authorId: authorId, categoryId: _filterCategoryId, tagId: _filterTagId, dateFrom: _filterDateFrom, dateTo: _filterDateTo)
+        var result = await Api.ListAdminAsync(Kind, _page, _pageSize, status: _status, search: search, ct: ct,
+            authorId: authorId, categoryId: _filterCategoryId, tagId: _filterTagId, dateFrom: _filterDateFrom, dateTo: _filterDateTo,
+            sort: _sort, typeFilter: _typeFilter, scheduledOnly: _scheduled)
             ?? throw new CmsException(UiText.T("Admin.ContentList.LoadFailed", "無法載入內容列表。"));
         if (_page > result.TotalPages)
-            result = await Api.ListAdminAsync(Kind, result.TotalPages, status: _status, search: search, ct: ct,
-                authorId: authorId, categoryId: _filterCategoryId, tagId: _filterTagId, dateFrom: _filterDateFrom, dateTo: _filterDateTo) ?? result;
+            result = await Api.ListAdminAsync(Kind, result.TotalPages, _pageSize, status: _status, search: search, ct: ct,
+                authorId: authorId, categoryId: _filterCategoryId, tagId: _filterTagId, dateFrom: _filterDateFrom, dateTo: _filterDateTo,
+                sort: _sort, typeFilter: _typeFilter, scheduledOnly: _scheduled) ?? result;
         var counts = await Api.CountAdminAsync(Kind, ct) ?? new ContentCounts(0, 0);
         _authors = await Api.AuthorOptionsAsync(ct) ?? [];
         if (Kind == ContentKind.Post)
         {
+            _types = await Api.ListContentTypesAsync(ct);
             _categories = (await Api.ListTaxonomiesAsync(TaxonomyKind.Category, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
             _tags = (await Api.ListTaxonomiesAsync(TaxonomyKind.Tag, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
         }
@@ -363,12 +427,55 @@
         var previousStatus = _status;
         var previousPage = _page;
         _status = status;
+        _scheduled = false;
         _page = 1;
         _pendingDelete = null;
         _selected.Clear();
         _quickEdit = null;
         if (!await LoadAsync()) { _status = previousStatus; _page = previousPage; }
     }
+
+    private async Task ShowScheduled()
+    {
+        if (Blocked) return;
+        _status = null;
+        _scheduled = true;
+        _page = 1;
+        _selected.Clear();
+        _quickEdit = null;
+        await LoadAsync();
+    }
+
+    private async Task SortChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _sort = args.Value?.ToString() ?? "";
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+
+    private async Task PageSizeChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _pageSize = int.TryParse(args.Value?.ToString(), out var size) && PageSizes.Contains(size) ? size : Limits.PageSize;
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+
+    private async Task TypeFilterChanged(ChangeEventArgs args)
+    {
+        if (Blocked) return;
+        _typeFilter = args.Value?.ToString() ?? "";
+        _page = 1;
+        _selected.Clear();
+        await LoadAsync();
+    }
+
+    private Task BulkChangeStatus() => Enum.TryParse<ContentStatus>(_bulkStatus, out var status)
+        ? BulkAsync(BulkAction.SetStatus, new BulkEditOptions(Status: status))
+        : Task.CompletedTask;
     private async Task ChangePage(int delta)
     {
         if (Blocked) return;

@@ -102,6 +102,87 @@ public sealed class AdminEfficiencyBrowserTests(IsolatedPostgres postgres) : Ser
         }
     }
 
+    [PostgresFact]
+    public async Task Content_list_sort_page_size_type_filter_and_scheduled_tab_work_in_browser()
+    {
+        var password = IsolatedPostgres.NewPassword();
+        await App.Provisioner.ResetPasswordAsync(password);
+        using var actor = await App.AdministratorAsync();
+        var type = await actor.Services.GetRequiredService<ContentTypeService>()
+            .SaveAsync(new ContentTypeService.TypeEdit { Name = "書評", Slug = "review" });
+        var alpha = await actor.Content.SaveAsync(NewContent("Alpha", status: ContentStatus.Published));
+        var beta = await actor.Content.SaveAsync(NewContent("Beta", status: ContentStatus.Published));
+        var review = NewContent("Review", status: ContentStatus.Published);
+        review.ContentTypeId = type.Id;
+        var reviewSaved = await actor.Content.SaveAsync(review);
+        var scheduled = NewContent("Scheduled");
+        scheduled.PublishAt = DateTimeOffset.UtcNow.AddDays(2);
+        await actor.Content.SaveAsync(scheduled);
+        for (var i = 0; i < 17; i++)
+            await actor.Content.SaveAsync(NewContent($"Extra {i:00}", status: ContentStatus.Published));
+        var now = DateTimeOffset.UtcNow;
+        await using (var db = await App.CreateContextAsync())
+        {
+            var rows = await db.Contents.ToListAsync();
+            rows.Single(x => x.Id == alpha.Id).PublishedAt = now.AddDays(-3);
+            rows.Single(x => x.Id == beta.Id).PublishedAt = now.AddDays(-2);
+            rows.Single(x => x.Id == reviewSaved.Id).PublishedAt = now.AddDays(-1);
+            foreach (var row in rows.Where(x => x.Title.StartsWith("Extra ", StringComparison.Ordinal)))
+                row.PublishedAt = now.AddDays(-10);
+            db.ContentViews.AddRange(
+                new ContentView { ContentId = alpha.Id!.Value, Date = DateOnly.FromDateTime(now.UtcDateTime), Count = 10 },
+                new ContentView { ContentId = beta.Id!.Value, Date = DateOnly.FromDateTime(now.UtcDateTime), Count = 30 },
+                new ContentView { ContentId = reviewSaved.Id!.Value, Date = DateOnly.FromDateTime(now.UtcDateTime), Count = 20 });
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(reviewSaved.Id,
+            (await actor.Content.ListAdminAsync(ContentKind.Post, pageSize: 20, sort: "published")).Items[0].Id);
+        Assert.Equal(beta.Id,
+            (await actor.Content.ListAdminAsync(ContentKind.Post, pageSize: 20, sort: "views")).Items[0].Id);
+
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync(environment: "Production");
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new()
+        {
+            Channel = Environment.GetEnvironmentVariable("ORIGAMI_BROWSER_CHANNEL") ?? "msedge", Headless = true
+        });
+        await using var context = await browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, BaseURL = site.Address.ToString() });
+        var page = await context.NewPageAsync();
+        var pageErrors = new ConcurrentQueue<string>();
+        page.PageError += (_, error) => pageErrors.Enqueue(error);
+
+        await LoginAsync(page, password);
+        await SelectFilterAsync(page, "#filter-sort", "title",
+            () => Expect(page.Locator("tbody tr").First).ToContainTextAsync("Alpha"));
+        await SelectFilterAsync(page, "#filter-page-size", "20", async () =>
+        {
+            await Expect(page.Locator("tbody tr")).ToHaveCountAsync(20);
+            await Expect(page.Locator(".pagination")).ToContainTextAsync("第 1 / 2 頁");
+        });
+        await SelectFilterAsync(page, "#filter-page-size", "10",
+            () => Expect(page.Locator("tbody tr")).ToHaveCountAsync(10));
+        await SelectFilterAsync(page, "#filter-page-size", "20",
+            () => Expect(page.Locator("tbody tr")).ToHaveCountAsync(20));
+
+        await SelectFilterAsync(page, "#filter-type", type.Id.ToString(), async () =>
+        {
+            await Expect(page.Locator("tbody tr")).ToHaveCountAsync(1);
+            await Expect(page.Locator("tbody tr")).ToContainTextAsync("Review");
+        });
+        await SelectFilterAsync(page, "#filter-type", "",
+            () => Expect(page.Locator("tbody tr")).ToHaveCountAsync(20));
+        await SelectFilterAsync(page, "#filter-sort", "views",
+            () => Expect(page.Locator("tbody tr").First).ToContainTextAsync("Beta"));
+        await SelectFilterAsync(page, "#filter-sort", "published",
+            () => Expect(page.Locator("tbody tr").First).ToContainTextAsync("Review"));
+
+        await page.Locator(".content-filters button").Filter(new() { HasText = "排程" }).ClickAsync();
+        await Expect(page.Locator("tbody tr")).ToHaveCountAsync(1);
+        await Expect(page.Locator("tbody tr")).ToContainTextAsync("Scheduled");
+        Assert.Empty(pageErrors);
+    }
+
     private static async Task LoginAsync(IPage page, string password)
     {
         await page.GotoAsync("/account/login");
@@ -110,6 +191,26 @@ public sealed class AdminEfficiencyBrowserTests(IsolatedPostgres postgres) : Ser
         await page.GetByRole(AriaRole.Button, new() { Name = "登入", Exact = true }).ClickAsync();
         await page.WaitForURLAsync("**/admin/posts");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+    }
+
+    private static async Task SelectFilterAsync(IPage page, string selector, string value, Func<Task> expectation)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            await Expect(page.Locator("section.panel[aria-busy]")).ToHaveAttributeAsync("aria-busy", "false");
+            await page.Locator(selector).SelectOptionAsync(value);
+            try
+            {
+                await Expect(page.Locator(selector)).ToHaveValueAsync(value);
+                await expectation();
+                await Expect(page.Locator("section.panel[aria-busy]")).ToHaveAttributeAsync("aria-busy", "false");
+                return;
+            }
+            catch (Exception ex) when (attempt < 2 && ex is PlaywrightException or TimeoutException)
+            {
+                continue;
+            }
+        }
     }
 
     /// <summary>預渲染互動頁的按鈕可能在電路就緒前被點擊；以預期條件出現與否重試。</summary>

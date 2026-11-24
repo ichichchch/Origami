@@ -31,8 +31,12 @@ public static class AdminEndpoints
             Guid? tagId = Guid.TryParse(http.Request.Query["tagId"].ToString(), out var tId) ? tId : null;
             DateOnly? dateFrom = DateOnly.TryParse(http.Request.Query["dateFrom"].ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var df) ? df : null;
             DateOnly? dateTo = DateOnly.TryParse(http.Request.Query["dateTo"].ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt) ? dt : null;
+            var sort = http.Request.Query["sort"].ToString();
+            var typeFilter = http.Request.Query["type"].ToString();
+            var scheduledOnly = http.Request.Query["scheduled"].ToString() is "1" or "true";
             return Results.Ok(await content.ListAdminAsync(kind!.Value, page ?? 1, pageSize ?? Limits.PageSize, ct,
-                status, search.Length == 0 ? null : search, authorId.Length == 0 ? null : authorId, categoryId, tagId, dateFrom, dateTo));
+                status, search.Length == 0 ? null : search, authorId.Length == 0 ? null : authorId, categoryId, tagId, dateFrom, dateTo,
+                sort.Length == 0 ? null : sort, typeFilter.Length == 0 ? null : typeFilter, scheduledOnly));
         });
 
         group.MapGet("/contents/{id}", async (Guid id, ContentService content, CancellationToken ct) =>
@@ -218,7 +222,7 @@ public static class AdminEndpoints
                 return Results.BadRequest(new { message = "請先選擇要操作的內容。" });
             if (input.Items.Count > Limits.BulkMaxItems)
                 return Results.BadRequest(new { message = $"單次批次操作最多 {Limits.BulkMaxItems} 筆。" });
-            var options = new BulkEditOptions(input.AuthorId, input.CategoryId, input.TagId);
+            var options = new BulkEditOptions(input.AuthorId, input.CategoryId, input.TagId, input.Status);
             var results = await content.BulkAsync(action, [.. input.Items.Select(x => (x.Id, x.Version))], ct, options);
             return Results.Ok(results);
         });
@@ -308,7 +312,8 @@ public static class AdminEndpoints
 
     public sealed record ProtectionUnlockInput(string? Password);
     public sealed record QuickEditInput(string? Title, string? Slug, ContentStatus Status, Guid Version);
-    public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items, string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null);
+    public sealed record BulkContentInput(string? Action, List<BulkContentItem>? Items, string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null,
+        ContentStatus? Status = null);
     public sealed record CommentPostEnvelope(string? AuthorName, string? Url, string? Markdown, bool? Honeypot, Guid? ParentId = null,
         string? Email = null, bool? NotifyReplies = null);
     public sealed record CommentUnsubscribeEnvelope(string? Token);

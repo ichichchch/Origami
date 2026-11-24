@@ -99,11 +99,11 @@ public sealed record TaxonomyEdit
 }
 
 /// <summary>內容清單的批次操作種類。</summary>
-public enum BulkAction { Trash, Restore, Delete, SetAuthor, AddCategory, AddTag, EnableComments, DisableComments }
+public enum BulkAction { Trash, Restore, Delete, SetAuthor, AddCategory, AddTag, EnableComments, DisableComments, SetStatus, RemoveCategory, RemoveTag, Sticky, Unsticky }
 /// <summary>批次操作的單筆結果；失敗時附原因，單筆失敗不影響其餘項目。</summary>
 public sealed record BulkItemResult(Guid Id, bool Succeeded, string Message);
-/// <summary>批次編輯附加參數（改派作者或新增分類／標籤）。</summary>
-public sealed record BulkEditOptions(string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null);
+/// <summary>批次編輯附加參數（改派作者、新增或移除分類／標籤、變更狀態）。</summary>
+public sealed record BulkEditOptions(string? AuthorId = null, Guid? CategoryId = null, Guid? TagId = null, ContentStatus? Status = null);
 
 public sealed record ContentSummary(Guid Id, ContentKind Kind, string Title, string Slug,
     ContentStatus Status, DateTimeOffset UpdatedAt, DateTimeOffset? PublishedAt, Guid Version)

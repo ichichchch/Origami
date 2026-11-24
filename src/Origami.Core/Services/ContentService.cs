@@ -24,7 +24,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     public async Task<PagedResult<ContentSummary>> ListAdminAsync(ContentKind kind, int page = 1, int pageSize = Limits.PageSize, CancellationToken ct = default,
-        ContentStatus? status = null, string? search = null, string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null)
+        ContentStatus? status = null, string? search = null, string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null,
+        string? sort = null, string? typeFilter = null, bool scheduledOnly = false)
     {
 
         await admin.RequireRoleAsync(SiteRole.Reader, ct);
@@ -36,6 +37,18 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         // 未指定狀態篩選時列表會隱藏回收桶；回收桶另有專屬分頁與生命週期。
         var query = db.Contents.AsNoTracking().Where(x => x.Kind == kind);
         query = status is null ? query.Where(x => x.Status != ContentStatus.Trashed) : query.Where(x => x.Status == status);
+        // 排程以「草稿＋未來發布時間」表示，不是獨立狀態；排程頁籤以此篩選。
+        if (scheduledOnly)
+            query = query.Where(x => x.Status == ContentStatus.Draft && x.PublishAt != null && x.PublishAt > clock.GetUtcNow());
+        // 內容類型篩選：builtin 表示內建文章（不屬於任何自訂類型），其餘為自訂類型識別碼。
+        if (!string.IsNullOrWhiteSpace(typeFilter))
+        {
+            query = typeFilter == "builtin"
+                ? query.Where(x => x.ContentTypeId == null)
+                : Guid.TryParse(typeFilter, out var typeFilterId)
+                    ? query.Where(x => x.ContentTypeId == typeFilterId)
+                    : throw new CmsException("內容類型篩選無效。");
+        }
         if (!string.IsNullOrWhiteSpace(search))
         {
             // 以標題與 slug 的包含比對搜尋，讓 CJK 文字的後台搜尋結果可預期。
@@ -59,9 +72,33 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             query = query.Where(x => (x.PublishedAt ?? x.UpdatedAt) < toUtcExclusive);
         }
         var total = await query.CountAsync(ct);
-        var ordered = kind == ContentKind.Page
-            ? query.OrderBy(x => x.MenuOrder).ThenByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
-            : query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id);
+        // 排序：預設依最後更新（頁面另先依選單權重）；可改依標題、發布時間或瀏覽數，皆以識別碼維持穩定順序。
+        IOrderedQueryable<Content> ordered;
+        switch ((sort ?? "").Trim().ToLowerInvariant())
+        {
+            case "" or "updated":
+                ordered = kind == ContentKind.Page
+                    ? query.OrderBy(x => x.MenuOrder).ThenByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id)
+                    : query.OrderByDescending(x => x.UpdatedAt).ThenByDescending(x => x.Id);
+                break;
+            case "title":
+                ordered = kind == ContentKind.Page
+                    ? query.OrderBy(x => x.MenuOrder).ThenBy(x => x.Title).ThenBy(x => x.Id)
+                    : query.OrderBy(x => x.Title).ThenBy(x => x.Id);
+                break;
+            case "published":
+                ordered = query
+                    .OrderBy(x => x.PublishedAt == null)
+                    .ThenByDescending(x => x.PublishedAt)
+                    .ThenByDescending(x => x.UpdatedAt)
+                    .ThenByDescending(x => x.Id);
+                break;
+            case "views":
+                ordered = query.OrderByDescending(x => x.Views.Sum(v => (long)v.Count)).ThenByDescending(x => x.Id);
+                break;
+            default:
+                throw new CmsException("排序欄位無效。");
+        }
         var items = await ordered
             .Skip(offset).Take(pageSize).Select(x => new ContentSummary(x.Id, x.Kind, x.Title, x.Slug, x.Status, x.UpdatedAt, x.PublishedAt, x.Version)
             {
@@ -944,10 +981,28 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                     case BulkAction.SetAuthor:
                     case BulkAction.AddCategory:
                     case BulkAction.AddTag:
+                    case BulkAction.RemoveCategory:
+                    case BulkAction.RemoveTag:
+                    case BulkAction.Sticky:
+                    case BulkAction.Unsticky:
                     case BulkAction.EnableComments:
                     case BulkAction.DisableComments:
                         await BulkEditItemCoreAsync(action, id, version, options, ct);
                         break;
+                    case BulkAction.SetStatus:
+                    {
+                        if (options?.Status is not { } target || target == ContentStatus.Trashed)
+                            throw new CmsException("請選擇要套用的狀態。");
+                        // 狀態變更沿用快速編輯的單筆流程：保留修訂快照、同步嵌入生命週期與審稿通知。
+                        await using var lookup = await factory.CreateDbContextAsync(ct);
+                        var current = await lookup.Contents.AsNoTracking().Where(x => x.Id == id)
+                            .Select(x => new { x.Title, x.Slug, x.Status, x.Version }).SingleOrDefaultAsync(ct)
+                            ?? throw new CmsException("內容不存在。");
+                        if (current.Status == ContentStatus.Trashed) throw new CmsException("回收桶內容請先還原再編輯。");
+                        if (current.Version != version) throw new CmsException("資料已被另一個分頁更新，請重新載入後再編輯。");
+                        if (current.Status != target) await QuickEditAsync(id, current.Title, current.Slug, target, version, ct);
+                        break;
+                    }
                 }
                 results.Add(new BulkItemResult(id, true, ""));
             }
@@ -1039,6 +1094,27 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 break;
             case BulkAction.DisableComments:
                 entity.AllowComments = false;
+                break;
+            case BulkAction.RemoveCategory:
+            {
+                if (options?.CategoryId is not { } removeCategoryId || removeCategoryId == Guid.Empty) throw new CmsException("請選擇要移除的分類。");
+                var linkedCategory = entity.Categories.FirstOrDefault(c => c.Id == removeCategoryId);
+                if (linkedCategory is not null) entity.Categories.Remove(linkedCategory);
+                break;
+            }
+            case BulkAction.RemoveTag:
+            {
+                if (options?.TagId is not { } removeTagId || removeTagId == Guid.Empty) throw new CmsException("請選擇要移除的標籤。");
+                var linkedTag = entity.Tags.FirstOrDefault(t => t.Id == removeTagId);
+                if (linkedTag is not null) entity.Tags.Remove(linkedTag);
+                break;
+            }
+            case BulkAction.Sticky:
+                if (entity.Kind == ContentKind.Page) throw new CmsException("獨立頁面不可置頂，置頂僅用於文章列表。");
+                entity.IsSticky = true;
+                break;
+            case BulkAction.Unsticky:
+                entity.IsSticky = false;
                 break;
         }
         entity.UpdatedAt = now;

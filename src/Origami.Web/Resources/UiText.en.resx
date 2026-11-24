@@ -2933,9 +2933,6 @@
   <data name="Admin.ContentList.Slug" xml:space="preserve">
     <value>URL slug</value>
   </data>
-  <data name="Admin.ContentList.SortOrder" xml:space="preserve">
-    <value>Sorted by last update · UTC</value>
-  </data>
   <data name="Admin.ContentList.Status" xml:space="preserve">
     <value>Status</value>
   </data>
@@ -4577,6 +4574,69 @@
   </data>
   <data name="Admin.ContentTypes.PostFields" xml:space="preserve">
     <value>Post fields</value>
+  </data>
+  <data name="Admin.ContentList.AllTypes" xml:space="preserve">
+    <value>All content types</value>
+  </data>
+  <data name="Admin.ContentList.BuiltinPost" xml:space="preserve">
+    <value>Standard posts</value>
+  </data>
+  <data name="Admin.ContentList.BulkApplyStatus" xml:space="preserve">
+    <value>Apply status</value>
+  </data>
+  <data name="Admin.ContentList.BulkPublish" xml:space="preserve">
+    <value>Publish</value>
+  </data>
+  <data name="Admin.ContentList.BulkRemoveCategory" xml:space="preserve">
+    <value>Remove category</value>
+  </data>
+  <data name="Admin.ContentList.BulkRemoveTag" xml:space="preserve">
+    <value>Remove tag</value>
+  </data>
+  <data name="Admin.ContentList.BulkStatus" xml:space="preserve">
+    <value>Bulk change status</value>
+  </data>
+  <data name="Admin.ContentList.BulkStatusPlaceholder" xml:space="preserve">
+    <value>Change status…</value>
+  </data>
+  <data name="Admin.ContentList.BulkSticky" xml:space="preserve">
+    <value>Make sticky</value>
+  </data>
+  <data name="Admin.ContentList.BulkSubmitReview" xml:space="preserve">
+    <value>Submit for review</value>
+  </data>
+  <data name="Admin.ContentList.BulkUnsticky" xml:space="preserve">
+    <value>Unstick</value>
+  </data>
+  <data name="Admin.ContentList.BulkWithdraw" xml:space="preserve">
+    <value>Withdraw to draft</value>
+  </data>
+  <data name="Admin.ContentList.PageSize" xml:space="preserve">
+    <value>Per page</value>
+  </data>
+  <data name="Admin.ContentList.Scheduled" xml:space="preserve">
+    <value>Scheduled</value>
+  </data>
+  <data name="Admin.ContentList.ScheduledItems" xml:space="preserve">
+    <value>Scheduled {0}</value>
+  </data>
+  <data name="Admin.ContentList.Sort" xml:space="preserve">
+    <value>Sort</value>
+  </data>
+  <data name="Admin.ContentList.SortPublished" xml:space="preserve">
+    <value>Publish date</value>
+  </data>
+  <data name="Admin.ContentList.SortTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Admin.ContentList.SortUpdated" xml:space="preserve">
+    <value>Newest updated</value>
+  </data>
+  <data name="Admin.ContentList.SortViews" xml:space="preserve">
+    <value>Views</value>
+  </data>
+  <data name="Admin.ContentList.TypeFilter" xml:space="preserve">
+    <value>Content type filter</value>
   </data>
   <data name="Admin.Navigation.AuthorSlug" xml:space="preserve">
     <value>Author slug</value>

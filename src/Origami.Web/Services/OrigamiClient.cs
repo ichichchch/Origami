@@ -464,7 +464,8 @@ public sealed class OrigamiClient
 
     public async Task<PagedResult<ContentSummary>?> ListAdminAsync(ContentKind kind, int page = 1,
         int pageSize = Limits.PageSize, ContentStatus? status = null, string? search = null, CancellationToken ct = default,
-        string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null)
+        string? authorId = null, Guid? categoryId = null, Guid? tagId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null,
+        string? sort = null, string? typeFilter = null, bool scheduledOnly = false)
     {
         var query = $"api/v1/admin/contents?kind={kind}&page={page}&pageSize={pageSize}";
         if (status is { } value) query += "&status=" + value;
@@ -474,6 +475,9 @@ public sealed class OrigamiClient
         if (tagId is { } tId && tId != Guid.Empty) query += "&tagId=" + tId;
         if (dateFrom is { } df) query += "&dateFrom=" + df.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         if (dateTo is { } dt) query += "&dateTo=" + dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        if (!string.IsNullOrWhiteSpace(sort)) query += "&sort=" + Uri.EscapeDataString(sort.Trim());
+        if (!string.IsNullOrWhiteSpace(typeFilter)) query += "&type=" + Uri.EscapeDataString(typeFilter.Trim());
+        if (scheduledOnly) query += "&scheduled=1";
         return await GetAsync<PagedResult<ContentSummary>>(query, ct);
     }
 
@@ -624,7 +628,8 @@ public sealed class OrigamiClient
                 items = items.Select(x => new { id = x.Id, version = x.Version }),
                 authorId = options?.AuthorId,
                 categoryId = options?.CategoryId,
-                tagId = options?.TagId
+                tagId = options?.TagId,
+                status = options?.Status
             }, ct);
     }
 
