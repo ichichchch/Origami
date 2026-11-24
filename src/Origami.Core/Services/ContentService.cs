@@ -1826,6 +1826,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         var typeSlugs = await db.ContentTypes.AsNoTracking().Where(x => !x.IsArchived)
             .Select(x => new { x.Id, x.Slug }).ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         var pages = rows.Where(x => x.Kind == ContentKind.Page).ToDictionary(x => x.Id);
+        string Segment(string slug) => Uri.EscapeDataString(slug);
         // 頁面公開路徑走訪已發布且非私密的祖先；未發布或私密祖先使子頁回退為平面路徑（與公開路由一致）。
         string PagePath(Guid id)
         {
@@ -1834,7 +1835,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             var guard = 0;
             while (cursor is { } current && pages.TryGetValue(current, out var node) && ++guard <= 10)
             {
-                parts.Insert(0, node.Slug);
+                parts.Insert(0, Segment(node.Slug));
                 cursor = node.ParentId;
             }
             return string.Join("/", parts);
@@ -1846,9 +1847,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             .Where(x => x.Latest != null).ToListAsync(ct);
         var homeLastModified = rows.Count == 0 ? null : (DateTimeOffset?)rows.Max(x => x.UpdatedAt);
         List<SitemapItem> items = [new("/", homeLastModified), new("/archives", homeLastModified)];
-        items.AddRange(rows.Where(x => x.Kind == ContentKind.Post && x.ContentTypeId == null).Select(x => new SitemapItem("/posts/" + x.Slug, x.UpdatedAt)));
+        items.AddRange(rows.Where(x => x.Kind == ContentKind.Post && x.ContentTypeId == null).Select(x => new SitemapItem("/posts/" + Segment(x.Slug), x.UpdatedAt)));
         items.AddRange(rows.Where(x => x.Kind == ContentKind.Post && x.ContentTypeId is { } typeId && typeSlugs.ContainsKey(typeId))
-            .Select(x => new SitemapItem("/" + ContentTypeService.PublicPrefix + "/" + typeSlugs[x.ContentTypeId!.Value] + "/" + x.Slug, x.UpdatedAt)));
+            .Select(x => new SitemapItem("/" + ContentTypeService.PublicPrefix + "/" + Segment(typeSlugs[x.ContentTypeId!.Value]) + "/" + Segment(x.Slug), x.UpdatedAt)));
         items.AddRange(pages.Values.Select(x => new SitemapItem("/pages/" + PagePath(x.Id), x.UpdatedAt)));
         items.AddRange(categories.Select(x => new SitemapItem("/?category=" + x.Slug, x.Latest)));
         return items;

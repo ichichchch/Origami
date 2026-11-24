@@ -45,8 +45,8 @@ public sealed class PageHierarchyTests(IsolatedPostgres postgres) : ServiceTestB
 
         // sitemap 使用完整階層路徑，平面子頁維持平面。
         var sitemap = await admin.Content.SitemapAsync();
-        Assert.Contains(sitemap, x => x.Path == "/pages/母頁面/子頁面");
-        Assert.Contains(sitemap, x => x.Path == "/pages/孤儿子頁");
+        Assert.Contains(sitemap, x => x.Path == "/pages/" + Uri.EscapeDataString("母頁面") + "/" + Uri.EscapeDataString("子頁面"));
+        Assert.Contains(sitemap, x => x.Path == "/pages/" + Uri.EscapeDataString("孤儿子頁"));
     }
 
     [PostgresFact]
@@ -110,8 +110,8 @@ public sealed class PageHierarchyTests(IsolatedPostgres postgres) : ServiceTestB
         Assert.Equal(["私密母頁子頁"], resolved!.Segments);
 
         var sitemap = await admin.Content.SitemapAsync();
-        Assert.Contains(sitemap, x => x.Path == "/pages/私密母頁子頁");
-        Assert.DoesNotContain(sitemap, x => x.Path.Contains("私密母頁/", StringComparison.Ordinal) || x.Path == "/pages/私密母頁");
+        Assert.Contains(sitemap, x => x.Path == "/pages/" + Uri.EscapeDataString("私密母頁子頁"));
+        Assert.DoesNotContain(sitemap, x => x.Path.Contains(Uri.EscapeDataString("私密母頁") + "/", StringComparison.Ordinal) || x.Path == "/pages/" + Uri.EscapeDataString("私密母頁"));
 
         await using var site = new RunningSite(App.ConnectionString);
         await site.StartAsync();
