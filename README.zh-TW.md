@@ -1,31 +1,46 @@
 # Origami — 開發與驗收說明
 
 本文件說明 MVP 的執行方式、專案結構、資料模型、登入授權、前後台頁面、開發順序與測試驗收。
-產品範圍與安全基線以 `Agent.MD` 為準；本文件只描述「如何執行與如何驗證」。
+產品範圍與安全基線以 [`.qoder/rules/agent.md`](.qoder/rules/agent.md) 為準；本文件只描述「如何執行與如何驗證」。
 
 **語言 / Languages：** [简体中文](README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md)
 
-> **第一批狀態（2026-10-28）：** 多站點、多使用者、角色權限與個人 API 憑證（PAT）已獲授權，正在實作／驗收；仍為共用應用與 PostgreSQL、單一應用實例、固定前台版型。本批僅做編譯驗證，使用者批量回歸待驗，不代表全量測試通過、已部署或已遷移正式資料庫。既有功能與歷史驗收基線不因此刪除或重新認定為本批已通過。
+> **第一批狀態（2026-10-28）：** 多站點、多使用者、角色權限與個人 API 憑證（PAT）已獲授權，正在實作／驗收；仍為共用應用與 PostgreSQL、單一應用實例、受控前台呈現。本批僅做編譯驗證，使用者批量回歸待驗，不代表全量測試通過、已部署或已遷移正式資料庫。既有功能與歷史驗收基線不因此刪除或重新認定為本批已通過。
+
+> **產品完善輪（2026-11-05 起）：** 編輯器增強、宣告式內容模型、後台效率、導覽與小工具、評論管理、帳號郵件、多語言介面與工程優化已實作，並新增 Markdown／Medium 可攜匯入與 WebDAV 異地上傳備份。目前進行聚焦驗證，使用者最終批量回歸尚未執行；本段不代表全量驗收、部署或正式資料遷移完成。
 
 ## 0. 功能總覽
 
 | 領域 | 說明 |
 | --- | --- |
 | 管理員與使用者 | CLI 安全初始化唯一全站管理者（network admin）、後台建立一般帳號與站點成員、Cookie 登入登出（含記住我）、伺服器端密碼復原、自己帳號的 TOTP 兩步驟驗證 |
-| 多站點與權限（第一批） | 獨立網域／子網域，共用應用與 PostgreSQL；內容、設定、關聯、媒體、搜尋索引與背景工作按站隔離；Reader／Editor／Administrator 站點角色與全站管理者 |
+| 多站點與權限（第一批） | 獨立網域／子網域，共用應用與 PostgreSQL；內容、設定、關聯、媒體、搜尋索引與背景工作按站隔離；Reader／Author／Editor／Administrator 站點角色與全站管理者 |
 | API 憑證（第一批） | 綁定使用者與站點的 Read／Write PAT、到期與撤銷、秘密僅建立時回傳一次；BFF 與 PAT 分開授權及限流 |
 | 文章 | 列表、建立、編輯、草稿、發布、撤回、置頂、排程發布、摘要、封面圖、確認後刪除與回收桶、清單批次操作（多選移入回收桶／還原／永久刪除）、清單快速編輯（就地改標題／代稱／狀態）、一稿多譯（平權翻譯組＋內容語言標記，前台 ?lang= 切換譯本、無譯本回退並提示、列表同組去重跟隨語言） |
 | 獨立頁面 | 獨立網址、層級式導覽與層級網址（/pages/父/子/，舊平面網址自動 301）、循環防護、可作為固定首頁 |
-| 分類與標籤 | 平面結構、多對多指派、描述文字、刪除只移除關聯、合併（關聯重派到目標後刪除來源） |
-| 媒體 | 圖片與非圖片檔案上傳（圖片重新編碼；PDF／音訊／影片／XLSX／CSV 以魔數與內容特徵驗證後原樣儲存）、從 URL 匯入媒體（sideload：僅公開 https 絕對網址、拒絕本機／內網與保留位址、不跟隨轉址、逾時與單檔上限，下載內容仍走同一套格式驗證）、媒體庫、Markdown 插入、alt 與說明文字、封面圖指派（文章與頁面）、引用保護刪除、響應式縮圖與 srcset、編輯器選圖器關鍵字搜尋 |
-| 公開網站 | 文章列表與分頁、封面縮圖、文章與頁面詳情（含封面、說明與作者列）、相鄰與相關文章、按月歸檔、混合搜尋（可分頁）、基本導覽、行動版型 |
-| 開放性 | RSS 2.0 與 Atom 1.0 訂閱（可按分類／標籤過濾、可輸出全文）、oEmbed provider（JSON＋探索連結）、OpenSearch 描述文件（瀏覽器可將站內搜尋註冊為搜尋引擎，站點關閉索引時同步停用）、sitemap.xml、robots.txt、文章級 Open Graph（og:image 以封面優先，無封面時退回本文首圖）與 canonical meta、舊網址 301 轉址、JSON 資料匯出與匯入、ZIP 完整備份（JSON＋圖片）與還原、每日自動備份（組態開啟）、`/health` 資料庫健康檢查、公開唯讀 JSON API `/api/v1` 與 MCP 端點（獨立 Api 主機；另有受限管理 API） |
-| 編輯安全網 | 既有草稿每 60 秒自動儲存、修訂歷史（每篇 20 筆、與編輯器內容的逐行差異比對、任選兩版的 A/B 差異比對）、AI 寫作輔助側欄（大綱／草稿／改寫選取／續寫／標題建議，預覽確認後才插入且仍須人工儲存）、30 天回收桶與還原、草稿分享預覽連結 |
+| 分類與標籤 | 層級分類（拒絕循環父子關係，刪除父分類時子分類上移）與平面標籤、多對多指派、描述文字、刪除只移除關聯、合併（關聯重派到目標後刪除來源）、預設分類／標籤、標籤轉分類、`/category/{slug}` 與 `/tag/{slug}` 獨立歸檔網址 |
+| 媒體 | 圖片與非圖片檔案上傳（圖片重新編碼；PDF／音訊／影片／XLSX／CSV 以魔數與內容特徵驗證後原樣儲存）、從 URL 匯入媒體（sideload：僅公開 https 絕對網址、拒絕本機／內網與保留位址、不跟隨轉址、逾時與單檔上限，下載內容仍走同一套格式驗證）、媒體庫、Markdown 插入、alt 與說明文字、封面圖指派（文章與頁面）、引用保護刪除、響應式縮圖與 srcset、編輯器選圖器關鍵字搜尋、EXIF 方向自動校正與 WebP 變體 |
+| 公開網站 | 文章列表與分頁、封面縮圖、文章與頁面詳情（含封面、說明與作者列）、相鄰與相關文章、分類／標籤／按月歸檔、混合搜尋（分類與日期篩選、分頁、關鍵詞反白）、巢狀評論、基本導覽、行動版型、已登入成員的前台管理工具列 |
+| 開放性 | RSS 2.0 與 Atom 1.0 訂閱（可按分類／標籤過濾、可輸出全文）、oEmbed provider（JSON＋探索連結）、OpenSearch 描述文件（瀏覽器可將站內搜尋註冊為搜尋引擎，站點關閉索引時同步停用）、sitemap.xml、robots.txt、文章級 Open Graph（og:image 以封面優先，無封面時退回本文首圖）與 canonical meta、舊網址 301 轉址、JSON／WXR 資料匯出、JSON／ZIP 還原式匯入、WordPress WXR 新增式匯入、ZIP 完整備份（JSON＋媒體（`media/` 與 `files/`））與還原、每日自動備份（組態開啟）、`/health` 資料庫健康檢查、公開唯讀 JSON API `/api/v1` 與 MCP 端點（獨立 Api 主機；另有受限管理 API）、Markdown／Medium 可攜匯入、WebDAV 異地備份上傳、回應壓縮與安全回應標頭、單篇評論 feed、Twitter Card 與譯本 hreflang |
+| 編輯安全網 | 既有草稿每 60 秒自動儲存、修訂歷史（每篇 20 筆、與編輯器內容的逐行差異比對、任選兩版的 A/B 差異比對）、AI 寫作輔助側欄（大綱／草稿／改寫選取／續寫／標題建議，預覽確認後才插入且仍須人工儲存）、30 天回收桶與還原、草稿分享預覽連結、程式碼語法高亮、編輯器工具列／快捷鍵／尋找取代／全螢幕、Word 與 Google Docs HTML 貼上轉 Markdown、字數與閱讀時間統計 |
 | 可見性 | 私密內容不公開，讀取須符合管理權限、密碼保護內容需解鎖後才顯示，兩者都不進入搜尋與 AI 檢索 |
-| 站點設定 | 網站名稱與說明、每頁文章數、訂閱條數與全文選項、作者顯示名稱、固定首頁、網站圖示、資料匯出（JSON／ZIP）與還原式匯入 |
+| 站點設定 | 網站名稱與說明、每頁文章數、訂閱條數與全文選項、作者顯示名稱、固定首頁、網站圖示、預設分類／標籤、預設介面語言、404 文案、logo、資料匯出（JSON／WXR／ZIP）、JSON／ZIP 還原式匯入、WordPress WXR 新增式匯入、Markdown／Medium 可攜匯入（預設草稿且不下載外部圖片） |
 | 外觀與版型 | 受控版型三預設（閱讀襯線／極簡緊湊／圖集大標題，字體與版面密度實質差異）、強調色與欄寬微調、設定頁即時預覽、深色模式前景自動提亮、後台個人三態外觀切換（cookie 記憶，站台 auto 時優先於系統探測）、prefers-contrast 高對比增強 |
-| 小工具與自訂 CSS | 側欄與頁尾小工具：九種內建宣告式型別（最新文章／分類／標籤／搜尋框／Markdown 文字／最新評論／外部 RSS/Atom feed／標籤雲／日曆），可排序與隱藏，寬螢幕側欄、窄螢幕堆疊；標籤雲按熱門程度加權字級，日曆呈現當月每日發布數並連往日期彙整；自訂 CSS 儲存前經危險構造清理（註解移除，@import／@font-face／expression／javascript:／反斜線轉義一律拒絕），輸出前再次清理 |
+| 小工具與自訂 CSS | 側欄與頁尾小工具：十五種內建宣告式型別（最新文章／分類／標籤／搜尋框／Markdown 文字／最新評論／外部 RSS/Atom feed／標籤雲／日曆／頁面清單／月份歸檔／圖片／選單／社群連結／音訊影片），可排序與隱藏，寬螢幕側欄、窄螢幕堆疊；標籤雲按熱門程度加權字級，日曆呈現當月每日發布數並連往日期彙整；自訂 CSS 儲存前經危險構造清理（註解移除，@import／@font-face／expression／javascript:／反斜線轉義一律拒絕），輸出前再次清理 |
 | 受控包市場 | 主題包與小工具包市場：內建目錄提供五個風格區隔的主題包（墨井 文藝經典、頭版 報紙雜誌、終端機 極客等寬、畫室 攝影畫廊、侘寂 日式極簡），目錄卡直接呈現各主題的真實版式；來源僅內建目錄與後台 ZIP 匯入，具安裝／啟用／停用／解除完整生命週期；主題包為版型宣告（強調色、欄寬、字體棧鍵、行距／密度／標題比例、選配受控 CSS），小工具包為內建型別的預先組合；不載入任何程式碼，字體棧只接受白名單鍵，包 CSS 與自訂 CSS 同一套清理規則；受控包隨資料匯出／匯入同行，並可匯出為可分享的 ZIP 供其他站點匯入；亦可匯入第三方（WordPress）主題封裝——只讀取 style.css 標頭的中繼資料與可推導的強調色、字體族，模板與程式碼不保留、不執行 |
+| 儀表板與稽核 | 後台總覽（已發布文章、頁面、評論審核、近 30 日瀏覽趨勢與熱門內容）與操作稽核日誌（發布、編輯、設定與安全操作），稽核紀錄永久保留 |
+| 內容類型與導覽 | 自訂內容類型（CPT）及其自訂分類法／欄位、站內導覽編輯器、作者彙整頁（/author/代稱）與作者專屬內容 |
+| 評論與反垃圾 | 訪客評論（待審／核可／垃圾／回收桶）、敏感詞與蜜罐反垃圾、管理員官方回覆、新評論郵件通知（作者／編輯以上／全站管理者）、訪客回覆訂閱（郵件通知含一次性退訂連結，退訂頁 GET 確認＋POST 執行）；訪客僅能經 BFF 提交評論 |
+| 通知與健康 | 出站 Webhook（content.published／comment.created，HMAC-SHA256 簽章、指數退避重試與人工重送）與 SiteHealth 系統健康面板（資料庫、儲存、排程、嵌入、Webhook、SMTP、備份、組態） |
+| 站點維運 | 維護模式（回 HTTP 503，已登入成員豁免）、深色／淺色／自動色彩模式、網站標誌、301 重新導向管理、兩步驟驗證備用復原碼 |
+| 個人資料 | 本機頭像（從媒體庫選擇，優先於外部網址，作者彙整頁同步呈現）、每使用者介面語言偏好、帳號個人資料匯出與塗抹（GDPR）；全站管理者可代辦其他帳號，其內容與評論一併匿名化 |
+| 編輯輔助 | 編輯器 AI 摘要與 SEO 描述建議（未設定模型時退回本地確定性摘要）、AI 寫作輔助側欄（預覽確認後才插入，仍須人工儲存，Author 以上可用） |
+| 介面語言 | 繁體中文／英文／簡體中文，可由站點設定預設語言，登入使用者另有個人偏好；以 `?lang=` 與 cookie 切換，介面文字集中於資源檔，缺漏與格式佔位符由測試攔截 |
+| 多語言內容 | 一稿多譯：平權翻譯組（同組內容互為譯本、同組同語言唯一）、內容語言標記（BCP 47 鍵）、前台以 `?lang=` 切換譯本（沿用文化機制，不加路徑前綴）、無譯本時回退預設語言並提示、公開列表同組去重並跟隨語言選代表；僅做翻譯關聯，不做自動翻譯 |
+| 結構化內容 | 文章／頁面與自訂內容類型可掛自訂欄位（文字、長文、數字、日期、核取方塊、URL、選項、媒體、email、時間、圖庫、關聯內容）；內容範本與可重複使用文字片段供編輯器插入 |
+| 後台效率 | 內容清單欄位排序、每頁筆數、自訂類型篩選、狀態／分類標籤／置頂批次編輯、排程總覽；前台管理工具列、命令面板與全域搜尋、首次設定檢查清單 |
+| 評論與帳號 | 評論巢狀回覆、編輯與批次審核、訪客記住身分、單篇評論 feed 與回覆訂閱；Email 驗證、歡迎信、密碼變更通知、測試寄信與信件紀錄、登入歷史；刪除帳號時可把內容轉移給其他成員 |
+| 導覽與版型 | 多層選單、多個選單位置、分類／標籤／歸檔選單項目；十五種小工具、logo、受控主題與版型參數、自訂 CSS（安全清理） |
 
 內容以 **Markdown** 書寫：原始 HTML 被停用，每個輸出網址都經過白名單檢查，儲存的內容無法引入腳本執行。
 
@@ -53,12 +68,34 @@ export Storage__RootPath="D:/origami-storage"   # 可省略，預設為使用者
 export Api__BaseUrl="http://127.0.0.1:5100"    # 網站主機（BFF）呼叫 Api 的位址
 export Api__ServiceToken="<隨機長字串>"   # 僅供 BFF 的主機憑證，不等於使用者權限；Web 與 Api 必須設同一值
 export Backup__Enabled=true   # 可省略，預設 false；開啟每日自動備份（Backup:Keep 保留份數，預設 7；Backup:HourUtc 執行小時，預設 3）
+export Backup__WebDav__Url="https://dav.example.test/backups"   # 可選；未設定時僅保留本機備份
+export Backup__WebDav__Username="<WebDAV 使用者名稱>"
+export Backup__WebDav__Password="<WebDAV 密碼>"   # 僅透過安全外部設定提供，不寫入日誌或備份
+export Backup__WebDav__Directory="origami"   # 可選；遠端會再按 site-{SiteId:N} 隔離
+export Smtp__Host="smtp.example.test"
+export Smtp__Port="587"
+export Smtp__User="origami@example.test"
+export Smtp__Password="<SMTP 密碼>"
+export Smtp__From="origami@example.test"
+export Smtp__EnableSsl="true"
+export Ai__Embedding__Endpoint="https://models.example.test/v1"   # 可選；未設定時語意搜尋退回關鍵字
+export Ai__Embedding__Model="text-embedding-3-small"
+export Ai__Embedding__ApiKey="<嵌入模型金鑰>"
+export Ai__Assistant__Endpoint="https://models.example.test/v1"   # 可選；未設定時站內助理與 AI 寫作提示不可用
+export Ai__Assistant__Model="gpt-4.1-mini"
+export Ai__Assistant__ApiKey="<助理模型金鑰>"
+export Authentication__External__Google__ClientId="<Google OAuth Client ID>"   # 可選
+export Authentication__External__Google__ClientSecret="<Google OAuth Client Secret>"
+export Authentication__External__Microsoft__ClientId="<Microsoft OAuth Client ID>"   # 可選
+export Authentication__External__Microsoft__ClientSecret="<Microsoft OAuth Client Secret>"
 ```
 
 `Storage__RootPath` 必須是絕對路徑，且不得位於應用發布目錄內；未設定時使用預設位置。
 資料保護金鑰以 Windows DPAPI 加密存放在全域 `Storage__RootPath/keys`，本批不移動金鑰。
-預設站媒體繼續使用 `Storage__RootPath/images`；新站使用 `Storage__RootPath/sites/{SiteId:N}/images`（`N` 為無連字號 GUID）。自動備份輸出 `origami-backup-*.zip`（JSON＋圖片完整封裝）到同站 `backups/`：預設站為 `Storage__RootPath/backups/`，新站為 `Storage__RootPath/sites/{SiteId:N}/backups/`，並保留最新幾份。Web 與 Api 須使用同一持久化儲存根目錄。
+預設站媒體繼續使用 `Storage__RootPath/images`；新站使用 `Storage__RootPath/sites/{SiteId:N}/images`（`N` 為無連字號 GUID）。自動備份輸出 `origami-backup-*.zip`（JSON＋媒體（`media/` 與 `files/`）完整封裝）到同站 `backups/`：預設站為 `Storage__RootPath/backups/`，新站為 `Storage__RootPath/sites/{SiteId:N}/backups/`，並保留最新幾份。Web 與 Api 須使用同一持久化儲存根目錄。
 `Api:ServiceToken` 僅驗證 BFF 主機，不等於任何使用者或寫入權限；管理操作還需轉發真實使用者及安全戳記並重驗角色。未設定時 BFF 認證不可用，但已簽發且有效的 PAT 仍可認證。服務通行證只透過安全外部設定提供給 Web 與 Api，絕不可分發給瀏覽器、第三方或行動端；對外 API 使用受限 PAT，而非公開 BFF 金鑰。
+
+啟用 WebDAV 後，每次自動或手動備份都會先完成本站本機備份，再以 HTTPS Basic Authentication 上傳到 `<Url>/<Directory>/site-{SiteId:N}/`。目的地不接受 URL 內帳密、查詢參數或片段，不跟隨轉址；遠端只清理該站目錄內符合 `origami-backup-日期-時間.zip` 命名的逾期備份，並按 `Backup:Keep` 保留最新幾份。遠端清理失敗不會撤銷已經完成的本機備份。
 
 ### 多站點選站與部署前提
 
@@ -79,14 +116,26 @@ dotnet run --project src/Origami.Web -- migrate
 # 2. 僅初始化唯一全站管理者（密碼由互動輸入，不接受命令列參數或重導向輸入）
 dotnet run --project src/Origami.Web -- admin-init
 
-# 3. 啟動 Api 主機（網站的頁面資料也經它讀寫；必須先於網站可用）
+# 3. 可選：立即為所有啟用站點生成本機備份，並在已設定 WebDAV 時同步上傳
+dotnet run --project src/Origami.Web -- backup
+
+# 4. 啟動 Api 主機（網站的頁面資料也經它讀寫；必須先於網站可用）
 ASPNETCORE_URLS=http://127.0.0.1:5100 dotnet run --project src/Origami.Api
 
-# 4. 啟動網站主機（BFF 純用戶端：登入、兩步驗證與媒體檔在本機，資料讀寫經 Api）
+# 5. 啟動網站主機（BFF 純用戶端：登入、兩步驗證與媒體檔在本機，資料讀寫經 Api）
 ASPNETCORE_URLS=http://127.0.0.1:5000 dotnet run --project src/Origami.Web
 ```
 
-`admin-init` 只初始化唯一全站管理者，不用於建立一般使用者；一般帳號由全站管理者透過後台建立，站點管理員管理本站成員。`admin-reset` 在伺服器端復原全站管理者帳號；重設會輪替安全戳記，使既有登入與舊 PAT 立即失效。
+`admin-init` 只初始化唯一全站管理者，不用於建立一般使用者；`create-user` 也只建立全域帳號，不自動授予任何站點成員資格。一般帳號也可由全站管理者透過後台建立，站點管理員管理本站成員。`admin-reset` 在伺服器端復原全站管理者帳號；重設會輪替安全戳記，使既有登入與舊 PAT 立即失效。
+
+以下命令只操作**預設站點**，都需要互動終端機並以全站管理者重新認證（密碼隱藏輸入，啟用兩步驟驗證時需動態碼或一次性復原碼）；不接受重導向輸入或命令列憑證。`export` 可選 JSON 或 ZIP（預設 ZIP），`import` 須輸入 `REPLACE` 確認取代式還原，`create-user` 只建立一般帳號：
+
+```bash
+dotnet run --project src/Origami.Web -- export
+dotnet run --project src/Origami.Web -- import
+dotnet run --project src/Origami.Web -- create-user
+```
+
 公開網站入口為 `/`，後台為 `/admin/posts`。
 Api 主機與網站共用同一資料庫與遷移（遷移僅由 Web 的 `migrate` 命令執行）；媒體圖片仍由網站的 `/media` 提供。
 
@@ -117,7 +166,7 @@ tests/Origami.Tests/
 | --- | --- | --- |
 | `AdminUser`（Identity） | 全域帳號、密碼雜湊、安全戳記、停用狀態 | `SingletonKey` 可為 null；非 null 唯一且只能為 1，僅此帳號是全站管理者，一般使用者不受單帳號限制 |
 | `CmsSite` | 站點目錄、Host 映射、啟用狀態 | 站點 slug 與非 null Host 唯一 |
-| `SiteMembership` | 使用者的站點角色 | `(SiteId, UserId)` 複合主鍵；Reader／Editor／Administrator |
+| `SiteMembership` | 使用者的站點角色 | `(SiteId, UserId)` 複合主鍵；Reader／Author／Editor／Administrator |
 | `ApiCredential` | 綁定使用者與站點的 PAT 雜湊、範圍、戳記、到期與撤銷時間 | 不存明文秘密；按使用者、站點及目前權限重驗 |
 | `Content` | 文章與頁面（`Kind` 區分）、標題、slug、Markdown、摘要、封面參照、狀態、時間、並發版本 | `(SiteId, Slug)` 站內唯一；狀態、標題、slug、發布時間皆有檢查約束；`Version` 為並發權杖；私密與密碼保護不可同時啟用；頁面不可指向自身 |
 | `Category` / `Tag` | 文章分類與標籤，含描述文字 | 名稱及 slug 的唯一性檢查限於站內同類 |
@@ -127,11 +176,20 @@ tests/Origami.Tests/
 | `ContentSlugRedirect` | 舊 slug 到現有內容的永久轉址記錄 | 舊 slug 站內唯一；隨內容刪除級聯清理 |
 | `ContentRevision` | 每次儲存前的前一版快照（標題／本文／摘要） | 隨內容級聯刪除；每篇保留最新 20 筆 |
 | `ContentView` | 每篇內容的每日瀏覽計數 | 複合主鍵（內容＋日期）；隨內容級聯刪除 |
+| `ContentType` / `CustomField` / `ContentFieldValue` | 自訂內容類型、宣告式欄位定義與內容值 | 同站隔離；欄位可掛內建文章／頁面或自訂類型，值按欄位類型驗證 |
+| `ContentTemplate` / `ContentSnippet` | 新內容骨架與可重複文字片段 | 同站隔離；套用或插入不改寫既有內容 |
+| `SiteNavItem` / `SiteWidget` | 多層選單項目與十五種內建宣告式小工具 | 同站隔離；顯式啟用時覆蓋頁面自動導覽 |
+| `SitePackage` / `WebhookDeliveryRecord` / `AuditLog` | 受控主題與小工具包、Webhook 投遞重試、管理操作稽核 | 同站隔離；只保存宣告式套件與必要稽核摘要 |
+| `ContentComment` | 訪客評論、父評論、審核狀態、官方回覆與退訂識別 | 同站關聯；父評論層級由服務驗證，版本用於並行審核 |
+| `EmailLog` | 寄信結果（收件人、主旨、成功狀態與診斷摘要） | 依站點隔離；只保存必要摘要，不存密碼、Token 或郵件本文 |
+| `LoginEvent` | 帳號登入成功與失敗事件 | 全域帳號紀錄；只保存來源位址與裝置代理的截斷摘要 |
 
 內容另有「上層頁面」`ParentId`（僅獨立頁面）、草稿分享預覽權杖、排程時間 `PublishAt` 與回收桶時間 `DeletedAt`；
+平權翻譯組使用 `TranslationGroupId`，內容語言使用 BCP 47 `Language`；編輯器占用另存 `EditingById`／`EditingByName`／`EditingAt`。
+`ContentRevision.SnapshotJson` 保存包含 SEO、封面、作者、分類標籤與自訂欄位的完整結構快照；站點設定另含預設介面語言、404 文案與評論顯示深度。
 密碼保護內容另外保存 Identity 密碼雜湊，私密內容對外等同不存在。
 
-狀態有 `Draft`、`Published` 與 `Trashed`；撤回即改回 `Draft`，刪除先進回收桶保留 30 天（可還原、逾期自動清理）。首次發布時間寫入 `PublishedAt` 後不再變更（排程發布、撤回後再發布都一樣）；排程發布以草稿＋未來時間表示，到期由背景工作晉升。
+狀態有 `Draft`、`Pending`、`Published` 與 `Trashed`；Author 可提交 `Pending`，Editor 以上審核發布。撤回即改回 `Draft`，刪除先進回收桶保留 30 天（可還原、逾期自動清理）。首次發布時間寫入 `PublishedAt` 後不再變更（排程發布、撤回後再發布都一樣）；排程發布以草稿＋未來時間表示，到期由背景工作晉升。
 
 ## 6. 登入與授權
 
@@ -140,7 +198,7 @@ tests/Origami.Tests/
 - Api 註冊 IdentityCore／EF stores 供受控帳號管理，不註冊 Cookie、SignInManager、背景工作或媒體靜態檔；瀏覽器登入仍在 Web。
 - 每個受保護的服務操作都會以新的 `DbContext` 重驗目前使用者、安全戳記、啟用狀態、站點成員角色與 PAT 狀態／範圍，
   不信任頁面送上的身分或角色。登出或重設密碼會輪替安全戳記，既有分頁與舊 PAT 立即失效；角色改變、成員移除、帳號／站點停用也在後續操作即時生效。
-- 站點角色：`Reader` 可唯讀管理內容（含草稿讀取），不是僅能閱讀公開文章；`Editor` 可寫入內容、媒體及分類標籤；`Administrator` 另可管理本站設定、匯入匯出及成員。全站管理者（network admin）透過網站管理站點目錄和全域帳號，並擁有跨站管理權限；本批不做作者擁有權或待審稿。
+- 站點角色：`Reader` 可唯讀管理內容（含草稿讀取），不是僅能閱讀公開文章；`Author` 可建立內容並提交待審，但不能自行發布、也不能編輯他人內容；`Editor` 可寫入內容、媒體及分類標籤；`Administrator` 另可管理本站設定、匯入匯出及成員。待審內容使用 `Pending` 狀態，由 Editor 以上審核發布。全站管理者（network admin）透過網站管理站點目錄和全域帳號，並擁有跨站管理權限。
 - BFF 以 `Authorization: Bearer <Api:ServiceToken>` 驗證主機，管理操作同時轉發 `X-Origami-User` 與 `X-Admin-Security-Stamp` 表示真實登入身分，缺任一項回傳 401，不合成管理員身分。角色不足回傳 403，不應被當作登入失效或觸發登出；匿名網站呈現仍可由可信 BFF 代讀公開資料。
 - PAT 使用 `Authorization: Bearer <PAT>`，綁定使用者與站點；有效權限是現行站點角色與範圍上限的交集：`Read` 最高 `Reader`，`Write` 最高 `Editor`。即使持有人是全站管理者，PAT 也不能管理站點／帳號／成員／憑證、站點設定或匯入匯出，不能呼叫 BFF-only 呈現、unlock／unlock-state 或瀏覽計數入口；偽造轉發身分標頭不會提權。
 - PAT 固定格式為 `org_<32位小寫GUID>.<64位小寫十六進位secret>`（即 `org_GUID.secret`）；完整秘密僅建立成功時回傳一次，資料庫只存秘密雜湊。每人每站最多 20 張有效憑證，到期時間須在未來且最長 365 天；管理列表優先顯示有效憑證，再列歷史，總計最多 100 筆，不刪除歷史紀錄。
@@ -162,24 +220,32 @@ tests/Origami.Tests/
 | --- | --- |
 | `/` | 已發布文章列表，依發布時間倒序，含分頁；站點指定固定首頁時改顯示該頁面，帶有分類／標籤篩選時顯示篩選後的列表 |
 | `/posts` | 文章列表頁（未指定固定首頁時會轉址到 `/`） |
-| `/posts/{slug}` | 文章詳情；未發布或不存在回傳 404；含相鄰文章與語意相關文章 |
-| `/pages/{slug}` | 獨立頁面詳情；未發布回傳 404；舊網址在 slug 變更後 301 轉址到新網址 |
-| `/archives`、`/archives/{年}/{月}` | 按月歸檔的公開文章一覽 |
-| `/search` | 混合搜尋：關鍵字比對結合 pgvector 語意結果，模型未設定時退回關鍵字 |
-| `/feed`、`/sitemap.xml`、`/robots.txt`、`/health`、`/favicon.ico` | RSS 2.0 訂閱、網站地圖、爬蟲規則、資料庫健康檢查與網站圖示；僅反映已發布狀態 |
+| `/posts/{slug}` | 文章詳情；未發布或不存在回傳 404；含相鄰文章與語意相關文章。另支援 `/posts/{年}/{月}/{slug}`、`/posts/{年}/{月}/{日}/{slug}` 與 `/archives/p/{id}` 相容入口 |
+| `/pages/{*SlugPath}` | 獨立頁面詳情，支援 `/pages/父/子/` 層級網址；未發布回傳 404，舊平面網址自動 301 到現行層級網址 |
+| `/archives`、`/archives/{年}/{月}`、`/category/{slug}`、`/tag/{slug}`、`/author/{slug}` | 按月歸檔、分類歸檔、標籤歸檔與作者彙整的公開內容一覽 |
+| `/t/{Slug}`、`/t/{Slug}/{TaxonomySlug}/{TermSlug}`、`/t/{Slug}/{ContentSlug}` | 自訂內容類型總覽、自訂分類法篩選與內容詳情 |
+| `/search` | 混合搜尋：關鍵字比對結合 pgvector 語意結果，模型未設定時退回關鍵字；支援分類、日期篩選、分頁與關鍵詞反白 |
+| `/feed`、`/feed/atom`、`/feed/comments?post={slug}`、`/sitemap.xml`、`/robots.txt`、`/opensearch.xml`、`/oembed`、`/health`、`/favicon.ico` | RSS／Atom／單篇評論訂閱、網站地圖、爬蟲規則、OpenSearch 描述文件、oEmbed、資料庫健康檢查與網站圖示；僅反映已發布狀態 |
 | `/preview/{token}` | 草稿分享預覽（noindex；撤銷或發布後失效，已發布則轉址公開網址） |
-| `/account/login` | 使用者登入（Static SSR，host-only Cookie；管理權限依目前站點角色） |
+| `/account/login`、`/account/verify-email`、`/account/confirm-email-change`、`/account/forgot-password`、`/account/reset-password`、`/account/external-logins` | 使用者登入、郵箱驗證與信箱變更確認、網頁忘記／重設密碼、第三方帳號綁定（管理權限依目前站點角色） |
 
 機器介面（獨立的 `Origami.Api` 主機，回應 no-store）：公開 JSON 與 MCP 仍唯讀，匿名公開請求按來源 IP 每分鐘 30 次；管理 API 支援 BFF 與受限 PAT，角色和限流見第 6 節。持 PAT 不會讓公開文章端點回傳草稿，草稿須走獲授權的管理讀取端點。
 
 | 路由 | 內容 |
 | --- | --- |
-| `/api/v1/posts` | 已發布文章列表：分頁（`page`、`pageSize`）與 `category`／`tag`／`year`／`month` 篩選 |
-| `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章與獨立頁面詳情（Markdown 原文）；草稿、受保護與私密內容一律 404 |
+| `/api/v1/posts` | 已發布文章列表：分頁（`page`、`pageSize`）與 `category`／`tag`／`author`／`year`／`month`／`lang` 篩選 |
+| `/api/v1/posts/{slug}`、`/api/v1/pages/{slug}` | 文章與獨立頁面詳情（Markdown 原文；可用 `lang` 選譯本）；草稿、受保護與私密內容一律 404 |
 | `/api/v1/search?q=` | 混合搜尋，規則與 `/search` 相同；模型未設定時退回關鍵字 |
+| `/api/v1/openapi.json`、`/openapi/v1.json`、`/scalar` | OpenAPI 3.1 契約與 Scalar API 參考頁；參考頁資源由 Api 主機內嵌提供 |
 | `/mcp`、`/health` | 唯讀 MCP 工具（`search_posts`、`get_post`、`get_page`）與資料庫健康檢查 |
-| 公開讀取面 | `/settings`、`/navigation`、`/widgets`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/media/widths`——網站頁面的資料來源 |
+| 公開讀取面（相對 `/api/v1`） | `/settings`、`/navigation`、`/widgets`、`/contents/{id}/published`、`/media/widths`、`/contents/{id}/neighbors`、`/contents/{id}/related`、`/archives`、`/categories/popular`、`/taxonomies/{kind}/{slug}`、`/redirects/{slug}`、`/preview/{token}`、`/sitemap`、`/feed`、`/feed/comments`——網站頁面的資料來源 |
+| `/api/v1/layout` | 一次取得公開站點設定、導覽與小工具的版面殼層 |
+| `/api/v1/contents/{id}/comments` | 指定內容的已核可公開評論，支援 `page` 分頁 |
+| 公開自訂內容類型（相對 `/api/v1`） | `/types`、`/types/{slug}/contents`、`/types/{slug}/taxonomies/{taxonomySlug}/terms/{termSlug}`、`/types/{slug}/contents/{contentSlug}` |
+| `/api/v1/posts/by-id/{id}` | 依內容識別碼讀取已發布文章 |
+| `/api/v1/authors/{slug}` | 依作者代稱讀取公開作者資料 |
 | `/api/v1/admin/…` | 管理讀取與寫入（內容／分類標籤／媒體／設定／修訂／預覽連結／匯入匯出）；BFF 轉發真實身分，PAT 按 Read／Write 及角色上限存取內容類端點，不能管理設定或匯入匯出 |
+| `/api/v1/admin/transfer/import-portable/analyze`、`/api/v1/admin/transfer/import-portable/apply` | Markdown／Medium 可攜匯入預覽與套用；分析不落地，套用為新增式，限 BFF 管理者 |
 | `/api/v1/sites/resolve?host=…` | 公開 Host 映射解析，只回傳站點中繼資料，不回傳帳號或憑證 |
 | `/api/v1/admin/access`、`/sites`、`/users`、`/members`、`/credentials` | 此列除首項外均相對 `/api/v1/admin`；BFF-only 權限、站點、全域帳號、成員及 PAT 管理，服務再檢查相應角色 |
 | BFF-only 呈現入口 | 已發布內容／層級頁面呈現、unlock／unlock-state、瀏覽計數仍僅供可信網站主機，PAT 不可呼叫 |
@@ -188,34 +254,48 @@ tests/Origami.Tests/
 
 | 路由 | 內容 |
 | --- | --- |
-| `/admin/posts`、`/admin/pages` | 內容列表（含關鍵字搜尋、狀態篩選、回收桶）、快速編輯（就地改標題／代稱／狀態）、發布、撤回、確認後刪除 |
-| `/admin/content/{id}` | Markdown 編輯器、預覽、分類標籤指派、媒體插入、排程發布、修訂歷史、密碼保護與私密設定 |
-| `/admin/taxonomies` | 分類與標籤的建立、修改、刪除 |
-| `/admin/widgets` | 側欄與頁尾小工具的建立、編輯、排序、顯示開關與刪除（內建九種型別） |
+| `/admin`、`/admin/dashboard` | 後台總覽：內容與待審評論數量、瀏覽趨勢、熱門內容與首次設定檢查清單 |
+| `/admin/posts`、`/admin/pages` | 內容列表（關鍵字搜尋、狀態／類型篩選、排程總覽、回收桶）、欄位排序與每頁筆數、批次狀態／分類標籤／置頂編輯、快速編輯、發布、撤回、確認後刪除 |
+| `/admin/content/{id}` | Markdown 編輯器（工具列、快捷鍵、尋找取代、全螢幕、語法高亮、HTML 貼上轉換）、預覽、分類標籤與自訂欄位、媒體／圖庫／關聯內容、內容範本與文字片段、排程發布、修訂比較、密碼保護與私密設定 |
+| `/admin/types` | 自訂內容類型、自訂分類法與欄位定義 |
+| `/admin/taxonomies` | 分類與標籤的建立、修改、刪除、預設值、批次刪除與標籤轉分類 |
+| `/admin/navigation`、`/admin/widgets` | 多層選單與多個位置；側欄與頁尾小工具的建立、編輯、排序、顯示開關與刪除（內建十五種型別） |
+| `/admin/templates` | 內容範本與可重複使用文字片段的建立、編輯、排序與刪除 |
+| `/admin/comments` | 巢狀評論檢視、編輯、官方回覆、審核／垃圾／回收桶與批次操作 |
 | `/admin/marketplace` | 受控包市場：內建目錄瀏覽與主題即時預覽（直接套用主題自身的版式樣式）、ZIP 上傳解析與安裝、啟用／停用與解除（解除小工具包會一併刪除其建立的小工具）、包匯出為可分享的 ZIP、第三方（WordPress）主題封裝轉換為受控主題包 |
 | `/admin/media` | 圖片與檔案上傳（圖片、PDF、音訊、影片、XLSX、CSV）、從 URL 匯入（sideload）、媒體庫關鍵字搜尋與類型篩選、alt 文字編輯、引用保護刪除 |
-| `/admin/settings` | 網站名稱與說明、每頁文章數、訂閱條數、固定首頁、網站圖示、資料匯出（JSON／ZIP 完整備份）與還原式匯入 |
-| `/admin/security` | 自己帳號的兩步驟驗證（TOTP）啟用與停用、本機頭像與介面語言偏好設定 |
+| `/admin/settings` | 網站名稱與說明、每頁文章數、訂閱條數、固定首頁、網站圖示／logo、預設分類標籤、預設介面語言、404 文案、版型與導覽、資料匯出（JSON／WXR／ZIP）、JSON／ZIP 還原式匯入、WordPress WXR 新增式匯入與 Markdown／Medium 可攜匯入 |
+| `/admin/security` | 自己帳號的密碼、兩步驟驗證（TOTP）、備用復原碼、登入工作階段與登入歷史、本機頭像、介面語言偏好及第三方帳號綁定 |
+| `/admin/site-health` | 資料庫／儲存／排程／嵌入／Webhook／SMTP／備份／組態檢查、Webhook 投遞重送、測試寄信與依站點隔離的寄信紀錄 |
+| `/admin/redirects`、`/admin/audit`、`/admin/assistant` | 301 轉址管理、管理操作稽核、唯讀站內助理 |
 | `/admin/sites` | 第一批：可存取站點列表／切站；全站管理者建立、更新站點及 Host／啟用狀態 |
 | `/admin/users` | 第一批：全站管理者建立及啟用／停用全域一般帳號 |
 | `/admin/members` | 第一批：Administrator／全站管理者管理本站成員及角色 |
 | `/admin/credentials` | 第一批：目前使用者、目前站點的 PAT 列表、建立與撤銷，秘密僅顯示一次 |
 
-新增管理路由待 Web 整合後複驗，不代表瀏覽器流程已驗收。內容讀取允許 Reader；內容／媒體／分類寫入須 Editor 以上，設定／匯入匯出／成員須 Administrator 以上，不能只靠隱藏按鈕授權。切站須開啟目標站已登錄 Host，並在該 Host 各自登入。
+管理路由已接入 Web，瀏覽器驗收仍以實際回歸結果為準。Reader 可讀取；Author 可建立、編輯本人 `Draft`／`Pending` 內容並提交審核；Editor 以上可寫內容、媒體及分類標籤；Administrator 以上管理設定、匯入匯出及成員。不能只靠隱藏按鈕授權。切站須開啟目標站已登錄 Host，並在該 Host 各自登入。
 
-固定版型在行動裝置可用；操作期間停用重複提交；未儲存變更離開時會提示，既有草稿每 60 秒自動儲存；
+受控響應式版型在行動裝置可用；操作期間停用重複提交；未儲存變更離開時會提示，既有草稿每 60 秒自動儲存；
 連線中斷時明確告知「未儲存的內容尚未保存」，不會假稱已儲存。
 
-## 8. 開發順序
+## 8. 安全說明
+
+- **圖片皆為公開資源。** 每張已上傳圖片皆可透過網址讀取，包括只用於草稿的圖片。撤回或刪除內容不會隱藏圖片網址；管理後臺會明確提示此限制。
+- **不信任上傳檔案，先校驗再使用。** 點陣圖片僅接受 PNG、JPEG 與 WebP；白名單中的 PDF／音訊／影片／XLSX／CSV 經格式校驗後也會接受。伺服器核驗真實格式、解碼圖片、執行大小與尺寸上限，並在儲存前重新編碼圖片。SVG、可執行檔、偽裝檔案與路徑穿越嘗試會被拒絕；失敗上傳不會留下可讀取的半成品。
+- **Markdown 經清理。** 原始 HTML 被停用，套用標籤與屬性白名單，連結目標只接受 `http`、`https` 與本機路徑。
+- **敏感資料不進入版本控制。** 連線字串、密碼、權杖與 Data Protection 金鑰透過外部設定提供，絕不寫入原始碼或日誌。
+
+## 9. 開發順序
 
 1. **M1 基礎與登入**：SDK/PostgreSQL 確認、Blazor Web App、Identity、遷移、管理員初始化與恢復。
 2. **M2 內容管理**：文章與頁面生命週期、分類標籤、slug 唯一、發布與撤回、樂觀並發。
 3. **M3 網站可用**：圖片上傳與驗證、前台 SSR、導覽與分頁、站點設定。
-4. **M4 MVP 驗收**：回歸、安全、PostgreSQL 整合、瀏覽器端到端、重啟與備份還原。
+4. **M4 AI 能力**：pgvector、嵌入生命週期、混合搜尋與唯讀 MCP。
+5. **M5 MVP 驗收**：回歸、安全、PostgreSQL 整合、瀏覽器端到端、重啟與備份還原。
 
-## 9. 測試與驗收
+## 10. 測試與驗收
 
-**第一批驗證邊界：只做編譯驗證；使用者最後批量回歸待驗。** 本次文件同步沒有執行命令、測試、部署或遷移。以下為既有測試涵蓋／歷史驗收基線及供後續執行的命令，不是本批全量測試報告；歷史已驗收紀錄與數字保留原適用範圍，不套用於本批。表中的舊「唯一管理員」「只有服務通行證」測試描述屬於原基線，新契約須另行回歸。
+**驗證狀態（2026-11-24）：** 本輪使用儲存庫內隔離 `OutDir` 完成 Release 建置並執行聚焦 PostgreSQL／瀏覽器測試；完整回歸仍待使用者批量執行。下表說明既有與本輪測試涵蓋，不是全量通過報告；歷史已驗收數字保留原適用範圍，不套用於本輪。第一批舊「唯一管理員」「只有服務通行證」描述屬於原基線，新契約仍須回歸。
 
 ```bash
 # 完整回歸（需本機有 PostgreSQL 伺服器工具，測試會自行建立隔離叢集）
@@ -230,39 +310,41 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 | --- | --- |
 | `ContentServiceTests` | 發布閉環、slug 唯一與穩定性、首次發布時間、分頁邊界、關聯去重與刪除、交易回滾、樂觀並發、內容類型由伺服器決定、重複提交被唯一約束拒絕 |
 | `TaxonomyServiceTests` | 分類標籤唯一性、分頁、刪除僅移除關聯、樂觀並發 |
-| `SettingsServiceTests` | 站點設定儲存、輸出編碼、長度上限、並發更新 |
+| `SettingsServiceTests` | 站點設定儲存、輸出編碼、長度上限、並發更新、版面 provider 每次請求只讀取一次 API |
 | `AdminProvisioningTests` | 唯一管理員、重複與並發初始化被拒絕、密碼重設與舊登入失效、取消操作不改變資料 |
 | `ProtectedServiceTests` | 未登入或身分失效時，所有受保護服務都拒絕操作 |
 | `DatabaseIntegrationTests` | 遷移、唯一約束、交易、UTC 時間保存、資料庫層級規則 |
 | `MediaServiceTests` | 圖片上傳、格式偽裝、SVG 拒絕、大小與尺寸上限、路徑穿越、失敗清理、持久化 |
 | `MediaFileUploadTests` | 非圖片檔案上傳：PDF／音訊／影片／XLSX／CSV 魔數與內容驗證、偽裝與副檔名不符拒絕、失敗清理 |
-| `MarkdownSecurityTests` | 原始 HTML 停用、危險連結與圖片網址協定、XSS 防護、並行渲染 |
-| `HttpSecurityTests` | Cookie 屬性、防偽、登入失敗鎖定與速率限制、資安標頭、公開路由 404、撤回與刪除後不可讀取、未登入無法進入任何後台頁面 |
+| `MarkdownSecurityTests` | 原始 HTML 停用、危險連結與圖片網址協定、XSS 防護、並行渲染、編輯器預覽 |
+| `HttpSecurityTests` | Cookie 屬性、防偽、登入失敗鎖定與速率限制、資安標頭、公開路由 404、撤回與刪除後不可讀取、未登入無法進入任何後台頁面、公開頁回應壓縮、媒體與 CSS／JS 不可變快取 |
 | `BrowserFlowTests` | 完整發布閉環、雙分頁並發衝突、未儲存提示、斷線恢復、行動版面 |
 | `PersistenceTests` | 應用重啟後資料與圖片可用、資料庫與檔案備份還原、原登入仍可用 |
-| `CommandLineTests` | 遷移命令套用結構且可重複執行、管理命令拒絕憑證參數與重導向輸入、缺少設定時拒絕啟動 |
+| `CommandLineTests`／`CliCommandTests` | 遷移命令套用結構且可重複執行、管理命令拒絕憑證參數與重導向輸入、缺少設定時拒絕啟動；CLI 匯出／匯入往返、建立帳號、隱藏密碼、錯誤認證與安全確認 |
 | `StoragePathsTests` | 持久化目錄不得位於發布目錄內、相對路徑拒絕、預設位置在應用目錄之外 |
 | `PublicSyndicationTests` | 手寫摘要優先與上限、robots/sitemap/feed 僅含已發布內容且撤回後立即下架、詳情頁 og/canonical、feed 條數上限 |
 | `PublishingParityTests` | 置頂排序與頁面停用置頂、舊 slug 301 轉址與撤回後停止、圖片 lazy loading、媒體 alt 文字、健康檢查、JSON 匯出與權限 |
 | `ContentLifecycleTests` | 回收桶下架與還原、逾期清理、修訂版本數量上限與還原、排程晉升與撤回、預覽連結生命週期 |
-| `MediaClosureTests` | 上傳縮圖變體與 srcset、引用保護刪除、變體回填 |
+| `MediaClosureTests` | 上傳縮圖變體與 srcset、EXIF 方向校正、WebP 變體、引用保護刪除、變體回填、自訂欄位媒體引用保護、跨請求儲存變更序列化、刪除檔案失敗時回復原檔並保留資料列 |
 | `CoverImageTests` | 封面指派與清除、公開列表與詳情帶封面、媒體說明文字（caption）上限、僅封面引用也阻擋刪除、admin API 往返、前台 og:image 與 srcset 渲染 |
 | `BulkOperationsTests` | 批次移入回收桶／還原／永久刪除逐筆回報、並發衝突與不存在項目不影響其他、空清單與超上限拒絕、匿名拒絕、admin API 端點驗證 |
 | `QuickEditTests` | 清單快速編輯改標題代稱與狀態、slug 退役 301、發布清除排程並同步嵌入生命週期、衝突與回收桶與非法輸入拒絕、BFF 端點驗證 |
-| `ArchiveTransferTests` | ZIP 封裝打包資料與圖片、還原圖片並清理孤兒檔、缺媒體檔在動資料庫前整體拒絕、JSON 與 ZIP 分析、匯出端點 |
-| `BackupServiceTests` | 每日備份落檔為有效封裝、保留份數上限清理最舊、暫存檔不殘留 |
-| `AdminEfficiencyBrowserTests` | 瀏覽器驗證快速編輯、選圖器搜尋與摘要切點的互動流程 |
+| `ArchiveTransferTests` | ZIP 封裝打包資料、圖片與非圖片檔案、還原媒體中繼資料並清理孤兒檔、缺檔或壞檔在動資料庫前整體拒絕、正式媒體被鎖定時取消匯入並保留資料與原檔、JSON 與 ZIP 分析、匯出端點 |
+| `BackupServiceTests` | 每日備份落檔為有效封裝、保留份數上限清理最舊、暫存檔不殘留、手動備份 worker 與按站隔離 |
+| 本輪新增測試 | `MarkdownLayoutTests`／`HtmlToMarkdownTests`（安全版型與 HTML 轉換）、`EditorToolbarBrowserTests`（編輯器互動）、`AdminProductivityBrowserTests`（命令面板、全域搜尋、首次設定清單與站台刪除）、`ContentShareMetaTests`／`TermArchiveTests`（分享語言標記與分類標籤歸檔）、`TaxonomyDefaultsTests`、`CustomFieldExpansionTests`／`WritingAssetsTests`、`ContentListExpansionTests`、`NavigationWidgetsExpansionTests`、`CommentModerationExpansionTests`、`SearchSettingsExpansionTests`、`AccountMailTests`、`PortableImportTests`／`WebDavBackupTests`、`CliCommandTests`（命令列匯入匯出與使用者建立） |
+| `AdminEfficiencyBrowserTests` | 瀏覽器驗證快速編輯、選圖器搜尋、摘要切點、內容清單排序／每頁筆數／類型篩選／排程頁籤，以及站台刪除確認與儲存清理 |
 | `SyndicationEmbedTests` | 分類過濾 feed 與 404、Atom 1.0 輸出與過濾、篩選頁訂閱連結、oEmbed 僅公開內容、格式與路徑驗證、詳情頁探索連結 |
 | `PageHierarchyTests` | TextDiff 行差異與超限回退、頁面路徑解析與未發布祖先平面回退、sitemap 層級路徑、平面網址 301、錯誤中段 404、三段式 oEmbed |
 | `PresentationPolishTests` | 記住我切換持久 Cookie、Feed 全文（content:encoded／Atom content）與作者欄、byline 呈現、搜尋分頁與總數、越界頁 404、apple-touch-icon 連結與 404 |
 | `HybridSearchTests` | 關鍵字命中（CJK 與大小寫）、語意結果融合去重、撤回後不再命中、前台頁呈現 |
 | `SecurityAndProtectionTests` | RFC 6238 向量與 TOTP 流程、admin-reset 停用兩步驗證、密碼保護閘門與搜尋/MCP 排除、每日瀏覽計數 |
 | `ProtectionRegressionTests` | 畸形解鎖 Cookie 不外洩摘要、Static SSR 解鎖表單、帳號鎖定時第二階段無法登入、私密與受保護內容不進入嵌入供應商 |
-| `ImportExportRegressionTests` | 匯入拒絕越界媒體檔名、匯入還原網站圖示、縮圖變體納入引用保護 |
+| `ImportExportRegressionTests` | 匯入拒絕越界媒體檔名、匯入還原網站圖示、縮圖變體納入引用保護、v3 還原預設分類標籤／封面／內容語言／翻譯組並以新識別碼隔離來源站 |
 | `LifecycleRegressionTests` | 回收桶清理不刪除已還原內容、並行儲存不形成頁面循環、排程再發布保留首次發布時間、固定首頁仍可篩選文章列表 |
 | `EditorRegressionTests` | 產生預覽連結不掩蓋其他分頁的變更、排程時間視為未儲存變更 |
 | `ScheduleTimeTests` | 排程時間按瀏覽器時區換算並跨日光節約時間保持牆上時間、不存在的當地時間被拒絕 |
-| `ApiV1EndpointTests` | /api/v1 列表分頁與僅已發布、詳情對草稿／受保護／私密內容 404、搜尋無模型金鑰時退回關鍵字、參數校驗與按 IP 限流 |
+| `ApiV1EndpointTests` | /api/v1 列表分頁與僅已發布、詳情對草稿／受保護／私密內容 404、搜尋無模型金鑰時退回關鍵字、參數校驗與按 IP 限流、公開 JSON gzip／no-store／安全標頭 |
+| `OpenApiContractTests`／`ScalarApiReferenceTests` | OpenAPI 3.1 路由完整性、摘要／標籤／operationId 與管理 Bearer／公開匿名宣告；Scalar 頁面、主機內嵌資源與契約連結 |
 | `McpEndpointTests` | MCP 端點（Api 主機）僅暴露三個唯讀工具、草稿不可見、缺模型金鑰時工具層降級不回 5xx、按 IP 限流 |
 | `ApiV1AdminEndpointTests` | 寫入端點無通行證或錯誤通行證一律 401、建立→發布→撤回→回收桶→還原閉環、過期版本被拒絕不靜默覆寫、管理流量獨立限流配額 |
 | `WidgetAndCustomCssTests` | CSS 清理器危險構造拒絕與註解移除、小工具 CRUD／邊界驗證／區域排序／公開投影（僅已發布內容）、未登入拒絕與跨站隔離、自訂 CSS 清理落庫與匯出匯入往返 |
@@ -272,16 +354,18 @@ dotnet test tests/Origami.Tests/Origami.Tests.csproj -c Release
 
 ### 已知限制
 
-- 多站點、多使用者與角色權限屬於本批實作／驗收中能力，仍限單一應用實例、固定前台版型；不支援分散式／多實例部署。站點須按已登錄的獨立 DNS 網域／子網域存取（IPv4／localhost 供本機使用，不支援 IPv6 literal）；DNS／TLS／反向代理仍須維運配置。
+- 多站點、多使用者與角色權限屬於本批實作／驗收中能力，仍限單一應用實例、受控前台呈現；不支援分散式／多實例部署。站點須按已登錄的獨立 DNS 網域／子網域存取（IPv4／localhost 供本機使用，不支援 IPv6 literal）；DNS／TLS／反向代理仍須維運配置。
 - 所有已上傳圖片皆為公開資源，草稿中的圖片也不例外；撤回或刪除內容不會隱藏圖片網址。站點目錄隔離不等於私密附件權限。
 - 非圖片上傳僅接受白名單格式（PDF、音訊、影片、XLSX、CSV）；CSV 僅限 UTF-8（含 BOM）純文字，Big5／GBK 等其他編碼會被拒絕；XLSX 只驗證 OOXML 容器特徵後原樣儲存，伺服器不解析儲存格內容。
 - 資料保護金鑰以 Windows DPAPI 加密，只能由同一台電腦上的同一個使用者解密；keys 全域共用，本批不搬遷。
-- 資料匯出檔（JSON 與 ZIP）包含受密碼保護內容的密碼雜湊，可離線嘗試破解，請視為機密檔案並不外流；匯入會以單一交易取代目前站內全部文字資料。上傳 JSON 時圖片檔不變動；上傳 ZIP（完整備份）時會一併還原該站圖片並清理清單外的舊圖檔（取代式語意），媒體總量上限 256 MB。此處「完整備份」僅指本站內容＋圖片封裝，不含帳號／成員／PAT 或全域 keys，不能取代完整 PostgreSQL／媒體／keys 備份。
+- 資料匯出檔（JSON 與 ZIP）包含受密碼保護內容的密碼雜湊，可離線嘗試破解，請視為機密檔案並不外流；匯入會以單一交易取代目前站內全部文字資料。上傳 JSON 時圖片與非圖片檔案均不變動；上傳 ZIP（完整備份）時會還原 `media/` 圖片及變體與 `files/` 非圖片檔案，並清理清單外的舊媒體檔（取代式語意），媒體總量上限 256 MB。此處「完整備份」僅指本站內容＋媒體封裝，不含帳號／成員／PAT 或全域 keys，不能取代完整 PostgreSQL／媒體／keys 備份。
+- ZIP 還原會以 PostgreSQL advisory lock 序列化並發媒體變更，並在一般 I/O 失敗時回復原檔；但檔案系統與資料庫交易並非跨程序崩潰原子，替換媒體過程中若斷電或程序終止，須以完整備份還原。站點刪除採資料庫交易，實體目錄刪除失敗時會保留孤兒目錄供維運重試，不誤報資料庫刪除失敗。
+- WXR 匯出是遷出路徑，輸出文章／頁面／分類／標籤與已核可評論，不承諾外掛資料相容；WordPress WXR 匯入為新增式，保留可識別的發布／待審／草稿／私密／回收桶狀態，重複代稱略過；附件下載預設關閉，開啟時須指定允許網域並沿用 HTTPS／SSRF／大小限制。Markdown／Medium 可攜匯入為新增式，預設草稿且不下載外部圖片；輸入檔與 ZIP 解壓後總量上限均為 32 MiB，單次最多處理 200 個 Markdown／HTML 來源檔。WebDAV 只異地上傳同一份本站 ZIP，仍不包含資料庫、帳號或 keys；僅接受 HTTPS 且不跟隨轉址。
 - 公開 API 與 MCP 仍匿名可讀且唯讀；第三方／App 可用綁定使用者＋站點的 PAT 存取獲授權的管理內容，寫入最高 Editor，不可管理站點、帳號、設定或匯入匯出，不可呼叫 BFF-only 呈現／解鎖。此後端能力不表示行動客戶端已完成寫入 UI。
 - 網站與 Api 為兩個程序：網站啟動前 Api 必須可用（`Api:BaseUrl`），雙方須設同一 `Api:ServiceToken`；單機部署建議相鄰連接埠，並配置 HTTPS，不能把 HTTP 回環範例當作帳號管理上線設定。
 - 登入、兩步驗證、站內助理、背景工作（嵌入／回收桶清理）、資料庫遷移與管理命令仍在網站主機本地執行。
-- 不含評論與外掛機制、主題系統、作者擁有權、待審稿、SSO 或私密附件；不引入 PHP 或 WordPress 資料表／REST API／外掛／主題相容層。
-- 自訂 CSS 屬受控清理而非自由模板：@import、@font-face、expression、javascript: 與反斜線轉義會被拒絕，覆蓋內建版型變數需 `!important`；`url()` 允許與內文圖片同級的站內／外部圖片資源。小工具僅有內建九種宣告式型別，不支援載入任意程式碼或自訂區塊型別。
+- 不包含任意可執行外掛、自由主題模板、SSO 或私密附件；不引入 PHP 或 WordPress 資料表／REST API／可執行外掛相容層。評論、選單編輯器、受控主題與作者待審稿已實作，但仍非 WordPress 相容層。
+- 自訂 CSS 屬受控清理而非自由模板：@import、@font-face、expression、javascript: 與反斜線轉義會被拒絕，覆蓋內建版型變數需 `!important`；`url()` 允許與內文圖片同級的站內／外部圖片資源。小工具僅有內建十五種宣告式型別，不支援載入任意程式碼或自訂區塊型別。
 - 受控包市場只提供宣告式擴充包（主題包與小工具包），來源限內建目錄與 ZIP 匯入：字體棧僅接受 sans／serif／mono 白名單鍵並對應內建常數，ZIP 僅接受根目錄單一 manifest.json（夾帶條目與路徑穿越一律拒絕）；不提供線上目錄抓取，也不載入任何組件、腳本或外部字體。主題包停用或解除後版型退回內建「閱讀」預設；小工具包解除時會一併刪除其建立的小工具。
 - 與其他 CMS 市場的相容僅限宣告式層：第三方（WordPress）主題封裝可轉換為受控主題包，但只讀取 style.css 標頭的中繼資料與可推導的強調色、字體族，模板與程式碼不保留、不執行，第三方樣式不直接帶入；其他 CMS 的「可執行外掛」一律不支援，也不以載入任意程式碼換取相容性。相容不包含遠端目錄對接（不連接 wp.org 等線上市場），僅限本機上傳的封裝。
 - `AddSiteIsolationAndApiCredentials` 未套用正式資料庫；多站／帳號／成員／憑證實際啟用後拒絕 `Down`，部署及回退前必須另行規劃完整備份與還原。
