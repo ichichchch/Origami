@@ -163,6 +163,29 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         actor.Services.GetRequiredService<StorageMutationCoordinator>());
 
     [PostgresFact]
+    public async Task Locked_variant_restores_the_original_and_keeps_the_media_row()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var service = CreateService(admin, directory);
+        MediaItem uploaded;
+        await using (var stream = new MemoryStream(Png(1200, 400)))
+            uploaded = await service.UploadAsync(stream, "locked-delete.png");
+        var storage = directory.Create();
+        var original = Path.Combine(storage.Images, uploaded.FileName);
+        var variant = Path.Combine(storage.Images, MediaService.VariantName(uploaded.FileName, 480));
+        var originalBytes = await File.ReadAllBytesAsync(original);
+        using var locked = new FileStream(variant, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var refused = await Assert.ThrowsAsync<CmsException>(() => service.DeleteAsync(uploaded.Id, true));
+        Assert.Contains("媒體資料已保留", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(originalBytes, await File.ReadAllBytesAsync(original));
+        Assert.True(File.Exists(variant));
+        await using var db = await App.CreateContextAsync();
+        Assert.True(await db.MediaAssets.AnyAsync(x => x.Id == uploaded.Id));
+    }
+
+    [PostgresFact]
     public async Task Storage_mutations_are_serialized_across_request_scopes()
     {
         using var firstAdmin = await App.AdministratorAsync();

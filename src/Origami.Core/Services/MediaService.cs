@@ -456,18 +456,56 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             var more = references.Count > 3 ? "等共 " + references.Count + " 個引用" : "";
             throw new CmsException("圖片仍被 " + titles + more + " 引用，請先移除引用或更換圖片後再刪除。");
         }
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.MediaAssets.Remove(asset);
         await ContentRules.SaveAsync(db, ct);
-        // 資料列已刪除；檔案移除採盡力而為，絕不阻擋資料庫結果。
-        if (asset.Kind == MediaKind.Image)
+        var directory = asset.Kind == MediaKind.Image ? storage.Images : storage.Files;
+        var names = asset.Kind == MediaKind.Image
+            ? new[] { asset.FileName }.Concat(Limits.ImageVariantWidths.Select(width => VariantName(asset.FileName, width))).ToArray()
+            : [asset.FileName];
+        var quarantine = Path.Combine(storage.Staging, "delete-" + Guid.NewGuid().ToString("N"));
+        var moved = new List<(string Final, string Quarantined)>();
+        var committed = false;
+        var restored = true;
+        try
         {
-            Cleanup(Path.Combine(storage.Images, asset.FileName));
-            foreach (var width in Limits.ImageVariantWidths)
-                Cleanup(Path.Combine(storage.Images, VariantName(asset.FileName, width)));
+            Directory.CreateDirectory(quarantine);
+            foreach (var name in names)
+            {
+                var final = Path.Combine(directory, name);
+                if (!File.Exists(final)) continue;
+                var quarantined = Path.Combine(quarantine, name);
+                File.Move(final, quarantined);
+                moved.Add((final, quarantined));
+            }
+            await transaction.CommitAsync(ct);
+            committed = true;
         }
-        else
+        catch (Exception error)
         {
-            Cleanup(Path.Combine(storage.Files, asset.FileName));
+            try { await transaction.RollbackAsync(CancellationToken.None); }
+            catch (Exception ex) when (ex is NpgsqlException or PostgresException or InvalidOperationException)
+            {
+                Log.RollbackFailed(logger, mediaId, ex);
+            }
+            foreach (var (final, quarantined) in moved.AsEnumerable().Reverse())
+            {
+                try { File.Move(quarantined, final, overwrite: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    restored = false;
+                    Log.RestoreFailed(logger, mediaId, quarantine, ex);
+                }
+            }
+            if (!restored)
+                throw new CmsException("媒體資料已保留，但部分實體檔案無法回復；請檢查儲存目錄權限，並由管理員清理隔離暫存檔。");
+            if (error is IOException or UnauthorizedAccessException)
+                throw new CmsException("媒體資料已保留，但實體檔案無法刪除；請檢查儲存目錄權限後重試。");
+            throw;
+        }
+        finally
+        {
+            if (committed || restored) CleanupDirectory(quarantine);
         }
     }
 
@@ -710,9 +748,27 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         }
     }
 
+    private void CleanupDirectory(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.DirectoryCleanupFailed(logger, path, ex);
+        }
+    }
+
     private static partial class Log
     {
         [LoggerMessage(LogLevel.Error, "無法清理本次上傳暫存檔，請檢查儲存目錄權限。")]
         public static partial void CleanupFailed(ILogger logger, Exception exception);
+
+        [LoggerMessage(LogLevel.Error, "無法清理媒體隔離暫存目錄 {Path}，請由管理員重試。")]
+        public static partial void DirectoryCleanupFailed(ILogger logger, string path, Exception exception);
+
+        [LoggerMessage(LogLevel.Error, "媒體 {MediaId} 刪除交易回滾失敗；請重新查詢媒體資料後再重試。")]
+        public static partial void RollbackFailed(ILogger logger, Guid mediaId, Exception exception);
+
+        [LoggerMessage(LogLevel.Error, "媒體 {MediaId} 的部分檔案無法從 {Path} 回復，請保留現場供管理員處理。")]
+        public static partial void RestoreFailed(ILogger logger, Guid mediaId, string path, Exception exception);
     }
 }
