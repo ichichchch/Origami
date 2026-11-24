@@ -10,7 +10,11 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         string? Email = null, bool NotifyReplies = false);
     public sealed record CommentView(Guid Id, Guid ContentId, string ContentTitle, string AuthorName, string Url,
         string Markdown, CommentStatus Status, DateTimeOffset CreatedAt, Guid Version,
-        Guid? ParentId = null, bool IsAdminReply = false, string ParentAuthorName = "");
+        Guid? ParentId = null, bool IsAdminReply = false, string ParentAuthorName = "")
+    {
+        /// <summary>後台是否編輯過內容。</summary>
+        public bool IsEdited { get; init; }
+    }
     public sealed record CommentCounts(int Pending, int Approved, int Spam, int Trashed);
 
     /// <summary>
@@ -27,8 +31,7 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
             throw new CmsException($"評論內容須為 1–{Limits.CommentBody} 字。");
         var url = (input.Url ?? "").Trim();
         if (url.Length > Limits.CommentUrl) throw new CmsException($"網址最長 {Limits.CommentUrl} 字。");
-        if (url.Length > 0 && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")))
-            throw new CmsException("網址必須是 http 或 https 的絕對網址。");
+        url = ContentRules.OptionalHttpUrl(url, Limits.CommentUrl, "網址");
         // 回覆訂閱：勾選通知必須留 email；僅用於寄送回覆通知，不公開顯示。
         var email = (input.Email ?? "").Trim();
         if (email.Length > 256 || email.Any(char.IsControl))
@@ -186,13 +189,15 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
     }
 
     /// <summary>全站已核可評論訂閱資料（最新在前，僅限公開可讀且允許評論的文章）。</summary>
-    public async Task<List<CommentFeedEntry>> FeedCommentsAsync(int count, CancellationToken ct = default)
+    public async Task<List<CommentFeedEntry>> FeedCommentsAsync(int count, CancellationToken ct = default, Guid? contentId = null)
     {
         if (count is < 1 or > Limits.MaxFeedItems) throw new CmsException("訂閱筆數超出範圍。");
         await using var db = await factory.CreateDbContextAsync(ct);
         if (!await db.Settings.AsNoTracking().AnyAsync(s => s.Id == 1 && s.CommentsEnabled, ct))
             return [];
         return await db.Comments.AsNoTracking()
+            // 指定單篇內容時只列該篇的評論（單篇評論 feed）。
+            .Where(x => contentId == null || x.ContentId == contentId)
             .Where(x => x.Status == CommentStatus.Approved
                 && x.Content.Kind == ContentKind.Post && x.Content.Status == ContentStatus.Published
                 && !x.Content.IsProtected && !x.Content.IsPrivate && x.Content.AllowComments
@@ -277,7 +282,7 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         var total = await query.CountAsync(ct);
         var items = await query.Skip(ContentRules.Offset(normalized, Limits.CommentsPageSize)).Take(Limits.CommentsPageSize)
             .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version,
-                x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : ""))
+                x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : "") { IsEdited = x.IsEdited })
             .ToListAsync(ct);
         return new(items, total, normalized, Limits.CommentsPageSize);
     }
@@ -313,9 +318,52 @@ public sealed partial class CommentService(IDbContextFactory<CmsDbContext> facto
         var items = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
             .Skip(offset).Take(pageSize)
             .Select(x => new CommentView(x.Id, x.ContentId, x.Content.Title, x.AuthorName, x.Url, x.Markdown, x.Status, x.CreatedAt, x.Version,
-                x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : ""))
+                x.ParentId, x.IsAdminReply, x.Parent != null ? x.Parent.AuthorName : "") { IsEdited = x.IsEdited })
             .ToListAsync(ct);
         return new(items, total, page, pageSize);
+    }
+
+    /// <summary>批次審核：逐筆攜帶版本並回報，單筆失敗不中斷其餘；整批先重驗一次編輯者權限。</summary>
+    public async Task<List<BulkItemResult>> BulkModerateAsync(IReadOnlyList<(Guid Id, Guid Version)> items, CommentStatus target, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        if (!Enum.IsDefined(target)) throw new CmsException("評論狀態無效。");
+        if (items.Count == 0) throw new CmsException("請先選擇要處理的評論。");
+        if (items.Count > Limits.BulkMaxItems) throw new CmsException($"單次批次操作最多 {Limits.BulkMaxItems} 筆。");
+        var results = new List<BulkItemResult>(items.Count);
+        foreach (var (id, version) in items)
+        {
+            try
+            {
+                await ModerateAsync(id, target, version, ct);
+                results.Add(new BulkItemResult(id, true, ""));
+            }
+            catch (CmsException error)
+            {
+                results.Add(new BulkItemResult(id, false, error.Message));
+            }
+        }
+        return results;
+    }
+
+    /// <summary>編輯訪客評論內容（修正錯字或移除不當文字）：標記為已編輯並輪替版本；官方回覆不可編輯。</summary>
+    public async Task<CommentView> UpdateAsync(Guid id, string markdown, Guid version, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        var body = (markdown ?? "").Trim();
+        if (body.Length is 0 or > Limits.CommentBody) throw new CmsException($"評論內容須為 1–{Limits.CommentBody} 字。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var comment = await db.Comments.Include(x => x.Content).Include(x => x.Parent).SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new CmsException("評論不存在。");
+        if (comment.IsAdminReply) throw new CmsException("官方回覆請以刪除後重新回覆的方式更正。");
+        if (comment.Version != version) throw new CmsException(StaleMessage);
+        comment.Markdown = body;
+        comment.IsEdited = true;
+        comment.Version = Guid.NewGuid();
+        await ContentRules.SaveAsync(db, ct);
+        return new CommentView(comment.Id, comment.ContentId, comment.Content.Title, comment.AuthorName, comment.Url,
+            comment.Markdown, comment.Status, comment.CreatedAt, comment.Version, comment.ParentId, comment.IsAdminReply,
+            comment.Parent?.AuthorName ?? "") { IsEdited = true };
     }
 
     public async Task<CommentCounts> CountAdminAsync(CancellationToken ct = default)

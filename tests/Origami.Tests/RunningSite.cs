@@ -104,6 +104,7 @@ internal sealed class RunningSite : IAsyncDisposable
         SetEnvironment(start.Environment, "Logging__LogLevel__Microsoft.Hosting.Lifetime", "Information");
         var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var capturingError = false;
+        var capturingCommentWarning = false;
         void Capture(object sender, DataReceivedEventArgs e)
         {
             var line = e.Data;
@@ -115,11 +116,31 @@ internal sealed class RunningSite : IAsyncDisposable
                 if (line.Contains("Origami.Web.Services.SiteResolver", StringComparison.Ordinal))
                     siteResolutionLines.Enqueue(line.Length > 500 ? line[..500] : line);
                 capturingError = false;
+                capturingCommentWarning = line.Contains("Origami.Web.Components.Pages.ContentDetail", StringComparison.Ordinal);
             }
             else if (line?.StartsWith("fail: ", StringComparison.Ordinal) == true)
             {
                 capturingError = true;
+                capturingCommentWarning = false;
                 errorLines.Enqueue(line);
+            }
+            else if (capturingCommentWarning && line is not null && line.Length > 0)
+            {
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("warn: ", StringComparison.Ordinal) ||
+                    trimmed.StartsWith("info: ", StringComparison.Ordinal) ||
+                    trimmed.StartsWith("fail: ", StringComparison.Ordinal) ||
+                    trimmed.StartsWith("dbug: ", StringComparison.Ordinal))
+                {
+                    capturingCommentWarning = false;
+                }
+                else
+                {
+                    var colon = trimmed.IndexOf(':');
+                    if (colon > 0 && !trimmed.StartsWith("at ", StringComparison.Ordinal) && trimmed[..colon].Contains('.'))
+                        warningExceptionTypes.Enqueue(trimmed[..colon]);
+                    if (trimmed.StartsWith("at ", StringComparison.Ordinal)) capturingCommentWarning = false;
+                }
             }
             else if (capturingError && line is not null && line.Length > 0)
             {

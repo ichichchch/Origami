@@ -34,6 +34,10 @@
                 <link rel="next" href="@(BaseUrl + PageHref(_pageIndex + 1))" />
             }
             <link rel="alternate" type="application/json+oembed" href="@OembedUrl" title="@_content.Title" />
+            @if (_content.Kind == ContentKind.Post)
+            {
+                <link rel="alternate" type="application/rss+xml" title="@string.Format(UiText.T("Public.ContentDetail.CommentFeedTitle", "{0} 的評論"), _content.Title)" href="/feed/comments?post=@Uri.EscapeDataString(_content.Slug)" />
+            }
             <meta property="og:site_name" content="@_settings.Name" />
             <meta property="og:title" content="@_content.Title" />
             <meta property="og:type" content="@(_content.Kind == ContentKind.Post ? "article" : "website")" />
@@ -264,9 +268,11 @@ else if (_content is not null)
                 <h2 id="comments-title">@string.Format(UiText.T("Public.ContentDetail.CommentCount", "評論（{0}）"), _commentTotal)</h2>
                 @foreach (var comment in _comments)
                 {
-                    <article class="comment @(comment.ParentId is not null ? "comment-reply" : "")">
+                    // 巢狀顯示：依父鏈深度縮排，深度上限來自站點設定；父評論不在本頁時視為最上層。
+                    var depth = Math.Min(CommentDepth(comment), Math.Max(1, _settings.CommentMaxDepth));
+                    <article class="comment @(comment.ParentId is not null ? "comment-reply" : "")" style="@(depth > 0 ? $"margin-inline-start:{depth * 1.4}rem" : null)">
                         <p class="comment-meta">
-                            @if (Uri.TryCreate(comment.Url, UriKind.Absolute, out var website) && website.Scheme is "https" or "http")
+                            @if (Uri.TryCreate(comment.Url, UriKind.Absolute, out var website) && website.Scheme is "https" or "http" && website.Host.Length > 0)
                             {
                                 <a href="@website.AbsoluteUri" rel="nofollow noopener" target="_blank">@comment.AuthorName</a>
                             }
@@ -277,6 +283,10 @@ else if (_content is not null)
                             @if (comment.IsAdminReply)
                             {
                                 <span class="status-badge published">@UiText.T("Public.ContentDetail.OfficialReply", "作者／管理員")</span>
+                            }
+                            @if (comment.IsEdited)
+                            {
+                                <span class="muted"> · @UiText.T("Public.ContentDetail.EditedComment", "已編輯")</span>
                             }
                             @if (!string.IsNullOrEmpty(comment.ParentAuthorName))
                             {
@@ -312,14 +322,15 @@ else if (_content is not null)
                 @* Static SSR 的 EditForm 內含防偽權杖，並在 POST 時驗證；評論端點經 BFF 通道寫入。 *@
                 <EditForm Model="CommentForm" method="post" OnValidSubmit="PostCommentAsync" FormName="content-comment" Enhance="false">
                     <DataAnnotationsValidator />
-                    <div class="field"><label for="comment-name">@UiText.T("Public.ContentDetail.CommentName", "名稱") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><input id="comment-name" name="CommentForm.AuthorName" maxlength="@Limits.CommentAuthor" required autocomplete="name" /></div>
-                    <div class="field"><label for="comment-url">@UiText.T("Public.ContentDetail.CommentUrl", "網址（選填）")</label><input id="comment-url" name="CommentForm.Url" maxlength="@Limits.CommentUrl" autocomplete="url" placeholder="https://" /></div>
-                    <div class="field"><label for="comment-email">@UiText.T("Public.ContentDetail.CommentEmail", "電子郵件（選填）")</label><input id="comment-email" name="CommentForm.Email" type="email" maxlength="256" autocomplete="email" />
-                        <label class="checkbox-inline"><input type="checkbox" name="CommentForm.NotifyReplies" value="true" /> @UiText.T("Public.ContentDetail.CommentNotifyReplies", "有人回覆時以電子郵件通知我")</label>
+                    <div class="field"><label for="comment-name">@UiText.T("Public.ContentDetail.CommentName", "名稱") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><input id="comment-name" name="CommentForm.AuthorName" value="@CommentForm.AuthorName" maxlength="@Limits.CommentAuthor" required autocomplete="name" /></div>
+                    <div class="field"><label for="comment-url">@UiText.T("Public.ContentDetail.CommentUrl", "網址（選填）")</label><input id="comment-url" name="CommentForm.Url" value="@CommentForm.Url" maxlength="@Limits.CommentUrl" autocomplete="url" placeholder="https://" /></div>
+                    <div class="field checkbox-field"><label for="comment-remember"><input id="comment-remember" type="checkbox" name="CommentForm.Remember" value="true" checked="@CommentForm.Remember" /> @UiText.T("Public.ContentDetail.RememberMe", "記住我的名稱與網址")</label></div>
+                    <div class="field"><label for="comment-email">@UiText.T("Public.ContentDetail.CommentEmail", "電子郵件（選填）")</label><input id="comment-email" name="CommentForm.Email" value="@CommentForm.Email" type="email" maxlength="256" autocomplete="email" />
+                        <label class="checkbox-inline"><input type="checkbox" name="CommentForm.NotifyReplies" value="true" checked="@CommentForm.NotifyReplies" /> @UiText.T("Public.ContentDetail.CommentNotifyReplies", "有人回覆時以電子郵件通知我")</label>
                         <span class="field-help">@UiText.T("Public.ContentDetail.CommentEmailHelp", "僅用於回覆通知，不公開顯示；郵件附退訂連結。")</span></div>
                     @* 蜜罐欄位對正常訪客隱藏；機器人填寫後該則評論靜默進入垃圾佇列。 *@
                     <div class="hp-field" aria-hidden="true"><label for="comment-website">@UiText.T("Public.ContentDetail.LeaveBlank", "請留空")</label><input id="comment-website" name="CommentForm.Honeypot" tabindex="-1" autocomplete="off" /></div>
-                    <div class="field"><label for="comment-body">@UiText.T("Public.ContentDetail.CommentBody", "評論") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><textarea id="comment-body" name="CommentForm.Body" rows="4" maxlength="@Limits.CommentBody" required></textarea></div>
+                    <div class="field"><label for="comment-body">@UiText.T("Public.ContentDetail.CommentBody", "評論") <span class="required">@UiText.T("Public.ContentDetail.Required", "必填")</span></label><textarea id="comment-body" name="CommentForm.Body" rows="4" maxlength="@Limits.CommentBody" required>@CommentForm.Body</textarea></div>
                     @if (ReplyToCommentId is { } replyToId && _comments.FirstOrDefault(x => x.Id == replyToId) is { } replyTarget)
                     {
                         <input type="hidden" name="CommentForm.ParentId" value="@replyTarget.Id" />
@@ -397,12 +408,15 @@ else
         [StringLength(256, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(EmailTooLong))]
         public string? Email { get; set; }
         public bool NotifyReplies { get; set; }
+        /// <summary>訪客勾選「記住我的名稱與網址」；電子郵件一律不記。</summary>
+        public bool Remember { get; set; }
         [Required(ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyRequired))]
         [StringLength(Limits.CommentBody, ErrorMessageResourceType = typeof(CommentFormInput), ErrorMessageResourceName = nameof(BodyTooLong))]
         public string Body { get; set; } = "";
 
         public static string EmailInvalid => UiText.T("Public.ContentDetail.CommentEmailInvalid", "電子郵件格式不正確。");
         public static string EmailTooLong => UiText.T("Public.ContentDetail.CommentEmailTooLong", "電子郵件最長 256 字。");
+        public static string NotifyEmailRequired => UiText.T("Public.ContentDetail.CommentNotifyEmailRequired", "勾選回覆通知時請留下電子郵件。");
     }
     private string? _unlockError;
     [SupplyParameterFromForm(FormName = "content-unlock")]
@@ -478,6 +492,18 @@ else
         return parts.Count == 0 ? "" : "?" + string.Join("&", parts);
     }
 
+    private Dictionary<Guid, CommentService.CommentView> _commentById = [];
+
+    /// <summary>評論在本頁父鏈中的深度；父評論不在本頁（已刪除或位於其他分頁）時為 0，最多追 20 層。</summary>
+    private int CommentDepth(CommentService.CommentView comment)
+    {
+        var depth = 0;
+        Guid? cursor = comment.ParentId;
+        while (cursor is { } parentId && _commentById.TryGetValue(parentId, out var parent) && ++depth <= 20)
+            cursor = parent.ParentId;
+        return depth > 20 ? 0 : depth;
+    }
+
     /// <summary>載入指定頁的公開評論；請求頁碼超過總頁數時夾回最後一頁再讀一次。</summary>
     private async Task LoadCommentsAsync(int page, CancellationToken ct)
     {
@@ -489,6 +515,7 @@ else
             if (result is null) return;
         }
         _comments = [.. result.Items];
+        _commentById = _comments.ToDictionary(x => x.Id);
         _commentTotal = result.Total;
         _commentPageNum = result.Page;
         _commentPageTotal = result.TotalPages;
@@ -611,6 +638,7 @@ else
         {
             Unlock = new UnlockInput();
             CommentForm = new CommentFormInput();
+            ApplyRememberedCommenter();
         }
         Unlock ??= new UnlockInput();
         CommentForm ??= new CommentFormInput();
@@ -762,6 +790,40 @@ else
             _unlockError = UiText.T("Public.ContentDetail.UnlockFailed", "解鎖失敗，請稍後再試。");
         }
     }
+    private const string CommenterCookieName = "origami.commenter";
+
+    /// <summary>「記住我」只記名稱與網址（一年）；電子郵件一律不寫入 Cookie。</summary>
+    private void RememberCommenter(bool remember, string name, string url)
+    {
+        if (HttpContext is null || HttpContext.Response.HasStarted) return;
+        if (!remember)
+        {
+            if (HttpContext.Request.Cookies.ContainsKey(CommenterCookieName)) HttpContext.Response.Cookies.Delete(CommenterCookieName);
+            return;
+        }
+        var serialized = System.Text.Json.JsonSerializer.Serialize(new { n = name, u = url });
+        if (HttpContext.Request.Cookies[CommenterCookieName] == serialized) return;
+        HttpContext.Response.Cookies.Append(CommenterCookieName, serialized, new CookieOptions
+        {
+            MaxAge = TimeSpan.FromDays(365), HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, Path = "/"
+        });
+    }
+
+    private void ApplyRememberedCommenter()
+    {
+        if (HttpContext is null || !HttpContext.Request.Cookies.TryGetValue(CommenterCookieName, out var raw) || raw.Length > 2000) return;
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+            if (document.RootElement.TryGetProperty("n", out var name) && name.ValueKind == System.Text.Json.JsonValueKind.String)
+                CommentForm.AuthorName = name.GetString() is { Length: > 0 and <= Limits.CommentAuthor } value ? value : "";
+            if (document.RootElement.TryGetProperty("u", out var url) && url.ValueKind == System.Text.Json.JsonValueKind.String)
+                CommentForm.Url = url.GetString() is { Length: > 0 and <= Limits.CommentUrl } link ? link : null;
+        }
+        catch (System.Text.Json.JsonException) { /* 損壞的 Cookie 視同未設定。 */ }
+    }
+
     private async Task PostCommentAsync()
     {
         if (_content is null || HttpContext is null || HttpContext.Response.HasStarted) return;
@@ -773,10 +835,14 @@ else
         }
         try
         {
-            await Api.PostCommentAsync(_content.Id, CommentForm.AuthorName.Trim(), CommentForm.Url?.Trim(),
+            var remember = CommentForm.Remember;
+            var rememberedName = CommentForm.AuthorName.Trim();
+            var rememberedUrl = CommentForm.Url?.Trim() ?? "";
+            await Api.PostCommentAsync(_content.Id, rememberedName, CommentForm.Url?.Trim(),
                 CommentForm.Body.Trim(), !string.IsNullOrEmpty(CommentForm.Honeypot), CommentForm.ParentId,
                 string.IsNullOrWhiteSpace(CommentForm.Email) ? null : CommentForm.Email.Trim(),
                 CommentForm.NotifyReplies, HttpContext.RequestAborted);
+            RememberCommenter(remember, rememberedName, rememberedUrl);
             _commentPosted = true;
             _commentError = null;
             CommentForm = new CommentFormInput();
@@ -802,6 +868,7 @@ else
         "內容不存在。" => UiText.T("Public.ContentDetail.ContentMissing", "內容不存在。"),
         "這篇內容不接受評論。" => UiText.T("Public.ContentDetail.CommentsNotAccepted", "這篇內容不接受評論。"),
         "這篇文章發布已超過評論開放期限，目前已關閉評論。" => UiText.T("Public.ContentDetail.CommentsClosedByAge", "這篇文章發布已超過評論開放期限，目前已關閉評論。"),
+        "勾選回覆通知時請留下電子郵件。" => CommentFormInput.NotifyEmailRequired,
         _ => UiText.T("Public.ContentDetail.CommentFailed", "評論送出失敗，請稍後再試。")
     };
 

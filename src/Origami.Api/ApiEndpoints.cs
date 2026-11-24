@@ -123,7 +123,7 @@ public static class ApiEndpoints
         { LogoFileName = logoFileName ?? "", CommentsEnabled = value.CommentsEnabled,
             CommentCloseDays = value.CommentCloseDays,
             NotFoundTitle = value.NotFoundTitle, NotFoundBody = value.NotFoundBody,
-            DefaultUiLanguage = value.DefaultUiLanguage,
+            DefaultUiLanguage = value.DefaultUiLanguage, CommentMaxDepth = value.CommentMaxDepth,
             ThemePreset = value.ThemePreset, AccentColor = value.AccentColor, ReadingWidth = value.ReadingWidth,
             ShowByline = value.ShowByline, ShowCover = value.ShowCover, CardStyle = value.CardStyle,
             ColorScheme = value.ColorScheme, FooterText = value.FooterText,
@@ -263,11 +263,17 @@ public static class ApiEndpoints
     }
 
     /// <summary>全站最新已核可評論的訂閱項目。</summary>
-    private static async Task<IResult> GetCommentsFeedAsync(CommentService comments, SettingsService settings,
-        CancellationToken ct)
+    private static async Task<IResult> GetCommentsFeedAsync(string? post, CommentService comments, SettingsService settings,
+        ContentService content, CancellationToken ct)
     {
         var configured = await settings.GetAsync(ct);
         var count = Math.Clamp(configured.FeedItems ?? Limits.FeedItems, 1, Limits.MaxFeedItems);
+        // 指定文章代稱時只列該篇的評論；文章不存在或未發布時回 404（與公開路由一致）。
+        if (!string.IsNullOrWhiteSpace(post))
+        {
+            var published = await content.GetPublishedAsync(ContentKind.Post, ContentRules.NormalizeSlug(post), null, ct);
+            return published is null ? Results.NotFound() : Results.Ok(await comments.FeedCommentsAsync(count, ct, published.Id));
+        }
         return Results.Ok(await comments.FeedCommentsAsync(count, ct));
     }
 
@@ -294,6 +300,8 @@ public static class ApiEndpoints
         public string NotFoundBody { get; init; } = "";
         /// <summary>站點預設介面語言；空字串表示產品預設。</summary>
         public string DefaultUiLanguage { get; init; } = "";
+        /// <summary>訪客評論巢狀顯示的最大深度。</summary>
+        public int CommentMaxDepth { get; init; } = 3;
         /// <summary>受控版型預設名稱。</summary>
         public string ThemePreset { get; init; } = "reading";
         /// <summary>版型強調色（十六進位色碼）。</summary>

@@ -2023,11 +2023,9 @@
   <data name="Admin.ContentEditor.AiSelectionLost" xml:space="preserve"><value>The original selection is gone; reselect and rewrite again.</value></data>
   <data name="Admin.ContentEditor.AiTitleApplied" xml:space="preserve"><value>Title applied; not saved yet.</value></data>
   <data name="Admin.ContentEditor.AiFailed" xml:space="preserve"><value>Writing assist is unavailable right now; please try again later.</value></data>
-  <data name="Public.ContentDetail.CommentEmail" xml:space="preserve"><value>Email (optional)</value></data>
   <data name="Public.ContentDetail.CommentEmailHelp" xml:space="preserve"><value>Used for reply notifications only, never displayed publicly; every email includes an unsubscribe link.</value></data>
   <data name="Public.ContentDetail.CommentEmailInvalid" xml:space="preserve"><value>Invalid email address.</value></data>
   <data name="Public.ContentDetail.CommentEmailTooLong" xml:space="preserve"><value>Email must be at most 256 characters.</value></data>
-  <data name="Public.ContentDetail.CommentNotifyReplies" xml:space="preserve"><value>Notify me by email when someone replies</value></data>
   <data name="Public.Unsubscribe.PageTitle" xml:space="preserve"><value>Unsubscribe from reply notifications</value></data>
   <data name="Public.Unsubscribe.Title" xml:space="preserve"><value>Unsubscribe from reply notifications</value></data>
   <data name="Public.Unsubscribe.Done" xml:space="preserve"><value>Unsubscribed; you will no longer receive replies to this comment.</value></data>
@@ -2035,6 +2033,15 @@
   <data name="Public.Unsubscribe.Confirm" xml:space="preserve"><value>Stop receiving reply notifications for this comment?</value></data>
   <data name="Public.Unsubscribe.Submit" xml:space="preserve"><value>Confirm unsubscribe</value></data>
   <data name="Public.Unsubscribe.BackHome" xml:space="preserve"><value>Back to home</value></data>
+  <data name="Public.ContentDetail.CommentEmail" xml:space="preserve">
+    <value>Email (optional)</value>
+  </data>
+  <data name="Public.ContentDetail.CommentNotifyEmailRequired" xml:space="preserve">
+    <value>Enter an email address to receive reply notifications.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentNotifyReplies" xml:space="preserve">
+    <value>Notify me by email when someone replies</value>
+  </data>
   <data name="Public.ContentDetail.Categories" xml:space="preserve">
     <value>Categories</value>
   </data>
@@ -4676,6 +4683,12 @@
   <data name="Public.Widget.SocialLinks" xml:space="preserve">
     <value>Social links</value>
   </data>
+  <data name="Admin.Settings.CommentMaxDepth" xml:space="preserve">
+    <value>Comment reply nesting depth</value>
+  </data>
+  <data name="Admin.Settings.CommentMaxDepthHelp" xml:space="preserve">
+    <value>How many levels visitor replies are indented; deeper replies attach under the deepest level.</value>
+  </data>
   <data name="Admin.Settings.DefaultUiLanguage" xml:space="preserve">
     <value>Default interface language</value>
   </data>
@@ -4714,6 +4727,78 @@
   </data>
   <data name="Public.Search.MonthFilter" xml:space="preserve">
     <value>Month filter</value>
+  </data>
+  <data name="Admin.Comments.AuthorOf" xml:space="preserve">
+    <value>comment by {0}</value>
+  </data>
+  <data name="Admin.Comments.BulkActions" xml:space="preserve">
+    <value>Bulk actions</value>
+  </data>
+  <data name="Admin.Comments.BulkApprove" xml:space="preserve">
+    <value>Approve selected</value>
+  </data>
+  <data name="Admin.Comments.BulkDelete" xml:space="preserve">
+    <value>Delete permanently</value>
+  </data>
+  <data name="Admin.Comments.BulkDeleteTitle" xml:space="preserve">
+    <value>Permanently delete the {0} selected comments?</value>
+  </data>
+  <data name="Admin.Comments.BulkDeleteWarning" xml:space="preserve">
+    <value>Permanent deletion cannot be undone.</value>
+  </data>
+  <data name="Admin.Comments.BulkDeleted" xml:space="preserve">
+    <value>The selected comments were deleted permanently.</value>
+  </data>
+  <data name="Admin.Comments.BulkDone" xml:space="preserve">
+    <value>Bulk action finished.</value>
+  </data>
+  <data name="Admin.Comments.BulkFailed" xml:space="preserve">
+    <value>The bulk action could not be completed. Try again.</value>
+  </data>
+  <data name="Admin.Comments.BulkPartial" xml:space="preserve">
+    <value>Bulk action finished: {0} succeeded, {1} failed. Example: {2}</value>
+  </data>
+  <data name="Admin.Comments.BulkSpam" xml:space="preserve">
+    <value>Mark as spam</value>
+  </data>
+  <data name="Admin.Comments.BulkTrash" xml:space="preserve">
+    <value>Move to trash</value>
+  </data>
+  <data name="Admin.Comments.ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="Admin.Comments.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.Comments.EditLabel" xml:space="preserve">
+    <value>Comment text</value>
+  </data>
+  <data name="Admin.Comments.EditSaved" xml:space="preserve">
+    <value>Comment updated and marked as edited.</value>
+  </data>
+  <data name="Admin.Comments.EditedBadge" xml:space="preserve">
+    <value>edited</value>
+  </data>
+  <data name="Admin.Comments.SaveEdit" xml:space="preserve">
+    <value>Save changes</value>
+  </data>
+  <data name="Admin.Comments.SelectComment" xml:space="preserve">
+    <value>Select comment by {0}</value>
+  </data>
+  <data name="Admin.Comments.SelectPage" xml:space="preserve">
+    <value>Select page</value>
+  </data>
+  <data name="Admin.Comments.SelectedCount" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="Public.ContentDetail.CommentFeedTitle" xml:space="preserve">
+    <value>Comments on {0}</value>
+  </data>
+  <data name="Public.ContentDetail.EditedComment" xml:space="preserve">
+    <value>edited</value>
+  </data>
+  <data name="Public.ContentDetail.RememberMe" xml:space="preserve">
+    <value>Remember my name and website</value>
   </data>
   <data name="Account.ConfirmEmailChange.Done" xml:space="preserve">
     <value>Your email address has been changed and verified.</value>

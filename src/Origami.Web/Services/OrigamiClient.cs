@@ -14,6 +14,8 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public string NotFoundBody { get; init; } = "";
     /// <summary>站點預設介面語言；空字串表示產品預設。</summary>
     public string DefaultUiLanguage { get; init; } = "";
+    /// <summary>訪客評論巢狀顯示的最大深度。</summary>
+    public int CommentMaxDepth { get; init; } = 3;
     /// <summary>受控版型預設名稱。</summary>
     public string ThemePreset { get; init; } = "reading";
     /// <summary>版型強調色（十六進位色碼）。</summary>
@@ -227,6 +229,16 @@ public sealed class OrigamiClient
         SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/comments/{id}/moderate?version={version}",
             new { status = status.ToString() }, ct);
 
+    /// <summary>批次審核評論；回傳逐筆結果，單筆失敗不影響其他項目。</summary>
+    public Task<List<BulkItemResult>?> BulkModerateCommentsAsync(IReadOnlyList<(Guid Id, Guid Version)> items, CommentStatus status,
+        CancellationToken ct = default) =>
+        SendAsync<List<BulkItemResult>>(new(HttpMethod.Post, "api/v1/admin/comments/bulk"),
+            new { status = status.ToString(), items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
+
+    /// <summary>編輯訪客評論內容；回傳標示為已編輯的評論。</summary>
+    public Task<CommentService.CommentView?> UpdateCommentAsync(Guid id, string markdown, Guid version, CancellationToken ct = default) =>
+        SendAsync<CommentService.CommentView>(new(HttpMethod.Put, $"api/v1/admin/comments/{id}"), new { markdown, version }, ct);
+
     /// <summary>帳號信箱與登入歷史；網站主機以 BFF 通道呼叫，來源網址由呼叫端提供。</summary>
     public Task SendEmailVerificationAsync(string userId, string origin, CancellationToken ct = default) =>
         SendEmptyAsync(HttpMethod.Post, "api/v1/admin/account/email-verification", new { userId, origin }, ct);
@@ -305,8 +317,8 @@ public sealed class OrigamiClient
         return await GetAsync<List<ApiFeedItem>>(query, ct);
     }
 
-    public Task<List<CommentFeedEntry>?> GetCommentFeedItemsAsync(CancellationToken ct = default) =>
-        GetAsync<List<CommentFeedEntry>>("api/v1/feed/comments", ct);
+    public Task<List<CommentFeedEntry>?> GetCommentFeedItemsAsync(CancellationToken ct = default, string? post = null) =>
+        GetAsync<List<CommentFeedEntry>>("api/v1/feed/comments" + (string.IsNullOrWhiteSpace(post) ? "" : "?post=" + Uri.EscapeDataString(post)), ct);
 
     public Task<PublicSearchService.Result?> SearchAsync(string query, int limit = Limits.PageSize, int page = 1, CancellationToken ct = default, bool includePages = false,
         string? category = null, int? year = null, int? month = null)

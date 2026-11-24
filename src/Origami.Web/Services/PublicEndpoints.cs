@@ -103,13 +103,20 @@ public static class PublicEndpoints
             HttpContext http, CancellationToken ct) =>
         {
             var site = await api.GetPublicSettingsAsync(ct) ?? PublicSiteSettings.Default;
-            var comments = await api.GetCommentFeedItemsAsync(ct) ?? [];
+            // ?post=代稱 指定單篇評論 feed；文章不存在或未發布時回 404。
+            var postSlug = http.Request.Query["post"].ToString();
+            if (postSlug.Length > 0)
+            {
+                var target = await api.GetPublishedDetailAsync(ContentKind.Post, postSlug, null, ct);
+                if (target is null) return Results.NotFound();
+            }
+            var comments = await api.GetCommentFeedItemsAsync(ct, postSlug) ?? [];
             XNamespace dc = "http://purl.org/dc/elements/1.1/";
             var document = new XDocument(new XDeclaration("1.0", "utf-8", null),
                 new XElement("rss", new XAttribute("version", "2.0"),
                     new XAttribute(XNamespace.Xmlns + "dc", dc),
                     new XElement("channel",
-                        new XElement("title", site.Name + " · 最新評論"),
+                        new XElement("title", site.Name + (postSlug.Length > 0 ? " · 單篇評論" : " · 最新評論")),
                         new XElement("link", BaseUrl(http) + "/"),
                         new XElement("description", site.Description),
                         comments.Select(c =>

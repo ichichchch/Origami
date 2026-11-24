@@ -37,10 +37,24 @@ else
         }
         else
         {
-            <section class="panel"><div class="table-scroll"><table><caption class="sr-only">@UiText.T("Admin.Comments.ListCaption", "評論列表")</caption><thead><tr><th scope="col">@UiText.T("Admin.Comments.AuthorAndTime", "訪客 / 時間")</th><th scope="col">@UiText.T("Admin.Comments.CommentBody", "評論內容")</th><th scope="col">@UiText.T("Admin.Comments.Status", "狀態")</th><th scope="col">@UiText.T("Admin.Comments.Actions", "操作")</th></tr></thead><tbody>
+            @if (_selected.Count > 0)
+            {
+                <div class="bulk-bar" role="group" aria-label="@UiText.T("Admin.Comments.BulkActions", "批次操作")">
+                    <span class="bulk-count">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.SelectedCount", "已選 {0} 則"), _selected.Count)</span>
+                    <div class="button-row">
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(CommentStatus.Approved)">@UiText.T("Admin.Comments.BulkApprove", "批次核可")</button>
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(CommentStatus.Spam)">@UiText.T("Admin.Comments.BulkSpam", "批次標記垃圾")</button>
+                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="() => BulkAsync(CommentStatus.Trashed)">@UiText.T("Admin.Comments.BulkTrash", "批次移入垃圾桶")</button>
+                        <button type="button" class="button button-danger button-small" disabled="@EditBlocked" @onclick="() => _pendingBulkDelete = true">@UiText.T("Admin.Comments.BulkDelete", "批次永久刪除")</button>
+                        <button type="button" class="text-button" disabled="@EditBlocked" @onclick="ClearSelection">@UiText.T("Admin.Comments.ClearSelection", "取消選取")</button>
+                    </div>
+                </div>
+            }
+            <section class="panel"><div class="table-scroll"><table><caption class="sr-only">@UiText.T("Admin.Comments.ListCaption", "評論列表")</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="comment-select-all">@UiText.T("Admin.Comments.SelectPage", "全選本頁")</label><input id="comment-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@EditBlocked" /></th><th scope="col">@UiText.T("Admin.Comments.AuthorAndTime", "訪客 / 時間")</th><th scope="col">@UiText.T("Admin.Comments.CommentBody", "評論內容")</th><th scope="col">@UiText.T("Admin.Comments.Status", "狀態")</th><th scope="col">@UiText.T("Admin.Comments.Actions", "操作")</th></tr></thead><tbody>
             @foreach (var comment in _result.Items)
             {
                 <tr @key="comment.Id">
+                    <td class="select-cell"><label class="sr-only" for="@("comment-select-" + comment.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.SelectComment", "選擇 {0} 的評論"), comment.AuthorName)</label><input id="@("comment-select-" + comment.Id)" type="checkbox" checked="@_selected.Contains(comment.Id)" @onchange="e => ToggleSelect(comment.Id, e)" disabled="@EditBlocked" /></td>
                     <td class="date-cell">
                         <strong>@comment.AuthorName</strong>
                         @if (comment.IsAdminReply) { <span class="status-badge published">@UiText.T("Admin.Comments.OfficialReply", "官方回覆")</span> }
@@ -50,6 +64,25 @@ else
                     <td class="title-cell">
                         <span class="slug-text">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.OnContent", "於「{0}」"), comment.ContentTitle)@if (!string.IsNullOrEmpty(comment.ParentAuthorName)) { <text> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.ReplyTo", "回覆 {0}"), comment.ParentAuthorName)</text> }</span>
                         <div class="comment-body">@MarkdownPreview(comment.Markdown)</div>
+                        @if (comment.IsEdited) { <span class="slug-text">@UiText.T("Admin.Comments.EditedBadge", "已編輯")</span> }
+                        @if (!comment.IsAdminReply)
+                        {
+                            @if (_editingId == comment.Id)
+                            {
+                                <div class="reply-box">
+                                    <label class="sr-only" for="@("admin-edit-" + comment.Id)">@UiText.T("Admin.Comments.EditLabel", "評論內容")</label>
+                                    <textarea id="@("admin-edit-" + comment.Id)" rows="3" maxlength="@Limits.CommentBody" @bind="_editBody" @bind:event="oninput" disabled="@EditBlocked"></textarea>
+                                    <div class="button-row">
+                                        <button type="button" class="button button-small" disabled="@(EditBlocked || string.IsNullOrWhiteSpace(_editBody))" @onclick="() => SubmitEditAsync(comment)">@UiText.T("Admin.Comments.SaveEdit", "儲存修改")</button>
+                                        <button type="button" class="button button-secondary button-small" disabled="@EditBlocked" @onclick="CancelEdit">@UiText.T("Admin.Comments.Cancel", "取消")</button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <button type="button" class="text-button" disabled="@EditBlocked" @onclick="() => StartEdit(comment)">@UiText.T("Admin.Comments.Edit", "編輯")<span class="sr-only"> @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.AuthorOf", "{0} 的評論"), comment.AuthorName)</span></button>
+                            }
+                        }
                         @if (_replyingToId == comment.Id)
                         {
                             <div class="reply-box">
@@ -94,6 +127,14 @@ else
         }
     }
 }
+@if (_pendingBulkDelete)
+{
+    <section class="notice notice-danger" role="alertdialog" aria-labelledby="comment-bulk-delete-title">
+        <h2 id="comment-bulk-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Comments.BulkDeleteTitle", "永久刪除所選的 {0} 則評論？"), _selected.Count)</h2>
+        <p>@UiText.T("Admin.Comments.BulkDeleteWarning", "永久刪除無法復原。")</p>
+        <div class="button-row"><button class="button button-danger" disabled="@Blocked" @onclick="BulkDelete">@UiText.T("Admin.Comments.ConfirmDelete", "確認刪除")</button><button class="button button-secondary" disabled="@Blocked" @onclick="() => _pendingBulkDelete = false">@UiText.T("Admin.Comments.Cancel", "取消")</button></div>
+    </section>
+}
 @if (_pendingDelete is not null)
 {
     <section class="notice notice-danger" role="alertdialog" aria-labelledby="comment-delete-title">
@@ -111,6 +152,12 @@ else
     private CommentService.CommentView? _pendingDelete;
     private Guid? _replyingToId;
     private string _replyBody = "";
+    // 批次選取僅對目前頁面快照有效：版本號取自當前列表，換頁、重篩選或操作後清空。
+    private readonly HashSet<Guid> _selected = [];
+    private bool _pendingBulkDelete;
+    private Guid? _editingId;
+    private string _editBody = "";
+    private bool AllPageSelected => _result is not null && _result.Items.Count > 0 && _result.Items.All(x => _selected.Contains(x.Id));
     private int TotalCount => _counts is null ? 0 : _counts.Pending + _counts.Approved + _counts.Spam + _counts.Trashed;
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -134,6 +181,8 @@ else
         var previous = (_status, _page);
         _status = status;
         _page = 1;
+        _selected.Clear();
+        CancelEdit();
         if (!await RunAsync(LoadDataAsync)) (_status, _page) = previous;
     }
 
@@ -151,10 +200,96 @@ else
         await LoadDataAsync(ct);
     }, UiText.T("Admin.Comments.StatusUpdated", "評論狀態已更新。"));
 
+    private void ToggleSelect(Guid id, ChangeEventArgs args)
+    {
+        if (args.Value is true) _selected.Add(id);
+        else _selected.Remove(id);
+    }
+
+    private void ToggleAll(ChangeEventArgs args)
+    {
+        _selected.Clear();
+        if (args.Value is true && _result is not null)
+            foreach (var comment in _result.Items) _selected.Add(comment.Id);
+    }
+
+    private void ClearSelection()
+    {
+        _selected.Clear();
+        _pendingBulkDelete = false;
+    }
+
+    private List<(Guid Id, Guid Version)> SelectedItems() =>
+        [.. (_result?.Items ?? []).Where(x => _selected.Contains(x.Id)).Select(x => (x.Id, x.Version))];
+
+    private async Task BulkAsync(CommentStatus target)
+    {
+        if (Blocked) return;
+        var items = SelectedItems();
+        var ok = await RunEditAsync(async ct =>
+        {
+            var results = await Api.BulkModerateCommentsAsync(items, target, ct)
+                ?? throw new CmsException(UiText.T("Admin.Comments.BulkFailed", "批次操作無法執行，請重試。"));
+            _selected.Clear();
+            await LoadDataAsync(ct);
+            var failed = results.Where(x => !x.Succeeded).ToList();
+            if (failed.Count > 0)
+                throw new CmsException(string.Format(CultureInfo.CurrentCulture,
+                    UiText.T("Admin.Comments.BulkPartial", "批次處理完成：成功 {0} 則、失敗 {1} 則。例：{2}"),
+                    results.Count - failed.Count, failed.Count, failed[0].Message));
+        }, UiText.T("Admin.Comments.BulkDone", "批次處理完成。"));
+        if (!ok) _selected.Clear();
+    }
+
+    /// <summary>批次永久刪除：逐一刪除並回報；需先在頁內確認，單則失敗不中斷其餘。</summary>
+    private Task BulkDelete() => RunEditAsync(async ct =>
+    {
+        var items = SelectedItems();
+        var failed = 0;
+        string? firstError = null;
+        foreach (var (id, version) in items)
+        {
+            try { await Api.DeleteCommentAsync(id, version, ct); }
+            catch (CmsException error)
+            {
+                failed++;
+                firstError ??= error.Message;
+            }
+        }
+        _selected.Clear();
+        _pendingBulkDelete = false;
+        await LoadDataAsync(ct);
+        if (failed > 0)
+            throw new CmsException(string.Format(CultureInfo.CurrentCulture,
+                UiText.T("Admin.Comments.BulkPartial", "批次處理完成：成功 {0} 則、失敗 {1} 則。例：{2}"), items.Count - failed, failed, firstError ?? ""));
+    }, UiText.T("Admin.Comments.BulkDeleted", "已批次永久刪除所選評論。"));
+
+    private void StartEdit(CommentService.CommentView comment)
+    {
+        _editingId = comment.Id;
+        _editBody = comment.Markdown;
+        _replyingToId = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _editBody = "";
+    }
+
+    private Task SubmitEditAsync(CommentService.CommentView comment) => RunEditAsync(async ct =>
+    {
+        await Api.UpdateCommentAsync(comment.Id, _editBody, comment.Version, ct);
+        _editingId = null;
+        _editBody = "";
+        await LoadDataAsync(ct);
+    }, UiText.T("Admin.Comments.EditSaved", "評論內容已修改，並標示為已編輯。"));
+
     private void BeginReply(Guid commentId)
     {
         _replyingToId = commentId;
         _replyBody = "";
+        CancelEdit();
     }
 
     private void CancelReply()

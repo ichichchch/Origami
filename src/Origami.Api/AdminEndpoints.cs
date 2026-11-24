@@ -179,6 +179,22 @@ public static class AdminEndpoints
             return Results.NoContent();
         });
 
+        // 批次審核：逐筆攜帶版本並回報，單筆失敗不中斷其餘；永久刪除仍由呼叫端逐筆確認。
+        group.MapPost("/comments/bulk", async (BulkCommentInput input, CommentService comments, CancellationToken ct) =>
+        {
+            if (!Enum.TryParse<CommentStatus>(input.Status, ignoreCase: true, out var target) || !Enum.IsDefined(target))
+                return Results.BadRequest(new { message = "參數 status 無效。" });
+            if (input.Items is null || input.Items.Count == 0)
+                return Results.BadRequest(new { message = "請先選擇要處理的評論。" });
+            if (input.Items.Count > Limits.BulkMaxItems)
+                return Results.BadRequest(new { message = $"單次批次操作最多 {Limits.BulkMaxItems} 筆。" });
+            return Results.Ok(await comments.BulkModerateAsync([.. input.Items.Select(x => (x.Id, x.Version))], target, ct));
+        });
+
+        // 編輯訪客評論內容（標記為已編輯）。
+        group.MapPut("/comments/{id}", async (Guid id, CommentEditInput input, CommentService comments, CancellationToken ct) =>
+            Results.Ok(await comments.UpdateAsync(id, input.Markdown ?? "", input.Version, ct)));
+
         // 編輯占用心跳：提示性占用，不阻止開啟或儲存；takeOver=true 明確接管他人仍有效的占用。
         group.MapPost("/contents/{id}/editing", async (Guid id, ContentService content, HttpContext http, CancellationToken ct) =>
         {
@@ -299,6 +315,8 @@ public static class AdminEndpoints
     public sealed record CommentReplyInput(string? Markdown);
     public sealed record CommentModerateInput(string Status);
     public sealed record BulkContentItem(Guid Id, Guid Version);
+    public sealed record BulkCommentInput(string? Status, List<BulkContentItem>? Items);
+    public sealed record CommentEditInput(string? Markdown, Guid Version);
     public sealed record AiSummaryInput(string? Title, string? Markdown);
 
     private static ContentKind? ParseKind(string raw, ContentKind fallback, out IResult? error)

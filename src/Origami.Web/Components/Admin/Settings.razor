@@ -111,6 +111,11 @@
                     <p class="field-help">@UiText.T("Admin.Settings.CommentsHelp", "開放後已發布文章顯示評論表單；未自動核可時，評論須在「評論」頁審核後才會公開。蜜罐與連結過量的評論會自動進入垃圾佇列。")</p>
                 </div>
                 <div class="field">
+                    <div class="field">
+                        <label for="comment-depth">@UiText.T("Admin.Settings.CommentMaxDepth", "評論回覆巢狀深度")</label>
+                        <input id="comment-depth" type="number" min="1" max="10" @bind="_model.CommentMaxDepth" disabled="@Blocked" />
+                        <span class="field-help">@UiText.T("Admin.Settings.CommentMaxDepthHelp", "訪客回覆最多縮排幾層；更深的回覆附在最深一層之下。")</span>
+                    </div>
                     <label for="comment-close-days">@UiText.T("Admin.Settings.CommentCloseDays", "舊文章自動關閉評論（天數）")</label>
                     <input id="comment-close-days" type="number" min="0" max="3650" @bind="_model.CommentCloseDays" disabled="@Blocked" />
                     <span class="field-help">@UiText.T("Admin.Settings.CommentCloseDaysHelp", "文章發布超過指定天數後自動關閉評論；0 表示不自動關閉。")</span>
