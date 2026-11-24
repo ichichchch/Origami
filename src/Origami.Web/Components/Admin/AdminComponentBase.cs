@@ -42,7 +42,7 @@ public abstract partial class AdminComponentBase : ComponentBase, IDisposable
             {
                 Access = await AccessApi.GetAccessAsync(Lifetime.Token);
                 if (RequiresMembership && !Access.CanRead)
-                    throw new AccessDeniedException(UiText.T("Common.AccessDenied", "你沒有此站點的操作權限。"));
+                    throw new AccessDeniedException(UiText.T("Common.AccessDenied", "你已登入，但沒有此站點的操作權限。請聯絡站點管理員。"));
             }
             await action(Lifetime.Token);
             Notice = success;

@@ -45,7 +45,7 @@ else
     </div>
     <nav class="pagination" aria-label="@UiText.T("Public.Author.Pagination", "作者文章分頁")">
         @if (_result.Page > 1) { <a class="button button-secondary" href="@PageUrl(_result.Page - 1)">@UiText.T("Public.PreviousPage", "上一頁")</a> }
-        <span>@string.Format(UiText.T("Public.Author.PageStatus", UiText.T("Public.PageOf", "第") + " {0} " + UiText.T("Public.PageOfSeparator", "/") + " {1} " + UiText.T("Public.PageOfSuffix", "頁")), _result.Page, _result.TotalPages)</span>
+        <span>@string.Format(UiText.T("Public.PageOf", "第") + " {0} " + UiText.T("Public.PageOfSeparator", "/") + " {1} " + UiText.T("Public.PageOfSuffix", "頁"), _result.Page, _result.TotalPages)</span>
         @if (_result.Page < _result.TotalPages) { <a class="button button-secondary" href="@PageUrl(_result.Page + 1)">@UiText.T("Public.NextPage", "下一頁")</a> }
     </nav>
 }

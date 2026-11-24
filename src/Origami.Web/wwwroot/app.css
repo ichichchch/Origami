@@ -142,6 +142,7 @@ a.img-lightbox { display: block; }
 .nav-label { color: var(--muted); font-size: .66rem; letter-spacing: .12em; padding: 0 .9rem; margin-bottom: .7rem; }
 .admin-nav a { display: flex; justify-content: space-between; align-items: center; text-decoration: none; color: color-mix(in srgb, var(--ink) 85%, var(--surface)); font-size: .875rem; padding: .75rem .9rem; border-radius: 6px; }
 .admin-nav a span { color: var(--muted); font-size: .8rem; }
+.admin-nav a .nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 1.4rem; height: 1.4rem; padding: 0 .35rem; border-radius: 999px; background: var(--accent-ink); color: var(--paper); font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .admin-nav a:hover { background: color-mix(in srgb, var(--surface-sunken) 60%, var(--surface)); }
 .admin-nav a.active { color: var(--accent-ink); background: color-mix(in srgb, var(--accent-ink) 13%, var(--surface-sunken)); font-weight: 650; }
 .sidebar-bottom { border-top: 1px solid var(--border); padding: 1.2rem .9rem 0; margin-top: auto; font-size: .8rem; }
@@ -720,3 +721,29 @@ th { letter-spacing: .07em; text-transform: uppercase; font-size: .68rem; }
 @media (max-width: 700px) { .prose .columns { grid-auto-flow: row; gap: 1rem; } }
 
 
+/* 前台成員工具列、後台命令面板與首次設定清單。 */
+.member-bar { position: sticky; top: 0; z-index: 900; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1rem; padding: .35rem 1.2rem; background: var(--ink); color: var(--paper); font-size: .8rem; }
+.member-bar a { color: inherit; text-decoration: none; opacity: .9; }
+.member-bar a:hover { opacity: 1; text-decoration: underline; }
+.member-bar-label { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; opacity: .7; }
+.palette[hidden] { display: none; }
+.palette { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: flex-start; justify-content: center; padding: 12vh 1rem 1rem; background: color-mix(in srgb, #000 55%, transparent); }
+.palette-open { overflow: hidden; }
+.palette-box { width: min(100%, 560px); background: var(--surface, #fff); color: var(--ink, #1b1b1f); border: 1px solid var(--border, #e5e5e8); border-radius: 12px; box-shadow: 0 30px 80px #00000066; overflow: hidden; }
+.palette-head { display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem .5rem 1rem; border-bottom: 1px solid var(--border, #e5e5e8); }
+.palette-input { flex: 1; border: 0; background: transparent; color: inherit; padding: .6rem 0; font-size: 1rem; outline: none; }
+.palette-close { background: none; border: 0; font-size: 1.4rem; line-height: 1; color: var(--muted, #5d5d66); cursor: pointer; padding: .3rem .5rem; }
+.palette-list { list-style: none; margin: 0; padding: .4rem; max-height: 50vh; overflow: auto; }
+.palette-list li { display: flex; align-items: center; gap: .7rem; padding: .6rem .8rem; border-radius: 8px; cursor: pointer; }
+.palette-list li[aria-selected="true"] { background: color-mix(in srgb, var(--accent-ink, #315d48) 12%, transparent); }
+.palette-kind { flex-shrink: 0; min-width: 2.6rem; font-size: .68rem; color: var(--muted, #5d5d66); border: 1px solid var(--border, #e5e5e8); border-radius: 999px; padding: .05rem .45rem; text-align: center; }
+.palette-status, .palette-help { margin: 0; padding: .5rem 1rem .7rem; font-size: .75rem; color: var(--muted, #5d5d66); }
+.palette-trigger { margin-left: auto; background: none; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .74rem; padding: .25rem .75rem; }
+.palette-trigger:hover:not(:disabled) { color: var(--accent-ink); border-color: var(--accent-ink); }
+.setup-checklist .setup-steps { grid-template-columns: 1fr; gap: .6rem; padding: .3rem 1.2rem 1.2rem 2.6rem; }
+.setup-checklist .setup-steps li { display: grid; grid-template-columns: 1.4rem 1fr; gap: .6rem; align-items: start; }
+.setup-checklist .setup-steps strong { font-size: .9rem; }
+.setup-checklist .setup-steps span { margin-top: .1rem; }
+.setup-checklist .setup-steps a { display: inline-block; margin-top: .2rem; font-size: .85rem; }
+.setup-checklist .setup-steps li.done strong { color: var(--muted); text-decoration: line-through; }
+.setup-checklist .setup-mark { color: var(--accent-ink); font-weight: 700; }

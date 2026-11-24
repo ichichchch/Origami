@@ -22,6 +22,18 @@
     {
         <style>@((MarkupString)_settings.CustomCss)</style>
     }
+    @if (_isMember)
+    {
+        @* 已登入成員瀏覽前台時的精簡管理工具列：只列通用入口；文章頁的「編輯此文」由該頁依權限另行顯示。 *@
+        <nav class="member-bar" aria-label="@UiText.T("Layout.Main.MemberBar", "成員工具列")">
+            <span class="member-bar-label">@UiText.T("Layout.Main.MemberBarLabel", "已登入成員")</span>
+            <a href="/admin" data-enhance-nav="false">@UiText.T("Layout.Admin.Dashboard", "總覽儀表板")</a>
+            <a href="/admin/posts/new" data-enhance-nav="false">@UiText.T("Admin.Dashboard.NewPost", "撰寫新文章")</a>
+            <a href="/admin/posts" data-enhance-nav="false">@UiText.T("Layout.Admin.Posts", "文章")</a>
+            <a href="/admin/media" data-enhance-nav="false">@UiText.T("Layout.Admin.Media", "媒體庫")</a>
+            <a href="/admin/comments" data-enhance-nav="false">@UiText.T("Layout.Admin.Comments", "評論")</a>
+        </nav>
+    }
     <header class="site-header">
         <a class="site-brand" href="/">
             @if (!string.IsNullOrEmpty(_settings.LogoFileName))
@@ -107,18 +119,18 @@
         {
             <a href="@("/pages/" + Uri.EscapeDataString(_settings.PrivacyPageSlug))">@(string.IsNullOrWhiteSpace(_settings.PrivacyPageTitle) ? UiText.T("Layout.Main.Privacy", "隱私權政策") : _settings.PrivacyPageTitle)</a>
         }
-        @if (!string.IsNullOrWhiteSpace(_settings.SocialGithubUrl) || !string.IsNullOrWhiteSpace(_settings.SocialXUrl) || !string.IsNullOrWhiteSpace(_settings.SocialMastodonUrl))
+        @if (IsExternalUrl(_settings.SocialGithubUrl) || IsExternalUrl(_settings.SocialXUrl) || IsExternalUrl(_settings.SocialMastodonUrl))
         {
             <span class="footer-socials">
-                @if (!string.IsNullOrWhiteSpace(_settings.SocialGithubUrl))
+                @if (IsExternalUrl(_settings.SocialGithubUrl))
                 {
                     <a href="@_settings.SocialGithubUrl" target="_blank" rel="noopener">GitHub</a>
                 }
-                @if (!string.IsNullOrWhiteSpace(_settings.SocialXUrl))
+                @if (IsExternalUrl(_settings.SocialXUrl))
                 {
                     <a href="@_settings.SocialXUrl" target="_blank" rel="noopener">X</a>
                 }
-                @if (!string.IsNullOrWhiteSpace(_settings.SocialMastodonUrl))
+                @if (IsExternalUrl(_settings.SocialMastodonUrl))
                 {
                     <a href="@_settings.SocialMastodonUrl" target="_blank" rel="noopener">Mastodon</a>
                 }

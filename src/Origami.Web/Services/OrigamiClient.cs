@@ -994,7 +994,7 @@ public sealed class OrigamiClient
     {
         if (response.IsSuccessStatusCode) return;
         if (response.StatusCode == HttpStatusCode.Unauthorized)
-            throw new UnauthorizedAccessException(UiText.T("Common.CredentialsExpired", "登入已失效或網站服務憑證無效，請重新登入；若持續失敗請聯絡管理者。"));
+            throw new UnauthorizedAccessException(UiText.T("Common.CredentialsExpired", "登入或網站服務憑證已失效，請重新登入；若持續失敗請聯絡管理者。"));
         if (response.StatusCode == HttpStatusCode.Forbidden)
             throw new AccessDeniedException(UiText.T("Common.AccessDenied", "你已登入，但沒有此站點的操作權限。請聯絡站點管理員。"));
         // API 端的驗證訊息以 CmsException 原樣呈現，頁面錯誤處理因此不必改寫。

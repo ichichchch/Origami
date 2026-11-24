@@ -68,7 +68,7 @@ public static class OpenApiDocumentBuilder
             ["get /api/v1/admin/pages/options"] = ("取得可選為父層或靜態首頁的頁面選項清單", "管理"),
             ["get /api/v1/admin/audit-logs"] = ("分頁查詢後台管理操作稽核紀錄", "管理"),
             ["post /api/v1/admin/ai/suggest-summary"] = ("使用智慧寫作助理生成文章摘要與搜尋引擎描述建議", "管理"),
-            ["post /api/v1/admin/ai/writing"] = ("使用寫作助理生成大綱、草稿、改寫或續寫", "管理"),
+            ["post /api/v1/admin/ai/writing"] = ("使用智慧寫作助理產生大綱、草稿、改寫、續寫或標題建議", "管理"),
             ["get /api/v1/admin/dashboard"] = ("取得後台管理儀表板統計總覽", "管理"),
             ["get /api/v1/admin/redirects"] = ("列出站點永久轉址規則", "管理"),
             ["post /api/v1/admin/redirects"] = ("建立新的永久轉址規則", "管理"),

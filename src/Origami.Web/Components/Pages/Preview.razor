@@ -28,7 +28,7 @@ else if (_content is not null)
             <h1>@_content.Title</h1>
             @if (_content.Kind == ContentKind.Post && _content.Categories.Count > 0)
             {
-                <div class="chip-list" aria-label="@UiText.T("Public.Preview.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))" data-enhance-nav="false">@category.Title</a> }</div>
+                <div class="chip-list" aria-label="@UiText.T("Public.Preview.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/category/" + Uri.EscapeDataString(category.Slug))" data-enhance-nav="false">@category.Title</a> }</div>
             }
         </header>
         @if (_content.CoverUrl is { } coverUrl)
@@ -38,7 +38,7 @@ else if (_content is not null)
         <div class="prose">@((MarkupString)_html)</div>
         @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
         {
-            <footer class="article-tags" aria-label="@UiText.T("Public.Preview.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))" data-enhance-nav="false"># @tag.Title</a> }</footer>
+            <footer class="article-tags" aria-label="@UiText.T("Public.Preview.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/tag/" + Uri.EscapeDataString(tag.Slug))" data-enhance-nav="false"># @tag.Title</a> }</footer>
         }
     </article>
 }

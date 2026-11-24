@@ -1,4 +1,4 @@
-@page "/admin"
+﻿@page "/admin"
 @page "/admin/dashboard"
 @rendermode InteractiveServer
 @attribute [Authorize]
@@ -24,6 +24,37 @@
     }
 </div>
 <AdminFeedback Busy="Busy" Error="@Error" Notice="@Notice" LoginRequired="LoginRequired" />
+
+@if (_summary is not null && CanEdit && !_checklistDismissed)
+{
+    var steps = Checklist();
+    var done = steps.Count(step => step.Done);
+    if (done < steps.Count)
+    {
+        <section class="panel setup-checklist" aria-labelledby="setup-checklist-title">
+            <div class="panel-toolbar">
+                <h2 id="setup-checklist-title">@UiText.T("Admin.Dashboard.ChecklistTitle", "首次設定清單") <span class="count">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Dashboard.ChecklistProgress", "{0} / {1}"), done, steps.Count)</span></h2>
+                <button type="button" class="text-button" @onclick="DismissChecklistAsync">@UiText.T("Admin.Dashboard.ChecklistDismiss", "稍後再說")</button>
+            </div>
+            <ol class="setup-steps">
+                @foreach (var step in steps)
+                {
+                    <li class="@(step.Done ? "done" : "")">
+                        <span class="setup-mark" aria-hidden="true">@(step.Done ? "✓" : "○")</span>
+                        <span>
+                            <strong>@step.Title</strong>
+                            <span>@step.Help</span>
+                            @if (!step.Done && step.Url.Length > 0)
+                            {
+                                <a href="@step.Url">@step.Action</a>
+                            }
+                        </span>
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+}
 
 @if (_summary is null)
 {
@@ -166,15 +197,52 @@ else
     private IJSObjectReference? _chartsModule;
     private DotNetObjectReference<Dashboard>? _chartsRef;
 
+    private PublicSiteSettings _publicSettings = PublicSiteSettings.Default;
+    private bool _checklistDismissed;
+
+    private sealed record ChecklistStep(bool Done, string Title, string Help, string Url, string Action);
+
+    /// <summary>首次設定清單：以實際資料判定是否完成，不另存狀態；管理者才看得到站台設定相關步驟。</summary>
+    private List<ChecklistStep> Checklist()
+    {
+        List<ChecklistStep> steps = [];
+        var administer = CanAdminister;
+        steps.Add(new ChecklistStep(_publicSettings.Name != "Origami", UiText.T("Admin.Dashboard.ChecklistName", "設定網站名稱與說明"),
+            UiText.T("Admin.Dashboard.ChecklistNameHelp", "讓訪客知道這是誰的網站。"), administer ? "/admin/settings" : "", UiText.T("Admin.Dashboard.ChecklistOpenSettings", "前往網站設定")));
+        steps.Add(new ChecklistStep(_publicSettings.LogoFileName.Length > 0, UiText.T("Admin.Dashboard.ChecklistLogo", "上傳網站標誌或圖示"),
+            UiText.T("Admin.Dashboard.ChecklistLogoHelp", "顯示在頁首與瀏覽器分頁。"), administer ? "/admin/settings" : "", UiText.T("Admin.Dashboard.ChecklistOpenSettings", "前往網站設定")));
+        steps.Add(new ChecklistStep(_summary?.Posts.Published > 0, UiText.T("Admin.Dashboard.ChecklistFirstPost", "發表第一篇文章"),
+            UiText.T("Admin.Dashboard.ChecklistFirstPostHelp", "發布後會出現在首頁、RSS 與搜尋。"), "/admin/posts/new", UiText.T("Admin.Dashboard.ChecklistWrite", "撰寫文章")));
+        steps.Add(new ChecklistStep(_summary?.Pages.Published > 0, UiText.T("Admin.Dashboard.ChecklistPage", "建立獨立頁面"),
+            UiText.T("Admin.Dashboard.ChecklistPageHelp", "例如「關於本站」，會出現在導覽列。"), "/admin/pages/new", UiText.T("Admin.Dashboard.ChecklistNewPage", "新增頁面")));
+        steps.Add(new ChecklistStep(_publicSettings.ThemePreset != "reading", UiText.T("Admin.Dashboard.ChecklistTheme", "挑選版型"),
+            UiText.T("Admin.Dashboard.ChecklistThemeHelp", "內建三種版型與五種主題包。"), administer ? "/admin/marketplace" : "", UiText.T("Admin.Dashboard.ChecklistOpenMarketplace", "前往主題與小工具包")));
+        return steps;
+    }
+
+    private async Task DismissChecklistAsync()
+    {
+        _checklistDismissed = true;
+        try { await JavaScript.InvokeVoidAsync("localStorage.setItem", "origami.setup-checklist", "dismissed"); }
+        catch (JSException) { }
+    }
+
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private Task LoadAsync() => RunAsync(async ct =>
     {
         _summary = await Api.GetDashboardAsync(ct);
+        _publicSettings = await Api.GetPublicSettingsAsync(ct) ?? PublicSiteSettings.Default;
     });
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            try { _checklistDismissed = await JavaScript.InvokeAsync<string>("localStorage.getItem", "origami.setup-checklist") == "dismissed"; }
+            catch (JSException) { }
+            if (_checklistDismissed) StateHasChanged();
+        }
         // 資料可能在首次互動渲染後才載入完成（BFF 呼叫慢於電路首繪），不能只依賴 firstRender。
         if (_chartsInitializing || _chartsModule is not null || _summary is null) return;
         var trend = TrendChartData();

@@ -193,6 +193,9 @@
   <data name="Public.Author.PageTitle" xml:space="preserve">
     <value>Author: </value>
   </data>
+  <data name="Public.Author.TitleFormat" xml:space="preserve">
+    <value>{0} · Articles</value>
+  </data>
   <data name="Public.Author.PageTitleSuffix" xml:space="preserve">
     <value> · Articles</value>
   </data>
@@ -1984,14 +1987,8 @@
   <data name="Public.Author.LoadError" xml:space="preserve">
     <value>This author's articles could not be loaded. Please try again later.</value>
   </data>
-  <data name="Public.Author.PageStatus" xml:space="preserve">
-    <value>Page {0} of {1}</value>
-  </data>
   <data name="Public.Author.ReadArticle" xml:space="preserve">
     <value>Read: {0}</value>
-  </data>
-  <data name="Public.Author.TitleFormat" xml:space="preserve">
-    <value>Author: {0} · Articles</value>
   </data>
   <data name="Public.ContentDetail.Author" xml:space="preserve">
     <value>Author</value>
@@ -2002,45 +1999,107 @@
   <data name="Public.ContentDetail.TranslationMissing" xml:space="preserve">
     <value>This content has no {0} translation yet; showing another language below.</value>
   </data>
-  <data name="Admin.ContentEditor.AiWritingTitle" xml:space="preserve"><value>AI writing assist</value></data>
-  <data name="Admin.ContentEditor.AiWritingHelp" xml:space="preserve"><value>Suggestions only: nothing is inserted until you confirm in the preview, and you still save manually — nothing is auto-saved or published.</value></data>
-  <data name="Admin.ContentEditor.AiInstruction" xml:space="preserve"><value>Extra instruction (optional)</value></data>
-  <data name="Admin.ContentEditor.AiInstructionPlaceholder" xml:space="preserve"><value>Tone, audience, focus…</value></data>
-  <data name="Admin.ContentEditor.AiOutline" xml:space="preserve"><value>Outline</value></data>
-  <data name="Admin.ContentEditor.AiDraft" xml:space="preserve"><value>Draft</value></data>
-  <data name="Admin.ContentEditor.AiRewrite" xml:space="preserve"><value>Rewrite selection</value></data>
-  <data name="Admin.ContentEditor.AiContinue" xml:space="preserve"><value>Continue</value></data>
-  <data name="Admin.ContentEditor.AiTitles" xml:space="preserve"><value>Title ideas</value></data>
-  <data name="Admin.ContentEditor.AiNeedSelection" xml:space="preserve"><value>Select the text to rewrite in the body first.</value></data>
-  <data name="Admin.ContentEditor.AiGenerated" xml:space="preserve"><value>Suggestion ready — preview, then insert.</value></data>
-  <data name="Admin.ContentEditor.AiConfirmInsert" xml:space="preserve"><value>Confirming inserts at the cursor position:</value></data>
-  <data name="Admin.ContentEditor.AiConfirmReplace" xml:space="preserve"><value>Confirming replaces the current selection:</value></data>
-  <data name="Admin.ContentEditor.AiConfirmTitle" xml:space="preserve"><value>Pick a line as the title:</value></data>
-  <data name="Admin.ContentEditor.AiApply" xml:space="preserve"><value>Insert</value></data>
-  <data name="Admin.ContentEditor.AiDiscard" xml:space="preserve"><value>Discard</value></data>
-  <data name="Admin.ContentEditor.AiInserted" xml:space="preserve"><value>Inserted into the body; not saved yet — review and save manually.</value></data>
-  <data name="Admin.ContentEditor.AiInsertFailed" xml:space="preserve"><value>Could not insert into the body; copy the preview manually.</value></data>
-  <data name="Admin.ContentEditor.AiSelectionLost" xml:space="preserve"><value>The original selection is gone; reselect and rewrite again.</value></data>
-  <data name="Admin.ContentEditor.AiTitleApplied" xml:space="preserve"><value>Title applied; not saved yet.</value></data>
-  <data name="Admin.ContentEditor.AiFailed" xml:space="preserve"><value>Writing assist is unavailable right now; please try again later.</value></data>
-  <data name="Public.ContentDetail.CommentEmailHelp" xml:space="preserve"><value>Used for reply notifications only, never displayed publicly; every email includes an unsubscribe link.</value></data>
-  <data name="Public.ContentDetail.CommentEmailInvalid" xml:space="preserve"><value>Invalid email address.</value></data>
-  <data name="Public.ContentDetail.CommentEmailTooLong" xml:space="preserve"><value>Email must be at most 256 characters.</value></data>
-  <data name="Public.Unsubscribe.PageTitle" xml:space="preserve"><value>Unsubscribe from reply notifications</value></data>
-  <data name="Public.Unsubscribe.Title" xml:space="preserve"><value>Unsubscribe from reply notifications</value></data>
-  <data name="Public.Unsubscribe.Done" xml:space="preserve"><value>Unsubscribed; you will no longer receive replies to this comment.</value></data>
-  <data name="Public.Unsubscribe.Invalid" xml:space="preserve"><value>Invalid unsubscribe link; please open the full link from the notification email.</value></data>
-  <data name="Public.Unsubscribe.Confirm" xml:space="preserve"><value>Stop receiving reply notifications for this comment?</value></data>
-  <data name="Public.Unsubscribe.Submit" xml:space="preserve"><value>Confirm unsubscribe</value></data>
-  <data name="Public.Unsubscribe.BackHome" xml:space="preserve"><value>Back to home</value></data>
+  <data name="Admin.ContentEditor.AiWritingTitle" xml:space="preserve">
+    <value>AI writing assist</value>
+  </data>
+  <data name="Admin.ContentEditor.AiWritingHelp" xml:space="preserve">
+    <value>Suggestions only: nothing is inserted until you confirm in the preview, and you still save manually — nothing is auto-saved or published.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiInstruction" xml:space="preserve">
+    <value>Extra instruction (optional)</value>
+  </data>
+  <data name="Admin.ContentEditor.AiInstructionPlaceholder" xml:space="preserve">
+    <value>Tone, audience, focus…</value>
+  </data>
+  <data name="Admin.ContentEditor.AiOutline" xml:space="preserve">
+    <value>Outline</value>
+  </data>
+  <data name="Admin.ContentEditor.AiDraft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Admin.ContentEditor.AiRewrite" xml:space="preserve">
+    <value>Rewrite selection</value>
+  </data>
+  <data name="Admin.ContentEditor.AiContinue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="Admin.ContentEditor.AiTitles" xml:space="preserve">
+    <value>Title ideas</value>
+  </data>
+  <data name="Admin.ContentEditor.AiNeedSelection" xml:space="preserve">
+    <value>Select the text to rewrite in the body first.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiGenerated" xml:space="preserve">
+    <value>Suggestion ready — preview, then insert.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiConfirmInsert" xml:space="preserve">
+    <value>Confirming inserts at the cursor position:</value>
+  </data>
+  <data name="Admin.ContentEditor.AiConfirmReplace" xml:space="preserve">
+    <value>Confirming replaces the current selection:</value>
+  </data>
+  <data name="Admin.ContentEditor.AiConfirmTitle" xml:space="preserve">
+    <value>Pick a line as the title:</value>
+  </data>
+  <data name="Admin.ContentEditor.AiApply" xml:space="preserve">
+    <value>Insert</value>
+  </data>
+  <data name="Admin.ContentEditor.AiDiscard" xml:space="preserve">
+    <value>Discard</value>
+  </data>
+  <data name="Admin.ContentEditor.AiInserted" xml:space="preserve">
+    <value>Inserted into the body; not saved yet — review and save manually.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiInsertFailed" xml:space="preserve">
+    <value>Could not insert into the body; copy the preview manually.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiSelectionLost" xml:space="preserve">
+    <value>The original selection is gone; reselect and rewrite again.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiTitleApplied" xml:space="preserve">
+    <value>Title applied; not saved yet.</value>
+  </data>
+  <data name="Admin.ContentEditor.AiFailed" xml:space="preserve">
+    <value>Writing assist is unavailable right now; please try again later.</value>
+  </data>
   <data name="Public.ContentDetail.CommentEmail" xml:space="preserve">
     <value>Email (optional)</value>
+  </data>
+  <data name="Public.ContentDetail.CommentEmailHelp" xml:space="preserve">
+    <value>Used for reply notifications only, never displayed publicly; every email includes an unsubscribe link.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentEmailInvalid" xml:space="preserve">
+    <value>Invalid email address.</value>
+  </data>
+  <data name="Public.ContentDetail.CommentEmailTooLong" xml:space="preserve">
+    <value>Email must be at most 256 characters.</value>
   </data>
   <data name="Public.ContentDetail.CommentNotifyEmailRequired" xml:space="preserve">
     <value>Enter an email address to receive reply notifications.</value>
   </data>
   <data name="Public.ContentDetail.CommentNotifyReplies" xml:space="preserve">
     <value>Notify me by email when someone replies</value>
+  </data>
+  <data name="Public.Unsubscribe.PageTitle" xml:space="preserve">
+    <value>Unsubscribe from reply notifications</value>
+  </data>
+  <data name="Public.Unsubscribe.Title" xml:space="preserve">
+    <value>Unsubscribe from reply notifications</value>
+  </data>
+  <data name="Public.Unsubscribe.Done" xml:space="preserve">
+    <value>Unsubscribed; you will no longer receive replies to this comment.</value>
+  </data>
+  <data name="Public.Unsubscribe.Invalid" xml:space="preserve">
+    <value>Invalid unsubscribe link; please open the full link from the notification email.</value>
+  </data>
+  <data name="Public.Unsubscribe.Confirm" xml:space="preserve">
+    <value>Stop receiving reply notifications for this comment?</value>
+  </data>
+  <data name="Public.Unsubscribe.Submit" xml:space="preserve">
+    <value>Confirm unsubscribe</value>
+  </data>
+  <data name="Public.Unsubscribe.BackHome" xml:space="preserve">
+    <value>Back to home</value>
   </data>
   <data name="Public.ContentDetail.Categories" xml:space="preserve">
     <value>Categories</value>
@@ -4271,96 +4330,221 @@
   <data name="Public.ContentDetail.CommentsClosedByAge" xml:space="preserve">
     <value>This post was published longer ago than the comment period, so comments are closed.</value>
   </data>
-  <data name="Account.Login.SecondFactorHelp" xml:space="preserve"><value>Your identity has been verified. Enter a 6-digit authenticator code or an 8-character recovery code.</value></data>
-  <data name="Account.Login.Environment" xml:space="preserve"><value>Sign-in environment</value></data>
-  <data name="Account.Login.PublicEnvironment" xml:space="preserve"><value>Public device · up to 8 hours</value></data>
-  <data name="Account.Login.HomeEnvironment" xml:space="preserve"><value>Home device · stay signed in for 30 days</value></data>
-  <data name="Account.Login.EnvironmentHelp" xml:space="preserve"><value>Activity does not extend the deadline. Sign out after using a public device; closing the browser may not end your session.</value></data>
-  <data name="Account.Login.ExternalHelp" xml:space="preserve"><value>Or use a linked account with the sign-in environment selected above.</value></data>
-  <data name="Account.Login.BindingHelp" xml:space="preserve"><value>Before your first external sign-in, sign in with your existing account and link the provider in your security settings.</value></data>
-  <data name="Account.Login.ExternalFailed" xml:space="preserve"><value>External sign-in did not complete. Try again or use your account and password.</value></data>
-  <data name="Account.Login.ExternalUnlinked" xml:space="preserve"><value>This external account is not linked. Sign in with your existing account, then link it in your security settings.</value></data>
-  <data name="Account.Login.BindingsChanged" xml:space="preserve"><value>Your external sign-in links have changed. Existing sessions and API credentials are no longer valid. Please sign in again.</value></data>
-  <data name="Account.External.Title" xml:space="preserve"><value>External sign-in accounts</value></data>
-  <data name="Account.External.Help" xml:space="preserve"><value>Link an external account to sign in without creating another account or changing site permissions. Your local password is retained.</value></data>
-  <data name="Account.External.RevocationHelp" xml:space="preserve"><value>Linking or unlinking revokes all existing sessions and API credentials. You will need to sign in again.</value></data>
-  <data name="Account.External.ConfirmTitle" xml:space="preserve"><value>Confirm linking the verified external account</value></data>
-  <data name="Account.External.Confirm" xml:space="preserve"><value>Confirm link and sign in again</value></data>
-  <data name="Account.External.Linked" xml:space="preserve"><value>Linked accounts</value></data>
-  <data name="Account.External.NoLinks" xml:space="preserve"><value>No external accounts are linked.</value></data>
-  <data name="Account.External.CodeHelp" xml:space="preserve"><value>Authenticator or recovery code, if two-factor authentication is enabled</value></data>
-  <data name="Account.External.Unlink" xml:space="preserve"><value>Confirm unlink</value></data>
-  <data name="Account.External.LinkTitle" xml:space="preserve"><value>Link an external account</value></data>
-  <data name="Account.External.NoProviders" xml:space="preserve"><value>No additional providers are available. Unconfigured external sign-in providers remain disabled.</value></data>
-  <data name="Account.External.Back" xml:space="preserve"><value>Back to security settings</value></data>
-  <data name="Account.External.VerificationFailed" xml:space="preserve"><value>Identity verification failed. Check your password and two-factor code, then try again.</value></data>
-  <data name="Account.External.LoadFailed" xml:space="preserve"><value>Unable to load linked accounts. Sign in again or try later.</value></data>
-  <data name="Admin.Security.ExternalLogins" xml:space="preserve"><value>Manage external sign-in accounts</value></data>
-  <data name="Layout.Admin.Widgets" xml:space="preserve"><value>Sidebar &amp; footer widgets</value></data>
-  <data name="Layout.Main.Sidebar" xml:space="preserve"><value>Sidebar</value></data>
-  <data name="Layout.Main.Privacy" xml:space="preserve"><value>Privacy policy</value></data>
-  <data name="Public.Widget.RecentPosts" xml:space="preserve"><value>Recent posts</value></data>
-  <data name="Public.Widget.Categories" xml:space="preserve"><value>Categories</value></data>
-  <data name="Public.Widget.Tags" xml:space="preserve"><value>Tags</value></data>
-  <data name="Public.Widget.Search" xml:space="preserve"><value>Search</value></data>
-  <data name="Public.Widget.Text" xml:space="preserve"><value>Text</value></data>
-  <data name="Public.Widget.SearchLabel" xml:space="preserve"><value>Search posts</value></data>
-  <data name="Public.Widget.SearchPlaceholder" xml:space="preserve"><value>Find posts by meaning…</value></data>
-  <data name="Public.Widget.SearchButton" xml:space="preserve"><value>Search</value></data>
-  <data name="Admin.Settings.CustomCss" xml:space="preserve"><value>Custom CSS (optional)</value></data>
-  <data name="Admin.Settings.CustomCssHelp" xml:space="preserve"><value>Up to {0} characters. Saved styles are sanitized first: comments are stripped and dangerous constructs (@import, @font-face, expression, javascript:) as well as backslash escapes are rejected; use !important to override built-in theme variables.</value></data>
-  <data name="Admin.Widgets.PageTitle" xml:space="preserve"><value>Widgets · Content management</value></data>
-  <data name="Admin.Widgets.Eyebrow" xml:space="preserve"><value>Controlled widgets</value></data>
-  <data name="Admin.Widgets.Title" xml:space="preserve"><value>Sidebar &amp; footer widgets</value></data>
-  <data name="Admin.Widgets.Introduction" xml:space="preserve"><value>Compose sidebar and footer blocks from built-in types; sortable and hideable, with no code loading. The sidebar appears beside content on wide screens; footer blocks appear above the footer line.</value></data>
-  <data name="Admin.Widgets.ReadOnlyNotice" xml:space="preserve"><value>Read-only members can view widget settings but cannot change them.</value></data>
-  <data name="Admin.Widgets.AddItem" xml:space="preserve"><value>Add widget</value></data>
-  <data name="Admin.Widgets.EditItem" xml:space="preserve"><value>Edit widget</value></data>
-  <data name="Admin.Widgets.Area" xml:space="preserve"><value>Area</value></data>
-  <data name="Admin.Widgets.AreaHelp" xml:space="preserve"><value>The area cannot be changed after creation; to move a widget, delete it and recreate it in the target area.</value></data>
-  <data name="Admin.Widgets.AreaSidebar" xml:space="preserve"><value>Sidebar</value></data>
-  <data name="Admin.Widgets.AreaFooter" xml:space="preserve"><value>Footer</value></data>
-  <data name="Admin.Widgets.Type" xml:space="preserve"><value>Type</value></data>
-  <data name="Admin.Widgets.TypeHelp" xml:space="preserve"><value>Text widgets use the same safe Markdown pipeline as posts; raw HTML is not parsed.</value></data>
-  <data name="Admin.Widgets.TypeRecentPosts" xml:space="preserve"><value>Recent posts</value></data>
-  <data name="Admin.Widgets.TypeCategories" xml:space="preserve"><value>Categories</value></data>
-  <data name="Admin.Widgets.TypeTags" xml:space="preserve"><value>Tags</value></data>
-  <data name="Admin.Widgets.TypeSearch" xml:space="preserve"><value>Search box</value></data>
-  <data name="Admin.Widgets.TypeText" xml:space="preserve"><value>Text (Markdown)</value></data>
-  <data name="Admin.Widgets.DisplayTitle" xml:space="preserve"><value>Display title (optional)</value></data>
-  <data name="Admin.Widgets.TitlePlaceholder" xml:space="preserve"><value>Leave empty to use the type default title</value></data>
-  <data name="Admin.Widgets.Count" xml:space="preserve"><value>Number of posts</value></data>
-  <data name="Admin.Widgets.CountHelp" xml:space="preserve"><value>1–{0} posts, published posts only.</value></data>
-  <data name="Admin.Widgets.Markdown" xml:space="preserve"><value>Text content (Markdown)</value></data>
-  <data name="Admin.Widgets.MarkdownHelp" xml:space="preserve"><value>Up to {0} characters; links, lists and image syntax are supported.</value></data>
-  <data name="Admin.Widgets.VisibleShort" xml:space="preserve"><value>Visible</value></data>
-  <data name="Admin.Widgets.Hidden" xml:space="preserve"><value>Hidden</value></data>
-  <data name="Admin.Widgets.Saving" xml:space="preserve"><value>Saving…</value></data>
-  <data name="Admin.Widgets.SaveItem" xml:space="preserve"><value>Save widget</value></data>
-  <data name="Admin.Widgets.CancelOrAdd" xml:space="preserve"><value>Cancel / add</value></data>
-  <data name="Admin.Widgets.EmptyTitle" xml:space="preserve"><value>No widgets in the {0} area yet</value></data>
-  <data name="Admin.Widgets.EmptyHelp" xml:space="preserve"><value>Once added, the area appears on the public site; when no visible items remain, the sidebar hides itself.</value></data>
-  <data name="Admin.Widgets.MoveUp" xml:space="preserve"><value>Move up</value></data>
-  <data name="Admin.Widgets.MoveDown" xml:space="preserve"><value>Move down</value></data>
-  <data name="Admin.Widgets.Edit" xml:space="preserve"><value>Edit</value></data>
-  <data name="Admin.Widgets.Delete" xml:space="preserve"><value>Delete</value></data>
-  <data name="Admin.Widgets.DeleteTitle" xml:space="preserve"><value>Delete widget “{0}”?</value></data>
-  <data name="Admin.Widgets.DeleteWarning" xml:space="preserve"><value>Only the widget is removed; content is unaffected. This action cannot be undone.</value></data>
-  <data name="Admin.Widgets.ConfirmDelete" xml:space="preserve"><value>Confirm delete</value></data>
-  <data name="Admin.Widgets.Cancel" xml:space="preserve"><value>Cancel</value></data>
-  <data name="Admin.Widgets.Saved" xml:space="preserve"><value>Widget saved.</value></data>
-  <data name="Admin.Widgets.Deleted" xml:space="preserve"><value>Widget deleted.</value></data>
-  <data name="Admin.Widgets.Reordered" xml:space="preserve"><value>Widget order updated.</value></data>
-  <data name="Admin.Settings.SearchEngineBlocked" xml:space="preserve"><value>Ask search engines not to index this site</value></data>
-  <data name="Admin.Settings.SearchEngineBlockedHelp" xml:space="preserve"><value>When enabled, robots.txt disallows the entire site and every public response carries a noindex header. Pages already indexed by search engines are not removed immediately.</value></data>
+  <data name="Account.Login.SecondFactorHelp" xml:space="preserve">
+    <value>Your identity has been verified. Enter a 6-digit authenticator code or an 8-character recovery code.</value>
+  </data>
+  <data name="Account.Login.Environment" xml:space="preserve">
+    <value>Sign-in environment</value>
+  </data>
+  <data name="Account.Login.PublicEnvironment" xml:space="preserve">
+    <value>Public device · up to 8 hours</value>
+  </data>
+  <data name="Account.Login.HomeEnvironment" xml:space="preserve">
+    <value>Home device · stay signed in for 30 days</value>
+  </data>
+  <data name="Account.Login.EnvironmentHelp" xml:space="preserve">
+    <value>Activity does not extend the deadline. Sign out after using a public device; closing the browser may not end your session.</value>
+  </data>
+  <data name="Account.Login.ExternalHelp" xml:space="preserve">
+    <value>Or use a linked account with the sign-in environment selected above.</value>
+  </data>
+  <data name="Account.Login.BindingHelp" xml:space="preserve">
+    <value>Before your first external sign-in, sign in with your existing account and link the provider in your security settings.</value>
+  </data>
+  <data name="Account.Login.ExternalFailed" xml:space="preserve">
+    <value>External sign-in did not complete. Try again or use your account and password.</value>
+  </data>
+  <data name="Account.Login.ExternalUnlinked" xml:space="preserve">
+    <value>This external account is not linked. Sign in with your existing account, then link it in your security settings.</value>
+  </data>
+  <data name="Account.Login.BindingsChanged" xml:space="preserve">
+    <value>Your external sign-in links have changed. Existing sessions and API credentials are no longer valid. Please sign in again.</value>
+  </data>
+  <data name="Account.External.Title" xml:space="preserve">
+    <value>External sign-in accounts</value>
+  </data>
+  <data name="Account.External.Help" xml:space="preserve">
+    <value>Link an external account to sign in without creating another account or changing site permissions. Your local password is retained.</value>
+  </data>
+  <data name="Account.External.RevocationHelp" xml:space="preserve">
+    <value>Linking or unlinking revokes all existing sessions and API credentials. You will need to sign in again.</value>
+  </data>
+  <data name="Account.External.ConfirmTitle" xml:space="preserve">
+    <value>Confirm linking the verified external account</value>
+  </data>
+  <data name="Account.External.Confirm" xml:space="preserve">
+    <value>Confirm link and sign in again</value>
+  </data>
   <data name="Common.Cancel" xml:space="preserve">
     <value>Cancel</value>
+  </data>
+  <data name="Account.External.Linked" xml:space="preserve">
+    <value>Linked accounts</value>
+  </data>
+  <data name="Account.External.NoLinks" xml:space="preserve">
+    <value>No external accounts are linked.</value>
+  </data>
+  <data name="Account.External.CodeHelp" xml:space="preserve">
+    <value>Authenticator or recovery code, if two-factor authentication is enabled</value>
+  </data>
+  <data name="Account.External.Unlink" xml:space="preserve">
+    <value>Confirm unlink</value>
+  </data>
+  <data name="Account.External.LinkTitle" xml:space="preserve">
+    <value>Link an external account</value>
+  </data>
+  <data name="Account.External.NoProviders" xml:space="preserve">
+    <value>No additional providers are available. Unconfigured external sign-in providers remain disabled.</value>
+  </data>
+  <data name="Account.External.Back" xml:space="preserve">
+    <value>Back to security settings</value>
+  </data>
+  <data name="Account.External.VerificationFailed" xml:space="preserve">
+    <value>Identity verification failed. Check your password and two-factor code, then try again.</value>
+  </data>
+  <data name="Account.External.LoadFailed" xml:space="preserve">
+    <value>Unable to load linked accounts. Sign in again or try later.</value>
+  </data>
+  <data name="Admin.Security.ExternalLogins" xml:space="preserve">
+    <value>Manage external sign-in accounts</value>
+  </data>
+  <data name="Layout.Admin.Widgets" xml:space="preserve">
+    <value>Sidebar &amp; footer widgets</value>
+  </data>
+  <data name="Layout.Main.Sidebar" xml:space="preserve">
+    <value>Sidebar</value>
+  </data>
+  <data name="Layout.Main.Privacy" xml:space="preserve">
+    <value>Privacy policy</value>
+  </data>
+  <data name="Public.Widget.RecentPosts" xml:space="preserve">
+    <value>Recent posts</value>
+  </data>
+  <data name="Public.Widget.Categories" xml:space="preserve">
+    <value>Categories</value>
+  </data>
+  <data name="Public.Widget.Tags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Public.Widget.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Public.Widget.Text" xml:space="preserve">
+    <value>Text</value>
+  </data>
+  <data name="Public.Widget.SearchLabel" xml:space="preserve">
+    <value>Search posts</value>
+  </data>
+  <data name="Public.Widget.SearchPlaceholder" xml:space="preserve">
+    <value>Find posts by meaning…</value>
+  </data>
+  <data name="Public.Widget.SearchButton" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Admin.Settings.CustomCss" xml:space="preserve">
+    <value>Custom CSS (optional)</value>
+  </data>
+  <data name="Admin.Settings.CustomCssHelp" xml:space="preserve">
+    <value>Up to {0} characters. Saved styles are sanitized first: comments are stripped and dangerous constructs (@import, @font-face, expression, javascript:) as well as backslash escapes are rejected; use !important to override built-in theme variables.</value>
+  </data>
+  <data name="Admin.Widgets.PageTitle" xml:space="preserve">
+    <value>Widgets · Content management</value>
+  </data>
+  <data name="Admin.Widgets.Eyebrow" xml:space="preserve">
+    <value>Controlled widgets</value>
+  </data>
+  <data name="Admin.Widgets.Title" xml:space="preserve">
+    <value>Sidebar &amp; footer widgets</value>
+  </data>
+  <data name="Admin.Widgets.Introduction" xml:space="preserve">
+    <value>Compose sidebar and footer blocks from built-in types; sortable and hideable, with no code loading. The sidebar appears beside content on wide screens; footer blocks appear above the footer line.</value>
+  </data>
+  <data name="Admin.Widgets.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can view widget settings but cannot change them.</value>
+  </data>
+  <data name="Admin.Widgets.AddItem" xml:space="preserve">
+    <value>Add widget</value>
+  </data>
+  <data name="Admin.Widgets.EditItem" xml:space="preserve">
+    <value>Edit widget</value>
+  </data>
+  <data name="Admin.Widgets.Area" xml:space="preserve">
+    <value>Area</value>
+  </data>
+  <data name="Admin.Widgets.AreaHelp" xml:space="preserve">
+    <value>The area cannot be changed after creation; to move a widget, delete it and recreate it in the target area.</value>
+  </data>
+  <data name="Admin.Widgets.AreaSidebar" xml:space="preserve">
+    <value>Sidebar</value>
+  </data>
+  <data name="Admin.Widgets.AreaFooter" xml:space="preserve">
+    <value>Footer</value>
+  </data>
+  <data name="Admin.Widgets.Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Admin.Widgets.TypeHelp" xml:space="preserve">
+    <value>Text widgets use the same safe Markdown pipeline as posts; raw HTML is not parsed.</value>
+  </data>
+  <data name="Admin.Widgets.TypeRecentPosts" xml:space="preserve">
+    <value>Recent posts</value>
+  </data>
+  <data name="Admin.Widgets.TypeCategories" xml:space="preserve">
+    <value>Categories</value>
+  </data>
+  <data name="Admin.Widgets.TypeTags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Admin.Widgets.TypeSearch" xml:space="preserve">
+    <value>Search box</value>
+  </data>
+  <data name="Admin.Widgets.TypeText" xml:space="preserve">
+    <value>Text (Markdown)</value>
+  </data>
+  <data name="Admin.Widgets.DisplayTitle" xml:space="preserve">
+    <value>Display title (optional)</value>
+  </data>
+  <data name="Admin.Widgets.TitlePlaceholder" xml:space="preserve">
+    <value>Leave empty to use the type default title</value>
+  </data>
+  <data name="Admin.Widgets.Count" xml:space="preserve">
+    <value>Number of posts</value>
+  </data>
+  <data name="Admin.Widgets.CountHelp" xml:space="preserve">
+    <value>1–{0} posts, published posts only.</value>
+  </data>
+  <data name="Admin.Widgets.Markdown" xml:space="preserve">
+    <value>Text content (Markdown)</value>
   </data>
   <data name="Admin.Widgets.Required" xml:space="preserve">
     <value>Required</value>
   </data>
+  <data name="Admin.Widgets.MarkdownHelp" xml:space="preserve">
+    <value>Up to {0} characters; links, lists and image syntax are supported.</value>
+  </data>
   <data name="Admin.Widgets.Visible" xml:space="preserve">
     <value>Show on the public site</value>
+  </data>
+  <data name="Admin.Widgets.VisibleShort" xml:space="preserve">
+    <value>Visible</value>
+  </data>
+  <data name="Admin.Widgets.Hidden" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="Admin.Widgets.Saving" xml:space="preserve">
+    <value>Saving…</value>
+  </data>
+  <data name="Admin.Widgets.SaveItem" xml:space="preserve">
+    <value>Save widget</value>
+  </data>
+  <data name="Admin.Widgets.CancelOrAdd" xml:space="preserve">
+    <value>Cancel / add</value>
+  </data>
+  <data name="Admin.Widgets.EmptyTitle" xml:space="preserve">
+    <value>No widgets in the {0} area yet</value>
+  </data>
+  <data name="Admin.Widgets.EmptyHelp" xml:space="preserve">
+    <value>Once added, the area appears on the public site; when no visible items remain, the sidebar hides itself.</value>
   </data>
   <data name="Admin.Widgets.Order" xml:space="preserve">
     <value>Order</value>
@@ -4371,154 +4555,447 @@
   <data name="Admin.Widgets.Actions" xml:space="preserve">
     <value>Actions</value>
   </data>
+  <data name="Admin.Widgets.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Admin.Widgets.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Admin.Widgets.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Admin.Widgets.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Admin.Widgets.DeleteTitle" xml:space="preserve">
+    <value>Delete widget “{0}”?</value>
+  </data>
+  <data name="Admin.Widgets.DeleteWarning" xml:space="preserve">
+    <value>Only the widget is removed; content is unaffected. This action cannot be undone.</value>
+  </data>
+  <data name="Admin.Widgets.ConfirmDelete" xml:space="preserve">
+    <value>Confirm delete</value>
+  </data>
+  <data name="Admin.Widgets.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Widgets.Saved" xml:space="preserve">
+    <value>Widget saved.</value>
+  </data>
+  <data name="Admin.Widgets.Deleted" xml:space="preserve">
+    <value>Widget deleted.</value>
+  </data>
+  <data name="Admin.Widgets.Reordered" xml:space="preserve">
+    <value>Widget order updated.</value>
+  </data>
+  <data name="Admin.Settings.SearchEngineBlocked" xml:space="preserve">
+    <value>Ask search engines not to index this site</value>
+  </data>
+  <data name="Admin.Settings.SearchEngineBlockedHelp" xml:space="preserve">
+    <value>When enabled, robots.txt disallows the entire site and every public response carries a noindex header. Pages already indexed by search engines are not removed immediately.</value>
+  </data>
   <data name="Admin.Settings.ShowViewCounts" xml:space="preserve"><value>Show view counts on the public site</value></data>
   <data name="Admin.Settings.ShowViewCountsHelp" xml:space="preserve"><value>When enabled, article pages show the cumulative view count next to the byline.</value></data>
   <data name="Admin.Settings.IndexNowEnabled" xml:space="preserve"><value>Enable IndexNow search engine pings</value></data>
   <data name="Admin.Settings.IndexNowEnabledHelp" xml:space="preserve"><value>Submits the public URL to IndexNow (used by Bing and others) when content is published; requires a key.</value></data>
   <data name="Admin.Settings.IndexNowKey" xml:space="preserve"><value>IndexNow key (8–128 hexadecimal characters)</value></data>
   <data name="Admin.Settings.IndexNowKeyHelp" xml:space="preserve"><value>Generate any random hexadecimal string; this site automatically serves the /{key}.txt verification file at the site root.</value></data>
-  <data name="Admin.Taxonomies.SortOrder" xml:space="preserve"><value>Sort weight</value></data>
-  <data name="Admin.Taxonomies.SortOrderHelp" xml:space="preserve"><value>Lower numbers come first; 0 falls back to name order. Public category menus and widgets follow this order.</value></data>
   <data name="Public.ContentDetail.ViewCount" xml:space="preserve"><value>{0:N0} views</value></data>
-  <data name="Public.ContentDetail.CommentsPagination" xml:space="preserve"><value>Comment pagination</value></data>
-  <data name="Public.ContentDetail.CommentsPrev" xml:space="preserve"><value>Previous</value></data>
-  <data name="Public.ContentDetail.CommentsNext" xml:space="preserve"><value>Next</value></data>
-  <data name="Public.ContentDetail.CommentsPageStatus" xml:space="preserve"><value>Page {0} of {1}</value></data>
-  <data name="Public.ContentDetail.EditLink" xml:space="preserve"><value>Edit this content</value></data>
-  <data name="Admin.SiteHealth.PageTitle" xml:space="preserve"><value>Site Health &amp; Webhooks · Content Management</value></data>
-  <data name="Admin.SiteHealth.Eyebrow" xml:space="preserve"><value>Operations diagnostics and integration monitoring</value></data>
-  <data name="Admin.SiteHealth.Title" xml:space="preserve"><value>Site Health</value></data>
-  <data name="Admin.SiteHealth.Introduction" xml:space="preserve"><value>Review the database, storage writability, schedules, AI embedding queue, SMTP, backups, and outbound webhook delivery status (never including secrets or connection strings).</value></data>
-  <data name="Admin.SiteHealth.Recheck" xml:space="preserve"><value>Run checks again</value></data>
-  <data name="Admin.SiteHealth.OverallStatus" xml:space="preserve"><value>Overall status: </value></data>
-  <data name="Admin.SiteHealth.CheckedAt" xml:space="preserve"><value>Checked at: </value></data>
-  <data name="Admin.SiteHealth.ColCategory" xml:space="preserve"><value>Category</value></data>
-  <data name="Admin.SiteHealth.ColItem" xml:space="preserve"><value>Check</value></data>
-  <data name="Admin.SiteHealth.WebhookDeliveries" xml:space="preserve"><value>Outbound webhook deliveries</value></data>
-  <data name="Admin.SiteHealth.WebhookHelp" xml:space="preserve"><value>Persisted, with exponential-backoff retries and manual re-delivery</value></data>
-  <data name="Admin.SiteHealth.NoDeliveries" xml:space="preserve"><value>No webhook deliveries yet.</value></data>
-  <data name="Admin.SiteHealth.ColEvent" xml:space="preserve"><value>Event</value></data>
-  <data name="Admin.SiteHealth.ColTarget" xml:space="preserve"><value>Target URL</value></data>
-  <data name="Admin.SiteHealth.ColStatus2" xml:space="preserve"><value>Status</value></data>
-  <data name="Admin.SiteHealth.ColAttempts" xml:space="preserve"><value>Attempts</value></data>
-  <data name="Admin.SiteHealth.ColLastResponse" xml:space="preserve"><value>Last response</value></data>
-  <data name="Admin.SiteHealth.ColTime" xml:space="preserve"><value>Time</value></data>
-  <data name="Admin.SiteHealth.ColActions" xml:space="preserve"><value>Actions</value></data>
-  <data name="Admin.SiteHealth.RetryNow" xml:space="preserve"><value>Re-deliver</value></data>
-  <data name="Admin.SiteHealth.OpenApiTitle" xml:space="preserve"><value>OpenAPI and API discovery contract</value></data>
-  <data name="Admin.SiteHealth.OpenApiHelp" xml:space="preserve"><value>Origami is API-first and publishes a machine-readable OpenAPI 3.1 document with the endpoint catalogue.</value></data>
-  <data name="Admin.SiteHealth.ViewOpenApi" xml:space="preserve"><value>View the OpenAPI 3.1 JSON contract ↗</value></data>
-  <data name="Admin.SiteHealth.AdminOnly" xml:space="preserve"><value>Site health is visible to site administrators only.</value></data>
-  <data name="Admin.SiteHealth.RetryTriggered" xml:space="preserve"><value>Webhook re-delivery triggered.</value></data>
-  <data name="Admin.SiteHealth.StatusGood" xml:space="preserve"><value>Good</value></data>
-  <data name="Admin.SiteHealth.StatusWarning" xml:space="preserve"><value>Warning</value></data>
-  <data name="Admin.SiteHealth.StatusCritical" xml:space="preserve"><value>Critical</value></data>
-  <data name="Admin.Security.SessionsTitle" xml:space="preserve"><value>Login sessions</value></data>
-  <data name="Admin.Security.SessionsHelp" xml:space="preserve"><value>Active logins with their origin; you can remotely sign out other sessions, which take effect on their next request.</value></data>
-  <data name="Admin.Security.NoSessions" xml:space="preserve"><value>No active login sessions.</value></data>
-  <data name="Admin.Security.SessionCreated" xml:space="preserve"><value>Signed in</value></data>
-  <data name="Admin.Security.SessionExpires" xml:space="preserve"><value>Expires</value></data>
-  <data name="Admin.Security.SessionStatusCol" xml:space="preserve"><value>Status</value></data>
-  <data name="Admin.Security.SessionActions" xml:space="preserve"><value>Actions</value></data>
-  <data name="Admin.Security.SessionCurrent" xml:space="preserve"><value>This session</value></data>
-  <data name="Admin.Security.SessionOther" xml:space="preserve"><value>Other device</value></data>
-  <data name="Admin.Security.RevokeSession" xml:space="preserve"><value>Sign out remotely</value></data>
-  <data name="Admin.Security.SessionRevoked" xml:space="preserve"><value>That session has been signed out.</value></data>
-  <data name="Admin.Security.UnknownDevice" xml:space="preserve"><value>Unknown device</value></data>
-  <data name="Admin.Security.PrivacyTitle" xml:space="preserve"><value>Privacy and personal data tools</value></data>
-  <data name="Admin.Security.PrivacyHelp" xml:space="preserve"><value>Download your account's personal data (memberships, authored content list, and recent activity), or request erasure that anonymizes your published content.</value></data>
-  <data name="Admin.Security.DownloadData" xml:space="preserve"><value>Download personal data (JSON)</value></data>
-  <data name="Admin.Security.EraseData" xml:space="preserve"><value>Erase my personal data and disable the account</value></data>
-  <data name="Admin.Security.EraseConfirmTitle" xml:space="preserve"><value>Erase your personal data?</value></data>
-  <data name="Admin.Security.EraseConfirmBody" xml:space="preserve"><value>This clears your email, bio, and website, revokes all API credentials, anonymizes your posts and comments, and disables this account. It cannot be undone.</value></data>
-  <data name="Admin.Security.EraseConfirmAction" xml:space="preserve"><value>Confirm erasure and sign out</value></data>
-  <data name="Admin.Security.EraseCancel" xml:space="preserve"><value>Cancel</value></data>
-  <data name="Admin.Security.Erased" xml:space="preserve"><value>Personal data erased; the account has been disabled.</value></data>
-  <data name="Admin.Widgets.TypeRecentComments" xml:space="preserve"><value>Recent comments</value></data>
-  <data name="Admin.Widgets.TypeRssFeed" xml:space="preserve"><value>External articles (RSS/Atom)</value></data>
-  <data name="Admin.Widgets.TypeTagCloud" xml:space="preserve"><value>Tag cloud</value></data>
-  <data name="Admin.Widgets.TypeCalendar" xml:space="preserve"><value>Calendar</value></data>
-  <data name="Admin.Widgets.TagCloudCount" xml:space="preserve"><value>Number of tags</value></data>
-  <data name="Admin.Widgets.TagCloudCountHelp" xml:space="preserve"><value>1–{0} tags, the most-used ones; font size is weighted by popularity.</value></data>
-  <data name="Admin.Widgets.FeedUrl" xml:space="preserve"><value>Feed URL</value></data>
-  <data name="Admin.Widgets.Required2" xml:space="preserve"><value>Required</value></data>
-  <data name="Admin.Widgets.FeedUrlHelp" xml:space="preserve"><value>Public absolute https URL (local or intranet hosts rejected); cached for 10 minutes, and hidden while the feed cannot be fetched.</value></data>
-  <data name="Public.Widget.RecentComments" xml:space="preserve"><value>Recent comments</value></data>
-  <data name="Public.Widget.RssFeed" xml:space="preserve"><value>External articles</value></data>
-  <data name="Public.Widget.TagCloud" xml:space="preserve"><value>Tag cloud</value></data>
-  <data name="Public.Widget.Calendar" xml:space="preserve"><value>Calendar</value></data>
-  <data name="Public.Widget.CalendarPrev" xml:space="preserve"><value>Previous month</value></data>
-  <data name="Public.Widget.CalendarNext" xml:space="preserve"><value>Next month</value></data>
-  <data name="Public.Widget.CalendarTitle" xml:space="preserve"><value>{0}-{1}</value></data>
-  <data name="Public.Widget.CalendarMon" xml:space="preserve"><value>Mo</value></data>
-  <data name="Public.Widget.CalendarTue" xml:space="preserve"><value>Tu</value></data>
-  <data name="Public.Widget.CalendarWed" xml:space="preserve"><value>We</value></data>
-  <data name="Public.Widget.CalendarThu" xml:space="preserve"><value>Th</value></data>
-  <data name="Public.Widget.CalendarFri" xml:space="preserve"><value>Fr</value></data>
-  <data name="Public.Widget.CalendarSat" xml:space="preserve"><value>Sa</value></data>
-  <data name="Public.Widget.CalendarSun" xml:space="preserve"><value>Su</value></data>
-  <data name="Public.Widget.CalendarDayPosts" xml:space="preserve"><value>Day {0}, {1} posts</value></data>
-  <data name="Layout.Admin.Marketplace" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
-  <data name="Admin.Marketplace.PageTitle" xml:space="preserve"><value>Themes &amp; widget packs · Content management</value></data>
-  <data name="Admin.Marketplace.Title" xml:space="preserve"><value>Controlled package market</value></data>
-  <data name="Admin.Marketplace.Heading" xml:space="preserve"><value>Themes &amp; widget packs</value></data>
-  <data name="Admin.Marketplace.Introduction" xml:space="preserve"><value>Install layouts or widget combos via declarative packs; sources are the built-in catalog and ZIP import only, every declared value is validated against whitelists and bounds, and no code is ever loaded.</value></data>
-  <data name="Admin.Marketplace.ReadOnlyNotice" xml:space="preserve"><value>Read-only members can browse the market; installing, toggling and uninstalling require an administrator.</value></data>
-  <data name="Admin.Marketplace.CatalogTitle" xml:space="preserve"><value>Built-in catalog</value></data>
-  <data name="Admin.Marketplace.KindTheme" xml:space="preserve"><value>Theme pack</value></data>
-  <data name="Admin.Marketplace.KindWidgets" xml:space="preserve"><value>Widget pack</value></data>
-  <data name="Admin.Marketplace.ThemePreview" xml:space="preserve"><value>Layout preview</value></data>
-  <data name="Admin.Marketplace.AlreadyInstalled" xml:space="preserve"><value>This pack is already installed.</value></data>
-  <data name="Admin.Marketplace.Install" xml:space="preserve"><value>Install</value></data>
-  <data name="Admin.Marketplace.InstalledTitle" xml:space="preserve"><value>Installed</value></data>
-  <data name="Admin.Marketplace.InstalledEmpty" xml:space="preserve"><value>No packs installed yet</value></data>
-  <data name="Admin.Marketplace.InstalledEmptyHelp" xml:space="preserve"><value>Install from the built-in catalog above, or upload a ZIP package.</value></data>
-  <data name="Admin.Marketplace.PackageName" xml:space="preserve"><value>Pack</value></data>
-  <data name="Admin.Marketplace.Source" xml:space="preserve"><value>Source</value></data>
-  <data name="Admin.Marketplace.SourceBuiltin" xml:space="preserve"><value>Built-in</value></data>
-  <data name="Admin.Marketplace.SourceUpload" xml:space="preserve"><value>Uploaded</value></data>
-  <data name="Admin.Marketplace.Status" xml:space="preserve"><value>Status</value></data>
-  <data name="Admin.Marketplace.StatusEnabled" xml:space="preserve"><value>Enabled</value></data>
-  <data name="Admin.Marketplace.StatusDisabled" xml:space="preserve"><value>Disabled</value></data>
-  <data name="Admin.Marketplace.Enable" xml:space="preserve"><value>Enable</value></data>
-  <data name="Admin.Marketplace.Disable" xml:space="preserve"><value>Disable</value></data>
-  <data name="Admin.Marketplace.Uninstall" xml:space="preserve"><value>Uninstall</value></data>
-  <data name="Admin.Marketplace.UninstallConfirm" xml:space="preserve"><value>Uninstall “{0}”?</value></data>
-  <data name="Admin.Marketplace.UninstallThemeWarning" xml:space="preserve"><value>The site layout will fall back to the built-in Reading preset.</value></data>
-  <data name="Admin.Marketplace.UninstallWidgetsWarning" xml:space="preserve"><value>{0} widgets created by this pack will also be deleted.</value></data>
-  <data name="Admin.Marketplace.ConfirmUninstall" xml:space="preserve"><value>Confirm uninstall</value></data>
-  <data name="Admin.Marketplace.UploadTitle" xml:space="preserve"><value>Upload package (ZIP)</value></data>
-  <data name="Admin.Marketplace.UploadHelp" xml:space="preserve"><value>The ZIP must contain only a root manifest.json, with a size limit of {0} MB. Theme declarations (color, width, font stack keys, density) and widget definitions are validated item by item, and pack CSS follows the same cleaning rules as custom CSS.</value></data>
-  <data name="Admin.Marketplace.PreviewTitle" xml:space="preserve"><value>Package preview</value></data>
-  <data name="Admin.Marketplace.ChooseFile" xml:space="preserve"><value>Choose package (.zip)</value></data>
-  <data name="Admin.Marketplace.ConfirmInstall" xml:space="preserve"><value>Confirm install</value></data>
-  <data name="Admin.Marketplace.UploadTooLarge" xml:space="preserve"><value>The package file exceeds the size limit.</value></data>
-  <data name="Admin.Marketplace.Installed" xml:space="preserve"><value>Pack installed.</value></data>
-  <data name="Admin.Marketplace.EnabledNotice" xml:space="preserve"><value>Pack enabled.</value></data>
-  <data name="Admin.Marketplace.Disabled" xml:space="preserve"><value>Pack disabled.</value></data>
-  <data name="Admin.Marketplace.Uninstalled" xml:space="preserve"><value>Pack uninstalled.</value></data>
-  <data name="Admin.Marketplace.InstallDenied" xml:space="preserve"><value>Installing controlled packs requires the site administrator role.</value></data>
-  <data name="Admin.Widgets.PackageBadge" xml:space="preserve"><value>from pack</value></data>
-  <data name="Admin.Marketplace.Export" xml:space="preserve"><value>Export</value></data>
-  <data name="Admin.Marketplace.ImportThemeTitle" xml:space="preserve"><value>Import a third-party theme (WordPress)</value></data>
-  <data name="Admin.Marketplace.ImportThemeHelp" xml:space="preserve"><value>Upload a WordPress theme archive: only the style.css header (name, author, description, license) and derivable accent color and font family are read; templates and code are never kept or executed, and the remaining layout values can be fine-tuned on the settings page.</value></data>
-  <data name="Admin.Marketplace.ThemePreviewTitle" xml:space="preserve"><value>Theme conversion preview</value></data>
-  <data name="Admin.Marketplace.ThemeDerived" xml:space="preserve"><value>Converted visual values: accent color {0}, font {1}.</value></data>
-  <data name="Admin.Marketplace.ChooseThemeFile" xml:space="preserve"><value>Choose theme archive (.zip)</value></data>
-  <data name="Admin.Marketplace.PreviewPostTitle" xml:space="preserve"><value>Sample article title</value></data>
-  <data name="Admin.Marketplace.PreviewPostSummary" xml:space="preserve"><value>Sample summary: fonts, line height, cards and heading styles all come from the theme pack.</value></data>
-  <data name="Admin.Marketplace.PreviewRead" xml:space="preserve"><value>Read full article</value></data>
+  <data name="Public.ContentDetail.CommentsPagination" xml:space="preserve">
+    <value>Comment pagination</value>
+  </data>
+  <data name="Public.ContentDetail.CommentsPrev" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Public.ContentDetail.CommentsNext" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Public.ContentDetail.CommentsPageStatus" xml:space="preserve">
+    <value>Page {0} of {1}</value>
+  </data>
+  <data name="Public.ContentDetail.EditLink" xml:space="preserve">
+    <value>Edit this content</value>
+  </data>
+  <data name="Admin.SiteHealth.PageTitle" xml:space="preserve">
+    <value>Site Health &amp; Webhooks · Content Management</value>
+  </data>
+  <data name="Admin.SiteHealth.Eyebrow" xml:space="preserve">
+    <value>Operations diagnostics and integration monitoring</value>
+  </data>
+  <data name="Admin.SiteHealth.Title" xml:space="preserve">
+    <value>Site Health</value>
+  </data>
+  <data name="Admin.SiteHealth.Introduction" xml:space="preserve">
+    <value>Review the database, storage writability, schedules, AI embedding queue, SMTP, backups, and outbound webhook delivery status (never including secrets or connection strings).</value>
+  </data>
+  <data name="Admin.SiteHealth.Recheck" xml:space="preserve">
+    <value>Run checks again</value>
+  </data>
+  <data name="Admin.SiteHealth.OverallStatus" xml:space="preserve">
+    <value>Overall status: </value>
+  </data>
+  <data name="Admin.SiteHealth.CheckedAt" xml:space="preserve">
+    <value>Checked at: </value>
+  </data>
+  <data name="Admin.SiteHealth.ColCategory" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="Admin.SiteHealth.ColItem" xml:space="preserve">
+    <value>Check</value>
+  </data>
   <data name="Admin.SiteHealth.ColStatus" xml:space="preserve">
     <value>Status</value>
   </data>
   <data name="Admin.SiteHealth.ColSummary" xml:space="preserve">
     <value>Summary</value>
   </data>
+  <data name="Admin.SiteHealth.WebhookDeliveries" xml:space="preserve">
+    <value>Outbound webhook deliveries</value>
+  </data>
+  <data name="Admin.SiteHealth.WebhookHelp" xml:space="preserve">
+    <value>Persisted, with exponential-backoff retries and manual re-delivery</value>
+  </data>
+  <data name="Admin.SiteHealth.NoDeliveries" xml:space="preserve">
+    <value>No webhook deliveries yet.</value>
+  </data>
+  <data name="Admin.SiteHealth.ColEvent" xml:space="preserve">
+    <value>Event</value>
+  </data>
+  <data name="Admin.SiteHealth.ColTarget" xml:space="preserve">
+    <value>Target URL</value>
+  </data>
+  <data name="Admin.SiteHealth.ColStatus2" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.SiteHealth.ColAttempts" xml:space="preserve">
+    <value>Attempts</value>
+  </data>
+  <data name="Admin.SiteHealth.ColLastResponse" xml:space="preserve">
+    <value>Last response</value>
+  </data>
+  <data name="Admin.SiteHealth.ColTime" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Admin.SiteHealth.ColActions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.SiteHealth.RetryNow" xml:space="preserve">
+    <value>Re-deliver</value>
+  </data>
+  <data name="Admin.SiteHealth.OpenApiTitle" xml:space="preserve">
+    <value>OpenAPI and API discovery contract</value>
+  </data>
+  <data name="Admin.SiteHealth.OpenApiHelp" xml:space="preserve">
+    <value>Origami is API-first and publishes a machine-readable OpenAPI 3.1 document with the endpoint catalogue.</value>
+  </data>
+  <data name="Admin.SiteHealth.ViewOpenApi" xml:space="preserve">
+    <value>View the OpenAPI 3.1 JSON contract ↗</value>
+  </data>
+  <data name="Admin.SiteHealth.AdminOnly" xml:space="preserve">
+    <value>Site health is visible to site administrators only.</value>
+  </data>
+  <data name="Admin.SiteHealth.RetryTriggered" xml:space="preserve">
+    <value>Webhook re-delivery triggered.</value>
+  </data>
+  <data name="Admin.SiteHealth.StatusGood" xml:space="preserve">
+    <value>Good</value>
+  </data>
+  <data name="Admin.SiteHealth.StatusWarning" xml:space="preserve">
+    <value>Warning</value>
+  </data>
+  <data name="Admin.SiteHealth.StatusCritical" xml:space="preserve">
+    <value>Critical</value>
+  </data>
+  <data name="Admin.Security.SessionsTitle" xml:space="preserve">
+    <value>Login sessions</value>
+  </data>
+  <data name="Admin.Security.SessionsHelp" xml:space="preserve">
+    <value>Active logins with their origin; you can remotely sign out other sessions, which take effect on their next request.</value>
+  </data>
+  <data name="Admin.Security.NoSessions" xml:space="preserve">
+    <value>No active login sessions.</value>
+  </data>
+  <data name="Admin.Security.SessionCreated" xml:space="preserve">
+    <value>Signed in</value>
+  </data>
+  <data name="Admin.Security.SessionExpires" xml:space="preserve">
+    <value>Expires</value>
+  </data>
   <data name="Admin.Security.SessionSource" xml:space="preserve">
     <value>Source IP</value>
   </data>
   <data name="Admin.Security.SessionDevice" xml:space="preserve">
     <value>Device</value>
+  </data>
+  <data name="Admin.Security.SessionStatusCol" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.Security.SessionActions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
+  <data name="Admin.Security.SessionCurrent" xml:space="preserve">
+    <value>This session</value>
+  </data>
+  <data name="Admin.Security.SessionOther" xml:space="preserve">
+    <value>Other device</value>
+  </data>
+  <data name="Admin.Security.RevokeSession" xml:space="preserve">
+    <value>Sign out remotely</value>
+  </data>
+  <data name="Admin.Security.SessionRevoked" xml:space="preserve">
+    <value>That session has been signed out.</value>
+  </data>
+  <data name="Admin.Security.UnknownDevice" xml:space="preserve">
+    <value>Unknown device</value>
+  </data>
+  <data name="Admin.Security.PrivacyTitle" xml:space="preserve">
+    <value>Privacy and personal data tools</value>
+  </data>
+  <data name="Admin.Security.PrivacyHelp" xml:space="preserve">
+    <value>Download your account's personal data (memberships, authored content list, and recent activity), or request erasure that anonymizes your published content.</value>
+  </data>
+  <data name="Admin.Security.DownloadData" xml:space="preserve">
+    <value>Download personal data (JSON)</value>
+  </data>
+  <data name="Admin.Security.EraseData" xml:space="preserve">
+    <value>Erase my personal data and disable the account</value>
+  </data>
+  <data name="Admin.Security.EraseConfirmTitle" xml:space="preserve">
+    <value>Erase your personal data?</value>
+  </data>
+  <data name="Admin.Security.EraseConfirmBody" xml:space="preserve">
+    <value>This clears your email, bio, and website, revokes all API credentials, anonymizes your posts and comments, and disables this account. It cannot be undone.</value>
+  </data>
+  <data name="Admin.Security.EraseConfirmAction" xml:space="preserve">
+    <value>Confirm erasure and sign out</value>
+  </data>
+  <data name="Admin.Security.EraseCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Admin.Security.Erased" xml:space="preserve">
+    <value>Personal data erased; the account has been disabled.</value>
+  </data>
+  <data name="Admin.Widgets.TypeRecentComments" xml:space="preserve">
+    <value>Recent comments</value>
+  </data>
+  <data name="Admin.Widgets.TypeRssFeed" xml:space="preserve">
+    <value>External articles (RSS/Atom)</value>
+  </data>
+  <data name="Admin.Widgets.TypeTagCloud" xml:space="preserve">
+    <value>Tag cloud</value>
+  </data>
+  <data name="Admin.Widgets.TypeCalendar" xml:space="preserve">
+    <value>Calendar</value>
+  </data>
+  <data name="Admin.Widgets.TagCloudCount" xml:space="preserve">
+    <value>Number of tags</value>
+  </data>
+  <data name="Admin.Widgets.TagCloudCountHelp" xml:space="preserve">
+    <value>1–{0} tags, the most-used ones; font size is weighted by popularity.</value>
+  </data>
+  <data name="Admin.Widgets.FeedUrl" xml:space="preserve">
+    <value>Feed URL</value>
+  </data>
+  <data name="Admin.Widgets.Required2" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Widgets.FeedUrlHelp" xml:space="preserve">
+    <value>Public absolute https URL (local or intranet hosts rejected); cached for 10 minutes, and hidden while the feed cannot be fetched.</value>
+  </data>
+  <data name="Public.Widget.RecentComments" xml:space="preserve">
+    <value>Recent comments</value>
+  </data>
+  <data name="Public.Widget.RssFeed" xml:space="preserve">
+    <value>External articles</value>
+  </data>
+  <data name="Public.Widget.TagCloud" xml:space="preserve">
+    <value>Tag cloud</value>
+  </data>
+  <data name="Public.Widget.Calendar" xml:space="preserve">
+    <value>Calendar</value>
+  </data>
+  <data name="Public.Widget.CalendarPrev" xml:space="preserve">
+    <value>Previous month</value>
+  </data>
+  <data name="Public.Widget.CalendarNext" xml:space="preserve">
+    <value>Next month</value>
+  </data>
+  <data name="Public.Widget.CalendarTitle" xml:space="preserve">
+    <value>{0}-{1}</value>
+  </data>
+  <data name="Public.Widget.CalendarMon" xml:space="preserve">
+    <value>Mo</value>
+  </data>
+  <data name="Public.Widget.CalendarTue" xml:space="preserve">
+    <value>Tu</value>
+  </data>
+  <data name="Public.Widget.CalendarWed" xml:space="preserve">
+    <value>We</value>
+  </data>
+  <data name="Public.Widget.CalendarThu" xml:space="preserve">
+    <value>Th</value>
+  </data>
+  <data name="Public.Widget.CalendarFri" xml:space="preserve">
+    <value>Fr</value>
+  </data>
+  <data name="Public.Widget.CalendarSat" xml:space="preserve">
+    <value>Sa</value>
+  </data>
+  <data name="Public.Widget.CalendarSun" xml:space="preserve">
+    <value>Su</value>
+  </data>
+  <data name="Public.Widget.CalendarDayPosts" xml:space="preserve">
+    <value>Day {0}, {1} posts</value>
+  </data>
+  <data name="Layout.Admin.Marketplace" xml:space="preserve">
+    <value>Themes &amp; widget packs</value>
+  </data>
+  <data name="Admin.Marketplace.PageTitle" xml:space="preserve">
+    <value>Themes &amp; widget packs · Content management</value>
+  </data>
+  <data name="Admin.Marketplace.Title" xml:space="preserve">
+    <value>Controlled package market</value>
+  </data>
+  <data name="Admin.Marketplace.Heading" xml:space="preserve">
+    <value>Themes &amp; widget packs</value>
+  </data>
+  <data name="Admin.Marketplace.Introduction" xml:space="preserve">
+    <value>Install layouts or widget combos via declarative packs; sources are the built-in catalog and ZIP import only, every declared value is validated against whitelists and bounds, and no code is ever loaded.</value>
+  </data>
+  <data name="Admin.Marketplace.ReadOnlyNotice" xml:space="preserve">
+    <value>Read-only members can browse the market; installing, toggling and uninstalling require an administrator.</value>
+  </data>
+  <data name="Admin.Marketplace.CatalogTitle" xml:space="preserve">
+    <value>Built-in catalog</value>
+  </data>
+  <data name="Admin.Marketplace.KindTheme" xml:space="preserve">
+    <value>Theme pack</value>
+  </data>
+  <data name="Admin.Marketplace.KindWidgets" xml:space="preserve">
+    <value>Widget pack</value>
+  </data>
+  <data name="Admin.Marketplace.ThemePreview" xml:space="preserve">
+    <value>Layout preview</value>
+  </data>
+  <data name="Admin.Marketplace.AlreadyInstalled" xml:space="preserve">
+    <value>This pack is already installed.</value>
+  </data>
+  <data name="Admin.Marketplace.Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Admin.Marketplace.InstalledTitle" xml:space="preserve">
+    <value>Installed</value>
+  </data>
+  <data name="Admin.Marketplace.InstalledEmpty" xml:space="preserve">
+    <value>No packs installed yet</value>
+  </data>
+  <data name="Admin.Marketplace.InstalledEmptyHelp" xml:space="preserve">
+    <value>Install from the built-in catalog above, or upload a ZIP package.</value>
+  </data>
+  <data name="Admin.Marketplace.PackageName" xml:space="preserve">
+    <value>Pack</value>
+  </data>
+  <data name="Admin.Marketplace.Source" xml:space="preserve">
+    <value>Source</value>
+  </data>
+  <data name="Admin.Marketplace.SourceBuiltin" xml:space="preserve">
+    <value>Built-in</value>
+  </data>
+  <data name="Admin.Marketplace.SourceUpload" xml:space="preserve">
+    <value>Uploaded</value>
+  </data>
+  <data name="Admin.Marketplace.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.Marketplace.StatusEnabled" xml:space="preserve">
+    <value>Enabled</value>
+  </data>
+  <data name="Admin.Marketplace.StatusDisabled" xml:space="preserve">
+    <value>Disabled</value>
+  </data>
+  <data name="Admin.Marketplace.Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Admin.Marketplace.Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Admin.Marketplace.Uninstall" xml:space="preserve">
+    <value>Uninstall</value>
+  </data>
+  <data name="Admin.Marketplace.UninstallConfirm" xml:space="preserve">
+    <value>Uninstall “{0}”?</value>
+  </data>
+  <data name="Admin.Marketplace.UninstallThemeWarning" xml:space="preserve">
+    <value>The site layout will fall back to the built-in Reading preset.</value>
+  </data>
+  <data name="Admin.Marketplace.UninstallWidgetsWarning" xml:space="preserve">
+    <value>{0} widgets created by this pack will also be deleted.</value>
+  </data>
+  <data name="Admin.Marketplace.ConfirmUninstall" xml:space="preserve">
+    <value>Confirm uninstall</value>
+  </data>
+  <data name="Admin.Marketplace.UploadTitle" xml:space="preserve">
+    <value>Upload package (ZIP)</value>
+  </data>
+  <data name="Admin.Marketplace.UploadHelp" xml:space="preserve">
+    <value>The ZIP must contain only a root manifest.json, with a size limit of {0} MB. Theme declarations (color, width, font stack keys, density) and widget definitions are validated item by item, and pack CSS follows the same cleaning rules as custom CSS.</value>
+  </data>
+  <data name="Admin.Marketplace.PreviewTitle" xml:space="preserve">
+    <value>Package preview</value>
+  </data>
+  <data name="Admin.Marketplace.ChooseFile" xml:space="preserve">
+    <value>Choose package (.zip)</value>
+  </data>
+  <data name="Admin.Marketplace.ConfirmInstall" xml:space="preserve">
+    <value>Confirm install</value>
+  </data>
+  <data name="Admin.Marketplace.UploadTooLarge" xml:space="preserve">
+    <value>The package file exceeds the size limit.</value>
+  </data>
+  <data name="Admin.Marketplace.Installed" xml:space="preserve">
+    <value>Pack installed.</value>
+  </data>
+  <data name="Admin.Marketplace.EnabledNotice" xml:space="preserve">
+    <value>Pack enabled.</value>
+  </data>
+  <data name="Admin.Marketplace.Disabled" xml:space="preserve">
+    <value>Pack disabled.</value>
+  </data>
+  <data name="Admin.Marketplace.Uninstalled" xml:space="preserve">
+    <value>Pack uninstalled.</value>
+  </data>
+  <data name="Admin.Marketplace.InstallDenied" xml:space="preserve">
+    <value>Installing controlled packs requires the site administrator role.</value>
+  </data>
+  <data name="Admin.Widgets.PackageBadge" xml:space="preserve">
+    <value>from pack</value>
+  </data>
+  <data name="Admin.Marketplace.Export" xml:space="preserve">
+    <value>Export</value>
+  </data>
+  <data name="Admin.Marketplace.ImportThemeTitle" xml:space="preserve">
+    <value>Import a third-party theme (WordPress)</value>
+  </data>
+  <data name="Admin.Marketplace.ImportThemeHelp" xml:space="preserve">
+    <value>Upload a WordPress theme archive: only the style.css header (name, author, description, license) and derivable accent color and font family are read; templates and code are never kept or executed, and the remaining layout values can be fine-tuned on the settings page.</value>
+  </data>
+  <data name="Admin.Marketplace.ThemePreviewTitle" xml:space="preserve">
+    <value>Theme conversion preview</value>
+  </data>
+  <data name="Admin.Marketplace.ThemeDerived" xml:space="preserve">
+    <value>Converted visual values: accent color {0}, font {1}.</value>
+  </data>
+  <data name="Admin.Marketplace.ChooseThemeFile" xml:space="preserve">
+    <value>Choose theme archive (.zip)</value>
+  </data>
+  <data name="Admin.Marketplace.PreviewPostTitle" xml:space="preserve">
+    <value>Sample article title</value>
+  </data>
+  <data name="Admin.Marketplace.PreviewPostSummary" xml:space="preserve">
+    <value>Sample summary: fonts, line height, cards and heading styles all come from the theme pack.</value>
+  </data>
+  <data name="Admin.Marketplace.PreviewRead" xml:space="preserve">
+    <value>Read full article</value>
   </data>
   <data name="Admin.ContentEditor.Bold" xml:space="preserve">
     <value>Bold</value>
@@ -4673,6 +5150,8 @@
   <data name="Admin.Taxonomies.ToCategory" xml:space="preserve">
     <value>Convert to category</value>
   </data>
+  <data name="Admin.Taxonomies.SortOrder" xml:space="preserve"><value>Sort weight</value></data>
+  <data name="Admin.Taxonomies.SortOrderHelp" xml:space="preserve"><value>Lower numbers come first; 0 falls back to name order. Public category menus and widgets follow this order.</value></data>
   <data name="Public.TermArchive.CategoryLabel" xml:space="preserve">
     <value>Category</value>
   </data>
@@ -4894,6 +5373,12 @@
   </data>
   <data name="Admin.ContentList.TypeFilter" xml:space="preserve">
     <value>Content type filter</value>
+  </data>
+  <data name="Layout.Admin.PendingCommentsBadge" xml:space="preserve">
+    <value>{0} comments awaiting moderation</value>
+  </data>
+  <data name="Layout.Admin.PendingContentsBadge" xml:space="preserve">
+    <value>{0} pending review</value>
   </data>
   <data name="Admin.Navigation.AuthorSlug" xml:space="preserve">
     <value>Author slug</value>
@@ -5245,6 +5730,90 @@
   </data>
   <data name="Admin.Users.DeletedTransferred" xml:space="preserve">
     <value>Account deleted; its content is now attributed to the selected account.</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistDismiss" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistFirstPost" xml:space="preserve">
+    <value>Publish your first post</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistFirstPostHelp" xml:space="preserve">
+    <value>Published posts appear on the home page, RSS and search.</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistLogo" xml:space="preserve">
+    <value>Upload a logo or site icon</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistLogoHelp" xml:space="preserve">
+    <value>Shown in the header and the browser tab.</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistName" xml:space="preserve">
+    <value>Set the site name and description</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistNameHelp" xml:space="preserve">
+    <value>Let visitors know whose site this is.</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistNewPage" xml:space="preserve">
+    <value>New page</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistOpenMarketplace" xml:space="preserve">
+    <value>Open themes &amp; widget packages</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistOpenSettings" xml:space="preserve">
+    <value>Open site settings</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistPage" xml:space="preserve">
+    <value>Create a standalone page</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistPageHelp" xml:space="preserve">
+    <value>For example “About this site”; it appears in the navigation.</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistProgress" xml:space="preserve">
+    <value>{0} / {1}</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistTheme" xml:space="preserve">
+    <value>Pick a theme</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistThemeHelp" xml:space="preserve">
+    <value>Three built-in layouts and five theme packages.</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistTitle" xml:space="preserve">
+    <value>Setup checklist</value>
+  </data>
+  <data name="Admin.Dashboard.ChecklistWrite" xml:space="preserve">
+    <value>Write a post</value>
+  </data>
+  <data name="Layout.Admin.Palette" xml:space="preserve">
+    <value>Quick navigation</value>
+  </data>
+  <data name="Layout.Admin.PaletteClose" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Layout.Admin.PaletteEmpty" xml:space="preserve">
+    <value>No matching items</value>
+  </data>
+  <data name="Layout.Admin.PaletteHelp" xml:space="preserve">
+    <value>Up/Down to select · Enter to open · Esc to close; typing two or more characters also searches posts and pages</value>
+  </data>
+  <data name="Layout.Admin.PaletteHint" xml:space="preserve">
+    <value>Quick navigation (Ctrl/Cmd + K)</value>
+  </data>
+  <data name="Layout.Admin.PaletteKindAction" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="Layout.Admin.PaletteKindPage" xml:space="preserve">
+    <value>Page</value>
+  </data>
+  <data name="Layout.Admin.PalettePlaceholder" xml:space="preserve">
+    <value>Search pages or content</value>
+  </data>
+  <data name="Layout.Admin.PaletteResults" xml:space="preserve">
+    <value>Results</value>
+  </data>
+  <data name="Layout.Main.MemberBar" xml:space="preserve">
+    <value>Member toolbar</value>
+  </data>
+  <data name="Layout.Main.MemberBarLabel" xml:space="preserve">
+    <value>Signed-in member</value>
   </data>
   <data name="Admin.Sites.Delete" xml:space="preserve">
     <value>Delete</value>

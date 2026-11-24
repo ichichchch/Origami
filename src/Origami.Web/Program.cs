@@ -398,6 +398,20 @@ app.MapGet("/admin/export-wxr", async (OrigamiClient api, HttpContext http, Canc
     return Results.File(await api.ExportWxrAsync(origin, ct), "application/xml", "origami-wxr-export.xml");
 })
     .RequireAuthorization();
+// 命令面板的關鍵字搜尋：Cookie 登入的成員經 BFF 通道查詢文章與頁面（各 5 筆）；唯讀 GET，角色由 Api 重驗。
+app.MapGet("/admin/palette-search", async (OrigamiClient api, HttpContext http, CancellationToken ct) =>
+{
+    var query = http.Request.Query["q"].ToString().Trim();
+    if (query.Length is 0 or > 200) return Results.Json(new { items = Array.Empty<object>() });
+    var items = new List<object>();
+    var posts = await api.ListAdminAsync(ContentKind.Post, 1, 5, search: query, ct: ct);
+    foreach (var post in posts?.Items ?? [])
+        items.Add(new { title = post.Title, url = "/admin/content/" + post.Id, kind = "文章" });
+    var pages = await api.ListAdminAsync(ContentKind.Page, 1, 5, search: query, ct: ct);
+    foreach (var page in pages?.Items ?? [])
+        items.Add(new { title = page.Title, url = "/admin/content/" + page.Id, kind = "頁面" });
+    return Results.Json(new { items });
+}).RequireAuthorization();
 // 受控包匯出：可分享的 ZIP（僅 manifest.json），供其他站點匯入。
 app.MapGet("/admin/marketplace/package-export/{id:guid}", async (OrigamiClient api, Guid id, HttpContext http, CancellationToken ct) =>
 {
