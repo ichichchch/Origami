@@ -764,9 +764,10 @@ public sealed class OrigamiClient
     }
 
     /// <summary>WordPress WXR 匯出：回傳 WXR 1.2 XML 位元組。</summary>
-    public async Task<byte[]> ExportWxrAsync(CancellationToken ct = default)
+    public async Task<byte[]> ExportWxrAsync(string siteOrigin, CancellationToken ct = default)
     {
-        using var response = await http.GetAsync("api/v1/admin/transfer/export-wxr", ct);
+        using var response = await http.GetAsync(
+            "api/v1/admin/transfer/export-wxr?siteOrigin=" + Uri.EscapeDataString(siteOrigin), ct);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadAsByteArrayAsync(ct);
     }

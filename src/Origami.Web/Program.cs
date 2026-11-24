@@ -391,8 +391,12 @@ app.MapGet("/admin/export", async (OrigamiClient api, HttpContext http, Cancella
 app.MapGet("/admin/export-archive", async (OrigamiClient api, CancellationToken ct) =>
     Results.File(await api.ExportArchiveAsync(ct), "application/zip", "origami-export.zip"))
     .RequireAuthorization();
-app.MapGet("/admin/export-wxr", async (OrigamiClient api, CancellationToken ct) =>
-    Results.File(await api.ExportWxrAsync(ct), "application/xml", "origami-wxr-export.xml"))
+app.MapGet("/admin/export-wxr", async (OrigamiClient api, HttpContext http, CancellationToken ct) =>
+{
+    var origin = WebSignInFlow.Origin(http);
+    if (origin.Length == 0) return Results.BadRequest(new { message = "無法判斷本站公開網址。" });
+    return Results.File(await api.ExportWxrAsync(origin, ct), "application/xml", "origami-wxr-export.xml");
+})
     .RequireAuthorization();
 // 受控包匯出：可分享的 ZIP（僅 manifest.json），供其他站點匯入。
 app.MapGet("/admin/marketplace/package-export/{id:guid}", async (OrigamiClient api, Guid id, HttpContext http, CancellationToken ct) =>

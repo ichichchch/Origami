@@ -61,10 +61,11 @@ public static class AdminTransferEndpoints
         }).DisableAntiforgery();
 
         // WordPress WXR 匯出與匯入：先預覽再套用；套用是新增內容，不取代現有資料。支援選用附件下載遷移。
-        group.MapGet("/export-wxr", async (WxrImportService wxr, CancellationToken ct) =>
+        group.MapGet("/export-wxr", async (WxrImportService wxr, HttpContext http, CancellationToken ct) =>
         {
+            var siteOrigin = http.Request.Query["siteOrigin"].ToString();
             using var buffer = new MemoryStream();
-            await wxr.ExportAsync(buffer, ct);
+            await wxr.ExportAsync(buffer, siteOrigin.Length == 0 ? null : siteOrigin, ct);
             return Results.File(buffer.ToArray(), "application/xml", "origami-wxr-export.xml");
         });
 

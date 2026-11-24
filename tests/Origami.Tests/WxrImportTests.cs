@@ -154,6 +154,48 @@ public sealed class WxrImportTests(IsolatedPostgres postgres) : ServiceTestBase(
     }
 
     [PostgresFact]
+    public async Task Export_uses_public_origin_and_site_language()
+    {
+        using var admin = await App.AdministratorAsync();
+        var settings = await admin.Settings.GetAsync();
+        settings.DefaultUiLanguage = "en";
+        await admin.Settings.SaveAsync(settings);
+        var wxr = admin.Services.GetRequiredService<WxrImportService>();
+
+        using var stream = new MemoryStream();
+        await wxr.ExportAsync(stream, "https://public.example.test:8443");
+        var document = XDocument.Parse(System.Text.Encoding.UTF8.GetString(stream.ToArray()));
+        var channel = document.Root!.Element("channel")!;
+        Assert.Equal("https://public.example.test:8443/", channel.Element("link")?.Value);
+        Assert.Equal("en", channel.Element("language")?.Value);
+
+        using var localStream = new MemoryStream();
+        await wxr.ExportAsync(localStream);
+        var localChannel = XDocument.Parse(System.Text.Encoding.UTF8.GetString(localStream.ToArray())).Root!.Element("channel")!;
+        Assert.Equal("http://localhost/", localChannel.Element("link")?.Value);
+    }
+
+    [PostgresFact]
+    public async Task Export_refuses_origins_that_are_not_http_roots()
+    {
+        using var admin = await App.AdministratorAsync();
+        var wxr = admin.Services.GetRequiredService<WxrImportService>();
+        foreach (var invalid in new[]
+        {
+            "javascript:alert(1)",
+            "https://example.test/path",
+            "https://user@example.test",
+            "https://example.test?query=1",
+            "https://example.test/#fragment",
+            "not a url"
+        })
+        {
+            using var stream = new MemoryStream();
+            await Assert.ThrowsAsync<CmsException>(() => wxr.ExportAsync(stream, invalid));
+        }
+    }
+
+    [PostgresFact]
     public async Task Oversized_input_is_refused_without_buffering_all_of_it()
     {
         using var admin = await App.AdministratorAsync();

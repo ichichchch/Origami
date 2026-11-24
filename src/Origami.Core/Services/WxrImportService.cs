@@ -285,7 +285,11 @@ public sealed class WxrImportService(
     }
 
     /// <summary>將目前站點的分類、標籤、文章、獨立頁面與已核可評論匯出為標準 WordPress WXR 1.2 XML。</summary>
-    public async Task ExportAsync(Stream output, CancellationToken ct = default)
+    public async Task ExportAsync(Stream output, CancellationToken ct = default) =>
+        await ExportAsync(output, null, ct);
+
+    /// <param name="siteOrigin">網站主機提供的公開來源（scheme + host [+ port]）；未提供時使用已登錄的站點主機。</param>
+    public async Task ExportAsync(Stream output, string? siteOrigin, CancellationToken ct = default)
     {
         await admin.RequireRoleAsync(SiteRole.Administrator, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -310,13 +314,24 @@ public sealed class WxrImportService(
         XNamespace wpNs = "http://wordpress.org/export/1.2/";
         var md = markdownService ?? new MarkdownService();
         var catSlugById = categories.ToDictionary(x => x.Id, x => x.Slug);
+        var site = await db.Sites.AsNoTracking().SingleAsync(x => x.Id == db.CurrentSiteId, ct);
+        var origin = NormalizeOrigin(siteOrigin);
+        if (origin is null)
+        {
+            if (!string.IsNullOrWhiteSpace(siteOrigin))
+                throw new CmsException("WXR 匯出來源必須是不含路徑的 HTTP／HTTPS 網站根網址。");
+            // 預設站在本機開發時可能尚未登錄網域；正式匯出由 Web 傳入實際公開來源。
+            origin = NormalizeOrigin(string.IsNullOrWhiteSpace(site.HostName) ? "http://localhost" : "https://" + site.HostName)
+                ?? throw new CmsException("站點尚未設定可用的公開網域，無法產生 WXR 匯出。");
+        }
+        var language = SupportedUiLanguages.Normalize(settings?.DefaultUiLanguage) ?? SupportedUiLanguages.All[0];
 
         var channel = new XElement("channel",
             new XElement("title", settings?.Name ?? "Origami"),
-            new XElement("link", "https://localhost/"),
+            new XElement("link", origin + "/"),
             new XElement("description", settings?.Description ?? ""),
             new XElement("pubDate", clock.GetUtcNow().UtcDateTime.ToString("R")),
-            new XElement("language", "zh-TW"),
+            new XElement("language", language),
             new XElement(wpNs + "wxr_version", "1.2"));
 
         var termIndex = 1;
@@ -411,6 +426,16 @@ public sealed class WxrImportService(
         });
         await doc.SaveAsync(writer, ct);
         await writer.FlushAsync();
+    }
+
+    private static string? NormalizeOrigin(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw) || raw.Length > 2048 || raw.Any(char.IsWhiteSpace) ||
+            !Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https") || uri.UserInfo.Length > 0 ||
+            uri.AbsolutePath is not ("" or "/") || uri.Query.Length > 0 || uri.Fragment.Length > 0)
+            return null;
+        return uri.GetLeftPart(UriPartial.Authority);
     }
 
     private static HashSet<string> ParseAllowedHosts(string? raw)
