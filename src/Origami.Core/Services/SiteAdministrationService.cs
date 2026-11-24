@@ -1,11 +1,14 @@
-namespace Origami.Core.Services;
+﻿namespace Origami.Core.Services;
 
 public sealed class SiteAdministrationService(
     IDbContextFactory<CmsDbContext> factory,
     AdminAccess admin,
     UserManager<AdminUser> userManager,
     TimeProvider timeProvider,
-    CmsEventBus? events = null)
+    StoragePaths storage,
+    StorageMutationCoordinator storageMutations,
+    CmsEventBus? events = null,
+    AccountEmailService? accountEmails = null)
 {
     private const int MaximumSites = 200;
     private const int MaximumMembers = 200;
@@ -410,8 +413,17 @@ public sealed class SiteAdministrationService(
             user.AvatarUrl = avatar;
             user.AvatarMediaId = avatarMediaId;
             user.UiLanguage = uiLanguage;
-            user.Email = email;
-            user.NormalizedEmail = email.Length == 0 ? null : userManager.NormalizeEmail(email);
+            // 變更信箱須至新信箱收信確認：這裡只記下要求的新信箱，原信箱在確認前維持不變；
+            // 清空信箱則直接生效（無法寄信的帳號無法自助重設密碼）。
+            var currentEmail = user.Email ?? "";
+            var pendingEmailChange = email.Length > 0 && !string.Equals(currentEmail, email, StringComparison.OrdinalIgnoreCase) ? email : null;
+            if (pendingEmailChange is null && !string.Equals(currentEmail, email, StringComparison.Ordinal))
+            {
+                user.Email = email;
+                user.NormalizedEmail = email.Length == 0 ? null : userManager.NormalizeEmail(email);
+                // 清空後重新填回同一個信箱仍需重新驗證。
+                if (email.Length == 0) user.EmailConfirmed = false;
+            }
 
             var member = await db.SiteMemberships.SingleOrDefaultAsync(x => x.UserId == user.Id, ct);
             if (member is not null && member.DisplayName != displayName)
@@ -436,7 +448,9 @@ public sealed class SiteAdministrationService(
                 AvatarUrl = user.AvatarUrl,
                 AvatarMediaId = user.AvatarMediaId,
                 AvatarMediaUrl = avatarFile is null ? "" : "/media/" + avatarFile,
-                UiLanguage = user.UiLanguage
+                UiLanguage = user.UiLanguage,
+                EmailConfirmed = user.EmailConfirmed,
+                PendingEmailChange = pendingEmailChange
             };
         });
     }
@@ -460,6 +474,89 @@ public sealed class SiteAdministrationService(
             throw new CmsException("目前密碼不正確，或新密碼不符合規則。");
         // Identity 改密碼自動輪替安全戳記；同步撤銷會話資料列，裝置清單不留幽靈會話。
         await LoginSessionService.RevokeAllAsync(factory, user.Id, timeProvider, ct);
+        if (accountEmails is not null) await accountEmails.NotifyPasswordChangedAsync(user.Id, ct);
+    }
+
+    /// <summary>
+    /// 刪除一般帳號（僅全站管理者；不可刪除自己或唯一全站管理者）。內容署名可轉移給另一位
+    /// 啟用中的一般帳號，未指定時清空署名（內容保留）。成員資格、存取憑證、工作階段、
+    /// 外部登入綁定與登入歷史一併移除；所有站點的內容都會處理。
+    /// </summary>
+    public async Task DeleteUserAsync(string id, string? transferToUserId, CancellationToken ct = default)
+    {
+        var actor = await admin.RequireNetworkAdminAsync(ct);
+        ValidateUserId(id);
+        if (string.Equals(id, actor.Id, StringComparison.OrdinalIgnoreCase)) throw new CmsException("不可刪除自己的帳號。");
+        await WriteSafelyAsync(async () =>
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var sites = await db.Sites.FromSqlRaw("SELECT * FROM \"Sites\" ORDER BY \"Id\" LIMIT 201 FOR UPDATE")
+                .AsNoTracking().ToListAsync(ct);
+            if (sites.Count > MaximumSites) throw new CmsException("站點超過 200 筆，請先處理站點上限。");
+            var target = await db.Users.FromSqlInterpolated($"SELECT * FROM \"AspNetUsers\" WHERE \"Id\" = {id} FOR UPDATE")
+                .SingleOrDefaultAsync(ct) ?? throw new CmsException("帳號不存在。");
+            if (target.SingletonKey is not null) throw new CmsException("不可刪除唯一的全站管理者。");
+            AdminUser? recipient = null;
+            if (!string.IsNullOrWhiteSpace(transferToUserId))
+            {
+                ValidateUserId(transferToUserId);
+                if (string.Equals(transferToUserId, id, StringComparison.Ordinal)) throw new CmsException("內容不可轉移給要刪除的帳號本身。");
+                recipient = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == transferToUserId, ct)
+                    ?? throw new CmsException("接收內容的帳號不存在。");
+                if (recipient.IsDisabled || recipient.SingletonKey is not null)
+                    throw new CmsException("接收內容的帳號必須是啟用中的其他一般帳號。");
+            }
+            string? recipientId = recipient?.Id;
+            // 逐站更新署名（略過站點查詢篩選，處理該帳號在所有站點的內容）。
+            var siteIds = await db.Contents.IgnoreQueryFilters().Where(x => x.AuthorId == id).Select(x => x.SiteId).Distinct().ToListAsync(ct);
+            foreach (var siteId in siteIds)
+            {
+                var name = "";
+                var slug = "";
+                if (recipient is not null)
+                {
+                    var displayName = await db.SiteMemberships.IgnoreQueryFilters()
+                        .Where(m => m.UserId == recipient.Id && m.SiteId == siteId).Select(m => m.DisplayName).SingleOrDefaultAsync(ct) ?? "";
+                    name = displayName.Length > 0 ? displayName : recipient.UserName ?? "";
+                    try { slug = name.Length == 0 ? "" : ContentRules.NormalizeSlug(name); }
+                    catch (CmsException) { slug = ""; }
+                }
+                await db.Contents.IgnoreQueryFilters().Where(x => x.AuthorId == id && x.SiteId == siteId).ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.AuthorId, recipientId)
+                    .SetProperty(x => x.AuthorName, name)
+                    .SetProperty(x => x.AuthorSlug, slug), ct);
+            }
+            var deletedMemberships = await db.SiteMemberships.IgnoreQueryFilters().Where(x => x.UserId == id).ToListAsync(ct);
+            if (deletedMemberships.Any(membership => membership.Role == SiteRole.Administrator))
+            {
+                var administratorSites = deletedMemberships.Where(x => x.Role == SiteRole.Administrator).Select(x => x.SiteId).Distinct().ToList();
+                var remainingAdministrators = await db.SiteMemberships.IgnoreQueryFilters().Where(x => administratorSites.Contains(x.SiteId)
+                        && x.Role == SiteRole.Administrator && x.UserId != id)
+                    .Join(db.Users.IgnoreQueryFilters(), membership => membership.UserId, user => user.Id, (membership, user) => new { membership.SiteId, user.IsDisabled })
+                    .ToListAsync(ct);
+                if (administratorSites.Any(siteId => !remainingAdministrators.Any(x => x.SiteId == siteId && !x.IsDisabled)))
+                    throw new CmsException("不可刪除任一站點的最後一位啟用中的管理者，請先交接管理權限。");
+            }
+            await db.SiteMemberships.IgnoreQueryFilters().Where(x => x.UserId == id).ExecuteDeleteAsync(ct);
+            await db.ApiCredentials.IgnoreQueryFilters().Where(x => x.UserId == id).ExecuteDeleteAsync(ct);
+            await db.LoginSessions.IgnoreQueryFilters().Where(x => x.UserId == id).ExecuteDeleteAsync(ct);
+            await db.LoginEvents.Where(x => x.UserId == id).ExecuteDeleteAsync(ct);
+            await db.UserLogins.IgnoreQueryFilters().Where(x => x.UserId == id).ExecuteDeleteAsync(ct);
+            db.AuditLogs.Add(new AuditLog
+            {
+                SiteId = db.CurrentSiteId,
+                UserId = actor.Id,
+                UserName = actor.UserName ?? "",
+                Action = "user.deleted",
+                Target = "帳號 " + (target.UserName ?? id) + (recipient is null ? "（內容署名已清空）" : "（內容轉移給 " + recipient.UserName + "）"),
+                CreatedAt = timeProvider.GetUtcNow()
+            });
+            await db.Users.IgnoreQueryFilters().Where(x => x.Id == id).ExecuteDeleteAsync(ct);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return true;
+        });
     }
 
     /// <summary>全站管理者重設一般使用者的兩步驗證（TOTP 與恢復碼），並輪替安全戳記使其重新登入。</summary>

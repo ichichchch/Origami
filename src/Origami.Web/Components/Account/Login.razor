@@ -1,4 +1,4 @@
-@page "/account/login"
+﻿@page "/account/login"
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
 @inject NavigationManager Navigation
@@ -127,7 +127,12 @@
                 Navigation.NavigateTo("/admin/posts", forceLoad: true);
             else awaitingCode = true;
         }
-        catch (Exception exception) when (exception is DbUpdateException or DbException or CmsException)
+        catch (CmsException exception)
+        {
+            // 服務層的帳號訊息（例如尚未完成信箱驗證）直接顯示，其餘登入失敗維持統一訊息。
+            errorMessage = exception.Message;
+        }
+        catch (Exception exception) when (exception is DbUpdateException or DbException)
         {
             errorMessage = LoginFailure;
         }

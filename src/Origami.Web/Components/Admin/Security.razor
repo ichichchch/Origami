@@ -1,4 +1,4 @@
-@page "/admin/security"
+﻿@page "/admin/security"
 @rendermode InteractiveServer
 @attribute [Authorize]
 @layout AdminLayout
@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthenticationState
 @inject OrigamiClient Api
 @inject UserLanguagePreferenceReader LanguagePrefs
+@inject NavigationManager Navigation
 
 <PageTitle>@UiText.T("Admin.Security.PageTitle", "個人資料與安全 · 內容管理")</PageTitle>
 <UnsavedGuard Busy="Busy" />
@@ -36,7 +37,20 @@
                     </div>
                     <div class="field">
                         <label for="profile-email">@UiText.T("Admin.Security.Email", "電子郵件（供密碼重設）")</label>
-                        <input id="profile-email" type="email" maxlength="256" @bind="_profile.Email" @bind:event="oninput" />
+                        <input id="profile-email" type="email" maxlength="256" @bind="_profile.Email" @bind:event="oninput" aria-describedby="profile-email-help" />
+                        <span id="profile-email-help" class="field-help">@UiText.T("Admin.Security.EmailHelp", "變更信箱時會寄確認信到新信箱，點擊連結後才生效。")</span>
+                        @if (!string.IsNullOrEmpty(_profile.Email))
+                        {
+                            @if (_profile.EmailConfirmed)
+                            {
+                                <span class="status-badge published">@UiText.T("Admin.Security.EmailVerified", "信箱已驗證")</span>
+                            }
+                            else
+                            {
+                                <span class="status-badge draft">@UiText.T("Admin.Security.EmailUnverified", "信箱尚未驗證")</span>
+                                <button type="button" class="text-button" disabled="@Blocked" @onclick="ResendVerificationAsync">@UiText.T("Admin.Security.ResendVerification", "重新寄驗證信")</button>
+                            }
+                        }
                     </div>
                     <div class="field">
                         <label for="profile-website">@UiText.T("Admin.Security.WebsiteUrl", "個人網站（選填）")</label>
@@ -273,6 +287,51 @@
         </div>
     }
 </section>
+<section class="panel settings-panel settings-width">
+    <div class="panel-intro">
+        <h2>@UiText.T("Admin.Security.LoginHistoryTitle", "登入歷史")</h2>
+        <p>@UiText.T("Admin.Security.LoginHistoryHelp", "這個帳號最近的登入成功與失敗紀錄（最多 20 筆，保留 50 筆）。若出現不熟悉的來源，請更改密碼並登出其他工作階段。")</p>
+    </div>
+    @if (_loginHistory.Count == 0)
+    {
+        <p class="empty-state">@UiText.T("Admin.Security.NoLoginHistory", "尚無登入紀錄。")</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">@UiText.T("Admin.Security.LoginTime", "時間")</th>
+                        <th scope="col">@UiText.T("Admin.Security.LoginResult", "結果")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionSource", "來源 IP")</th>
+                        <th scope="col">@UiText.T("Admin.Security.SessionDevice", "裝置")</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var login in _loginHistory)
+                    {
+                        <tr @key="login.Id">
+                            <td>@login.CreatedAt.ToString("yyyy.MM.dd HH:mm") <span class="sr-only">UTC</span></td>
+                            <td>
+                                @if (login.Succeeded)
+                                {
+                                    <span class="status-badge published">@UiText.T("Admin.Security.LoginSucceeded", "成功")</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge draft">@UiText.T("Admin.Security.LoginFailed", "失敗")</span>
+                                }
+                            </td>
+                            <td><code>@login.RemoteIp</code></td>
+                            <td><span class="muted" title="@login.UserAgent">@DeviceSummary(login.UserAgent)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
 
 @code {
     // 個人安全設定只需全域有效登入，不要求本站成員資格。
@@ -314,6 +373,7 @@
     {
         _status = await TwoFactor.GetStatusAsync(ct);
         _profile = await Api.GetMyProfileAsync(ct);
+        _loginHistory = await Api.GetLoginHistoryAsync(ct) ?? [];
         var user = await Admin.RequireUserAsync(ct);
         // 互動電路中 HttpContext 為 null，會話識別改由驗證狀態主體讀取（預渲染與電路皆可用）。
         var principal = (await AuthenticationState.GetAuthenticationStateAsync()).User;
@@ -346,14 +406,42 @@
         if (session.Provider is { Length: > 0 } provider && provider != "password") parts.Add(provider);
         return parts.Count > 0 ? string.Join(" · ", parts) : UiText.T("Admin.Security.UnknownDevice", "未知裝置");
     }
-    private Task SaveProfileAsync() => RunAsync(async ct =>
+    private async Task SaveProfileAsync()
     {
         if (_profile is null) return;
-        _profile = await Api.UpdateMyProfileAsync(_profile, ct);
-        // 偏好（語言/頭像）已寫入；讓文化中介的偏好快取立即失效，下一個請求即生效。
+        string? pendingEmail = null;
+        var ok = await RunAsync(async ct =>
+        {
+            _profile = await Api.UpdateMyProfileAsync(_profile, ct);
+            // 偏好（語言/頭像）已寫入；讓文化中介的偏好快取立即失效，下一個請求即生效。
+            var user = await Admin.RequireUserAsync(ct);
+            LanguagePrefs.Evict(user.Id);
+            // 信箱變更須至新信箱收信確認：原信箱在確認前維持不變。
+            pendingEmail = _profile.PendingEmailChange;
+            if (!string.IsNullOrEmpty(pendingEmail))
+                await Api.RequestEmailChangeAsync(user.Id, pendingEmail, Origin, ct);
+            _profile.PendingEmailChange = null;
+        });
+        if (ok)
+        {
+            Notice = !string.IsNullOrEmpty(pendingEmail)
+                ? UiText.T("Admin.Security.ProfileSavedEmailPending", "個人資料已更新；確認信已寄到新信箱，點擊連結後信箱才會變更。")
+                : UiText.T("Admin.Security.ProfileSaved", "個人資料已更新。");
+        }
+    }
+
+    private List<AccountEmailService.LoginEventView> _loginHistory = [];
+    // 互動電路沒有可靠的 HttpContext：以網站的基準網址推導連結來源。
+    private string Origin => new Uri(Navigation.BaseUri).GetLeftPart(UriPartial.Authority);
+
+    private Task ResendVerificationAsync() => RunAsync(async ct =>
+    {
         var user = await Admin.RequireUserAsync(ct);
-        LanguagePrefs.Evict(user.Id);
-    }, UiText.T("Admin.Security.ProfileSaved", "個人資料已更新。"));
+        await Api.SendEmailVerificationAsync(user.Id, Origin, ct);
+    }, UiText.T("Admin.Security.VerificationSent", "驗證信已寄出，請至信箱點擊連結。"));
+
+    private static string DeviceSummary(string userAgent) =>
+        string.IsNullOrWhiteSpace(userAgent) ? "—" : userAgent.Length <= 60 ? userAgent : userAgent[..60] + "…";
 
     private bool _pickerOpen;
     private void OpenAvatarPicker()

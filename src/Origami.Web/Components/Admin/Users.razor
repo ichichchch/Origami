@@ -1,9 +1,10 @@
-@page "/admin/users"
+﻿@page "/admin/users"
 @rendermode InteractiveServer
 @attribute [Authorize]
 @layout AdminLayout
 @inherits AdminComponentBase
 @inject OrigamiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>@UiText.T("Admin.Users.PageTitle", "使用者 · 內容管理")</PageTitle>
 <div class="page-heading"><div><p class="eyebrow">@UiText.T("Admin.Users.Eyebrow", "全站帳號管理")</p><h1>@UiText.T("Admin.Users.Title", "使用者")</h1><p>@UiText.T("Admin.Users.Introduction", "僅全站管理者可建立或停用帳號。不提供公開註冊；建立後需在各站分別加入成員。")</p></div></div>
@@ -42,6 +43,7 @@
                             @if (!user.IsNetworkAdmin)
                             {
                                 <button type="button" class="text-danger" disabled="@Blocked" @onclick="() => EraseUserDataAsync(user)">抹除個資</button>
+                                <button type="button" class="text-danger" disabled="@Blocked" @onclick="() => BeginDelete(user)">@UiText.T("Admin.Users.Delete", "刪除帳號")<span class="sr-only"> @user.UserName</span></button>
                             }
                         </div></td></tr>
                 }
@@ -49,6 +51,25 @@
             <nav class="pagination" aria-label="@UiText.T("Admin.Users.Pagination", "使用者分頁")"><button disabled="@(Blocked || _page <= 1)" @onclick="() => Move(-1)">@UiText.T("Admin.Users.PreviousPage", "上一頁")</button><span>@_result.Page / @_result.TotalPages</span><button disabled="@(Blocked || _page >= _result.TotalPages)" @onclick="() => Move(1)">@UiText.T("Admin.Users.NextPage", "下一頁")</button></nav>
         }
     </section>
+    @if (_deleting is { } deleting)
+    {
+        <section class="notice notice-danger" role="alertdialog" aria-labelledby="user-delete-title">
+            <h2 id="user-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Users.DeleteTitle", "刪除帳號「{0}」？"), deleting.UserName)</h2>
+            <p>@UiText.T("Admin.Users.DeleteWarning", "帳號、成員資格、API 憑證與登入工作階段都會移除，無法復原。此帳號發表的內容不會刪除。")</p>
+            <div class="field">
+                <label for="user-delete-transfer">@UiText.T("Admin.Users.DeleteTransfer", "內容署名轉移給")</label>
+                <select id="user-delete-transfer" value="@_transferTo" @onchange="e => _transferTo = e.Value?.ToString() ?? String.Empty" disabled="@Blocked">
+                    <option value="">@UiText.T("Admin.Users.DeleteTransferNone", "不轉移（內容保留，作者欄清空）")</option>
+                    @foreach (var candidate in (_result?.Items ?? []).Where(x => x.Id != deleting.Id && !x.IsDisabled))
+                    {
+                        <option value="@candidate.Id">@candidate.UserName</option>
+                    }
+                </select>
+            </div>
+            <button class="button button-danger" disabled="@Blocked" @onclick="DeleteAccount">@UiText.T("Admin.Users.ConfirmDelete", "確認刪除")</button>
+            <button class="button button-secondary" disabled="@Blocked" @onclick="CancelDelete">@UiText.T("Admin.Users.Cancel", "取消")</button>
+        </section>
+    }
     @if (_pending is { } pending)
     {
         <section class="notice notice-danger" role="alertdialog" aria-labelledby="user-state-title">
@@ -65,6 +86,10 @@
     private UserCreateInput _create = new();
     private PagedResult<UserSummary>? _result;
     private UserSummary? _pending;
+    private UserSummary? _deleting;
+    private string _transferTo = "";
+    // 互動電路沒有可靠的 HttpContext：以網站的基準網址推導連結來源（scheme + 主機 + 連接埠）。
+    private string Origin => new Uri(Navigation.BaseUri).GetLeftPart(UriPartial.Authority);
     private string _search = "";
     private int _page = 1;
     protected override Task OnInitializedAsync() => Load();
@@ -91,7 +116,14 @@
             await RunAsync(async ct =>
             {
                 RequireNetwork();
-                await Api.CreateUserAsync(input, ct);
+                var created = await Api.CreateUserAsync(input, ct);
+                // 有填信箱且郵件服務可用時，寄出歡迎信與信箱驗證連結；寄信失敗不影響帳號建立。
+                if (!string.IsNullOrWhiteSpace(input.Email))
+                {
+                    try { await Api.SendEmailVerificationAsync(created.Id, Origin, ct); }
+                    catch (CmsException) { }
+                    catch (HttpRequestException) { }
+                }
                 _result = await Api.ListUsersAsync(_page, _search, ct);
             }, UiText.T("Admin.Users.Created", "帳號已建立；請前往目標站點的成員管理指派角色。"));
         }
@@ -105,6 +137,39 @@
         _pending = null;
         _result = await Api.ListUsersAsync(_page, _search, ct);
     }, UiText.T("Admin.Users.StateChanged", "帳號狀態已更新，舊登入與 API 憑證已失效。"));
+    private void BeginDelete(UserSummary user)
+    {
+        _pending = null;
+        _deleting = user;
+        _transferTo = "";
+    }
+
+    private void CancelDelete()
+    {
+        _deleting = null;
+        _transferTo = "";
+    }
+
+    private async Task DeleteAccount()
+    {
+        if (_deleting is not { } user) return;
+        var transferTo = _transferTo;
+        var ok = await RunAsync(async ct =>
+        {
+            RequireNetwork();
+            await Api.DeleteUserAsync(user.Id, transferTo, ct);
+            _result = await Api.ListUsersAsync(_page, _search, ct);
+        });
+        if (ok)
+        {
+            _deleting = null;
+            _transferTo = "";
+            Notice = transferTo.Length == 0
+                ? UiText.T("Admin.Users.Deleted", "帳號已刪除；其內容保留並清空作者欄。")
+                : UiText.T("Admin.Users.DeletedTransferred", "帳號已刪除；其內容署名已轉移給指定的帳號。");
+        }
+    }
+
     private Task Reset2FaAsync(UserSummary user) => RunAsync(async ct =>
     {
         RequireNetwork();

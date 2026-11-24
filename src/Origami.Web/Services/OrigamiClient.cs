@@ -227,6 +227,36 @@ public sealed class OrigamiClient
         SendEmptyAsync(HttpMethod.Post, $"api/v1/admin/comments/{id}/moderate?version={version}",
             new { status = status.ToString() }, ct);
 
+    /// <summary>帳號信箱與登入歷史；網站主機以 BFF 通道呼叫，來源網址由呼叫端提供。</summary>
+    public Task SendEmailVerificationAsync(string userId, string origin, CancellationToken ct = default) =>
+        SendEmptyAsync(HttpMethod.Post, "api/v1/admin/account/email-verification", new { userId, origin }, ct);
+
+    public Task<AccountEmailService.Outcome?> VerifyEmailAsync(string userId, string token, CancellationToken ct = default) =>
+        SendAsync<AccountEmailService.Outcome>(new(HttpMethod.Post, "api/v1/admin/account/verify-email"), new { userId, token }, ct);
+
+    public async Task RequestEmailChangeAsync(string userId, string newEmail, string origin, CancellationToken ct = default) =>
+        await SendEmptyAsync(HttpMethod.Post, "api/v1/admin/account/email-change", new { userId, newEmail, origin }, ct);
+
+    public Task<AccountEmailService.Outcome?> ConfirmEmailChangeAsync(string userId, string email, string token, CancellationToken ct = default) =>
+        SendAsync<AccountEmailService.Outcome>(new(HttpMethod.Post, "api/v1/admin/account/confirm-email-change"), new { userId, email, token }, ct);
+
+    public Task<AccountEmailService.Outcome?> SendTestEmailAsync(string to, CancellationToken ct = default) =>
+        SendAsync<AccountEmailService.Outcome>(new(HttpMethod.Post, "api/v1/admin/account/email-test"), new { to }, ct);
+
+    public Task<PagedResult<AccountEmailService.EmailLogView>?> GetEmailLogAsync(int page = 1, CancellationToken ct = default) =>
+        GetAsync<PagedResult<AccountEmailService.EmailLogView>>($"api/v1/admin/account/email-log?page={page}", ct);
+
+    public Task<List<AccountEmailService.LoginEventView>?> GetLoginHistoryAsync(CancellationToken ct = default) =>
+        GetAsync<List<AccountEmailService.LoginEventView>>("api/v1/admin/account/login-history", ct);
+
+    /// <summary>刪除一般帳號（全站管理者）；transferTo 指定接收內容署名的帳號。</summary>
+    public async Task DeleteUserAsync(string id, string? transferTo, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync("api/v1/admin/users/" + Uri.EscapeDataString(id)
+            + (string.IsNullOrWhiteSpace(transferTo) ? "" : "?transferTo=" + Uri.EscapeDataString(transferTo)), ct);
+        await EnsureSuccessAsync(response);
+    }
+
     public async Task DeleteCommentAsync(Guid id, Guid version, CancellationToken ct = default)
     {
         using var response = await http.DeleteAsync($"api/v1/admin/comments/{id}?version={version}", ct);

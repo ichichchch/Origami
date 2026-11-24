@@ -90,7 +90,8 @@ public sealed class CmsEventTests(IsolatedPostgres postgres) : ServiceTestBase(p
         var administration = new SiteAdministrationService(App.ContextFactory,
             admin.Services.GetRequiredService<AdminAccess>(),
             admin.Services.GetRequiredService<UserManager<AdminUser>>(),
-            admin.Services.GetRequiredService<TimeProvider>(), events: bus);
+            admin.Services.GetRequiredService<TimeProvider>(), App.Storage,
+            admin.Services.GetRequiredService<StorageMutationCoordinator>(), events: bus);
 
         var created = await administration.CreateUserAsync(new UserCreateInput
         {

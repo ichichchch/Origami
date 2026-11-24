@@ -1,0 +1,54 @@
+@page "/account/confirm-email-change"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@inject OrigamiClient Api
+@inject ILogger<ConfirmEmailChange> Logger
+
+<PageTitle>@UiText.T("Account.ConfirmEmailChange.PageTitle", "確認變更信箱 · 內容工作室")</PageTitle>
+
+<section class="auth-card" aria-labelledby="confirm-email-title">
+    <p class="eyebrow">@UiText.T("Account.Brand", "ORIGAMI · 內容工作室")</p>
+    <h1 id="confirm-email-title">@UiText.T("Account.ConfirmEmailChange.Title", "確認變更信箱")</h1>
+    @* 確認信寄到「新」信箱；點擊連結後信箱才真正變更。訪客尚未登入，經網站主機的 BFF 通道完成。 *@
+    @if (_outcome is null)
+    {
+        <p role="status">@UiText.T("Account.ConfirmEmailChange.Working", "正在確認…")</p>
+    }
+    else if (_outcome == true)
+    {
+        <p class="notice notice-success" role="status">@UiText.T("Account.ConfirmEmailChange.Done", "信箱已變更並完成驗證。")</p>
+    }
+    else
+    {
+        <p class="notice notice-error" role="alert">@UiText.T("Account.ConfirmEmailChange.Invalid", "確認連結無效或已過期，信箱沒有變更。請重新登入後再申請一次。")</p>
+    }
+    <p class="field-help"><a href="/account/login">@UiText.T("Account.VerifyEmail.GoLogin", "前往登入")</a></p>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "user")] public string? UserId { get; set; }
+    [SupplyParameterFromQuery(Name = "email")] public string? Email { get; set; }
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private bool? _outcome;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(UserId) || string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+        {
+            _outcome = false;
+            return;
+        }
+        try
+        {
+            var result = await Api.ConfirmEmailChangeAsync(UserId, Email, Token, HttpContext?.RequestAborted ?? default);
+            _outcome = result?.Succeeded == true;
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (Exception exception) when (exception is CmsException or HttpRequestException)
+        {
+            Logger.LogWarning(exception, "信箱變更確認連結處理失敗");
+            _outcome = false;
+        }
+    }
+}

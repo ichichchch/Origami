@@ -75,7 +75,14 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<WidgetService>();
         builder.Services.AddScoped<MarketplaceService>();
         builder.Services.AddScoped<WxrImportService>();
-        builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+        builder.Services.AddSingleton<SmtpEmailSender>();
+        // 對外郵件一律經紀錄包裝：每次寄信寫一筆摘要到 EmailLogs，供後台檢視。
+        builder.Services.AddScoped<IEmailSender>(sp => new LoggingEmailSender(
+            sp.GetRequiredService<SmtpEmailSender>(),
+            sp.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            sp.GetRequiredService<SiteContext>(),
+            sp.GetRequiredService<TimeProvider>()));
+        builder.Services.AddScoped<AccountEmailService>();
         builder.Services.AddScoped<CommentService>();
         builder.Services.AddScoped<SettingsService>();
         builder.Services.AddScoped<ExportService>();

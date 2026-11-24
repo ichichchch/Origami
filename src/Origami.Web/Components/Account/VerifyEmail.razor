@@ -1,0 +1,54 @@
+@page "/account/verify-email"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@inject OrigamiClient Api
+@inject ILogger<VerifyEmail> Logger
+
+<PageTitle>@UiText.T("Account.VerifyEmail.PageTitle", "驗證信箱 · 內容工作室")</PageTitle>
+
+<section class="auth-card" aria-labelledby="verify-title">
+    <p class="eyebrow">@UiText.T("Account.Brand", "ORIGAMI · 內容工作室")</p>
+    <h1 id="verify-title">@UiText.T("Account.VerifyEmail.Title", "驗證信箱")</h1>
+    @* 驗證只憑信件中的限時權杖；訪客點擊連結時尚未登入，經網站主機的 BFF 通道完成。 *@
+    @if (_outcome is null)
+    {
+        <p role="status">@UiText.T("Account.VerifyEmail.Working", "正在驗證…")</p>
+    }
+    else if (_outcome == true)
+    {
+        <p class="notice notice-success" role="status">@UiText.T("Account.VerifyEmail.Done", "信箱已驗證，現在可以登入了。")</p>
+        <p class="field-help"><a href="/account/login">@UiText.T("Account.VerifyEmail.GoLogin", "前往登入")</a></p>
+    }
+    else
+    {
+        <p class="notice notice-error" role="alert">@UiText.T("Account.VerifyEmail.Invalid", "驗證連結無效或已過期。請登入後重新申請驗證信，或聯絡管理者。")</p>
+        <p class="field-help"><a href="/account/login">@UiText.T("Account.VerifyEmail.GoLogin", "前往登入")</a></p>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "user")] public string? UserId { get; set; }
+    [SupplyParameterFromQuery(Name = "token")] public string? Token { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private bool? _outcome;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(UserId) || string.IsNullOrWhiteSpace(Token))
+        {
+            _outcome = false;
+            return;
+        }
+        try
+        {
+            var result = await Api.VerifyEmailAsync(UserId, Token, HttpContext?.RequestAborted ?? default);
+            _outcome = result?.Succeeded == true;
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { }
+        catch (Exception exception) when (exception is CmsException or HttpRequestException)
+        {
+            Logger.LogWarning(exception, "信箱驗證連結處理失敗");
+            _outcome = false;
+        }
+    }
+}

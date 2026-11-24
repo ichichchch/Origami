@@ -1,4 +1,4 @@
-@page "/admin/site-health"
+﻿@page "/admin/site-health"
 @rendermode InteractiveServer
 @attribute [Authorize]
 @layout AdminLayout
@@ -99,6 +99,53 @@
 
 <section class="panel settings-panel settings-width">
     <div class="panel-intro">
+        <h2>@UiText.T("Admin.SiteHealth.EmailTitle", "郵件服務")</h2>
+        <p>@UiText.T("Admin.SiteHealth.EmailHelp", "寄一封測試郵件確認 SMTP 設定正確；下方列出最近的寄信紀錄（只含收件人、主旨與結果，不含內文）。")</p>
+    </div>
+    <div class="button-row">
+        <label class="sr-only" for="test-email-to">@UiText.T("Admin.SiteHealth.TestEmailTo", "收件信箱")</label>
+        <input id="test-email-to" type="email" maxlength="256" @bind="_testEmailTo" @bind:event="oninput" placeholder="you@example.com" disabled="@Blocked" />
+        <button type="button" class="button button-secondary" disabled="@(Blocked || string.IsNullOrWhiteSpace(_testEmailTo))" @onclick="SendTestEmailAsync">@UiText.T("Admin.SiteHealth.SendTestEmail", "寄測試信")</button>
+    </div>
+    @if (_emailLog is not null)
+    {
+        @if (_emailLog.Items.Count == 0)
+        {
+            <p class="empty-state">@UiText.T("Admin.SiteHealth.NoEmailLog", "尚無寄信紀錄。")</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.EmailTime", "時間")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.EmailRecipient", "收件人")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.EmailSubject", "主旨")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColStatus", "狀態")</th>
+                            <th scope="col">@UiText.T("Admin.SiteHealth.ColSummary", "診斷摘要")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in _emailLog.Items)
+                        {
+                            <tr @key="entry.Id">
+                                <td>@entry.CreatedAt.ToString("yyyy.MM.dd HH:mm") <span class="sr-only">UTC</span></td>
+                                <td>@entry.Recipient</td>
+                                <td>@entry.Subject</td>
+                                <td><span class="status-badge @(entry.Succeeded ? "published" : "draft")">@(entry.Succeeded ? UiText.T("Admin.SiteHealth.EmailSent", "已寄出") : UiText.T("Admin.SiteHealth.EmailFailed", "失敗"))</span></td>
+                                <td>@entry.Error</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+<section class="panel settings-panel settings-width">
+    <div class="panel-intro">
         <h2>@UiText.T("Admin.SiteHealth.OpenApiTitle", "OpenAPI 與 API 探索契約")</h2>
         <p>@UiText.T("Admin.SiteHealth.OpenApiHelp", "Origami 為 API-first 架構，提供機器可讀的 OpenAPI 3.1 規格文件與端點清單。")</p>
     </div>
@@ -110,6 +157,8 @@
 @code {
     private SiteHealthReport? _report;
     private PagedResult<WebhookService.WebhookDeliveryView>? _deliveries;
+    private string _testEmailTo = "";
+    private PagedResult<AccountEmailService.EmailLogView>? _emailLog;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -118,7 +167,26 @@
         if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.SiteHealth.AdminOnly", "系統健康檢查僅限本站管理員檢視。"));
         _report = await Api.GetSiteHealthAsync(ct);
         _deliveries = await Api.ListWebhookDeliveriesAsync(1, 20, ct);
+        _emailLog = await Api.GetEmailLogAsync(1, ct);
     });
+
+    private async Task SendTestEmailAsync()
+    {
+        var address = _testEmailTo.Trim();
+        string? failure = null;
+        var ok = await RunAsync(async ct =>
+        {
+            var result = await Api.SendTestEmailAsync(address, ct);
+            _emailLog = await Api.GetEmailLogAsync(1, ct);
+            _report = await Api.GetSiteHealthAsync(ct);
+            failure = result is null || result.Succeeded ? null : result.Message;
+        });
+        if (ok && failure is not null)
+        {
+            Notice = null;
+            Error = failure;
+        }
+    }
 
     private Task RetryAsync(Guid id) => RunAsync(async ct =>
     {

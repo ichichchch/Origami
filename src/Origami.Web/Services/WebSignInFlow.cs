@@ -1,4 +1,4 @@
-namespace Origami.Web.Services;
+﻿namespace Origami.Web.Services;
 
 public sealed class WebSignInFlow(
     UserManager<AdminUser> users,
@@ -8,7 +8,10 @@ public sealed class WebSignInFlow(
     IDataProtectionProvider protection,
     SiteContext site,
     TimeProvider clock,
-    LoginThrottle throttle)
+    LoginThrottle throttle,
+    IEmailSender? mail = null,
+    AccountEmailService? accountEmails = null,
+    IHttpContextAccessor? accessor = null)
 {
     public const string PendingCookie = "origami.2fa";
     public static readonly TimeSpan PendingLifetime = TimeSpan.FromMinutes(5);
@@ -32,6 +35,13 @@ public sealed class WebSignInFlow(
     {
         ClearPending(context);
         if (!await CanSignInAsync(user)) throw new CmsException("無法登入，請重新驗證帳號。");
+        if (RequiresEmailVerification(user))
+        {
+            // 郵件服務可用時，未驗證信箱的一般帳號不得登入（重新寄出驗證信）；
+            // CLI 建立的全站管理者、沒有信箱的帳號，以及郵件服務未設定時都不受影響。
+            if (accountEmails is not null) await accountEmails.SendVerificationAsync(user.Id, Origin(context), context.RequestAborted);
+            throw new CmsException("請先開啟驗證信完成信箱驗證；我們已重新寄出驗證信。");
+        }
         if (user.TwoFactorEnabled)
         {
             if (string.IsNullOrEmpty(user.TwoFactorSecret)) throw new CmsException("無法完成兩步驟驗證，請聯絡管理者。");
@@ -108,7 +118,27 @@ public sealed class WebSignInFlow(
         // 框架不認得自訂 TOTP，不能讓密碼成功提前重設兩步驗證的失敗次數。
         if (await users.CheckPasswordAsync(user, password)) return true;
         EnsureSucceeded(await users.AccessFailedAsync(user));
+        await RecordLoginAsync(accessor?.HttpContext, user, false);
         return false;
+    }
+
+    /// <summary>郵件服務可用時，設有信箱卻尚未驗證的一般帳號必須先完成驗證才能登入。</summary>
+    private bool RequiresEmailVerification(AdminUser user) =>
+        mail is { IsConfigured: true } && !string.IsNullOrEmpty(user.Email) && !user.EmailConfirmed && user.SingletonKey is null;
+
+    /// <summary>登入事件只記摘要；寫入失敗不得影響登入結果。</summary>
+    private async Task RecordLoginAsync(HttpContext? context, AdminUser user, bool succeeded)
+    {
+        try
+        {
+            await AccountEmailService.RecordLoginAsync(factory, user.Id, user.UserName, succeeded,
+                context?.Connection.RemoteIpAddress?.ToString(), context?.Request.Headers.UserAgent.ToString(),
+                clock.GetUtcNow(), context?.RequestAborted ?? default);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            // 登入歷史屬輔助資訊。
+        }
     }
 
     private async Task<bool> VerifySecondFactorAsync(AdminUser user, string code)
@@ -154,6 +184,7 @@ public sealed class WebSignInFlow(
             Provider = provider ?? "password"
         });
         await db.SaveChangesAsync(context.RequestAborted);
+        await RecordLoginAsync(context, user, true);
         ClearPending(context);
     }
 

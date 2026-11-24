@@ -317,6 +317,10 @@ public sealed class AccountProfileEdit
     [StringLength(16)] public string UiLanguage { get; set; } = "";
     [StringLength(256)] public string Email { get; set; } = "";
     public string UserName { get; set; } = "";
+    /// <summary>信箱是否已完成驗證（點擊驗證信或變更確認信的連結）。</summary>
+    public bool EmailConfirmed { get; set; }
+    /// <summary>要求變更的新信箱；確認信寄出後由服務端填入，原信箱在確認前維持不變。</summary>
+    [StringLength(256)] public string? PendingEmailChange { get; set; }
 }
 /// <summary>帳號自助修改密碼輸入。</summary>
 public sealed class ChangePasswordInput

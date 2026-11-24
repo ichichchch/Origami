@@ -4385,8 +4385,6 @@
   <data name="Admin.SiteHealth.CheckedAt" xml:space="preserve"><value>Checked at: </value></data>
   <data name="Admin.SiteHealth.ColCategory" xml:space="preserve"><value>Category</value></data>
   <data name="Admin.SiteHealth.ColItem" xml:space="preserve"><value>Check</value></data>
-  <data name="Admin.SiteHealth.ColStatus" xml:space="preserve"><value>Status</value></data>
-  <data name="Admin.SiteHealth.ColSummary" xml:space="preserve"><value>Summary</value></data>
   <data name="Admin.SiteHealth.WebhookDeliveries" xml:space="preserve"><value>Outbound webhook deliveries</value></data>
   <data name="Admin.SiteHealth.WebhookHelp" xml:space="preserve"><value>Persisted, with exponential-backoff retries and manual re-delivery</value></data>
   <data name="Admin.SiteHealth.NoDeliveries" xml:space="preserve"><value>No webhook deliveries yet.</value></data>
@@ -4411,8 +4409,6 @@
   <data name="Admin.Security.NoSessions" xml:space="preserve"><value>No active login sessions.</value></data>
   <data name="Admin.Security.SessionCreated" xml:space="preserve"><value>Signed in</value></data>
   <data name="Admin.Security.SessionExpires" xml:space="preserve"><value>Expires</value></data>
-  <data name="Admin.Security.SessionSource" xml:space="preserve"><value>Source IP</value></data>
-  <data name="Admin.Security.SessionDevice" xml:space="preserve"><value>Device</value></data>
   <data name="Admin.Security.SessionStatusCol" xml:space="preserve"><value>Status</value></data>
   <data name="Admin.Security.SessionActions" xml:space="preserve"><value>Actions</value></data>
   <data name="Admin.Security.SessionCurrent" xml:space="preserve"><value>This session</value></data>
@@ -4503,6 +4499,18 @@
   <data name="Admin.Marketplace.PreviewPostTitle" xml:space="preserve"><value>Sample article title</value></data>
   <data name="Admin.Marketplace.PreviewPostSummary" xml:space="preserve"><value>Sample summary: fonts, line height, cards and heading styles all come from the theme pack.</value></data>
   <data name="Admin.Marketplace.PreviewRead" xml:space="preserve"><value>Read full article</value></data>
+  <data name="Admin.SiteHealth.ColStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Admin.SiteHealth.ColSummary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Admin.Security.SessionSource" xml:space="preserve">
+    <value>Source IP</value>
+  </data>
+  <data name="Admin.Security.SessionDevice" xml:space="preserve">
+    <value>Device</value>
+  </data>
   <data name="Admin.Settings.DefaultCategory" xml:space="preserve">
     <value>Default category (optional)</value>
   </data>
@@ -4706,5 +4714,131 @@
   </data>
   <data name="Public.Search.MonthFilter" xml:space="preserve">
     <value>Month filter</value>
+  </data>
+  <data name="Account.ConfirmEmailChange.Done" xml:space="preserve">
+    <value>Your email address has been changed and verified.</value>
+  </data>
+  <data name="Account.ConfirmEmailChange.Invalid" xml:space="preserve">
+    <value>The confirmation link is invalid or has expired; the email address was not changed. Sign in and request the change again.</value>
+  </data>
+  <data name="Account.ConfirmEmailChange.PageTitle" xml:space="preserve">
+    <value>Confirm email change · Content Studio</value>
+  </data>
+  <data name="Account.ConfirmEmailChange.Title" xml:space="preserve">
+    <value>Confirm email change</value>
+  </data>
+  <data name="Account.ConfirmEmailChange.Working" xml:space="preserve">
+    <value>Confirming…</value>
+  </data>
+  <data name="Account.VerifyEmail.Done" xml:space="preserve">
+    <value>Your email is verified. You can sign in now.</value>
+  </data>
+  <data name="Account.VerifyEmail.GoLogin" xml:space="preserve">
+    <value>Go to sign-in</value>
+  </data>
+  <data name="Account.VerifyEmail.Invalid" xml:space="preserve">
+    <value>The verification link is invalid or has expired. Sign in to request a new one, or contact the administrator.</value>
+  </data>
+  <data name="Account.VerifyEmail.PageTitle" xml:space="preserve">
+    <value>Verify email · Content Studio</value>
+  </data>
+  <data name="Account.VerifyEmail.Title" xml:space="preserve">
+    <value>Verify your email</value>
+  </data>
+  <data name="Account.VerifyEmail.Working" xml:space="preserve">
+    <value>Verifying…</value>
+  </data>
+  <data name="Admin.Security.EmailHelp" xml:space="preserve">
+    <value>When you change the address, a confirmation email goes to the new address; the change takes effect only after you follow the link.</value>
+  </data>
+  <data name="Admin.Security.EmailUnverified" xml:space="preserve">
+    <value>Email not verified</value>
+  </data>
+  <data name="Admin.Security.EmailVerified" xml:space="preserve">
+    <value>Email verified</value>
+  </data>
+  <data name="Admin.Security.LoginFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Admin.Security.LoginHistoryHelp" xml:space="preserve">
+    <value>Recent successful and failed sign-ins for this account (20 shown, 50 kept). If you see an unfamiliar source, change your password and sign out other sessions.</value>
+  </data>
+  <data name="Admin.Security.LoginHistoryTitle" xml:space="preserve">
+    <value>Sign-in history</value>
+  </data>
+  <data name="Admin.Security.LoginResult" xml:space="preserve">
+    <value>Result</value>
+  </data>
+  <data name="Admin.Security.LoginSucceeded" xml:space="preserve">
+    <value>Success</value>
+  </data>
+  <data name="Admin.Security.LoginTime" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Admin.Security.NoLoginHistory" xml:space="preserve">
+    <value>No sign-in records yet.</value>
+  </data>
+  <data name="Admin.Security.ProfileSavedEmailPending" xml:space="preserve">
+    <value>Profile updated; a confirmation email was sent to the new address. The change takes effect after you follow the link.</value>
+  </data>
+  <data name="Admin.Security.ResendVerification" xml:space="preserve">
+    <value>Resend verification email</value>
+  </data>
+  <data name="Admin.Security.VerificationSent" xml:space="preserve">
+    <value>Verification email sent; follow the link in your inbox.</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailHelp" xml:space="preserve">
+    <value>Send a test email to confirm the SMTP settings; the list below shows recent outgoing emails (recipient, subject and result only, never the body).</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailRecipient" xml:space="preserve">
+    <value>Recipient</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailSent" xml:space="preserve">
+    <value>Sent</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailSubject" xml:space="preserve">
+    <value>Subject</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailTime" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Admin.SiteHealth.EmailTitle" xml:space="preserve">
+    <value>Email service</value>
+  </data>
+  <data name="Admin.SiteHealth.NoEmailLog" xml:space="preserve">
+    <value>No emails have been sent yet.</value>
+  </data>
+  <data name="Admin.SiteHealth.SendTestEmail" xml:space="preserve">
+    <value>Send test email</value>
+  </data>
+  <data name="Admin.SiteHealth.TestEmailTo" xml:space="preserve">
+    <value>Recipient</value>
+  </data>
+  <data name="Admin.Users.ConfirmDelete" xml:space="preserve">
+    <value>Confirm delete</value>
+  </data>
+  <data name="Admin.Users.Delete" xml:space="preserve">
+    <value>Delete account</value>
+  </data>
+  <data name="Admin.Users.DeleteTitle" xml:space="preserve">
+    <value>Delete account "{0}"?</value>
+  </data>
+  <data name="Admin.Users.DeleteTransfer" xml:space="preserve">
+    <value>Attribute content to</value>
+  </data>
+  <data name="Admin.Users.DeleteTransferNone" xml:space="preserve">
+    <value>Nobody (keep content, clear the byline)</value>
+  </data>
+  <data name="Admin.Users.DeleteWarning" xml:space="preserve">
+    <value>The account, memberships, API credentials and sign-in sessions are removed permanently. Content written by this account is kept.</value>
+  </data>
+  <data name="Admin.Users.Deleted" xml:space="preserve">
+    <value>Account deleted; its content is kept with the byline cleared.</value>
+  </data>
+  <data name="Admin.Users.DeletedTransferred" xml:space="preserve">
+    <value>Account deleted; its content is now attributed to the selected account.</value>
   </data>
 </root>

@@ -114,6 +114,59 @@ public static class TenancyEndpoints
         group.MapDelete("/users/{id}/personal-data", async (string id, SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.EraseUserPersonalDataAsync(id, ct)));
 
+        // 刪除一般帳號：可將其內容署名轉移給另一帳號（transferTo）；僅全站管理者。
+        group.MapDelete("/users/{id}", async (string id, string? transferTo, SiteAdministrationService sites, CancellationToken ct) =>
+        {
+            await sites.DeleteUserAsync(id, string.IsNullOrWhiteSpace(transferTo) ? null : transferTo, ct);
+            return Results.NoContent();
+        });
+
+        // 帳號信箱：驗證、變更確認、測試郵件、寄信紀錄與登入歷史。
+        // 連結網址的來源（origin）由網站主機以 BFF 通道提供；驗證與確認只憑限時權杖，不要求已登入。
+        group.MapPost("/account/email-verification", async (AccountOriginInput input, AccountEmailService emails, AdminAccess access, CancellationToken ct) =>
+        {
+            var actor = await access.RequireUserAsync(ct);
+            await RequireSelfOrNetworkAdminAsync(access, input.UserId ?? "", actor.Id, ct);
+            var sent = await emails.SendVerificationAsync(input.UserId ?? "", ValidOrigin(input.Origin), ct);
+            return Results.Ok(new { sent });
+        });
+
+        group.MapPost("/account/verify-email", async (AccountTokenInput input, AccountEmailService emails, CancellationToken ct) =>
+            Results.Ok(await emails.ConfirmEmailAsync(input.UserId ?? "", input.Token ?? "", ct)));
+
+        group.MapPost("/account/email-change", async (AccountEmailChangeInput input, AccountEmailService emails, AdminAccess access, CancellationToken ct) =>
+        {
+            var actor = await access.RequireUserAsync(ct);
+            if (!string.Equals(actor.Id, input.UserId, StringComparison.Ordinal))
+                return Results.Forbid();
+            var sent = await emails.RequestEmailChangeAsync(input.UserId ?? "", input.NewEmail ?? "", ValidOrigin(input.Origin), ct);
+            return Results.Ok(new { sent });
+        });
+
+        group.MapPost("/account/confirm-email-change", async (AccountEmailChangeConfirmInput input, AccountEmailService emails, CancellationToken ct) =>
+            Results.Ok(await emails.ConfirmEmailChangeAsync(input.UserId ?? "", input.Email ?? "", input.Token ?? "", ct)));
+
+        group.MapPost("/account/email-test", async (AccountTestEmailInput input, AdminAccess access, AccountEmailService emails, CancellationToken ct) =>
+        {
+            await access.RequireRoleAsync(SiteRole.Administrator, ct);
+            return Results.Ok(await emails.SendTestAsync(input.To ?? "", ct));
+        });
+
+        group.MapGet("/account/email-log", async (HttpContext http, AdminAccess access, AccountEmailService emails, CancellationToken ct) =>
+        {
+            await access.RequireRoleAsync(SiteRole.Administrator, ct);
+            if (!ApiEndpoints.TryQueryInt(http, "page", 1, minimum: 1, maximum: int.MaxValue, out var page, out var error)) return error;
+            return Results.Ok(await emails.ListEmailLogAsync(page ?? 1, Limits.PageSize, ct));
+        });
+
+        group.MapGet("/account/login-history", async (string? userId, HttpContext http, AdminAccess access, AccountEmailService emails, CancellationToken ct) =>
+        {
+            var actor = await access.RequireUserAsync(ct);
+            var target = string.IsNullOrWhiteSpace(userId) ? actor.Id : userId;
+            await RequireSelfOrNetworkAdminAsync(access, target, actor.Id, ct);
+            return Results.Ok(await emails.ListLoginHistoryAsync(target, ct: ct));
+        });
+
         group.MapGet("/members", async (SiteAdministrationService sites, CancellationToken ct) =>
             Results.Ok(await sites.ListMembersAsync(ct)));
 
@@ -186,4 +239,26 @@ public static class TenancyEndpoints
     public sealed record NavigationOrderItem(Guid Id, Guid Version);
     public sealed record WidgetOrderInput(WidgetArea Area, List<WidgetOrderItem>? Items);
     public sealed record WidgetOrderItem(Guid Id, Guid Version);
+    /// <summary>本人或全站管理者才可操作；其餘回 403（不透露目標帳號是否存在）。</summary>
+    private static async Task RequireSelfOrNetworkAdminAsync(AdminAccess access, string userId, string? actorId, CancellationToken ct)
+    {
+        if (string.Equals(actorId, userId, StringComparison.Ordinal)) return;
+        var info = await access.GetCurrentAccessAsync(ct);
+        if (!info.IsNetworkAdmin) throw new AccessDeniedException("只可操作自己的帳號。");
+    }
+
+    /// <summary>連結來源只接受 http／https 的來源（schema + 主機 [+ 連接埠]），不含路徑、查詢或片段。</summary>
+    private static string ValidOrigin(string? origin)
+    {
+        if (Uri.TryCreate(origin ?? "", UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" &&
+            uri.Host.Length > 0 && uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0)
+            return uri.Scheme + "://" + uri.Authority;
+        throw new CmsException("連結來源無效。");
+    }
+
+    public sealed record AccountOriginInput(string? UserId, string? Origin);
+    public sealed record AccountTokenInput(string? UserId, string? Token);
+    public sealed record AccountEmailChangeInput(string? UserId, string? NewEmail, string? Origin);
+    public sealed record AccountEmailChangeConfirmInput(string? UserId, string? Email, string? Token);
+    public sealed record AccountTestEmailInput(string? To);
 }

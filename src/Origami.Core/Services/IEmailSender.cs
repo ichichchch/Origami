@@ -47,3 +47,49 @@ public sealed class SmtpEmailSender(IConfiguration configuration, ILogger<SmtpEm
         }
     }
 }
+
+/// <summary>
+/// 寄信紀錄包裝：每次寄信後寫一筆摘要（收件人、主旨、結果），失敗只記原因種類，
+/// 不記連線資訊與內文。以範圍生命週期保留寄信當下的站點識別。
+/// </summary>
+public sealed class LoggingEmailSender(
+    IEmailSender inner,
+    IDbContextFactory<CmsDbContext> factory,
+    SiteContext site,
+    TimeProvider? clock = null) : IEmailSender
+{
+    private const int KeepPerRun = 200;
+
+    public bool IsConfigured => inner.IsConfigured;
+
+    public async Task<bool> SendAsync(string to, string subject, string body, CancellationToken ct = default)
+    {
+        var succeeded = await inner.SendAsync(to, subject, body, ct);
+        try
+        {
+            await using var db = await factory.CreateDbContextAsync(ct);
+            db.EmailLogs.Add(new EmailLog
+            {
+                SiteId = site.SiteId,
+                Recipient = Truncate(to, 256),
+                Subject = Truncate(subject, 300),
+                Succeeded = succeeded,
+                Error = succeeded ? "" : inner.IsConfigured ? "寄送失敗（連線或收件者被拒）" : "SMTP 未設定",
+                CreatedAt = (clock ?? TimeProvider.System).GetUtcNow()
+            });
+            await db.SaveChangesAsync(ct);
+            // 每個站點只保留最新的紀錄；寄信量低，逐次清理成本低。
+            var stale = await db.EmailLogs.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+                .Skip(KeepPerRun).Select(x => x.Id).ToListAsync(ct);
+            if (stale.Count > 0)
+                await db.EmailLogs.Where(x => stale.Contains(x.Id)).ExecuteDeleteAsync(ct);
+        }
+        catch (Exception error) when (error is not OutOfMemoryException)
+        {
+            // 紀錄失敗不得影響寄信結果。
+        }
+        return succeeded;
+    }
+
+    private static string Truncate(string value, int max) => value.Length <= max ? value : value[..max];
+}

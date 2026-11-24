@@ -88,9 +88,14 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<WidgetService>();
         services.AddScoped<MarketplaceService>();
         services.AddScoped<PasswordResetService>();
+        services.AddScoped<AccountEmailService>();
         services.AddScoped<CommentService>();
         services.AddSingleton<TestEmailSender>();
-        services.AddSingleton<IEmailSender>(provider => provider.GetRequiredService<TestEmailSender>());
+        services.AddScoped<IEmailSender>(sp => new LoggingEmailSender(
+            sp.GetRequiredService<TestEmailSender>(),
+            sp.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            sp.GetRequiredService<SiteContext>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddScoped<WxrImportService>();
         services.AddScoped<SettingsService>();
         services.AddScoped<CmsEventBus>();
