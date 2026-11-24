@@ -229,32 +229,6 @@ public sealed class WebhookService(
     public static bool IsAllowedWebhookUrl(string? url)
     {
         if (string.IsNullOrWhiteSpace(url)) return true;
-        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri)) return false;
-        if (uri.Scheme is not "https" || uri.Host.Length == 0) return false;
-        if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
-            || uri.Host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase))
-            return false;
-        if (IPAddress.TryParse(uri.Host, out var ip))
-        {
-            // IPv4-mapped IPv6（如 [::ffff:10.0.0.1]）正規化回 IPv4 再套用同一組私網檢查。
-            if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
-            if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) || ip.Equals(IPAddress.IPv6None))
-                return false;
-            var bytes = ip.GetAddressBytes();
-            if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-            {
-                if (bytes[0] is 10 or 127 or 0) return false;
-                if (bytes[0] == 172 && bytes[1] is >= 16 and <= 31) return false;
-                if (bytes[0] == 192 && bytes[1] == 168) return false;
-                if (bytes[0] == 169 && bytes[1] == 254) return false;
-                if (bytes[0] == 100 && bytes[1] is >= 64 and <= 127) return false;
-            }
-            else if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast || (bytes[0] & 0xfe) == 0xfc)
-            {
-                return false;
-            }
-        }
-        return true;
+        return Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) && PublicHttpUrlPolicy.IsAllowed(uri);
     }
 }

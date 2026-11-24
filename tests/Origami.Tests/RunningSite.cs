@@ -176,7 +176,7 @@ internal sealed class RunningSite : IAsyncDisposable
     {
         var handler = new HttpClientHandler
         {
-            AllowAutoRedirect = allowRedirects, CookieContainer = cookies ?? new CookieContainer(),
+            AllowAutoRedirect = allowRedirects, CookieContainer = cookies ?? new CookieContainer(), UseProxy = false,
             ServerCertificateCustomValidationCallback = (_, received, _, _) => received?.Thumbprint == certificate.Thumbprint
         };
         return new HttpClient(handler) { BaseAddress = Address };

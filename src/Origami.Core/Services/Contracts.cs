@@ -464,6 +464,19 @@ public static partial class ContentRules
     /// <summary>逸出 LIKE 萬用字元，讓使用者文字在 ILike 模式中逐字比對。</summary>
     public static string EscapeLike(string value) => value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 
+    public static bool IsHttpUrl(string? value) => !string.IsNullOrWhiteSpace(value)
+        && Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri)
+        && uri.Scheme is "http" or "https" && uri.Host.Length > 0;
+
+    public static string OptionalHttpUrl(string? value, int maxLength, string label)
+    {
+        var clean = (value ?? "").Trim();
+        if (clean.Length == 0) return "";
+        if (clean.Length > maxLength || !IsHttpUrl(clean))
+            throw new CmsException($"{label}必須是 http 或 https 的絕對網址。");
+        return clean;
+    }
+
     /// <summary>
     /// 儲存的媒體檔名必須是圖片目錄內的單純檔案：不得有路徑
     /// 分隔字元、磁碟機代號或路徑穿越，且僅限點陣圖副檔名。

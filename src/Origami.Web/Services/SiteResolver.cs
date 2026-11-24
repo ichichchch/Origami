@@ -1,7 +1,7 @@
 namespace Origami.Web.Services;
 
 /// <summary>只向 Api 查詢明確主機映射；不自行查庫或猜測預設站點。</summary>
-public sealed class SiteResolver(HttpClient client, IMemoryCache cache, SiteResolveThrottle throttle)
+public sealed class SiteResolver(HttpClient client, IMemoryCache cache, SiteResolveThrottle throttle, ILogger<SiteResolver> logger)
 {
     // Items 只由本機中介軟體設定，不接受任何瀏覽器站點標頭。
     public static readonly object ResolvedSiteKey = new();
@@ -19,24 +19,52 @@ public sealed class SiteResolver(HttpClient client, IMemoryCache cache, SiteReso
         var key = "site-host:" + host.Trim().TrimEnd('.').ToLowerInvariant();
         if (cache.TryGetValue(key, out SiteSummary? cached)) return cached;
         // 快取外的上游解析消耗每來源的預算，防止匿名流量以隨機 Host 把網站當放大器打 Api。
-        if (!throttle.TryAcquire(source)) throw new SiteResolutionException();
+        if (!throttle.TryAcquire(source))
+        {
+            logger.LogWarning("站點解析失敗：主機 {Host}，原因 rate-limited。", host);
+            throw new SiteResolutionException();
+        }
         SiteSummary? site;
         try
         {
             using var response = await client.GetAsync("api/v1/sites/resolve?host=" + Uri.EscapeDataString(host), ct);
             if (response.StatusCode == HttpStatusCode.NotFound) site = null;
-            else if (!response.IsSuccessStatusCode) throw new SiteResolutionException();
+            else if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("站點解析失敗：主機 {Host}，原因 HTTP {Status}。", host, (int)response.StatusCode);
+                throw new SiteResolutionException();
+            }
             else
             {
                 site = await response.Content.ReadFromJsonAsync<SiteSummary>(cancellationToken: ct);
-                if (site is null || site.Id == Guid.Empty) throw new SiteResolutionException();
+                if (site is null || site.Id == Guid.Empty)
+                {
+                    logger.LogWarning("站點解析失敗：主機 {Host}，原因 invalid-response。", host);
+                    throw new SiteResolutionException();
+                }
                 site = site.IsActive ? site : null;
             }
         }
-        catch (HttpRequestException) { throw new SiteResolutionException(); }
-        catch (JsonException) { throw new SiteResolutionException(); }
-        catch (NotSupportedException) { throw new SiteResolutionException(); }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new SiteResolutionException(); }
+        catch (HttpRequestException)
+        {
+            logger.LogWarning("站點解析失敗：主機 {Host}，原因 transport。", host);
+            throw new SiteResolutionException();
+        }
+        catch (JsonException)
+        {
+            logger.LogWarning("站點解析失敗：主機 {Host}，原因 invalid-response。", host);
+            throw new SiteResolutionException();
+        }
+        catch (NotSupportedException)
+        {
+            logger.LogWarning("站點解析失敗：主機 {Host}，原因 invalid-response。", host);
+            throw new SiteResolutionException();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("站點解析失敗：主機 {Host}，原因 timeout。", host);
+            throw new SiteResolutionException();
+        }
         // 連線失敗等暫時性錯誗不寫入快取，避免單次故障把整批主機封鎖 30 秒。
         cache.Set(key, site, CacheDuration);
         return site;

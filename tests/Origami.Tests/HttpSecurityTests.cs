@@ -93,6 +93,10 @@ public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBa
         var home = await client.GetAsync("/");
         Assert.Equal("nosniff", home.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Equal("strict-origin-when-cross-origin", home.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Equal("DENY", home.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("camera=(), microphone=(), geolocation=(), payment=(), usb=()", home.Headers.GetValues("Permissions-Policy").Single());
+        var policies = home.Headers.GetValues("Content-Security-Policy").ToArray();
+        Assert.Contains(policies, policy => policy.Contains("frame-ancestors 'none'", StringComparison.Ordinal));
         Assert.Contains("no-store", home.Headers.CacheControl!.ToString());
         HttpResponseMessage? throttled = null;
         for (var attempt = 0; attempt < LoginThrottle.MaxAttempts + 3; attempt++)
@@ -104,6 +108,69 @@ public sealed class HttpSecurityTests(IsolatedPostgres postgres) : ServiceTestBa
         Assert.Contains("嘗試次數過多", WebUtility.HtmlDecode(await throttled!.Content.ReadAsStringAsync()));
         // 同一來源額度用盡後，連正確密碼也一併拒絕。
         Assert.Equal(HttpStatusCode.TooManyRequests, (await LoginAsync(client, password)).StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task Public_pages_compress_and_media_uses_immutable_cache_headers()
+    {
+        await using var site = new RunningSite(App.ConnectionString);
+        await site.StartAsync(environment: "Production");
+        var images = Path.Combine(site.StorageRoot, "images");
+        Directory.CreateDirectory(images);
+        var fileName = "cache-test-" + Guid.NewGuid().ToString("N") + ".png";
+        using (var bitmap = new SKBitmap(32, 24))
+        {
+            bitmap.Erase(SKColors.Green);
+            using var image = SKImage.FromBitmap(bitmap);
+            using var encoded = image.Encode(SKEncodedImageFormat.Png, 90)!;
+            await File.WriteAllBytesAsync(Path.Combine(images, fileName), encoded.ToArray());
+        }
+
+        using var client = site.CreateClient();
+        client.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("br"));
+        client.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
+        using var home = await client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.OK, home.StatusCode);
+        Assert.Contains(home.Content.Headers.ContentEncoding, value => value is "br" or "gzip");
+        using var media = await client.GetAsync("/media/" + fileName);
+        Assert.Equal(HttpStatusCode.OK, media.StatusCode);
+        Assert.Equal("image/png", media.Content.Headers.ContentType?.MediaType);
+        Assert.True(media.Headers.CacheControl?.Public);
+        Assert.Equal(TimeSpan.FromDays(365), media.Headers.CacheControl?.MaxAge);
+        Assert.Contains(media.Headers.CacheControl!.Extensions, value => value.Name == "immutable");
+        Assert.False(media.Headers.Contains("Pragma"));
+        Assert.Equal("nosniff", media.Headers.GetValues("X-Content-Type-Options").Single());
+
+        client.DefaultRequestHeaders.AcceptEncoding.Clear();
+        using var assetPage = await client.GetAsync("/");
+        AssertNoCache(assetPage);
+        using var document = await new HtmlParser().ParseDocumentAsync(
+            WebUtility.HtmlDecode(await assetPage.Content.ReadAsStringAsync()));
+        var assetPaths = document.QuerySelectorAll("link[rel=stylesheet][href], script[src]")
+            .Select(element => element.GetAttribute("href") ?? element.GetAttribute("src"))
+            .Where(path => path is not null)
+            .Select(path => new Uri(site.Address, path!))
+            .Where(path => !path.AbsolutePath.StartsWith("/_framework/", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(assetPaths);
+        foreach (var path in assetPaths)
+        {
+            using var asset = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+            Assert.True(asset.Headers.CacheControl?.Public,
+                $"Asset: {path.AbsolutePath}; Cache-Control: {string.Join(" | ", asset.Headers.GetValues("Cache-Control"))}");
+            Assert.Equal(TimeSpan.FromDays(365), asset.Headers.CacheControl?.MaxAge);
+            Assert.Contains(asset.Headers.CacheControl!.Extensions, value => value.Name == "immutable");
+            Assert.Equal("nosniff", asset.Headers.GetValues("X-Content-Type-Options").Single());
+        }
+        foreach (var alias in new[] { "/app.css", "/theme.js", "/Origami.Web.styles.css" })
+        {
+            using var asset = await client.GetAsync(alias);
+            Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+            Assert.True(asset.Headers.CacheControl?.NoCache, $"Alias: {alias}");
+            Assert.Null(asset.Headers.CacheControl?.MaxAge);
+            Assert.DoesNotContain(asset.Headers.CacheControl!.Extensions, value => value.Name == "immutable");
+        }
     }
 
     [PostgresFact]

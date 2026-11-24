@@ -531,9 +531,12 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         var scheme = Bounded(site, "colorScheme", Limits.ThemeColorScheme, "色彩模式", optional: true);
         settings.ColorScheme = ThemePresets.IsValidColorScheme(scheme) ? scheme : ThemePresets.ColorSchemeAuto;
         settings.FooterText = Bounded(site, "footerText", Limits.FooterText, "頁尾文字", optional: true);
-        settings.SocialGithubUrl = Bounded(site, "socialGithubUrl", Limits.SocialUrl, "GitHub 連結", optional: true);
-        settings.SocialXUrl = Bounded(site, "socialXUrl", Limits.SocialUrl, "X 連結", optional: true);
-        settings.SocialMastodonUrl = Bounded(site, "socialMastodonUrl", Limits.SocialUrl, "Mastodon 連結", optional: true);
+        settings.SocialGithubUrl = ContentRules.OptionalHttpUrl(
+            Bounded(site, "socialGithubUrl", Limits.SocialUrl, "GitHub 連結", optional: true), Limits.SocialUrl, "GitHub 連結");
+        settings.SocialXUrl = ContentRules.OptionalHttpUrl(
+            Bounded(site, "socialXUrl", Limits.SocialUrl, "X 連結", optional: true), Limits.SocialUrl, "X 連結");
+        settings.SocialMastodonUrl = ContentRules.OptionalHttpUrl(
+            Bounded(site, "socialMastodonUrl", Limits.SocialUrl, "Mastodon 連結", optional: true), Limits.SocialUrl, "Mastodon 連結");
         settings.CommentBlockedWords = Bounded(site, "commentBlockedWords", Limits.CommentBlockedWords, "評論敏感詞", optional: true);
         settings.CommentCloseDays = site.TryGetProperty("commentCloseDays", out var closeDays) && closeDays.ValueKind == JsonValueKind.Number
             ? Math.Clamp(closeDays.GetInt32(), 0, 3650) : 0;
@@ -568,7 +571,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 {
                     SiteId = db.CurrentSiteId, ContentId = target.Id,
                     AuthorName = Bounded(node, "authorName", Limits.CommentAuthor, "評論名稱"),
-                    Url = Bounded(node, "url", Limits.CommentUrl, "評論網址", optional: true),
+                    Url = ContentRules.OptionalHttpUrl(
+                        Bounded(node, "url", Limits.CommentUrl, "評論網址", optional: true), Limits.CommentUrl, "評論網址"),
                     Markdown = Bounded(node, "markdown", Limits.CommentBody, "評論內容"),
                     Status = CommentStatus.Approved,
                     CreatedAt = Date(node, "createdAt") ?? now
@@ -583,7 +587,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             foreach (var node in navigation.EnumerateArray())
             {
                 var title = Bounded(node, "title", Limits.NavTitle, "導覽文字");
-                var url = Bounded(node, "url", Limits.NavUrl, "導覽網址", optional: true);
+                var url = ContentRules.OptionalHttpUrl(
+                    Bounded(node, "url", Limits.NavUrl, "導覽網址", optional: true), Limits.NavUrl, "導覽網址");
                 var visible = !node.TryGetProperty("isVisible", out var visibleNode) || visibleNode.ValueKind != JsonValueKind.False;
                 Guid? contentId = null;
                 if (node.GetString("pageSlug") is { } pageSlug && contentsBySlug.TryGetValue(pageSlug, out var page)

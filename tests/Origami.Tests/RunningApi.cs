@@ -113,6 +113,7 @@ internal sealed class RunningApi : IAsyncDisposable
     {
         var handler = new HttpClientHandler
         {
+            UseProxy = false,
             ServerCertificateCustomValidationCallback = (_, received, _, _) => received?.Thumbprint == certificate.Thumbprint
         };
         var client = new HttpClient(handler) { BaseAddress = Address };

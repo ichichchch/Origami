@@ -30,9 +30,9 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         var colorScheme = string.IsNullOrWhiteSpace(input.ColorScheme) ? ThemePresets.ColorSchemeAuto : input.ColorScheme.Trim().ToLowerInvariant();
         if (!ThemePresets.IsValidColorScheme(colorScheme))
             throw new CmsException("色彩模式無效（僅接受 auto、light 或 dark）。");
-        ValidateOptionalHttpUrl(input.SocialGithubUrl, "GitHub 連結");
-        ValidateOptionalHttpUrl(input.SocialXUrl, "X / Twitter 連結");
-        ValidateOptionalHttpUrl(input.SocialMastodonUrl, "Mastodon / 社群連結");
+        ContentRules.OptionalHttpUrl(input.SocialGithubUrl, Limits.SocialUrl, "GitHub 連結");
+        ContentRules.OptionalHttpUrl(input.SocialXUrl, Limits.SocialUrl, "X / Twitter 連結");
+        ContentRules.OptionalHttpUrl(input.SocialMastodonUrl, Limits.SocialUrl, "Mastodon / 社群連結");
         if (!WebhookService.IsAllowedWebhookUrl(input.WebhookUrl))
             throw new CmsException("Webhook 網址必須是公開 https 絕對網址（不允許本機或內網位址）。");
         if (input.CommentCloseDays is < 0 or > 3650)
@@ -159,11 +159,4 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         return input;
     }
 
-    private static void ValidateOptionalHttpUrl(string? url, string label)
-    {
-        var clean = (url ?? "").Trim();
-        if (clean.Length == 0) return;
-        if (clean.Length > Limits.SocialUrl || !Uri.TryCreate(clean, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
-            throw new CmsException($"{label}必須是 http 或 https 的絕對網址。");
-    }
 }

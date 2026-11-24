@@ -86,6 +86,36 @@ public sealed class ApiV1EndpointTests(IsolatedPostgres postgres) : ServiceTestB
         Assert.True(statuses.Contains(429), "預期 /api 在 30 次後限流，實際狀態碼：" + string.Join(",", statuses));
     }
 
+    [PostgresFact]
+    public async Task Public_json_compresses_and_keeps_security_and_no_store_headers()
+    {
+        using var actor = await App.AdministratorAsync();
+        var input = NewContent("API 壓縮文章", status: ContentStatus.Published);
+        input.Markdown = new string('內', 20_000);
+        var saved = await actor.Content.SaveAsync(input);
+
+        await using var api = new RunningApi(App.ConnectionString);
+        await api.StartAsync();
+        using var client = api.CreateClient();
+        client.DefaultRequestHeaders.AcceptEncoding.Add(new StringWithQualityHeaderValue("gzip"));
+        using var response = await client.GetAsync("/api/v1/posts/" + saved.Slug);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(response.Content.Headers.ContentEncoding, value => value == "gzip");
+        Assert.True(response.Headers.CacheControl?.NoCache);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("strict-origin-when-cross-origin", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Contains(response.Headers.GetValues("Content-Security-Policy"),
+            policy => policy.Contains("frame-ancestors 'none'", StringComparison.Ordinal));
+
+        await using var compressed = await response.Content.ReadAsStreamAsync();
+        await using var gzip = new GZipStream(compressed, CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip, Encoding.UTF8);
+        var body = JsonNode.Parse(await reader.ReadToEndAsync())!;
+        Assert.Equal(input.Markdown, (string?)body["markdown"]);
+    }
+
     private static async Task AssertOkWithMarkdownAsync(HttpClient client, string url, string markdown)
     {
         using var response = await client.GetAsync(url);

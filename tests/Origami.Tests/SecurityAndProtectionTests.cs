@@ -65,10 +65,16 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         // 字面 IPv4 私網／保留位址與本機名稱一律拒絕（webhook 與 feed 小工具共用此驗證）。
         foreach (var blocked in new[]
                  {
-                     "https://localhost/feed", "https://site.internal/feed", "https://127.0.0.1/feed",
+                     "https://localhost/feed", "https://localhost./feed", "https://app.localhost/feed", "https://site.internal/feed",
+                     "https://user:pass@example.com/feed", "https://127.0.0.1/feed", "https://0.0.0.0/feed",
                      "https://10.0.0.5/feed", "https://172.16.1.1/feed", "https://192.168.1.1/feed",
-                     "https://169.254.169.254/feed", "https://100.64.1.1/feed",
+                     "https://169.254.169.254/feed", "https://100.64.1.1/feed", "https://192.0.2.1/feed",
+                     "https://198.18.0.1/feed", "https://198.51.100.1/feed", "https://203.0.113.1/feed",
+                     "https://224.0.0.1/feed", "https://240.0.0.1/feed",
                      "https://[::1]/feed", "https://[fe80::1]/feed", "https://[fc00::1]/feed",
+                     "https://[ff02::1]/feed", "https://[2001:db8::1]/feed", "https://[2001:2::1]/feed",
+                     "https://[::7f00:1]/feed", "https://[::ffff:0:127.0.0.1]/feed",
+                     "https://[64:ff9b::7f00:1]/feed", "https://[2002:7f00:1::]/feed",
                      // IPv4-mapped IPv6：正規化回 IPv4 後同樣不得命中私網範圍。
                      "https://[::ffff:127.0.0.1]/feed", "https://[::ffff:10.0.0.1]/feed",
                      "https://[::ffff:192.168.1.1]/feed", "https://[::ffff:169.254.169.254]/feed",
@@ -79,10 +85,38 @@ public sealed class SecurityAndProtectionTests(IsolatedPostgres postgres) : Serv
         }
 
         // 公開位址（含正規化後為公開的 mapped 形式）與空值仍可用。
-        foreach (var allowed in new[] { "https://example.com/feed", "https://[2606:4700::6810:85e5]/feed",
-                     "https://[::ffff:8.8.8.8]/feed", null, "" })
+        foreach (var allowed in new[] { "https://example.com/feed", "https://8.8.8.8/feed", "https://[2606:4700::6810:85e5]/feed",
+                     "https://[2001:4860:4860::8888]/feed", "https://[::ffff:8.8.8.8]/feed", null, "" })
         {
             Assert.True(WebhookService.IsAllowedWebhookUrl(allowed), allowed ?? "(null)");
+        }
+    }
+
+    [Fact]
+    public async Task Public_network_handler_rejects_private_and_mixed_dns_before_connecting()
+    {
+        IPAddress[][] resolutions =
+        [
+            [IPAddress.Loopback],
+            [IPAddress.Parse("10.0.0.5")],
+            [IPAddress.Parse("169.254.169.254")],
+            [IPAddress.Parse("8.8.8.8"), IPAddress.Parse("192.168.1.1")],
+            [IPAddress.Parse("::1")]
+        ];
+        foreach (var addresses in resolutions)
+        {
+            var calls = 0;
+            using var handler = new PublicNetworkHttpHandler((host, _) =>
+            {
+                Assert.Equal("downloads.example", host);
+                calls++;
+                return ValueTask.FromResult(addresses);
+            });
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
+            var error = await Assert.ThrowsAsync<HttpRequestException>(() =>
+                client.GetAsync("https://downloads.example/image.png"));
+            Assert.Contains("不公開", error.Message, StringComparison.Ordinal);
+            Assert.Equal(1, calls);
         }
     }
 

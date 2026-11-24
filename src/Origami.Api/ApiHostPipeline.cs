@@ -1,4 +1,4 @@
-namespace Origami.Api;
+﻿namespace Origami.Api;
 
 /// <summary>
 /// Origami.Api 主機的服務註冊與請求管線組裝。
@@ -28,6 +28,15 @@ public static class ApiHostPipeline
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.Providers.Add<BrotliCompressionProvider>();
+            options.Providers.Add<GzipCompressionProvider>();
+            options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat([
+                "application/xml", "application/problem+json", "image/svg+xml"
+            ]).ToArray();
+        });
         builder.Services.AddMemoryCache();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<MarkdownService>();
@@ -76,16 +85,17 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<MediaService>();
         builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
         builder.Services.AddOptions<BackupOptions>().BindConfiguration("Backup");
-        builder.Services.AddHttpClient("OrigamiWebhook");
+        builder.Services.AddHttpClient("OrigamiWebhook")
+            .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
         // 外部 feed 小工具的抓取通道：短逾時、不跟隨轉址、不帶 cookie，回應大小另由服務層上限約束。
         builder.Services.AddHttpClient("OrigamiWidgetFeed", client => client.Timeout = TimeSpan.FromSeconds(5))
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+            .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
         builder.Services.AddHttpClient("OrigamiWxrAttachment")
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+            .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
         // 從網址匯入媒體（sideload）的下載通道：較長逾時容納較大檔案、不跟隨轉址、不帶 cookie；
         // 位址白名單與單檔大小上限由服務層把關。
         builder.Services.AddHttpClient("OrigamiMediaSideload", client => client.Timeout = TimeSpan.FromSeconds(30))
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+            .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
         builder.Services.AddScoped<WebhookService>();
         builder.Services.AddScoped<IndexNowService>();
         builder.Services.AddScoped<SiteHealthService>();
@@ -111,6 +121,7 @@ public static class ApiHostPipeline
             WriteExceptionResponseAsync(context, context.Features.Get<IExceptionHandlerFeature>()?.Error)));
         if (!app.Environment.IsDevelopment()) app.UseHsts();
         app.UseHttpsRedirection();
+        app.UseResponseCompression();
         app.Use(ApplyNoStoreHeaders);
         // 站點必須在認證（尤其 PAT）及任何站點資料查詢前確定；/health 不受此檢查影響。
         app.UseMiddleware<SiteResolutionMiddleware>();
@@ -181,6 +192,13 @@ public static class ApiHostPipeline
         // 已發布內容一經撤回須立即不可見，因此回應一律不快取。
         context.Response.Headers.XContentTypeOptions = "nosniff";
         context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+        context.Response.Headers["X-Frame-Options"] = "DENY";
+        context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
+        context.Response.Headers["Content-Security-Policy"] =
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; " +
+            "script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+            "img-src 'self' data: https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; " +
+            "connect-src 'self' https://cdn.jsdelivr.net";
         context.Response.Headers.CacheControl = "no-cache, no-store";
         context.Response.Headers.Pragma = "no-cache";
         await next(context);

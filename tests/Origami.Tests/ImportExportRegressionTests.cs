@@ -37,6 +37,52 @@ public sealed class ImportExportRegressionTests(IsolatedPostgres postgres) : Ser
     }
 
     [PostgresFact]
+    public async Task Import_refuses_unsafe_comment_navigation_and_social_urls_without_replacing_data()
+    {
+        using var admin = await App.AdministratorAsync();
+        var existing = await admin.Content.SaveAsync(NewContent("匯入前文章", status: ContentStatus.Published));
+        using var buffer = new MemoryStream();
+        await admin.Services.GetRequiredService<ExportService>().WriteAsync(buffer);
+        var exported = JsonNode.Parse(buffer.ToArray())!;
+        var importer = admin.Services.GetRequiredService<ImportService>();
+
+        foreach (var target in new[] { "social", "comment", "navigation" })
+        {
+            var document = exported.DeepClone();
+            if (target == "social")
+                document["site"]!["socialGithubUrl"] = "javascript:alert(1)";
+            else if (target == "comment")
+            {
+                document["comments"] = new JsonArray(new JsonObject
+                {
+                    ["contentSlug"] = existing.Slug,
+                    ["authorName"] = "訪客",
+                    ["url"] = "javascript:alert(1)",
+                    ["markdown"] = "留言"
+                });
+            }
+            else
+            {
+                document["navigation"] = new JsonArray(new JsonObject
+                {
+                    ["title"] = "危險導覽",
+                    ["url"] = "javascript:alert(1)"
+                });
+            }
+
+            using var input = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()));
+            var refused = await Assert.ThrowsAsync<CmsException>(() => importer.ApplyAsync(input, confirmed: true));
+            Assert.Contains("http 或 https", refused.Message, StringComparison.Ordinal);
+        }
+
+        await using var db = await App.CreateContextAsync();
+        Assert.True(await db.Contents.AnyAsync(x => x.Title == "匯入前文章"));
+        Assert.Empty(await db.SiteNavItems.ToListAsync());
+        Assert.Empty(await db.Comments.ToListAsync());
+        Assert.Equal("", (await db.Settings.AsNoTracking().SingleAsync(x => x.Id == 1)).SocialGithubUrl);
+    }
+
+    [PostgresFact]
     public async Task Import_restores_the_site_icon_to_the_imported_media()
     {
         using var directory = new TemporaryMediaStorage();

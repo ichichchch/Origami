@@ -70,6 +70,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
             {
                 AllowAutoRedirect = false,
                 UseCookies = false,
+                UseProxy = false,
                 SslOptions = new System.Net.Security.SslClientAuthenticationOptions
                 {
                     RemoteCertificateValidationCallback = delegate { return true; }

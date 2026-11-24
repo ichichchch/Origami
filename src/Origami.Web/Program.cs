@@ -46,6 +46,15 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
 // 啟動驗證即失敗。快取經單例 IMemoryCache 共享，Scoped 註冊不影響跨請求快取與失效。
 builder.Services.AddScoped<UserLanguagePreferenceReader>();
 builder.Services.AddMemoryCache();
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat([
+        "application/xml", "application/problem+json", "image/svg+xml"
+    ]).ToArray();
+});
 builder.Services.AddSingleton<SiteResolveThrottle>();
 builder.Services.AddSingleton<ContentUnlockThrottle>();
 builder.Services.AddSingleton<CommentThrottle>();
@@ -80,14 +89,15 @@ builder.Services.AddScoped<CmsEventBus>();
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddSingleton<MarkdownService>();
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
-builder.Services.AddHttpClient("OrigamiWebhook");
+builder.Services.AddHttpClient("OrigamiWebhook")
+    .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
 builder.Services.AddHttpClient("OrigamiWidgetFeed", client => client.Timeout = TimeSpan.FromSeconds(5))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
 builder.Services.AddHttpClient("OrigamiWxrAttachment")
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
 // 從網址匯入媒體（sideload）的下載通道：與 Api 主機同一組邊界（30 秒逾時、不跟隨轉址、不帶 cookie）。
 builder.Services.AddHttpClient("OrigamiMediaSideload", client => client.Timeout = TimeSpan.FromSeconds(30))
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new PublicNetworkHttpHandler());
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddScoped<IndexNowService>();
 builder.Services.AddScoped<SiteHealthService>();
@@ -152,14 +162,14 @@ void ConfigureApiClient(HttpClient client)
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", serviceToken);
 }
 builder.Services.AddHttpClient<OrigamiClient>(ConfigureApiClient)
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false, UseProxy = false });
 builder.Services.AddScoped<PublicSettingsProvider>();
 builder.Services.AddHttpClient<SiteResolver>(client =>
     {
         ConfigureApiClient(client);
         client.Timeout = TimeSpan.FromSeconds(30);
     })
-    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false, UseProxy = false });
 // 金鑰目錄維持全域，application name 保持舊值以相容既有 Cookie。
 var keyStorage = new StoragePaths(builder.Configuration, builder.Environment);
 var protection = builder.Services.AddDataProtection().SetApplicationName("Origami.SingleSite")
@@ -187,12 +197,24 @@ app.UseExceptionHandler("/Error", createScopeForErrors: true);
 if (!app.Environment.IsDevelopment()) app.UseHsts();
 // 轉址先於站點解析：未登錄主機的 HTTP 請求不必先付出解析成本，直接導向 HTTPS。
 app.UseHttpsRedirection();
+app.UseResponseCompression();
 app.Use(async (context, next) =>
 {
     context.Response.Headers.XContentTypeOptions = "nosniff";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    context.Response.Headers.CacheControl = "no-cache, no-store";
-    context.Response.Headers.Pragma = "no-cache";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
+    context.Response.Headers["Content-Security-Policy"] =
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; " +
+        "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+        "font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' ws: wss:; " +
+        "frame-src https://www.youtube-nocookie.com https://player.vimeo.com https://player.bilibili.com";
+    // 靜態資產由端點指紋決定快取；動態回應一律 no-store。
+    if (context.GetEndpoint()?.Metadata.GetMetadata<StaticAssetDescriptor>() is null)
+    {
+        context.Response.Headers.CacheControl = "no-cache, no-store";
+        context.Response.Headers.Pragma = "no-cache";
+    }
     await next(context);
 });
 // 包含 /_blazor 的握手與 WebSocket；在認證、媒體與任何租戶服務之前解析。
@@ -268,11 +290,27 @@ app.UseRateLimiter();
 // 輸出快取放在限流之後：命中同樣計入限流；詳情頁另以 ETag/304 支援條件請求。
 app.UseOutputCache();
 app.UseMiddleware<DetailPageEtagMiddleware>();
-app.MapStaticAssets();
+var staticAssets = app.MapStaticAssets()
+    .WithMetadata(new StaticAssetResponseHeader("X-Content-Type-Options", "nosniff"));
+staticAssets.Add(builder =>
+{
+    if (builder.Metadata.OfType<StaticAssetDescriptor>().SingleOrDefault()?.Properties.Any(x => x.Name == "fingerprint") != true) return;
+    var next = builder.RequestDelegate!;
+    builder.RequestDelegate = context =>
+    {
+        // 端點內建快取標頭較晚覆寫，於 OnStarting 依指紋重新指定。
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return Task.CompletedTask;
+        });
+        return next(context);
+    };
+});
 app.MapCmsIdentity();
 app.MapPublicEndpoints();
 // 媒體仍公開，但只服務已核定站點的圖片目錄，絕不映射全域目錄。
-app.MapGet("/media/{filename}", (string filename, StoragePaths paths) =>
+app.MapMethods("/media/{filename}", ["GET", "HEAD"], (string filename, StoragePaths paths, HttpContext context) =>
 {
     if (!ContentRules.IsSafeMediaFileNameAny(filename) || filename.Contains("..", StringComparison.Ordinal) ||
         filename.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
@@ -300,8 +338,11 @@ app.MapGet("/media/{filename}", (string filename, StoragePaths paths) =>
         ? Path.Combine(paths.Images, filename)
         : Path.Combine(paths.Files, filename);
     if (!File.Exists(path)) return Results.NotFound();
+    // 上傳檔名含隨機識別且不覆寫；變體亦同，可長期快取。設定型 favicon 不走此規則。
+    context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+    context.Response.Headers.Remove("Pragma");
     return Results.File(path, contentType, fileDownloadName: disposition == "attachment" ? filename : null,
-        enableRangeProcessing: true);
+        lastModified: File.GetLastWriteTimeUtc(path), enableRangeProcessing: true);
 });
 // 瀏覽器依慣例請求這個網址；直接提供已設定的媒體資產，不經媒體庫查詢介面。
 app.MapGet("/favicon.ico", async (MediaService media, CancellationToken ct) =>
