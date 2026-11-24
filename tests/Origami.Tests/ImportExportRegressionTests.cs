@@ -231,6 +231,83 @@ public sealed class ImportExportRegressionTests(IsolatedPostgres postgres) : Ser
     }
 
     [PostgresFact]
+    public async Task Import_restores_defaults_cover_language_and_translation_groups_with_new_ids()
+    {
+        using var admin = await App.AdministratorAsync();
+        var category = await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new TaxonomyEdit { Name = "預設分類" });
+        var tag = await admin.Taxonomy.SaveAsync(TaxonomyKind.Tag, new TaxonomyEdit { Name = "預設標籤" });
+        var settings = await admin.Settings.GetAsync();
+        settings.DefaultCategoryId = category.Id;
+        settings.DefaultTagId = tag.Id;
+        await admin.Settings.SaveAsync(settings);
+
+        Guid assetId;
+        var assetFileName = Guid.NewGuid().ToString("N") + ".png";
+        await using (var db = await App.CreateContextAsync())
+        {
+            var asset = new MediaAsset
+            {
+                FileName = assetFileName, OriginalName = "cover.png",
+                ContentType = "image/png", Width = 1200, Height = 400, UploadedAt = DateTimeOffset.UtcNow
+            };
+            db.MediaAssets.Add(asset);
+            await db.SaveChangesAsync();
+            assetId = asset.Id;
+        }
+
+        var original = await admin.Content.CreateAsync(ContentKind.Post, new ContentEdit
+        {
+            Title = "中文原文", Language = "zh-Hant", CoverMediaId = assetId, Status = ContentStatus.Published
+        });
+        var translation = await admin.Content.CreateAsync(ContentKind.Post, new ContentEdit
+        {
+            Title = "English version", Language = "en", CoverMediaId = assetId, Status = ContentStatus.Published,
+            LinkTranslationTo = original.Id
+        });
+        var sourceGroupId = translation.TranslationGroupId.GetValueOrDefault();
+        Assert.NotEqual(Guid.Empty, sourceGroupId);
+
+        using var buffer = new MemoryStream();
+        await admin.Services.GetRequiredService<ExportService>().WriteAsync(buffer);
+        var document = JsonNode.Parse(buffer.ToArray())!;
+        Assert.Equal(category.Slug, (string?)document["site"]?["defaultCategorySlug"]);
+        Assert.Equal(tag.Slug, (string?)document["site"]?["defaultTagSlug"]);
+        var exported = Assert.IsType<System.Text.Json.Nodes.JsonObject>(
+            Assert.Single(document["contents"]!.AsArray(), x => (string?)x?["slug"] == original.Slug));
+        Assert.Equal(64, ((string?)exported["translationGroupKey"])?.Length);
+        var exportedJson = buffer.ToArray();
+        Assert.DoesNotContain(sourceGroupId.ToString(), System.Text.Encoding.UTF8.GetString(exportedJson), StringComparison.OrdinalIgnoreCase);
+
+        var importer = admin.Services.GetRequiredService<ImportService>();
+        using (var input = new MemoryStream(exportedJson))
+            await importer.ApplyAsync(input, confirmed: true);
+
+        var restoredSettings = await admin.Settings.GetAsync();
+        Assert.NotEqual(category.Id, restoredSettings.DefaultCategoryId);
+        Assert.NotEqual(tag.Id, restoredSettings.DefaultTagId);
+        await using var restoredDb = await App.CreateContextAsync();
+        var restoredCategory = await restoredDb.Categories.SingleAsync(x => x.Slug == category.Slug);
+        var restoredTag = await restoredDb.Tags.SingleAsync(x => x.Slug == tag.Slug);
+        Assert.Equal(restoredCategory.Id, restoredSettings.DefaultCategoryId);
+        Assert.Equal(restoredTag.Id, restoredSettings.DefaultTagId);
+        var restored = await restoredDb.Contents.AsNoTracking().SingleAsync(x => x.Slug == original.Slug);
+        var restoredTranslation = await restoredDb.Contents.AsNoTracking().SingleAsync(x => x.Slug == translation.Slug);
+        Assert.Equal("zh-Hant", restored.Language);
+        Assert.Equal("en", restoredTranslation.Language);
+        Assert.NotNull(restored.TranslationGroupId);
+        Assert.Equal(restored.TranslationGroupId, restoredTranslation.TranslationGroupId);
+        Assert.NotEqual(sourceGroupId, restored.TranslationGroupId);
+        Assert.NotEqual(assetId, restored.CoverMediaId);
+        var restoredAsset = await restoredDb.MediaAssets.SingleAsync(x => x.FileName == assetFileName);
+        Assert.Equal(restoredAsset.Id, restored.CoverMediaId);
+        Assert.Equal(restoredAsset.Id, restoredTranslation.CoverMediaId);
+
+        var newPost = await admin.Content.SaveAsync(NewContent("匯入後新文章"));
+        Assert.Equal([restoredCategory.Id], newPost.CategoryIds);
+        Assert.Equal([restoredTag.Id], newPost.TagIds);
+    }
+
+    [PostgresFact]
     public async Task A_referenced_variant_protects_the_original_image()
     {
         using var directory = new TemporaryMediaStorage();

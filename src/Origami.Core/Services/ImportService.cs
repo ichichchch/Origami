@@ -600,6 +600,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
 
         // 第一輪：建立所有內容資料列；階層連結在記憶體中的實體上解析。
         Dictionary<string, Content> contentsBySlug = [];
+        Dictionary<(string Key, ContentKind Kind), Guid> translationGroupIds = [];
+        HashSet<(Guid GroupId, string Language)> translatedLanguages = [];
         List<(Content Entity, string? ParentSlug)> hierarchy = [];
         List<(Content Content, CustomField Field, IReadOnlyList<string> Targets)> pendingRelations = [];
         foreach (var node in document.RootElement.GetProperty("contents").EnumerateArray())
@@ -623,6 +625,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 Excerpt = Bounded(node, "excerpt", Limits.Excerpt, "內容摘要", optional: true),
                 // 匯入內容沒有對應帳號；僅還原署名快照供前台 byline 使用。
                 AuthorName = Bounded(node, "authorName", Limits.AuthorName, "作者名稱", optional: true),
+                Language = Bounded(node, "language", Limits.UiLanguage, "內容語言", optional: true),
                 IsSticky = node.TryGetProperty("isSticky", out var sticky) && sticky.GetBoolean(),
                 AllowComments = !node.TryGetProperty("allowComments", out var allowCommentsNode) || allowCommentsNode.ValueKind != JsonValueKind.False,
                 MenuOrder = node.TryGetProperty("menuOrder", out var menuOrderNode) && menuOrderNode.ValueKind == JsonValueKind.Number ? Math.Clamp(menuOrderNode.GetInt32(), -10000, 10000) : 0,
@@ -639,6 +642,26 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 DeletedAt = status == ContentStatus.Trashed ? Date(node, "deletedAt") ?? now : null,
                 Version = Guid.NewGuid(),
             };
+            if (!ContentService.IsValidLanguageKey(content.Language))
+                throw new CmsException($"內容「{content.Title}」的語言鍵格式無效。");
+            if (node.GetString("coverFileName") is { Length: > 0 } coverFile)
+            {
+                if (!mediaByFileName.TryGetValue(coverFile, out var cover))
+                    throw new CmsException($"內容「{content.Title}」的封面媒體不在匯入資料中：{coverFile}。");
+                content.CoverMediaId = cover.Id;
+            }
+            var translationKey = Bounded(node, "translationGroupKey", 64, "翻譯組代稱", optional: true);
+            if (translationKey.Length > 0)
+            {
+                if (translationKey.Length != 64 || translationKey.Any(character => !Uri.IsHexDigit(character)))
+                    throw new CmsException($"內容「{content.Title}」的翻譯組代稱格式無效。");
+                var groupKey = (translationKey, content.Kind);
+                if (!translationGroupIds.TryGetValue(groupKey, out var groupId))
+                    translationGroupIds[groupKey] = groupId = Guid.NewGuid();
+                content.TranslationGroupId = groupId;
+                if (content.Language.Length > 0 && !translatedLanguages.Add((groupId, content.Language)))
+                    throw new CmsException($"翻譯組內已有相同語言的譯本：{content.Language}。");
+            }
             if (content.Status == ContentStatus.Published && content.PublishedAt is null)
                 content.PublishedAt = now; // 資料庫檢查約束要求現行發布狀態必須有日期
             if (content.IsProtected && content.ProtectionHash == "")

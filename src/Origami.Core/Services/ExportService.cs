@@ -34,8 +34,15 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
 
         // 內容識別碼絕不離站；slug 才是匯入時建立連結的穩定識別。
         var slugById = await db.Contents.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
+        var mediaFileNameById = await db.MediaAssets.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.FileName, ct);
         var categorySlugById = await db.Categories.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         var tagSlugById = await db.Tags.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
+        var translationKeyById = (await db.Contents.AsNoTracking()
+            .Where(x => x.TranslationGroupId != null)
+            .Select(x => new { x.Id, x.TranslationGroupId, x.Kind, x.Slug }).ToListAsync(ct))
+            .GroupBy(x => x.TranslationGroupId)
+            .ToDictionary(x => x.Key!.Value, x => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+                x.First().Kind + "\n" + string.Join("\n", x.Select(member => member.Slug).OrderBy(slug => slug, StringComparer.Ordinal))))).ToLowerInvariant());
         var settings = await db.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, ct);
         writer.WriteStartObject("site");
         writer.WriteString("name", settings?.Name ?? "");
@@ -225,6 +232,11 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteString("slug", content.Slug);
             // 帳號識別不離站；匯出署名快照，匯入後 byline 不因缺少帳號而消失。
             if (content.AuthorName.Length > 0) writer.WriteString("authorName", content.AuthorName);
+            if (content.CoverMediaId is { } coverId && mediaFileNameById.TryGetValue(coverId, out var coverFile))
+                writer.WriteString("coverFileName", coverFile);
+            if (content.Language.Length > 0) writer.WriteString("language", content.Language);
+            if (content.TranslationGroupId is { } groupId && translationKeyById.TryGetValue(groupId, out var translationKey))
+                writer.WriteString("translationGroupKey", translationKey);
             writer.WriteString("excerpt", content.Excerpt);
             writer.WriteBoolean("isSticky", content.IsSticky);
             if (!content.AllowComments) writer.WriteBoolean("allowComments", false);

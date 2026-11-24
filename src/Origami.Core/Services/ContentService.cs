@@ -732,7 +732,7 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
     }
 
     /// <summary>語言鍵須為系統可辨識的文化特性名稱；空字串代表未標記。</summary>
-    private static bool IsValidLanguageKey(string language)
+    internal static bool IsValidLanguageKey(string language)
     {
         if (language.Length == 0) return true;
         try { CultureInfo.GetCultureInfo(language); return true; }
