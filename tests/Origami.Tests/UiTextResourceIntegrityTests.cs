@@ -54,6 +54,26 @@ public sealed class UiTextResourceIntegrityTests
     }
 
     [Fact]
+    public void Simplified_chinese_resource_matches_english_keys_and_placeholders()
+    {
+        var (referenced, english) = Load();
+        var path = Path.Combine(RunningSite.FindSolutionRoot(), "src", "Origami.Web", "Resources", "UiText.zh-Hans.resx");
+        var simplified = XDocument.Load(path).Root!.Elements("data")
+            .ToDictionary(element => element.Attribute("name")!.Value, element => element.Element("value")?.Value ?? string.Empty,
+                StringComparer.Ordinal);
+
+        Assert.Empty(referenced.Keys.Where(key => !simplified.ContainsKey(key)).OrderBy(key => key, StringComparer.Ordinal));
+        Assert.Empty(simplified.Keys.Where(key => !english.ContainsKey(key)).OrderBy(key => key, StringComparer.Ordinal));
+        var mismatched = referenced
+            .Where(entry => entry.Value.Fallback is not null && simplified.TryGetValue(entry.Key, out var translation))
+            .Where(entry => !Placeholders(entry.Value.Fallback!).SetEquals(Placeholders(simplified[entry.Key])))
+            .Select(entry => entry.Key)
+            .OrderBy(key => key, StringComparer.Ordinal)
+            .ToList();
+        Assert.Empty(mismatched);
+    }
+
+    [Fact]
     public void Every_translation_is_loadable_at_runtime_in_english()
     {
         var (referenced, _) = Load();

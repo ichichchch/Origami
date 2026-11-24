@@ -189,7 +189,7 @@ public sealed class AdminUser : IdentityUser
 /// <summary>介面語言鍵的單一真相來源；Web 的 UiTextLanguages 與服務層驗證共用。</summary>
 public static class SupportedUiLanguages
 {
-    public static readonly IReadOnlyList<string> All = Array.AsReadOnly(new[] { "zh-Hant", "en" });
+    public static readonly IReadOnlyList<string> All = Array.AsReadOnly(new[] { "zh-Hant", "zh-Hans", "en" });
 
     /// <summary>正規化為支援的語言鍵；不支援時回 null（空字串視為未設定，回 null）。</summary>
     public static string? Normalize(string? culture) =>
