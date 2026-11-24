@@ -335,6 +335,42 @@
             }
         }
     </section>
+    <section class="panel settings-panel settings-width">
+        <div class="panel-intro"><h2>@UiText.T("Admin.Settings.PortableTitle", "匯入 Markdown／Medium")</h2><p>@UiText.T("Admin.Settings.PortableHelp", "上傳 .md／.markdown、Medium 匯出的 .html，或包含這些檔案的 ZIP，將內容加入本站；不會取代現有資料。支援 YAML front matter 的 title、slug、type、status、categories、tags、lang、date 與 description。")</p><p class="field-help">@UiText.T("Admin.Settings.PortableMediaHelp", "預設匯入為草稿；明確標示 published 才會發布。圖片與附件不會下載，請另從媒體庫上傳。重複代稱會略過並在結果中列出。")</p></div>
+        @if (_portableResult is not null)
+        {
+            <div class="notice" role="status">
+                <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.PortableResult", "匯入完成：成功 {0} 筆，略過 {1} 筆。"), _portableResult.Imported, _portableResult.Skipped)</p>
+                @if (_portableResult.Warnings.Count > 0)
+                {
+                    <ul>@foreach (var warning in _portableResult.Warnings) { <li>@warning</li> }</ul>
+                }
+            </div>
+        }
+        else if (_portablePreview is not null)
+        {
+            <div class="notice" role="status">
+                <p>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.PortablePreview", "將匯入 {0} 篇文章、{1} 個頁面、{2} 個分類、{3} 個標籤。"), _portablePreview.Posts, _portablePreview.Pages, _portablePreview.Categories, _portablePreview.Tags)</p>
+                @if (_portablePreview.Warnings.Count > 0)
+                {
+                    <ul>@foreach (var warning in _portablePreview.Warnings) { <li>@warning</li> }</ul>
+                }
+            </div>
+            <div class="button-row">
+                <button type="button" class="button" disabled="@AdministrationBlocked" @onclick="ApplyPortable">@UiText.T("Admin.Settings.StartImport", "開始匯入")</button>
+                <button type="button" class="button button-secondary" disabled="@Blocked" @onclick="CancelPortable">@UiText.T("Admin.Settings.Cancel", "取消")</button>
+            </div>
+        }
+        else
+        {
+            <label class="button button-secondary" for="portable-file">@UiText.T("Admin.Settings.ChoosePortable", "選擇 Markdown／Medium 檔（.md、.html 或 ZIP）")</label>
+            <InputFile id="portable-file" OnChange="ChoosePortable" accept=".md,.markdown,.html,.htm,.zip,text/markdown,text/html,application/zip" class="import-file-input" />
+            @if (_portableError is not null)
+            {
+                <p class="notice notice-error" role="alert">@_portableError</p>
+            }
+        }
+    </section>
 }
 @if (!LoginRequired)
 {
@@ -501,6 +537,11 @@
     private string? _wxrError;
     private bool _wxrDownloadAttachments;
     private string _wxrAllowedHosts = "";
+    private PortableImportService.PortablePreview? _portablePreview;
+    private PortableImportService.PortableResult? _portableResult;
+    private byte[]? _portableFile;
+    private string? _portableFileName;
+    private string? _portableError;
 
     private async Task ChooseWxr(InputFileChangeEventArgs args)
     {
@@ -542,6 +583,51 @@
         _wxrError = null;
     }
 
+    private async Task ChoosePortable(InputFileChangeEventArgs args)
+    {
+        _portableError = null;
+        _portablePreview = null;
+        _portableResult = null;
+        _portableFile = null;
+        _portableFileName = args.File.Name;
+        if (AdministrationBlocked) return;
+        try
+        {
+            await using (var stream = args.File.OpenReadStream(Limits.PortableImportMaxBytes))
+            using (var buffer = new MemoryStream())
+            {
+                await stream.CopyToAsync(buffer);
+                _portableFile = buffer.ToArray();
+            }
+            _portablePreview = await Api.AnalyzePortableImportAsync(_portableFile, _portableFileName)
+                ?? throw new CmsException(UiText.T("Admin.Settings.PortableError", "無法分析匯入檔，請確認檔案格式後重試。"));
+        }
+        catch (UnauthorizedAccessException) { _portableFile = null; RequireLogin(); }
+        catch (AccessDeniedException error) { _portableFile = null; _portableError = error.Message; }
+        catch (CmsException error) { _portableFile = null; _portableError = error.Message; }
+        catch (IOException) { _portableFile = null; _portableError = UiText.T("Admin.Settings.PortableTooLarge", "匯入檔超過大小上限。"); }
+    }
+
+    private Task ApplyPortable() => RunAsync(async ct =>
+    {
+        if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.PortableDenied", "Markdown／Medium 匯入僅限本站管理員。"));
+        if (_portableFile is null || _portableFileName is null) return;
+        _portableResult = await Api.ApplyPortableImportAsync(_portableFile, _portableFileName, ct)
+            ?? throw new CmsException(UiText.T("Admin.Settings.PortableError", "無法分析匯入檔，請確認檔案格式後重試。"));
+        _portableFile = null;
+        _portablePreview = null;
+        await LoadCoreAsync(ct);
+    }, UiText.T("Admin.Settings.PortableImported", "Markdown／Medium 內容已匯入本站。"));
+
+    private void CancelPortable()
+    {
+        _portablePreview = null;
+        _portableResult = null;
+        _portableFile = null;
+        _portableFileName = null;
+        _portableError = null;
+    }
+
     private async Task ChooseImport(InputFileChangeEventArgs args)
     {
         _importError = null;
@@ -571,7 +657,7 @@
         await Api.ApplyImportAsync(_importFile, ct);
         _importFile = null;
         _importPreview = null;
-        await Load();
+        await LoadCoreAsync(ct);
     }, UiText.T("Admin.Settings.Imported", "資料已匯入，網站內容已取代為匯出檔版本。"));
 
     private void CancelImport()

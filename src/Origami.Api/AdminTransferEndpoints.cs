@@ -46,6 +46,20 @@ public static class AdminTransferEndpoints
             return Results.Ok(await import.ApplyAsync(stream, confirmed: true, ct));
         }).DisableAntiforgery();
 
+        group.MapPost("/import-portable/analyze", async (IFormFile file, PortableImportService import, CancellationToken ct) =>
+        {
+            ValidatePortableFile(file);
+            await using var stream = file.OpenReadStream();
+            return Results.Ok(await import.AnalyzeAsync(stream, file.FileName, ct));
+        }).DisableAntiforgery();
+
+        group.MapPost("/import-portable/apply", async (IFormFile file, PortableImportService import, CancellationToken ct) =>
+        {
+            ValidatePortableFile(file);
+            await using var stream = file.OpenReadStream();
+            return Results.Ok(await import.ApplyAsync(stream, file.FileName, ct));
+        }).DisableAntiforgery();
+
         // WordPress WXR 匯出與匯入：先預覽再套用；套用是新增內容，不取代現有資料。支援選用附件下載遷移。
         group.MapGet("/export-wxr", async (WxrImportService wxr, CancellationToken ct) =>
         {
@@ -71,6 +85,12 @@ public static class AdminTransferEndpoints
             using var stream = file.OpenReadStream();
             return Results.Ok(await wxr.ImportAsync(stream, ct, new WxrImportService.WxrAttachmentOptions(downloadAttachments, allowedHosts)));
         }).DisableAntiforgery();
+    }
+
+    private static void ValidatePortableFile(IFormFile file)
+    {
+        if (file.Length is 0 or > Limits.PortableImportMaxBytes)
+            throw new CmsException($"匯入檔大小須為 1 位元組至 {Limits.PortableImportMaxBytes} 位元組。");
     }
 
     private static async Task<ImportService.ImportPreview> AnalyzeAsync(IFormFile file, ImportService import, CancellationToken ct)

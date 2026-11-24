@@ -128,6 +128,10 @@ public static partial class Limits
     public const long UploadBytes = 5 * 1024 * 1024;
     /// <summary>匯出／匯入封裝（JSON 或 ZIP）的大小上限。</summary>
     public const long ArchiveMaxBytes = 256 * 1024 * 1024;
+    /// <summary>Markdown／Medium 可攜匯入的壓縮檔與解壓後總量上限。</summary>
+    public const long PortableImportMaxBytes = 32 * 1024 * 1024;
+    /// <summary>單次 Markdown／Medium ZIP 可處理的文章數上限。</summary>
+    public const int PortableImportMaxFiles = 200;
     /// <summary>主機級請求主體上限，保護匿名 /mcp 等端點；完整備份匯入端點另逐請求放寬到 <see cref="ArchiveMaxBytes"/>。</summary>
     public const long HostRequestMaxBytes = 50 * 1024 * 1024;
     public const long ImagePixels = 20_000_000;

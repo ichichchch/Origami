@@ -5246,4 +5246,34 @@
   <data name="Admin.Users.DeletedTransferred" xml:space="preserve">
     <value>Account deleted; its content is now attributed to the selected account.</value>
   </data>
+  <data name="Admin.Settings.ChoosePortable" xml:space="preserve">
+    <value>Choose a Markdown / Medium file (.md, .html, or ZIP)</value>
+  </data>
+  <data name="Admin.Settings.PortableDenied" xml:space="preserve">
+    <value>Only site administrators can import Markdown / Medium content.</value>
+  </data>
+  <data name="Admin.Settings.PortableError" xml:space="preserve">
+    <value>The import file could not be analyzed. Check its format and try again.</value>
+  </data>
+  <data name="Admin.Settings.PortableHelp" xml:space="preserve">
+    <value>Upload .md/.markdown files, a Medium .html export, or a ZIP containing them to add content to this site. Existing content is not replaced. YAML front matter supports title, slug, type, status, categories, tags, lang, date, and description.</value>
+  </data>
+  <data name="Admin.Settings.PortableImported" xml:space="preserve">
+    <value>Markdown / Medium content has been imported into this site.</value>
+  </data>
+  <data name="Admin.Settings.PortableMediaHelp" xml:space="preserve">
+    <value>Content is imported as a draft unless explicitly marked published. Images and attachments are not downloaded; upload them separately from the media library. Duplicate slugs are skipped and listed in the result.</value>
+  </data>
+  <data name="Admin.Settings.PortablePreview" xml:space="preserve">
+    <value>This will import {0} posts, {1} pages, {2} categories, and {3} tags.</value>
+  </data>
+  <data name="Admin.Settings.PortableResult" xml:space="preserve">
+    <value>Import complete: {0} imported, {1} skipped.</value>
+  </data>
+  <data name="Admin.Settings.PortableTitle" xml:space="preserve">
+    <value>Import Markdown / Medium</value>
+  </data>
+  <data name="Admin.Settings.PortableTooLarge" xml:space="preserve">
+    <value>The import file exceeds the size limit.</value>
+  </data>
 </root>

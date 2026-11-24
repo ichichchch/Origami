@@ -809,6 +809,27 @@ public sealed class OrigamiClient
     public Task<ImportService.ImportPreview?> ApplyImportAsync(byte[] bytes, CancellationToken ct = default) =>
         SendFileAsync<ImportService.ImportPreview>("api/v1/admin/transfer/import/apply", bytes, ct);
 
+    public Task<PortableImportService.PortablePreview?> AnalyzePortableImportAsync(byte[] bytes, string fileName, CancellationToken ct = default) =>
+        SendPortableAsync<PortableImportService.PortablePreview>("api/v1/admin/transfer/import-portable/analyze", bytes, fileName, ct);
+
+    public Task<PortableImportService.PortableResult?> ApplyPortableImportAsync(byte[] bytes, string fileName, CancellationToken ct = default) =>
+        SendPortableAsync<PortableImportService.PortableResult>("api/v1/admin/transfer/import-portable/apply", bytes, fileName, ct);
+
+    private async Task<T?> SendPortableAsync<T>(string url, byte[] bytes, string fileName, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(bytes);
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var contentType = extension is ".zip" ? "application/zip"
+            : extension is ".html" or ".htm" ? "text/html"
+            : "text/markdown";
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", Path.GetFileName(fileName));
+        using var response = await http.PostAsync(url, form, ct);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<T>(Json, ct);
+    }
+
     private sealed record UnlockState(bool Unlocked);
 
     // ---------- 共用傳輸 ----------

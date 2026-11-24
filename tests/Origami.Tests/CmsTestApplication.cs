@@ -73,6 +73,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<ContentTypeService>();
         services.AddScoped<ExportService>();
         services.AddScoped<ImportService>();
+        services.AddScoped<PortableImportService>();
         services.AddScoped<TwoFactorService>();
         services.AddScoped<TaxonomyService>();
         services.AddScoped<WritingAssetsService>();
@@ -227,6 +228,7 @@ public sealed class TestActor(IServiceScope scope) : IDisposable
     public ContentService Content => Services.GetRequiredService<ContentService>();
     public TaxonomyService Taxonomy => Services.GetRequiredService<TaxonomyService>();
     public WritingAssetsService Writing => Services.GetRequiredService<WritingAssetsService>();
+    public PortableImportService Portable => Services.GetRequiredService<PortableImportService>();
     public SettingsService Settings => Services.GetRequiredService<SettingsService>();
     public SemanticSearchService Semantic => Services.GetRequiredService<SemanticSearchService>();
     public SiteAssistant Assistant => Services.GetRequiredService<SiteAssistant>();
