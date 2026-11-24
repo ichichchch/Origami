@@ -1355,7 +1355,9 @@ else if (_model is not null)
         if (_model is null || Blocked) return;
         if ((_model.Markdown?.Length ?? 0) + item.Markdown.Length + 4 > Limits.Body)
         { Error = UiText.T("Admin.ContentEditor.ImageExceedsBodyLimit", "插入圖片後將超過本文長度上限，請先縮短內容。"); return; }
-        _model.Markdown = (_model.Markdown ?? "").TrimEnd() + "\n\n" + item.Markdown + "\n\n";
+        // 媒體庫的說明文字成為內文圖說（Markdown 圖片語法的引號文字）。
+        var caption = item.Kind == MediaKind.Image && !string.IsNullOrWhiteSpace(item.Caption) ? " \"" + item.Caption.Replace("\"", "") + "\"" : "";
+        await InsertBlockAsync(item.Markdown + caption);
         _preview = false;
         _mediaOpen = false;
     }

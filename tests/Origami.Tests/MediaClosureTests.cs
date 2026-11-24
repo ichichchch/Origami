@@ -1,4 +1,4 @@
-namespace Origami.Tests;
+﻿namespace Origami.Tests;
 
 [Collection(PostgresCollection.Name)]
 public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBase(postgres)
@@ -10,6 +10,150 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         using var image = SKImage.FromBitmap(bitmap);
         using var encoded = image.Encode(SKEncodedImageFormat.Png, 90)!;
         return encoded.ToArray();
+    }
+
+    private static byte[] JpegWithOrientation(int width, int height, SKEncodedOrigin origin)
+    {
+        using var bitmap = new SKBitmap(new SKImageInfo(width, height));
+        bitmap.Erase(SKColors.SeaGreen);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 90)!;
+        var jpeg = encoded.ToArray();
+        var payload = new byte[]
+        {
+            0x45, 0x78, 0x69, 0x66, 0, 0, 0x49, 0x49, 0x2A, 0, 8, 0, 0, 0,
+            1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0,
+            (byte)(int)origin, 0, 0, 0, 0, 0, 0, 0
+        };
+        var segment = new byte[payload.Length + 4];
+        segment[0] = 0xFF;
+        segment[1] = 0xE1;
+        var length = payload.Length + 2;
+        segment[2] = (byte)(length >> 8);
+        segment[3] = (byte)length;
+        payload.CopyTo(segment, 4);
+        var insertAt = jpeg.Length >= 4 && jpeg[0] == 0xff && jpeg[1] == 0xd8 && jpeg[2] == 0xff && jpeg[3] == 0xe0
+            ? 4 + ((jpeg[4] << 8) | jpeg[5])
+            : 2;
+        var result = new byte[jpeg.Length + segment.Length];
+        jpeg.AsSpan(0, insertAt).CopyTo(result);
+        segment.CopyTo(result, insertAt);
+        jpeg.AsSpan(insertAt).CopyTo(result.AsSpan(insertAt + segment.Length));
+        return result;
+    }
+
+    private static SKEncodedOrigin ReadOrientation(byte[] jpeg)
+    {
+        using var data = SKData.CreateCopy(jpeg);
+        using var codec = SKCodec.Create(data);
+        return codec?.EncodedOrigin ?? SKEncodedOrigin.TopLeft;
+    }
+
+    [Fact]
+    public void Exif_orientation_transforms_all_eight_directions()
+    {
+        SKColor[] source = [SKColors.Red, SKColors.Green, SKColors.Blue, SKColors.Yellow, SKColors.Cyan, SKColors.Magenta];
+        var expected = new Dictionary<SKEncodedOrigin, SKColor[]>
+        {
+            [SKEncodedOrigin.TopLeft] = source,
+            [SKEncodedOrigin.TopRight] = [SKColors.Blue, SKColors.Green, SKColors.Red, SKColors.Magenta, SKColors.Cyan, SKColors.Yellow],
+            [SKEncodedOrigin.BottomRight] = [SKColors.Magenta, SKColors.Cyan, SKColors.Yellow, SKColors.Blue, SKColors.Green, SKColors.Red],
+            [SKEncodedOrigin.BottomLeft] = [SKColors.Yellow, SKColors.Cyan, SKColors.Magenta, SKColors.Red, SKColors.Green, SKColors.Blue],
+            [SKEncodedOrigin.LeftTop] = [SKColors.Red, SKColors.Yellow, SKColors.Green, SKColors.Cyan, SKColors.Blue, SKColors.Magenta],
+            [SKEncodedOrigin.RightTop] = [SKColors.Yellow, SKColors.Red, SKColors.Cyan, SKColors.Green, SKColors.Magenta, SKColors.Blue],
+            [SKEncodedOrigin.RightBottom] = [SKColors.Magenta, SKColors.Blue, SKColors.Cyan, SKColors.Green, SKColors.Yellow, SKColors.Red],
+            [SKEncodedOrigin.LeftBottom] = [SKColors.Blue, SKColors.Magenta, SKColors.Green, SKColors.Cyan, SKColors.Red, SKColors.Yellow]
+        };
+        using var bitmap = new SKBitmap(new SKImageInfo(3, 2));
+        using (var canvas = new SKCanvas(bitmap))
+        using (var paint = new SKPaint())
+        {
+            for (var i = 0; i < source.Length; i++)
+            {
+                paint.Color = source[i];
+                var x = i % 3;
+                var y = i / 3;
+                canvas.DrawRect(new SKRect(x, y, x + 1, y + 1), paint);
+            }
+            canvas.Flush();
+        }
+        Assert.Equal(source, Enumerable.Range(0, source.Length).Select(i => bitmap.GetPixel(i % 3, i / 3)).ToArray());
+        foreach (var (origin, colors) in expected)
+        {
+            using var transformed = origin == SKEncodedOrigin.TopLeft ? null : MediaService.ApplyOrigin(bitmap, origin);
+            var oriented = transformed ?? bitmap;
+            var swapsAxes = origin is SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightTop or SKEncodedOrigin.RightBottom or SKEncodedOrigin.LeftBottom;
+            Assert.Equal(swapsAxes ? 2 : 3, oriented.Width);
+            Assert.Equal(swapsAxes ? 3 : 2, oriented.Height);
+            for (var i = 0; i < colors.Length; i++)
+                Assert.True(colors[i].Equals(oriented.GetPixel(i % oriented.Width, i / oriented.Width)),
+                    $"{origin} pixel {i}: expected {colors[i]}, actual {oriented.GetPixel(i % oriented.Width, i / oriented.Width)}");
+        }
+    }
+
+    [Fact]
+    public void Jpeg_exif_orientation_is_read_for_all_eight_values_and_malformed_data_is_ignored()
+    {
+        foreach (var origin in Enum.GetValues<SKEncodedOrigin>())
+        {
+            var jpeg = JpegWithOrientation(10, 20, origin);
+            Assert.True(origin.Equals(ReadOrientation(jpeg)),
+                $"{origin}: {Convert.ToHexString(jpeg[..Math.Min(96, jpeg.Length)])}");
+        }
+
+        var valid = JpegWithOrientation(10, 20, SKEncodedOrigin.RightTop);
+        var exifMarker = Array.IndexOf(valid, (byte)0xe1);
+        Assert.True(exifMarker > 0);
+        var truncated = valid[..exifMarker];
+        var invalidLength = (byte[])valid.Clone();
+        invalidLength[exifMarker + 2] = 0xff;
+        invalidLength[exifMarker + 3] = 0xff;
+        Assert.Equal(SKEncodedOrigin.TopLeft, ReadOrientation([]));
+        Assert.Equal(SKEncodedOrigin.TopLeft, ReadOrientation(truncated));
+        Assert.Equal(SKEncodedOrigin.TopLeft, ReadOrientation(invalidLength));
+    }
+
+    [PostgresFact]
+    public async Task Rotated_upload_stores_upright_pixels_and_variant_dimensions()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var service = CreateService(admin, directory);
+        var bytes = JpegWithOrientation(400, 800, SKEncodedOrigin.RightTop);
+        using (var verify = SKData.CreateCopy(bytes))
+        {
+            Assert.Equal(SKEncodedOrigin.RightTop, ReadOrientation(bytes));
+            using var codec = SKCodec.Create(verify);
+            Assert.NotNull(codec);
+            Assert.Equal(SKEncodedOrigin.RightTop, codec.EncodedOrigin);
+        }
+
+        MediaItem uploaded;
+        await using (var stream = new MemoryStream(bytes))
+            uploaded = await service.UploadAsync(stream, "portrait.jpg");
+        Assert.Equal(800, uploaded.Width);
+        Assert.Equal(400, uploaded.Height);
+
+        var storage = directory.Create();
+        using (var verify = SKData.Create(Path.Combine(storage.Images, uploaded.FileName)))
+        using (var codec = SKCodec.Create(verify))
+        {
+            Assert.NotNull(codec);
+            Assert.Equal(SKEncodedOrigin.TopLeft, codec!.EncodedOrigin);
+            Assert.Equal(800, codec.Info.Width);
+            Assert.Equal(400, codec.Info.Height);
+        }
+        var variantPath = Path.Combine(storage.Images, MediaService.VariantName(uploaded.FileName, 480));
+        Assert.True(File.Exists(variantPath));
+        Assert.False(File.Exists(Path.Combine(storage.Images, MediaService.VariantName(uploaded.FileName, 960))));
+        using (var verify = SKData.Create(variantPath))
+        using (var codec = SKCodec.Create(verify))
+        {
+            Assert.NotNull(codec);
+            Assert.Equal(480, codec!.Info.Width);
+            Assert.Equal(240, codec.Info.Height);
+            Assert.Equal(MediaService.WebpSupported ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg, codec.EncodedFormat);
+        }
     }
 
     private static MediaService CreateService(TestActor actor, TemporaryMediaStorage directory) => new(
@@ -53,8 +197,9 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         }
         var stem = Path.GetFileNameWithoutExtension(wide.FileName);
         Assert.True(File.Exists(Path.Combine(images, wide.FileName)));
-        Assert.True(File.Exists(Path.Combine(images, stem + "_w480.png")));
-        Assert.True(File.Exists(Path.Combine(images, stem + "_w960.png")));
+        // 變體副檔名由 MediaService.VariantName 決定（WebP 編碼器可用時為 .webp）。
+        Assert.True(File.Exists(Path.Combine(images, MediaService.VariantName(wide.FileName, 480))));
+        Assert.True(File.Exists(Path.Combine(images, MediaService.VariantName(wide.FileName, 960))));
         Assert.False(File.Exists(Path.Combine(images, stem + "_w1600.png")), "variants never upscale");
 
         MediaItem narrow;

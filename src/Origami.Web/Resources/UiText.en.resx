@@ -3021,7 +3021,7 @@
     <value>Copy Markdown</value>
   </data>
   <data name="Admin.Media.DeleteDescription" xml:space="preserve">
-    <value>No content references this image. Deleting it immediately invalidates its URL and cannot be undone, including thumbnail variants.</value>
+    <value>No content or widgets reference this image. Deleting it immediately invalidates its URL and cannot be undone, including thumbnail variants.</value>
   </data>
   <data name="Admin.Media.DeleteImage" xml:space="preserve">
     <value>Delete image</value>
@@ -3117,10 +3117,13 @@
     <value>Recently uploaded: </value>
   </data>
   <data name="Admin.Media.ReferenceCount" xml:space="preserve">
-    <value>Referenced by {0} content items</value>
+    <value>Referenced by {0} items</value>
   </data>
   <data name="Admin.Media.ReferencedImageHelp" xml:space="preserve">
-    <value>This image is still referenced by the following content. Remove the references before deleting it:</value>
+    <value>This image is still referenced by the following content or widgets. Remove the references before deleting it:</value>
+  </data>
+  <data name="Admin.Media.WidgetReference" xml:space="preserve">
+    <value>Widget</value>
   </data>
   <data name="Admin.Media.Reload" xml:space="preserve">
     <value>Reload media list</value>

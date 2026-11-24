@@ -661,10 +661,8 @@ else
         {
             if (_content?.CoverFileName is not { Length: > 0 } fileName
                 || !_imageWidths.TryGetValue(fileName, out var width) || width <= 0) return null;
-            var stem = Path.GetFileNameWithoutExtension(fileName);
-            var extension = Path.GetExtension(fileName);
             var candidates = Limits.ImageVariantWidths.Where(w => w < width)
-                .Select(w => "/media/" + stem + "_w" + w + extension + " " + w + "w").ToList();
+                .Select(w => "/media/" + MediaService.VariantName(fileName, w) + " " + w + "w").ToList();
             candidates.Add("/media/" + fileName + " " + width + "w");
             return new Dictionary<string, object> { ["srcset"] = string.Join(", ", candidates), ["sizes"] = "(min-width: 800px) 720px, 100vw" };
         }

@@ -517,7 +517,7 @@ public static partial class ContentRules
         && fileName.Length <= 80
         && fileName.IndexOfAny(['/', '\\', ':']) < 0
         && !fileName.Any(char.IsControl)
-        && Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".webp" or ".pdf" or ".mp3" or ".m4a"
+        && Path.GetExtension(fileName).ToLowerInvariant() is ".png" or ".jpg" or ".webp" or ".pdf" or ".xlsx" or ".csv" or ".mp3" or ".m4a"
             or ".mp4" or ".webm" or ".ogg" or ".wav";
 
     [GeneratedRegex(@"[^\p{L}\p{Nd}]+", RegexOptions.CultureInvariant)]

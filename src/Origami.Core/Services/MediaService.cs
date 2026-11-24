@@ -44,9 +44,27 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         { AltText = asset.AltText, Caption = asset.Caption, Kind = asset.Kind };
     }
 
-    /// <summary>回應式寬度的變體檔名，例如 abc.png → abc_w480.png。</summary>
+    private static readonly Lazy<bool> WebpEncoder = new(() =>
+    {
+        // 以 1×1 點陣實測編碼器：SkiaSharp 原生程式庫未編入 WebP 編碼時 Encode 回 null。
+        using var probe = new SKBitmap(new SKImageInfo(1, 1));
+        probe.Erase(SKColors.Black);
+        using var image = SKImage.FromBitmap(probe);
+        using var encoded = image.Encode(SKEncodedImageFormat.Webp, 80);
+        return encoded is not null;
+    });
+
+    /// <summary>此建置是否能輸出 WebP；變體一律在可用時轉為 WebP（原檔格式不變）。</summary>
+    public static bool WebpSupported => WebpEncoder.Value;
+
+    /// <summary>
+    /// 回應式寬度的變體檔名：abc.png → abc_w480.webp（編碼器可用時一律輸出 WebP 以縮小傳輸，
+    /// 否則沿用原格式）。所有產生、匯出、匯入、清理與 srcset 組裝都經過這裡，副檔名只有一個真相來源。
+    /// </summary>
     public static string VariantName(string fileName, int width) =>
-        Path.GetFileNameWithoutExtension(fileName) + "_w" + width + Path.GetExtension(fileName);
+        Path.GetFileNameWithoutExtension(fileName) + "_w" + width + (WebpSupported ? ".webp" : Path.GetExtension(fileName));
+
+    private static SKEncodedImageFormat VariantFormat(SKEncodedImageFormat original) => WebpSupported ? SKEncodedImageFormat.Webp : original;
 
     public sealed record MediaReference(Guid ContentId, string Title, ContentKind? Kind, ContentStatus? Status)
     {
@@ -477,7 +495,6 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             foreach (var width in Limits.ImageVariantWidths)
             {
                 ct.ThrowIfCancellationRequested();
-                if (width >= asset.Width) break;
                 var variantPath = Path.Combine(storage.Images, VariantName(asset.FileName, width));
                 if (File.Exists(variantPath)) continue;
                 if (TryReadVariant(originalPath, format.Value, width, out var bytes))
@@ -499,13 +516,17 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             using var codec = SKCodec.Create(data);
             if (codec is null) return false;
             var info = codec.Info;
-            var height = Math.Max(1, (int)Math.Round((double)info.Height * width / info.Width));
-            using var source = new SKBitmap();
-            if (!source.TryAllocPixels(info) || codec.GetPixels(info, source.GetPixels()) != SKCodecResult.Success) return false;
+            using var decoded = new SKBitmap();
+            if (!decoded.TryAllocPixels(info) || codec.GetPixels(info, decoded.GetPixels()) != SKCodecResult.Success) return false;
+            var origin = codec.EncodedOrigin;
+            using var transformed = origin == SKEncodedOrigin.TopLeft ? null : ApplyOrigin(decoded, origin);
+            var source = transformed ?? decoded;
+            if (width >= source.Width) return false;
+            var height = Math.Max(1, (int)Math.Round((double)source.Height * width / source.Width));
             using var target = new SKBitmap(new SKImageInfo(width, height));
             if (!source.ScalePixels(target, new SKSamplingOptions(SKCubicResampler.Mitchell))) return false;
             using var image = SKImage.FromBitmap(target);
-            using var encoded = image.Encode(format, 85);
+            using var encoded = image.Encode(VariantFormat(format), 80);
             if (encoded is null) return false;
             bytes = encoded.ToArray();
             return true;
@@ -514,6 +535,41 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         {
             return false;
         }
+    }
+
+    /// <summary>依 EXIF 方向轉正像素；預設方向直接回傳原圖，由呼叫端負責釋放。</summary>
+    internal static SKBitmap ApplyOrigin(SKBitmap source, SKEncodedOrigin origin)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        SKMatrix matrix;
+        (int Width, int Height) size;
+        switch (origin)
+        {
+            case SKEncodedOrigin.TopRight:     // 左右翻轉
+                matrix = new SKMatrix(-1, 0, width, 0, 1, 0, 0, 0, 1); size = (width, height); break;
+            case SKEncodedOrigin.BottomRight:  // 180°
+                matrix = new SKMatrix(-1, 0, width, 0, -1, height, 0, 0, 1); size = (width, height); break;
+            case SKEncodedOrigin.BottomLeft:   // 上下翻轉
+                matrix = new SKMatrix(1, 0, 0, 0, -1, height, 0, 0, 1); size = (width, height); break;
+            case SKEncodedOrigin.LeftTop:      // 主對角線鏡射
+                matrix = new SKMatrix(0, 1, 0, 1, 0, 0, 0, 0, 1); size = (height, width); break;
+            case SKEncodedOrigin.RightTop:     // 順時針 90°
+                matrix = new SKMatrix(0, -1, height, 1, 0, 0, 0, 0, 1); size = (height, width); break;
+            case SKEncodedOrigin.RightBottom:  // 反對角線鏡射
+                matrix = new SKMatrix(0, -1, height, -1, 0, width, 0, 0, 1); size = (height, width); break;
+            case SKEncodedOrigin.LeftBottom:   // 逆時針 90°
+                matrix = new SKMatrix(0, 1, 0, -1, 0, width, 0, 0, 1); size = (height, width); break;
+            default:
+                return source;
+        }
+        var target = new SKBitmap(new SKImageInfo(size.Width, size.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(target);
+        canvas.SetMatrix(matrix);
+        using var bitmapImage = SKImage.FromBitmap(source);
+        canvas.DrawImage(bitmapImage, 0, 0, SKSamplingOptions.Default);
+        canvas.Flush();
+        return target;
     }
 
     /// <summary>公開圖片檔名與像素寬度的匿名目錄，用於組出 srcset 屬性。</summary>
@@ -532,7 +588,8 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         await DecodeSlots.WaitAsync(ct);
         try
         {
-            using var data = SKData.CreateCopy(await ReadUploadAsync(stream, ct));
+            var uploadBytes = await ReadUploadAsync(stream, ct);
+            using var data = SKData.CreateCopy(uploadBytes);
             using var codec = SKCodec.Create(data);
             if (codec is null) throw new CmsException("圖片無法解碼或格式不合法。");
             var (extension, contentType, format) = codec.EncodedFormat switch
@@ -548,10 +605,14 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             if (info.Width <= 0 || info.Height <= 0 || info.Width > Limits.ImageDimension || info.Height > Limits.ImageDimension
                 || (long)info.Width * info.Height > Limits.ImagePixels || codec.FrameCount > 1)
                 throw new CmsException("圖片尺寸過大或含動畫；上限 2,000 萬像素、單邊 10,000 像素。");
-            using var bitmap = new SKBitmap();
-            if (!bitmap.TryAllocPixels(new SKImageInfo(info.Width, info.Height, SKColorType.Bgra8888, SKAlphaType.Premul))
-                || codec.GetPixels(bitmap.Info, bitmap.GetPixels()) != SKCodecResult.Success)
+            using var decoded = new SKBitmap();
+            if (!decoded.TryAllocPixels(new SKImageInfo(info.Width, info.Height, SKColorType.Bgra8888, SKAlphaType.Premul))
+                || codec.GetPixels(decoded.Info, decoded.GetPixels()) != SKCodecResult.Success)
                 throw new CmsException("圖片資料不完整或無法解碼。");
+            // 重新編碼會去掉 EXIF；手機直拍照片的方向資訊只在 EXIF，必須先把像素轉正，否則存檔後橫倒。
+            var origin = codec.EncodedOrigin;
+            using var transformed = origin == SKEncodedOrigin.TopLeft ? null : ApplyOrigin(decoded, origin);
+            var bitmap = transformed ?? decoded;
             using var image = SKImage.FromBitmap(bitmap);
             using var encoded = image.Encode(format, 90) ?? throw new CmsException("圖片重新編碼失敗。");
             if (encoded.Size > Limits.UploadBytes) throw new CmsException("圖片重新編碼後超過 5 MiB，請縮小圖片。");
@@ -564,12 +625,12 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             var variants = new List<(string Name, byte[] Bytes)>();
             foreach (var width in Limits.ImageVariantWidths)
             {
-                if (width >= info.Width) break;
-                var height = Math.Max(1, (int)Math.Round((double)info.Height * width / info.Width));
+                if (width >= bitmap.Width) break;
+                var height = Math.Max(1, (int)Math.Round((double)bitmap.Height * width / bitmap.Width));
                 using var target = new SKBitmap(new SKImageInfo(width, height));
                 if (!bitmap.ScalePixels(target, new SKSamplingOptions(SKCubicResampler.Mitchell))) continue;
                 using var scaled = SKImage.FromBitmap(target);
-                using var encodedVariant = scaled.Encode(format, 85);
+                using var encodedVariant = scaled.Encode(VariantFormat(format), 80);
                 if (encodedVariant is null) continue;
                 variants.Add((VariantName(fileName, width), encodedVariant.ToArray()));
             }
@@ -596,7 +657,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
                 var asset = new MediaAsset
                 {
                     Id = id, SiteId = db.CurrentSiteId, FileName = fileName, OriginalName = originalName, ContentType = contentType,
-                    Size = encoded.Size, Width = info.Width, Height = info.Height, UploadedAt = clock.GetUtcNow()
+                    Size = encoded.Size, Width = bitmap.Width, Height = bitmap.Height, UploadedAt = clock.GetUtcNow()
                 };
                 db.MediaAssets.Add(asset);
                 await ContentRules.SaveAsync(db, ct);

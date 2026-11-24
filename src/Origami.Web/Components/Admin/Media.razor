@@ -57,17 +57,28 @@
         <h2 id="media-delete-title">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.DeleteTitle", "刪除圖片「{0}」？"), _pendingDelete.OriginalName)</h2>
         @if (_pendingReferences.Count > 0)
         {
-            <p id="media-delete-description">@UiText.T("Admin.Media.ReferencedImageHelp", "這張圖片仍被以下內容引用，需先移除引用才能刪除：")</p>
+            <p id="media-delete-description">@UiText.T("Admin.Media.ReferencedImageHelp", "這張圖片仍被以下內容或小工具引用，需先移除引用才能刪除：")</p>
             <ul>
                 @foreach (var reference in _pendingReferences)
                 {
-                    <li>「@reference.Title」（@(reference.Status switch { ContentStatus.Published => UiText.T("Admin.Media.Published", "已發布"), ContentStatus.Trashed => UiText.T("Admin.Media.Trashed", "回收桶"), _ => UiText.T("Admin.Media.Draft", "草稿") })）</li>
+                    <li>
+                        @if (reference.WidgetId is not null)
+                        {
+                            <a href="/admin/widgets">「@reference.Title」</a>
+                            <span class="muted">(@UiText.T("Admin.Media.WidgetReference", "小工具"))</span>
+                        }
+                        else
+                        {
+                            <a href="@("/admin/content/" + reference.ContentId)">「@reference.Title」</a>
+                            <span class="muted">(@(reference.Status switch { ContentStatus.Published => UiText.T("Admin.Media.Published", "已發布"), ContentStatus.Trashed => UiText.T("Admin.Media.Trashed", "回收桶"), _ => UiText.T("Admin.Media.Draft", "草稿") }))</span>
+                        }
+                    </li>
                 }
             </ul>
         }
         else
         {
-            <p id="media-delete-description">@UiText.T("Admin.Media.DeleteDescription", "沒有任何內容引用這張圖片。刪除後圖片網址立即失效，無法復原（含縮圖變體）。")</p>
+            <p id="media-delete-description">@UiText.T("Admin.Media.DeleteDescription", "沒有任何內容或小工具引用這張圖片。刪除後圖片網址立即失效，無法復原（含縮圖變體）。")</p>
         }
         <div class="button-row">
             <button class="button button-danger" disabled="@(EditBlocked || _pendingReferences.Count > 0)" @onclick="DeleteAsync">@UiText.T("Admin.Media.ConfirmDelete", "確認刪除圖片")</button>
@@ -107,7 +118,7 @@
 @if (item.ReferenceCount > 0)
 {
     <p class="field-help">
-        @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.ReferenceCount", "被 {0} 篇內容引用"), item.ReferenceCount)
+        @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.ReferenceCount", "被 {0} 個項目引用"), item.ReferenceCount)
         · <button type="button" class="text-button" disabled="@Blocked" @onclick="() => ToggleReferencesAsync(item.Id)">@(_inspectedReferences.ContainsKey(item.Id) ? UiText.T("Admin.Media.HideReferences", "收起") : UiText.T("Admin.Media.ShowReferences", "查看引用"))</button>
     </p>
     @if (_inspectedReferences.TryGetValue(item.Id, out var refs) && refs.Count > 0)
@@ -115,7 +126,18 @@
         <ul class="plain-list">
             @foreach (var r in refs)
             {
-                <li><a href="@("/admin/content/" + r.ContentId)">@r.Title</a> <span class="muted">(@r.Status)</span></li>
+                <li>
+                    @if (r.WidgetId is not null)
+                    {
+                        <a href="/admin/widgets">@r.Title</a>
+                        <span class="muted">(@UiText.T("Admin.Media.WidgetReference", "小工具"))</span>
+                    }
+                    else
+                    {
+                        <a href="@("/admin/content/" + r.ContentId)">@r.Title</a>
+                        <span class="muted">(@r.Status)</span>
+                    }
+                </li>
             }
         </ul>
     }

@@ -215,9 +215,7 @@ public sealed partial class MarkdownService
             if (!mediaWidths.TryGetValue(fileName, out var originalWidth)) return match.Value;
             var candidates = Limits.ImageVariantWidths.Where(width => width < originalWidth).ToList();
             if (candidates.Count == 0) return match.Value;
-            var stem = Path.GetFileNameWithoutExtension(fileName);
-            var extension = Path.GetExtension(fileName);
-            var srcset = string.Join(", ", candidates.Select(width => "/media/" + stem + "_w" + width + extension + " " + width + "w"));
+            var srcset = string.Join(", ", candidates.Select(width => "/media/" + MediaService.VariantName(fileName, width) + " " + width + "w"));
             return match.Groups[1].Value + fileName + match.Groups[3].Value + " srcset=\"" + srcset + "\"";
         });
     }

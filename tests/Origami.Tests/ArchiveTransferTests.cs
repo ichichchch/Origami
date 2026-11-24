@@ -47,7 +47,7 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
         {
             Assert.NotNull(zip.GetEntry("origami-export.json"));
             Assert.NotNull(zip.GetEntry("media/" + image.FileName));
-            Assert.NotNull(zip.GetEntry("media/" + stem + "_w480.png"));
+            Assert.NotNull(zip.GetEntry("media/" + MediaService.VariantName(stem + ".png", 480)));
         }
 
         // 模擬災損：清掉圖片檔案後以封裝還原（資料面為取代式匯入）。
@@ -59,7 +59,7 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
         var posts = await admin.Content.ListAdminAsync(ContentKind.Post);
         Assert.Equal("封裝測試文章", posts.Items.Single().Title);
         Assert.True(File.Exists(Path.Combine(App.Storage.Images, image.FileName)), "原圖隨封裝還原");
-        Assert.True(File.Exists(Path.Combine(App.Storage.Images, stem + "_w480.png")), "變體隨封裝還原");
+        Assert.True(File.Exists(Path.Combine(App.Storage.Images, MediaService.VariantName(stem + ".png", 480))), "變體隨封裝還原");
         Assert.False(File.Exists(orphan), "清單外的孤兒檔在完整還原後被清理");
     }
 
