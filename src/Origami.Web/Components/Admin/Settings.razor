@@ -100,6 +100,9 @@
                     <p class="field-help">@UiText.T("Admin.Settings.IndexNowEnabledHelp", "內容發布時把公開網址提交到 IndexNow（Bing 等採用）；需要同時填寫金鑰。")</p>
                 </div>
                 <div class="field"><label for="indexnow-key">@UiText.T("Admin.Settings.IndexNowKey", "IndexNow 金鑰（8–128 個十六進位字元）")</label><input id="indexnow-key" @bind="_model.IndexNowKey" @bind:event="oninput" maxlength="128" disabled="@Blocked" aria-describedby="indexnow-key-help" placeholder="a1b2c3d4..." /><span id="indexnow-key-help" class="field-help">@UiText.T("Admin.Settings.IndexNowKeyHelp", "自行產生一段隨機十六進位字串即可；本站會自動在根目錄提供 /{金鑰}.txt 驗證檔。")</span></div>
+                <div class="field"><label for="not-found-title">@UiText.T("Admin.Settings.NotFoundTitle", "找不到頁面的標題（選填）")</label><input id="not-found-title" @bind="_model.NotFoundTitle" @bind:event="oninput" maxlength="@Limits.NotFoundTitle" disabled="@Blocked" placeholder="@UiText.T("Admin.Settings.NotFoundTitlePlaceholder", "這一頁，暫時缺席。")" /><span class="field-help">@UiText.T("Admin.Settings.NotFoundHelp", "訪客造訪不存在的網址（404）時顯示；留空使用預設文案。純文字，不解析 HTML。")</span></div>
+                <div class="field"><label for="not-found-body">@UiText.T("Admin.Settings.NotFoundBody", "找不到頁面的說明（選填）")</label><textarea id="not-found-body" rows="2" @bind="_model.NotFoundBody" @bind:event="oninput" maxlength="@Limits.NotFoundBody" disabled="@Blocked"></textarea></div>
+                <div class="field"><label for="default-ui-language">@UiText.T("Admin.Settings.DefaultUiLanguage", "預設介面語言")</label><select id="default-ui-language" value="@(_model.DefaultUiLanguage ?? "")" @onchange="DefaultUiLanguageChanged" disabled="@Blocked" aria-describedby="default-ui-language-help"><option value="">@UiText.T("Admin.Settings.UiLanguageProductDefault", "產品預設")</option>@foreach (var language in UiTextLanguages.Supported) { <option value="@language">@LanguageName(language)</option> }</select><span id="default-ui-language-help" class="field-help">@UiText.T("Admin.Settings.DefaultUiLanguageHelp", "未登入訪客與未設定偏好的成員使用的介面語言；成員仍可在個人設定中覆寫。")</span></div>
                 <div class="field"><label for="author-name">@UiText.T("Admin.Settings.AuthorDisplayName", "作者顯示名稱（選填）")</label><input id="author-name" @bind="_model.AuthorDisplayName" @bind:event="oninput" maxlength="@Limits.AuthorName" disabled="@Blocked" aria-describedby="author-name-help" placeholder="@UiText.T("Admin.Settings.AuthorPlaceholder", "例如：單文浩")" /><span id="author-name-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.AuthorDisplayNameHelp", "最多 {0} 字；顯示於文章詳情的作者列與 feed 作者欄位，留空不顯示。"), Limits.AuthorName)</span></div>
                 <div class="field checkbox-field">
                     <label for="comments-enabled"><input id="comments-enabled" type="checkbox" @bind="_model.CommentsEnabled" disabled="@Blocked" /> @UiText.T("Admin.Settings.EnableComments", "開放訪客評論")</label>
@@ -605,6 +608,8 @@
             SocialGithubUrl = _model.SocialGithubUrl, SocialXUrl = _model.SocialXUrl, SocialMastodonUrl = _model.SocialMastodonUrl,
             MaintenanceMode = _model.MaintenanceMode, MaintenanceMessage = _model.MaintenanceMessage,
             WebhookUrl = _model.WebhookUrl, WebhookSecret = _model.WebhookSecret,
+            NotFoundTitle = _model.NotFoundTitle, NotFoundBody = _model.NotFoundBody,
+            DefaultUiLanguage = _model.DefaultUiLanguage, CommentMaxDepth = _model.CommentMaxDepth,
         };
         _model = await Api.SaveSettingsAsync(input, ct) ?? input;
         _baseline = Snapshot(_model);

@@ -1,4 +1,4 @@
-namespace Origami.Api;
+﻿namespace Origami.Api;
 
 /// <summary>
 /// 由實際路由表產生 OpenAPI paths，使契約不會與端點實作漂移。
@@ -18,6 +18,7 @@ public static class OpenApiDocumentBuilder
             ["get /api/v1/pages/{slug}"] = ("依代稱取得已發布獨立頁面", "公開"),
             ["get /api/v1/search"] = ("混合式關鍵字與語意搜尋（依內容類型判斷，支援納入獨立頁面）", "公開"),
             ["get /api/v1/settings"] = ("取得站點公開設定、版型、永久連結與時區格式", "公開"),
+            ["get /api/v1/layout"] = ("一次取得站點公開設定、導覽選單與可見小工具", "公開"),
             ["get /api/v1/navigation"] = ("取得站點公開導覽選單項目", "公開"),
             ["get /api/v1/contents/{id}/published"] = ("依識別碼取得已設定為首頁的已發布頁面", "公開"),
             ["get /api/v1/media/widths"] = ("取得公開圖片響應式寬度變體設定", "公開"),
@@ -182,7 +183,7 @@ public static class OpenApiDocumentBuilder
         new(StringComparer.Ordinal)
         {
             ["get /api/v1/posts"] = ["page", "pageSize", "category", "tag", "author", "year", "month"],
-            ["get /api/v1/search"] = ["q", "limit", "page", "includePages"],
+            ["get /api/v1/search"] = ["q", "limit", "page", "includePages", "category", "year", "month"],
             ["get /api/v1/feed"] = ["category", "tag", "author", "type", "taxonomy", "term", "q"],
             ["get /api/v1/types/{slug}/contents"] = ["page", "pageSize", "taxonomy", "term"],
             ["get /api/v1/sites/resolve"] = ["host"],
@@ -238,6 +239,8 @@ public static class OpenApiDocumentBuilder
             ["status"] = "狀態篩選（例如草稿、待審、已發布或評論審核狀態）。",
             ["search"] = "搜尋關鍵字。",
             ["authorId"] = "作者使用者識別碼篩選。",
+            ["year"] = "發布年份篩選（1900–9999）。",
+            ["month"] = "發布月份篩選（1–12，需搭配 year）。",
             ["categoryId"] = "分類識別碼篩選。",
             ["tagId"] = "標籤識別碼篩選。",
             ["dateFrom"] = "起始日期篩選（格式：年-月-日）。",

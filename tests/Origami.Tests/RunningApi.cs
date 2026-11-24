@@ -9,11 +9,14 @@ internal sealed class RunningApi : IAsyncDisposable
     private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly X509Certificate2 certificate;
     private readonly ConcurrentQueue<string> consoleErrors = new();
+    private readonly ConcurrentQueue<string> errorExceptionTypes = new();
     private Process? process;
     public Uri Address { get; private set; } = null!;
 
     /// <summary>截斷後的伺服器端失敗輸出行，讓 500 錯誤的根因在測試輸出中看得到。</summary>
     public IReadOnlyList<string> ConsoleErrors => [.. consoleErrors];
+    /// <summary>例外型別摘要；不保留訊息、SQL、連接資訊或堆疊。</summary>
+    public IReadOnlyList<string> ErrorExceptionTypes => [.. errorExceptionTypes];
 
     public RunningApi(string connectionString)
     {
@@ -95,6 +98,10 @@ internal sealed class RunningApi : IAsyncDisposable
             else if (errorLinesRemaining > 0 && line.Trim().Length > 0)
             {
                 consoleErrors.Enqueue(Truncate(line));
+                var trimmed = line.TrimStart();
+                var colon = trimmed.IndexOf(':');
+                if (colon > 0 && !trimmed.StartsWith("at ", StringComparison.Ordinal) && trimmed[..colon].Contains('.'))
+                    errorExceptionTypes.Enqueue(trimmed[..colon]);
                 errorLinesRemaining--;
             }
             if (line.Contains("Application started.", StringComparison.Ordinal) == true) ready.TrySetResult();

@@ -10,6 +10,7 @@ internal sealed class RunningSite : IAsyncDisposable
     private readonly ConcurrentQueue<string> warningCategories = new();
     private readonly ConcurrentQueue<string> siteResolutionLines = new();
     private readonly ConcurrentQueue<string> errorLines = new();
+    private readonly ConcurrentQueue<string> warningExceptionTypes = new();
     private readonly string apiToken = "site-test-token-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
     private Process? process;
     private RunningApi? api;
@@ -20,8 +21,11 @@ internal sealed class RunningSite : IAsyncDisposable
     public IReadOnlyList<string> SiteResolutionLines => [.. siteResolutionLines];
     /// <summary>伺服器端錯誤輸出（含例外堆疊），供測試失敗時診斷 500 的根因。</summary>
     public IReadOnlyList<string> ErrorLines => [.. errorLines];
+    /// <summary>評論警告附帶的例外型別；不保留訊息、輸入內容或堆疊。</summary>
+    public IReadOnlyList<string> WarningExceptionTypes => [.. warningExceptionTypes];
     /// <summary>隔離 Api 主機的錯誤輸出，供 BFF 傳輸失敗時定位上游原因。</summary>
     public IReadOnlyList<string> ApiErrorLines => api?.ConsoleErrors.ToArray() ?? [];
+    public IReadOnlyList<string> ApiErrorTypes => api?.ErrorExceptionTypes.ToArray() ?? [];
     public string StorageRoot => Path.Combine(root, "storage");
 
     public RunningSite(string connectionString)

@@ -80,6 +80,7 @@ public sealed class ApiV1EndpointTests(IsolatedPostgres postgres) : ServiceTestB
         using var client = api.CreateClient();
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/v1/posts?pageSize=999")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/v1/posts?month=13")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/v1/search?q=x&month=2")).StatusCode);
         var statuses = new List<int>();
         for (var i = 0; i < 40 && !statuses.Contains(429); i++)
             statuses.Add((int)(await client.GetAsync("/api/v1/posts")).StatusCode);

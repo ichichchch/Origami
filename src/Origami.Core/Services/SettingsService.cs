@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider? clock = null, CmsEventBus? events = null)
+public sealed partial class SettingsService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider? clock = null, CmsEventBus? events = null)
 {
     public async Task<SiteSettings> GetAsync(CancellationToken ct = default)
     {
@@ -39,6 +39,10 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             throw new CmsException("自動關閉評論天數須為 0–3650 天（0 表示不自動關閉）。");
         if (input.IndexNowEnabled && !IndexNowService.IsValidKey(input.IndexNowKey))
             throw new CmsException("IndexNow 金鑰須為 8–128 個十六進位字元。");
+        // 預設介面語言只做格式檢查（BCP 47 基本形式）；是否為支援的語言由網站主機依支援清單正規化。
+        var defaultUiLanguage = (input.DefaultUiLanguage ?? "").Trim();
+        if (defaultUiLanguage.Length > 0 && !DefaultUiLanguagePattern().IsMatch(defaultUiLanguage))
+            throw new CmsException("預設介面語言格式無效。");
         var permalinkScheme = string.IsNullOrWhiteSpace(input.PermalinkScheme) ? PermalinkRules.PostName : input.PermalinkScheme.Trim().ToLowerInvariant();
         if (!PermalinkRules.IsValidScheme(permalinkScheme))
             throw new CmsException("永久連結結構方案無效。");
@@ -131,6 +135,9 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.WebhookUrl = (input.WebhookUrl ?? "").Trim();
         entity.WebhookSecret = (input.WebhookSecret ?? "").Trim();
         entity.CustomCss = customCss;
+        entity.NotFoundTitle = (input.NotFoundTitle ?? "").Trim();
+        entity.NotFoundBody = (input.NotFoundBody ?? "").Trim();
+        entity.DefaultUiLanguage = defaultUiLanguage;
         entity.Version = Guid.NewGuid();
         // 主題包啟用狀態鏡像：設定頁選擇 pkg: 預設與市場頁啟用共用同一份狀態，不各自為政。
         var themePackages = await db.SitePackages.Where(x => x.Kind == PackageKind.Theme).ToListAsync(ct);
@@ -165,4 +172,6 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         return input;
     }
 
+    [GeneratedRegex(@"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$", RegexOptions.CultureInvariant)]
+    private static partial Regex DefaultUiLanguagePattern();
 }

@@ -256,9 +256,6 @@
   <data name="Public.NextPage" xml:space="preserve">
     <value>Next</value>
   </data>
-  <data name="Public.NotFound.01" xml:space="preserve">
-    <value>Content not found</value>
-  </data>
   <data name="Public.NotFound.02" xml:space="preserve">
     <value>This page is temporarily away.</value>
   </data>
@@ -4670,5 +4667,44 @@
   </data>
   <data name="Public.Widget.SocialLinks" xml:space="preserve">
     <value>Social links</value>
+  </data>
+  <data name="Admin.Settings.DefaultUiLanguage" xml:space="preserve">
+    <value>Default interface language</value>
+  </data>
+  <data name="Admin.Settings.DefaultUiLanguageHelp" xml:space="preserve">
+    <value>Used for signed-out visitors and members without a preference; members can still override it in their profile.</value>
+  </data>
+  <data name="Admin.Settings.NotFoundBody" xml:space="preserve">
+    <value>Not-found page message (optional)</value>
+  </data>
+  <data name="Admin.Settings.NotFoundHelp" xml:space="preserve">
+    <value>Shown to visitors who request a missing URL (404); leave blank for the default copy. Plain text, no HTML.</value>
+  </data>
+  <data name="Admin.Settings.NotFoundTitle" xml:space="preserve">
+    <value>Not-found page title (optional)</value>
+  </data>
+  <data name="Admin.Settings.NotFoundTitlePlaceholder" xml:space="preserve">
+    <value>This page is taking a break.</value>
+  </data>
+  <data name="Admin.Settings.UiLanguageProductDefault" xml:space="preserve">
+    <value>Product default</value>
+  </data>
+  <data name="Public.Search.AllCategories" xml:space="preserve">
+    <value>All categories</value>
+  </data>
+  <data name="Public.Search.AllMonths" xml:space="preserve">
+    <value>All months</value>
+  </data>
+  <data name="Public.Search.CategoryFilter" xml:space="preserve">
+    <value>Category filter</value>
+  </data>
+  <data name="Public.Search.FilteredNote" xml:space="preserve">
+    <value>With a category or month filter, results come from keyword matching only; clear the filter to add semantic results.</value>
+  </data>
+  <data name="Public.Search.InvalidMonth" xml:space="preserve">
+    <value>The month filter is invalid.</value>
+  </data>
+  <data name="Public.Search.MonthFilter" xml:space="preserve">
+    <value>Month filter</value>
   </data>
 </root>

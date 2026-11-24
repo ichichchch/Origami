@@ -19,11 +19,40 @@
         {
             <input type="hidden" name="includePages" value="true" />
         }
+        <div class="button-row">
+            @if (_categoryOptions.Count > 0)
+            {
+                <label class="sr-only" for="search-category">@UiText.T("Public.Search.CategoryFilter", "分類篩選")</label>
+                <select id="search-category" name="category" aria-label="@UiText.T("Public.Search.CategoryFilter", "分類篩選")">
+                    <option value="">@UiText.T("Public.Search.AllCategories", "全部分類")</option>
+                    @foreach (var category in _categoryOptions)
+                    {
+                        <option value="@category.Slug" selected="@(CategoryFilter == category.Slug)">@category.Name</option>
+                    }
+                </select>
+            }
+            @if (_monthOptions.Count > 0)
+            {
+                <label class="sr-only" for="search-month">@UiText.T("Public.Search.MonthFilter", "月份篩選")</label>
+                <select id="search-month" name="month" aria-label="@UiText.T("Public.Search.MonthFilter", "月份篩選")">
+                    <option value="">@UiText.T("Public.Search.AllMonths", "所有月份")</option>
+                    @foreach (var month in _monthOptions)
+                    {
+                        var value = month.Year + "-" + month.Month.ToString("00", CultureInfo.InvariantCulture);
+                        <option value="@value" selected="@(MonthFilter == value)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Public.Widget.ArchiveMonth", "{0} 年 {1} 月"), month.Year, month.Month)</option>
+                    }
+                </select>
+            }
+        </div>
         <button type="submit" class="button">@UiText.T("Public.Search.05", "搜尋文章")</button>
     </form>
     @if (!_semanticAvailable && !string.IsNullOrWhiteSpace(Query))
     {
         <p class="field-help" role="status">@UiText.T("Public.Search.06", "語意搜尋暫時無法使用，已改為關鍵字比對；精確詞仍可命中。")</p>
+    }
+    @if (CategoryFilter is { Length: > 0 } || MonthFilter is { Length: > 0 })
+    {
+        <p class="field-help">@UiText.T("Public.Search.FilteredNote", "帶分類或月份篩選時只以關鍵字比對；清除篩選可再加入語意結果。")</p>
     }
     @if (_error is not null)
     {
@@ -48,7 +77,7 @@
                     <li>
                         <article>
                             <h3><span class="chip search-source">@SearchSourceLabel(hit.Source)</span> <a href="@hit.ResolvedPath">@hit.Title</a></h3>
-                            <p class="search-snippet">@hit.Snippet</p>
+                            <p class="search-snippet">@((MarkupString)(hit.SnippetHtml.Length > 0 ? hit.SnippetHtml : WebUtility.HtmlEncode(hit.Snippet)))</p>
                         </article>
                     </li>
                 }
@@ -69,7 +98,12 @@
     [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
     [SupplyParameterFromQuery(Name = "page")] public string? PageParam { get; set; }
     [SupplyParameterFromQuery(Name = "includePages")] public string? IncludePagesParam { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] public string? CategoryFilter { get; set; }
+    // 月份篩選格式為 yyyy-MM；拆成 year 與 month 傳給搜尋服務。
+    [SupplyParameterFromQuery(Name = "month")] public string? MonthFilter { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private List<PublicTaxonomy> _categoryOptions = [];
+    private List<ArchiveMonth> _monthOptions = [];
     private IReadOnlyList<PublicSearchHit> _hits = [];
     private string? _error;
     private bool _semanticAvailable = true;
@@ -79,7 +113,15 @@
     /// <summary>語意補強只在第一頁出現，總數取關鍵字總數與本頁實際筆數的較大者，避免「共 0 篇」卻列出結果。</summary>
     private int DisplayTotal => Math.Max(_total, _hits.Count);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling((double)DisplayTotal / Limits.PageSize));
-    private string PageUrl(int page) => "/search?q=" + Uri.EscapeDataString((Query ?? "").Trim()) + (IncludePages ? "&includePages=true" : "") + "&page=" + page;
+    private string PageUrl(int page) => "/search?q=" + Uri.EscapeDataString((Query ?? "").Trim())
+        + (string.IsNullOrWhiteSpace(CategoryFilter) ? "" : "&category=" + Uri.EscapeDataString(CategoryFilter.Trim()))
+        + (string.IsNullOrWhiteSpace(MonthFilter) ? "" : "&month=" + Uri.EscapeDataString(MonthFilter.Trim()))
+        + (IncludePages ? "&includePages=true" : "") + "&page=" + page;
+    private (int Year, int Month)? ParsedMonth => MonthFilter is { Length: 7 } && MonthFilter[4] == '-'
+        && int.TryParse(MonthFilter.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture, out var yearValue)
+        && int.TryParse(MonthFilter.AsSpan(5, 2), NumberStyles.None, CultureInfo.InvariantCulture, out var monthValue)
+        && yearValue is >= 1900 and <= 9999 && monthValue is >= 1 and <= 12
+        ? (yearValue, monthValue) : null;
     private static string SearchSourceLabel(string source) => source switch
     {
         "關鍵字" => UiText.T("Public.Search.KeywordSource", "關鍵字"),
@@ -118,10 +160,37 @@
             return;
         }
         // 開啟頁面（或送出空白查詢）不得觸發嵌入呼叫。
-        if (string.IsNullOrWhiteSpace(Query)) return;
+        var filterCancellationToken = HttpContext?.RequestAborted ?? default;
+        _categoryOptions = [];
+        _monthOptions = [];
         try
         {
-            var result = await Api.SearchAsync(Query, page: _page, ct: HttpContext?.RequestAborted ?? default, includePages: IncludePages)
+            _categoryOptions = await Api.GetPopularCategoriesAsync(filterCancellationToken) ?? [];
+            _monthOptions = (await Api.GetArchivesAsync(filterCancellationToken) ?? []).Take(24).ToList();
+        }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true)
+        {
+            // 訪客已斷線；中止整個請求，不把取消偽裝成空選項。
+            throw;
+        }
+        catch
+        {
+            // 篩選選項只是輔助資訊；Api 暫時故障時仍以空選項繼續搜尋。
+            _categoryOptions = [];
+            _monthOptions = [];
+        }
+        if (string.IsNullOrWhiteSpace(Query)) return;
+        if (MonthFilter is { Length: > 0 } && ParsedMonth is null)
+        {
+            _error = UiText.T("Public.Search.InvalidMonth", "月份篩選格式無效。");
+            SetStatus(StatusCodes.Status400BadRequest);
+            return;
+        }
+        try
+        {
+            var month = ParsedMonth;
+            var result = await Api.SearchAsync(Query, page: _page, ct: HttpContext?.RequestAborted ?? default, includePages: IncludePages,
+                    category: string.IsNullOrWhiteSpace(CategoryFilter) ? null : CategoryFilter.Trim(), year: month?.Year, month: month?.Month)
                 ?? new PublicSearchService.Result([], false, 0);
             _hits = result.Hits;
             _semanticAvailable = result.SemanticAvailable;

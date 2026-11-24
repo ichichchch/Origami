@@ -50,6 +50,25 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
         Assert.DoesNotContain("<img src=x", html, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Public_layout_provider_reuses_one_api_response_for_settings_and_layout()
+    {
+        var projection = PublicSiteSettings.Default;
+        var handler = new StubApiHandler(projection);
+        var session = new AdminSession(new HttpContextAccessor(), new AnonymousAuthenticationStateProvider(),
+            Options.Create(new IdentityOptions()));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://stub/") };
+        var provider = new PublicSettingsProvider(new OrigamiClient(http, session));
+
+        var settings = await provider.GetAsync();
+        var layout = await provider.GetLayoutAsync();
+
+        Assert.Equal(projection.Name, settings.Name);
+        Assert.Equal(projection.Description, settings.Description);
+        Assert.Same(settings, layout.Settings);
+        Assert.Equal(1, handler.LayoutRequests);
+    }
+
     [PostgresFact]
     public async Task Stale_settings_writes_cannot_overwrite_the_winning_actor()
     {
@@ -73,6 +92,8 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
     [InlineData("blank-name")]
     [InlineData("long-name")]
     [InlineData("long-description")]
+    [InlineData("long-not-found-title")]
+    [InlineData("long-not-found-body")]
     [InlineData("wrong-id")]
     public async Task Invalid_settings_do_not_modify_the_singleton(string scenario)
     {
@@ -84,6 +105,8 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
             case "blank-name": input.Name = " \t"; break;
             case "long-name": input.Name = new string('x', Limits.SiteName + 1); break;
             case "long-description": input.Description = new string('x', Limits.Description + 1); break;
+            case "long-not-found-title": input.NotFoundTitle = new string('x', Limits.NotFoundTitle + 1); break;
+            case "long-not-found-body": input.NotFoundBody = new string('x', Limits.NotFoundBody + 1); break;
             case "wrong-id": input.Id = 2; break;
             default: throw new ArgumentOutOfRangeException(nameof(scenario));
         }
@@ -101,10 +124,14 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
         var input = await admin.Settings.GetAsync();
         input.Name = new string('n', Limits.SiteName);
         input.Description = new string('d', Limits.Description);
+        input.NotFoundTitle = new string('t', Limits.NotFoundTitle);
+        input.NotFoundBody = new string('b', Limits.NotFoundBody);
         await admin.Settings.SaveAsync(input);
         var saved = await admin.Settings.GetAsync();
         Assert.Equal(input.Name, saved.Name);
         Assert.Equal(input.Description, saved.Description);
+        Assert.Equal(input.NotFoundTitle, saved.NotFoundTitle);
+        Assert.Equal(input.NotFoundBody, saved.NotFoundBody);
         saved.Name = "  Trimmed name  ";
         saved.Description = "  Trimmed description  ";
         await admin.Settings.SaveAsync(saved);
@@ -145,12 +172,19 @@ public sealed class SettingsServiceTests(IsolatedPostgres postgres) : ServiceTes
     private sealed class StubApiHandler(PublicSiteSettings settings) : HttpMessageHandler
     {
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+        public int LayoutRequests { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            var isLayout = request.RequestUri?.AbsolutePath.EndsWith("/api/v1/layout") == true;
+            if (isLayout) LayoutRequests++;
             var body = request.RequestUri?.AbsolutePath.EndsWith("/api/v1/navigation") == true
                 ? "[]"
-                : JsonSerializer.Serialize(settings, Json);
+                : request.RequestUri?.AbsolutePath.EndsWith("/api/v1/widgets") == true
+                    ? "[]"
+                    : isLayout
+                        ? JsonSerializer.Serialize(new { settings, navigation = Array.Empty<object>(), widgets = Array.Empty<object>() }, Json)
+                        : JsonSerializer.Serialize(settings, Json);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json")

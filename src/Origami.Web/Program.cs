@@ -39,12 +39,16 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
                 culture = await context.RequestServices.GetRequiredService<UserLanguagePreferenceReader>()
                     .GetAsync(userId, context.RequestAborted);
         }
+        // 最後退回站點預設介面語言；站點未設定時沿用產品預設。
+        culture ??= await context.RequestServices.GetRequiredService<SiteDefaultLanguageReader>()
+            .GetAsync(context, context.RequestAborted);
         return new ProviderCultureResult(culture ?? UiTextLanguages.Default);
     })];
 });
 // AddDbContextFactory 以 Scoped 註冊工廠；Singleton 讀取器會形成 captive dependency，
 // 啟動驗證即失敗。快取經單例 IMemoryCache 共享，Scoped 註冊不影響跨請求快取與失效。
 builder.Services.AddScoped<UserLanguagePreferenceReader>();
+builder.Services.AddScoped<SiteDefaultLanguageReader>();
 builder.Services.AddMemoryCache();
 builder.Services.AddResponseCompression(options =>
 {

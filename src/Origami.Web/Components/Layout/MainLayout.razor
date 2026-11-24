@@ -1,5 +1,4 @@
-@inherits LayoutComponentBase
-@inject OrigamiClient Api
+﻿@inherits LayoutComponentBase
 @inject PublicSettingsProvider Settings
 @inject AdminAccess Admin
 @inject ILogger<MainLayout> Logger
@@ -225,17 +224,16 @@
         try
         {
             var ct = HttpContext?.RequestAborted ?? default;
-            _settings = await Settings.GetAsync(ct);
-            _pages = await Api.GetNavigationAsync(ct) ?? [];
-            var widgets = await Api.GetWidgetsAsync(ct) ?? [];
-            _sidebarWidgets = [.. widgets.Where(x => x.Area == WidgetArea.Sidebar)];
-            _footerWidgets = [.. widgets.Where(x => x.Area == WidgetArea.Footer)];
-            if (_settings.MaintenanceMode)
-            {
-                _isMember = await Admin.IsAdminAsync(ct);
-                if (!_isMember && HttpContext?.Response.HasStarted == false)
-                    HttpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            }
+            var layout = await Settings.GetLayoutAsync(ct);
+            _settings = layout.Settings;
+            // 自訂導覽可分頁首與頁尾兩個位置；預設導覽（頁面自動排序）只有頁首。
+            _footerLinks = [.. layout.Navigation.Where(x => x.IsFooter)];
+            _pages = [.. layout.Navigation.Where(x => !x.IsFooter)];
+            _sidebarWidgets = [.. layout.Widgets.Where(x => x.Area == WidgetArea.Sidebar)];
+            _footerWidgets = [.. layout.Widgets.Where(x => x.Area == WidgetArea.Footer)];
+            _isMember = await Admin.IsAdminAsync(ct);
+            if (_settings.MaintenanceMode && !_isMember && HttpContext?.Response.HasStarted == false)
+                HttpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
         }
         catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
         catch (Exception ex) { Logger.LogError(ex, "Public navigation unavailable"); }

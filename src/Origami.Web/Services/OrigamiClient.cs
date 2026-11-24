@@ -9,6 +9,11 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public bool CommentsEnabled { get; init; }
     /// <summary>文章發布超過指定天數後自動關閉評論。</summary>
     public int CommentCloseDays { get; init; }
+    /// <summary>找不到頁面（404）的自訂標題與說明；空字串時前台使用預設文字。</summary>
+    public string NotFoundTitle { get; init; } = "";
+    public string NotFoundBody { get; init; } = "";
+    /// <summary>站點預設介面語言；空字串表示產品預設。</summary>
+    public string DefaultUiLanguage { get; init; } = "";
     /// <summary>受控版型預設名稱。</summary>
     public string ThemePreset { get; init; } = "reading";
     /// <summary>版型強調色（十六進位色碼）。</summary>
@@ -51,6 +56,9 @@ public sealed record PublicSiteSettings(string Name, string Description, int? Po
     public static PublicSiteSettings Default { get; } = new("Origami", "用文字，分享你的世界。", null, null, null, "", null, null);
 }
 
+public sealed record PublicLayout(PublicSiteSettings Settings, List<PageNavItem> Navigation,
+    List<WidgetService.PublicWidget> Widgets);
+
 /// <summary>現行主題包的公開投影：字體棧為內建常數值，CSS 已在輸出前再次清理。</summary>
 public sealed record PublicPackageTheme(string Slug, string FontBody, string FontHeading,
     double ProseLine, double ListGap, double HeadingScale, string Css);
@@ -83,6 +91,9 @@ public sealed class OrigamiClient
     };
 
     // ---------- 公開讀取 ----------
+
+    public Task<PublicLayout?> GetPublicLayoutAsync(CancellationToken ct = default) =>
+        GetAsync<PublicLayout>("api/v1/layout", ct);
 
     public Task<PublicSiteSettings?> GetPublicSettingsAsync(CancellationToken ct = default) =>
         GetAsync<PublicSiteSettings>("api/v1/settings", ct);
@@ -267,8 +278,15 @@ public sealed class OrigamiClient
     public Task<List<CommentFeedEntry>?> GetCommentFeedItemsAsync(CancellationToken ct = default) =>
         GetAsync<List<CommentFeedEntry>>("api/v1/feed/comments", ct);
 
-    public Task<PublicSearchService.Result?> SearchAsync(string query, int limit = Limits.PageSize, int page = 1, CancellationToken ct = default, bool includePages = false) =>
-        GetAsync<PublicSearchService.Result>($"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}&page={page}" + (includePages ? "&includePages=true" : ""), ct);
+    public Task<PublicSearchService.Result?> SearchAsync(string query, int limit = Limits.PageSize, int page = 1, CancellationToken ct = default, bool includePages = false,
+        string? category = null, int? year = null, int? month = null)
+    {
+        var url = $"api/v1/search?q={Uri.EscapeDataString(query)}&limit={limit}&page={page}" + (includePages ? "&includePages=true" : "");
+        if (!string.IsNullOrWhiteSpace(category)) url += "&category=" + Uri.EscapeDataString(category);
+        if (year is { } yearFilter) url += "&year=" + yearFilter;
+        if (month is { } monthFilter) url += "&month=" + monthFilter;
+        return GetAsync<PublicSearchService.Result>(url, ct);
+    }
 
     public async Task<PagedResult<ContentSummary>?> ListPublishedAsync(int page = 1, int pageSize = Limits.PageSize,
         string? category = null, string? tag = null, int? year = null, int? month = null, string? author = null,

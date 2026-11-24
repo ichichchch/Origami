@@ -452,6 +452,7 @@ input.code-input { font-family: Consolas, monospace; font-size: .72rem; color: v
 @media (max-width: 1100px) { .dashboard-grid { grid-template-columns: minmax(0, 1fr); } }
 .dashboard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
 .comment-reply { margin-left: 1.6rem; padding-left: .9rem; border-left: 2px solid var(--border); }
+.search-snippet mark { background: color-mix(in srgb, var(--warning-ink) 28%, transparent); color: inherit; border-radius: 3px; padding: 0 .1em; }
 .reply-box { margin-top: .6rem; display: grid; gap: .5rem; }
 .author-avatar { width: 4rem; height: 4rem; border-radius: 999px; object-fit: cover; margin-bottom: .5rem; border: 1px solid var(--border); }
 .prose .toc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .9rem 1.1rem; margin: 1.2rem 0; }

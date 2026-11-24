@@ -16,6 +16,7 @@ public static class ApiEndpoints
         group.MapGet("/pages/{slug}", GetPageAsync);
         group.MapGet("/search", SearchAsync);
         group.MapGet("/settings", GetSettingsAsync);
+        group.MapGet("/layout", GetLayoutAsync);
         group.MapGet("/navigation", GetNavigationAsync);
         group.MapGet("/widgets", GetWidgetsAsync);
         // 已設定為靜態首頁的頁面：以內容識別取得已發布頁面。
@@ -73,18 +74,38 @@ public static class ApiEndpoints
 
     /// <summary>全站搜尋：缺少嵌入供應商時關鍵字比對仍可運作，僅語意搜尋這一環降級。</summary>
     private static async Task<IResult> SearchAsync(string? q, int? limit, int? page, bool? includePages,
-        PublicSearchService search, CancellationToken ct)
+        string? category, int? year, int? month, PublicSearchService search, CancellationToken ct)
     {
         var query = (q ?? "").Trim();
         if (query.Length == 0) return Results.BadRequest(new { message = "請輸入搜尋文字。" });
         if (query.Length > Limits.SearchQueryMax) return Results.BadRequest(new { message = "搜尋文字過長。" });
         if (page is < 1) return Results.BadRequest(new { message = "參數 page 無效。" });
-        return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, page ?? 1, ct, includePages == true));
+        if (year is { } yearFilter && (yearFilter < 1900 || yearFilter > 9999) || month is { } monthFilter && (monthFilter < 1 || monthFilter > 12))
+            return Results.BadRequest(new { message = "日期篩選參數無效。" });
+        return Results.Ok(await search.SearchAsync(query, limit ?? Limits.PageSize, page ?? 1, ct, includePages == true,
+            category, year, month));
     }
 
     /// <summary>站點公開設定、版型與呈現選項。</summary>
-    private static async Task<IResult> GetSettingsAsync(SettingsService settings, ContentService content, MediaService media,
-        MarketplaceService marketplace, CancellationToken ct)
+    private static Task<IResult> GetSettingsAsync(SettingsService settings, ContentService content, MediaService media,
+        MarketplaceService marketplace, CancellationToken ct) =>
+        GetSettingsResultAsync(settings, content, media, marketplace, ct);
+
+    /// <summary>版面殼層一次取得設定、導覽與小工具，避免重複 Api 往返。</summary>
+    private static async Task<IResult> GetLayoutAsync(SettingsService settings, ContentService content, MediaService media,
+        MarketplaceService marketplace, NavigationService navigation, WidgetService widgets, CancellationToken ct)
+    {
+        var publicSettings = await ReadPublicSettingsAsync(settings, content, media, marketplace, ct);
+        var layout = new PublicLayout(publicSettings, await navigation.PublicAsync(ct), await widgets.PublicAsync(ct));
+        return Results.Ok(layout);
+    }
+
+    private static async Task<IResult> GetSettingsResultAsync(SettingsService settings, ContentService content,
+        MediaService media, MarketplaceService marketplace, CancellationToken ct) =>
+        Results.Ok(await ReadPublicSettingsAsync(settings, content, media, marketplace, ct));
+
+    private static async Task<PublicSiteSettings> ReadPublicSettingsAsync(SettingsService settings, ContentService content,
+        MediaService media, MarketplaceService marketplace, CancellationToken ct)
     {
         var value = await settings.GetAsync(ct);
         // 頁首標誌以檔名呈現；媒體網址由網站主機的 /media 提供。
@@ -97,10 +118,12 @@ public static class ApiEndpoints
         }
         // 現行主題包的字體密度與 CSS：服務層對資料庫值重跑驗證，此處再清一次 CSS，與 CustomCss 同構。
         var active = await marketplace.ActiveThemeAsync(ct);
-        return Results.Ok(new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
+        return new PublicSiteSettings(value.Name, value.Description, value.PostsPerPage,
             value.FeedItems, value.FeedShowFullText, value.AuthorDisplayName, value.HomePageContentId, value.SiteIconMediaId, value.LogoMediaId)
         { LogoFileName = logoFileName ?? "", CommentsEnabled = value.CommentsEnabled,
             CommentCloseDays = value.CommentCloseDays,
+            NotFoundTitle = value.NotFoundTitle, NotFoundBody = value.NotFoundBody,
+            DefaultUiLanguage = value.DefaultUiLanguage,
             ThemePreset = value.ThemePreset, AccentColor = value.AccentColor, ReadingWidth = value.ReadingWidth,
             ShowByline = value.ShowByline, ShowCover = value.ShowCover, CardStyle = value.CardStyle,
             ColorScheme = value.ColorScheme, FooterText = value.FooterText,
@@ -116,8 +139,11 @@ public static class ApiEndpoints
             PackageTheme = active is null ? null
                 : new PublicPackageTheme(active.Slug, active.FontBody, active.FontHeading, active.ProseLine,
                     active.ListGap, active.HeadingScale,
-                    CssSanitizer.TryClean(active.Css, out var packageCss) ? packageCss : "") });
+                    CssSanitizer.TryClean(active.Css, out var packageCss) ? packageCss : "") };
     }
+
+    public sealed record PublicLayout(PublicSiteSettings Settings, List<PageNavItem> Navigation,
+        List<WidgetService.PublicWidget> Widgets);
 
     /// <summary>前台頁首呈現所需的公開導覽選單。</summary>
     private static async Task<IResult> GetNavigationAsync(NavigationService navigation, CancellationToken ct) =>
@@ -263,6 +289,11 @@ public static class ApiEndpoints
         public bool CommentsEnabled { get; init; }
         /// <summary>文章發布超過指定天數後自動關閉評論。</summary>
         public int CommentCloseDays { get; init; }
+        /// <summary>找不到頁面（404）的自訂標題與說明；空字串時前台使用預設文字。</summary>
+        public string NotFoundTitle { get; init; } = "";
+        public string NotFoundBody { get; init; } = "";
+        /// <summary>站點預設介面語言；空字串表示產品預設。</summary>
+        public string DefaultUiLanguage { get; init; } = "";
         /// <summary>受控版型預設名稱。</summary>
         public string ThemePreset { get; init; } = "reading";
         /// <summary>版型強調色（十六進位色碼）。</summary>
