@@ -44,6 +44,10 @@ public static class AdminTaxonomyEndpoints
             return Results.Ok(new { moved });
         });
 
+        // 標籤轉分類：沿用名稱、代稱與描述，關聯文章改指到分類後刪除標籤；version 為標籤的並發版本。
+        group.MapPost("/tags/{id}/to-category", async (Guid id, Guid version, TaxonomyService taxonomy, CancellationToken ct) =>
+            Results.Ok(await taxonomy.ConvertTagToCategoryAsync(id, version, ct)));
+
         // 批次刪除：逐筆攜帶並發版本、逐筆回報；確認契約與單筆刪除相同（由 BFF 呼叫方取得人工確認）。
         group.MapPost("/bulk-delete", async (BulkTaxonomyDeleteInput input, TaxonomyService taxonomy, CancellationToken ct) =>
         {

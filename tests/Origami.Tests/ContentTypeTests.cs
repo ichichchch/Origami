@@ -175,8 +175,8 @@ public sealed class ContentTypeTests(IsolatedPostgres postgres) : ServiceTestBas
         var saved = await admin.Content.SaveAsync(content);
 
         var sitemap = await admin.Content.SitemapAsync();
-        Assert.Contains(sitemap, x => x.Path == "/t/reviews/" + saved.Slug);
-        Assert.DoesNotContain(sitemap, x => x.Path == "/posts/" + saved.Slug);
+        Assert.Contains(sitemap, x => x.Path == "/t/reviews/" + Uri.EscapeDataString(saved.Slug!));
+        Assert.DoesNotContain(sitemap, x => x.Path == "/posts/" + Uri.EscapeDataString(saved.Slug!));
     }
 
     [PostgresFact]

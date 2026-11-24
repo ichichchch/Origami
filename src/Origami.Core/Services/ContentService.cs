@@ -308,6 +308,16 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             throw new CmsException($"排程時間至少需在 {Limits.ScheduleLeadMinutes} 分鐘之後。");
         var categoryIds = input.CategoryIds.Distinct().ToList();
         var tagIds = input.TagIds.Distinct().ToList();
+        // 建立文章未指派時套用站點的預設分類／標籤；頁面與不支援指派的內容類型不套用。
+        if (id is null && entity.Kind == ContentKind.Post && (categoryIds.Count == 0 || tagIds.Count == 0))
+        {
+            var defaults = await db.Settings.AsNoTracking().Where(x => x.Id == 1)
+                .Select(x => new { x.DefaultCategoryId, x.DefaultTagId }).SingleOrDefaultAsync(ct);
+            if (categoryIds.Count == 0 && (contentType?.SupportsCategories ?? true) && defaults?.DefaultCategoryId is { } defaultCategory)
+                categoryIds.Add(defaultCategory);
+            if (tagIds.Count == 0 && (contentType?.SupportsTags ?? true) && defaults?.DefaultTagId is { } defaultTag)
+                tagIds.Add(defaultTag);
+        }
         var categories = await db.Categories.Where(x => categoryIds.Contains(x.Id)).ToListAsync(ct);
         var tags = await db.Tags.Where(x => tagIds.Contains(x.Id)).ToListAsync(ct);
         if (categories.Count != categoryIds.Count || tags.Count != tagIds.Count) throw new CmsException("所選分類或標籤不存在，請重新載入。");
@@ -503,6 +513,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         input.PublishAt = entity.PublishAt;
         input.PreviewToken = entity.PreviewToken;
         input.PublishedAt = entity.PublishedAt;
+        // 回報實際指派結果（含站點預設分類／標籤），編輯器不必重新載入即能顯示。
+        input.CategoryIds = [.. entity.Categories.Select(x => x.Id).OrderBy(x => x)];
+        input.TagIds = [.. entity.Tags.Select(x => x.Id).OrderBy(x => x)];
         input.HasProtectPassword = entity.ProtectionHash != "";
         input.CoverFileName = cover?.FileName ?? "";
         input.CoverAltText = cover?.AltText ?? "";
@@ -1851,7 +1864,13 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         items.AddRange(rows.Where(x => x.Kind == ContentKind.Post && x.ContentTypeId is { } typeId && typeSlugs.ContainsKey(typeId))
             .Select(x => new SitemapItem("/" + ContentTypeService.PublicPrefix + "/" + Segment(typeSlugs[x.ContentTypeId!.Value]) + "/" + Segment(x.Slug), x.UpdatedAt)));
         items.AddRange(pages.Values.Select(x => new SitemapItem("/pages/" + PagePath(x.Id), x.UpdatedAt)));
-        items.AddRange(categories.Select(x => new SitemapItem("/?category=" + x.Slug, x.Latest)));
+        items.AddRange(categories.Select(x => new SitemapItem("/category/" + Segment(x.Slug), x.Latest)));
+        var tags = await db.Tags.AsNoTracking()
+            .Select(x => new { x.Slug, Latest = x.Contents
+                .Where(c => c.Kind == ContentKind.Post && c.Status == ContentStatus.Published && !c.IsPrivate)
+                .Max(c => (DateTimeOffset?)c.PublishedAt) })
+            .Where(x => x.Latest != null).ToListAsync(ct);
+        items.AddRange(tags.Select(x => new SitemapItem("/tag/" + Segment(x.Slug), x.Latest)));
         return items;
     }
 

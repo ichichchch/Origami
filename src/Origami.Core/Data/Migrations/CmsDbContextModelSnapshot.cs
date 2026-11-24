@@ -1996,6 +1996,14 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("character varying(32)")
                         .HasComment("日期显示格式。");
 
+                    b.Property<Guid?>("DefaultCategoryId")
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：DefaultCategoryId。");
+
+                    b.Property<Guid?>("DefaultTagId")
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：DefaultTagId。");
+
                     b.Property<string>("DefaultUiLanguage")
                         .IsRequired()
                         .HasMaxLength(16)

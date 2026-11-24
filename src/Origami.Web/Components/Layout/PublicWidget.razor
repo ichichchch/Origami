@@ -18,7 +18,7 @@
                 @foreach (var category in Widget.Categories)
                 {
                     <li><a style="@(category.Depth > 0 ? $"padding-inline-start:{category.Depth * 0.9}rem" : null)"
-                          href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@(category.Depth > 0 ? "└ " : "")@category.Name</a></li>
+                          href="@("/category/" + Uri.EscapeDataString(category.Slug))">@(category.Depth > 0 ? "└ " : "")@category.Name</a></li>
                 }
             </ul>
             break;
@@ -26,7 +26,7 @@
             <ul class="widget-tags">
                 @foreach (var tag in Widget.Tags)
                 {
-                    <li><a href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Name</a></li>
+                    <li><a href="@("/tag/" + Uri.EscapeDataString(tag.Slug))"># @tag.Name</a></li>
                 }
             </ul>
             break;
@@ -34,7 +34,7 @@
             <div class="widget-tagcloud">
                 @foreach (var tag in Widget.TagCloud ?? [])
                 {
-                    <a class="tag-cloud-item @TagCloudLevel(tag.Count)" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))">@tag.Name</a>
+                    <a class="tag-cloud-item @TagCloudLevel(tag.Count)" href="@("/tag/" + Uri.EscapeDataString(tag.Slug))">@tag.Name</a>
                 }
             </div>
             break;

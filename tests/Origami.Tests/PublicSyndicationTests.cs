@@ -70,7 +70,7 @@ public sealed class PublicSyndicationTests(IsolatedPostgres postgres) : ServiceT
         Assert.Contains("http://www.sitemaps.org/schemas/sitemap/0.9", xml);
         Assert.Contains("/posts/feed-post", xml);
         Assert.Contains("/pages/about", xml);
-        Assert.Contains("/?category=released", xml);
+        Assert.Contains("/category/released", xml);
         Assert.DoesNotContain("draft-post", xml);
 
         var feed = await client.GetAsync("/feed");

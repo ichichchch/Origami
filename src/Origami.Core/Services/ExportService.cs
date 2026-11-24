@@ -45,6 +45,10 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteString("homePageSlug", homeSlug);
         if (settings?.PrivacyPageContentId is { } privacyId && slugById.TryGetValue(privacyId, out var privacySlug))
             writer.WriteString("privacyPageSlug", privacySlug);
+        if (settings?.DefaultCategoryId is { } defaultCategoryId && categorySlugById.TryGetValue(defaultCategoryId, out var defaultCategorySlug))
+            writer.WriteString("defaultCategorySlug", defaultCategorySlug);
+        if (settings?.DefaultTagId is { } defaultTagId && tagSlugById.TryGetValue(defaultTagId, out var defaultTagSlug))
+            writer.WriteString("defaultTagSlug", defaultTagSlug);
         if (settings?.EmailNotificationsEnabled == true)
             writer.WriteBoolean("emailNotificationsEnabled", true);
         if (!string.IsNullOrEmpty(settings?.PermalinkScheme) && settings.PermalinkScheme != PermalinkRules.PostName)

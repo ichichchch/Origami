@@ -1,4 +1,4 @@
-@page "/admin/settings"
+﻿@page "/admin/settings"
 @rendermode InteractiveServer
 @attribute [Authorize]
 @layout AdminLayout
@@ -80,6 +80,8 @@
                     </select>
                 </div>
                 <div class="field"><label for="posts-per-page">@UiText.T("Admin.Settings.PostsPerPage", "每頁文章數")</label><input id="posts-per-page" type="number" min="1" max="@Limits.MaxPageSize" @bind="_model.PostsPerPage" disabled="@Blocked" aria-describedby="posts-per-page-help" /><span id="posts-per-page-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.PostsPerPageHelp", "1–{0}；留空使用預設 {1} 篇。"), Limits.MaxPageSize, Limits.PageSize)</span></div>
+                <div class="field"><label for="default-category">@UiText.T("Admin.Settings.DefaultCategory", "預設分類（選填）")</label><select id="default-category" value="@(_model.DefaultCategoryId?.ToString() ?? "")" @onchange="DefaultCategoryChanged" disabled="@Blocked" aria-describedby="default-taxonomy-help"><option value="">@UiText.T("Admin.Settings.NoDefaultTaxonomy", "不套用")</option>@foreach (var option in _defaultCategories) { <option value="@option.Id">@option.Name</option> }</select></div>
+                <div class="field"><label for="default-tag">@UiText.T("Admin.Settings.DefaultTag", "預設標籤（選填）")</label><select id="default-tag" value="@(_model.DefaultTagId?.ToString() ?? "")" @onchange="DefaultTagChanged" disabled="@Blocked" aria-describedby="default-taxonomy-help"><option value="">@UiText.T("Admin.Settings.NoDefaultTaxonomy", "不套用")</option>@foreach (var option in _defaultTags) { <option value="@option.Id">@option.Name</option> }</select><span id="default-taxonomy-help" class="field-help">@UiText.T("Admin.Settings.DefaultTaxonomyHelp", "新文章未指派時自動套用；被指派的分類或標籤刪除後，設定自動失效。")</span></div>
                 <div class="field"><label for="feed-items">@UiText.T("Admin.Settings.FeedItems", "RSS Feed 條數")</label><input id="feed-items" type="number" min="1" max="@Limits.MaxFeedItems" @bind="_model.FeedItems" disabled="@Blocked" aria-describedby="feed-items-help" /><span id="feed-items-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Settings.FeedItemsHelp", "1–{0}；留空使用預設 {1} 篇。"), Limits.MaxFeedItems, Limits.FeedItems)</span></div>
                 <div class="field checkbox-field">
                     <label for="feed-full-text"><input id="feed-full-text" type="checkbox" @bind="_model.FeedShowFullText" disabled="@Blocked" /> @UiText.T("Admin.Settings.FeedFullText", "Feed 輸出全文")</label>
@@ -343,6 +345,8 @@
     private string _exportKind = "";
     private string _exportCategory = "";
     private List<TaxonomyItem> _categoryOptions = [];
+    private List<TaxonomyItem> _defaultCategories = [];
+    private List<TaxonomyItem> _defaultTags = [];
     private string ExportHref
     {
         get
@@ -370,10 +374,13 @@
     }
     private void ExportCategoryChanged(ChangeEventArgs args) => _exportCategory = args.Value?.ToString() ?? "";
     protected override Task OnInitializedAsync() => Load();
-    private Task Load() => RunAsync(async ct =>
+    private Task Load() => RunAsync(LoadCoreAsync);
+    private async Task LoadCoreAsync(CancellationToken ct)
     {
         if (!CanAdminister) throw new AccessDeniedException(UiText.T("Admin.Settings.LoadDenied", "網站設定僅限本站管理員；你的登入仍有效。"));
         _model = await Api.GetSettingsAsync(ct) ?? new SiteSettings();
+        _defaultCategories = (await Api.ListTaxonomiesAsync(TaxonomyKind.Category, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
+        _defaultTags = (await Api.ListTaxonomiesAsync(TaxonomyKind.Tag, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
         _homeOptions = (await Api.PageOptionsAsync(ct) ?? [])
             .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).ToList();
         var media = await Api.ListMediaAsync(1, Limits.MaxPageSize, ct: ct)
@@ -383,12 +390,31 @@
         _themePackages = (await Api.ListInstalledPackagesAsync(ct) ?? [])
             .Where(x => x.Kind == PackageKind.Theme).ToList();
         _baseline = Snapshot(_model);
-    });
+    }
     private void HomeChanged(ChangeEventArgs args)
     {
         if (_model is null) return;
         _model.HomePageContentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
     }
+    private void DefaultCategoryChanged(ChangeEventArgs args)
+    {
+        if (_model is not null) _model.DefaultCategoryId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+    private void DefaultTagChanged(ChangeEventArgs args)
+    {
+        if (_model is not null) _model.DefaultTagId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+    }
+    private void DefaultUiLanguageChanged(ChangeEventArgs args)
+    {
+        if (_model is not null) _model.DefaultUiLanguage = args.Value?.ToString() ?? "";
+    }
+
+    private static string LanguageName(string language)
+    {
+        try { return CultureInfo.GetCultureInfo(language).NativeName; }
+        catch (CultureNotFoundException) { return language; }
+    }
+
     private void PrivacyChanged(ChangeEventArgs args)
     {
         if (_model is null) return;
@@ -572,6 +598,7 @@
             CustomNavigationEnabled = _model.CustomNavigationEnabled,
             CommentsEnabled = _model.CommentsEnabled, CommentAutoApprove = _model.CommentAutoApprove,
             CommentBlockedWords = _model.CommentBlockedWords, CommentCloseDays = _model.CommentCloseDays,
+            DefaultCategoryId = _model.DefaultCategoryId, DefaultTagId = _model.DefaultTagId,
             ThemePreset = _model.ThemePreset, AccentColor = _model.AccentColor, ReadingWidth = _model.ReadingWidth,
             ShowByline = _model.ShowByline, ShowCover = _model.ShowCover, CardStyle = _model.CardStyle,
             ColorScheme = _model.ColorScheme, FooterText = _model.FooterText,

@@ -89,25 +89,31 @@ public sealed class ProductBrowsingTests(IsolatedPostgres postgres) : ServiceTes
         var page = await context.NewPageAsync();
         await page.GotoAsync("/");
         await page.GetByRole(AriaRole.Navigation, new() { Name = "常用分類" }).GetByRole(AriaRole.Link, new() { Name = "旅行筆記 11" }).ClickAsync();
+        // 首頁與分類歸檔頁的列表同樣是 10 篇：先等網址確實換到歸檔頁，再對其內容斷言（避免對舊頁面斷言）。
+        await page.WaitForURLAsync("**/category/travel-notes");
         await Expect(page.Locator(".post-preview")).ToHaveCountAsync(Limits.PageSize);
         await Expect(page.Locator(".post-list")).Not.ToContainTextAsync("不可洩漏的草稿");
         await Expect(page.Locator(".post-list")).Not.ToContainTextAsync("其他主題");
         await Expect(page.Locator(".post-summary").First).ToContainTextAsync("這是 旅途 的摘要。");
         await Expect(page.Locator(".post-list script")).ToHaveCountAsync(0);
         await page.GetByRole(AriaRole.Link, new() { Name = "下一頁", Exact = true }).ClickAsync();
+        await page.WaitForURLAsync("**/category/travel-notes?page=2");
         await Expect(page.Locator(".post-preview")).ToHaveCountAsync(1);
-        Assert.Contains("category=travel-notes", page.Url);
+        // 分類與標籤改以獨立歸檔網址呈現（/category/代稱、/tag/代稱），分頁沿用自己的路徑。
+        Assert.Contains("/category/travel-notes", page.Url);
         await page.Locator(".post-preview h2 a").ClickAsync();
         await page.GetByRole(AriaRole.Link, new() { Name = "# 山林", Exact = true }).ClickAsync();
+        await page.WaitForURLAsync("**/tag/mountains");
         await Expect(page.Locator("h1")).ToContainTextAsync("山林");
-        Assert.Contains("tag=mountains", page.Url);
+        Assert.Contains("/tag/mountains", page.Url);
         await SaveScreenshotAsync(page, "public-taxonomy-mobile.png");
         Assert.True(await page.EvaluateAsync<bool>("document.documentElement.scrollWidth <= window.innerWidth"),
             await page.EvaluateAsync<string>("JSON.stringify({viewport:innerWidth,width:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth).map(e=>e.tagName+'.'+e.className)})"));
         using var client = site.CreateClient();
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/?category=missing")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/?category=travel-notes&page=999")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/?tag=%2F%2F%2F")).StatusCode);
+        // 不存在的詞彙與超出範圍的分頁在獨立歸檔網址上一律回 404。
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/category/missing")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/category/travel-notes?page=999")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/tag/%2F%2F%2F")).StatusCode);
     }
 
     [PostgresFact]

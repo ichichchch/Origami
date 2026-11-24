@@ -102,8 +102,8 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         ValidateKind(kind);
         if (sourceId == targetId) throw new CmsException("不可合併到自身。");
         await using var db = await factory.CreateDbContextAsync(ct);
-        List<Guid> sourceIds;
-        HashSet<Guid> targetIds;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        int moved;
         if (kind == TaxonomyKind.Category)
         {
             var source = await db.Categories.SingleOrDefaultAsync(x => x.Id == sourceId, ct)
@@ -115,11 +115,13 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             await db.Categories.Where(x => x.ParentId == sourceId)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.ParentId, source.ParentId)
                     .SetProperty(x => x.Version, Guid.NewGuid()), ct);
-            sourceIds = await db.Categories.Where(x => x.Id == sourceId).SelectMany(x => x.Contents)
+            var sourceIds = await db.Categories.Where(x => x.Id == sourceId).SelectMany(x => x.Contents)
                 .Select(x => x.Id).ToListAsync(ct);
-            targetIds = new HashSet<Guid>(await db.Categories.Where(x => x.Id == targetId).SelectMany(x => x.Contents)
+            var targetIds = new HashSet<Guid>(await db.Categories.Where(x => x.Id == targetId).SelectMany(x => x.Contents)
                 .Select(x => x.Id).ToListAsync(ct));
-            return await MoveAndRemoveAsync(db, source, target.Contents, sourceIds, targetIds, ct);
+            await MoveDefaultAsync(db, kind, sourceId, targetId, ct);
+            await MoveNavigationAsync(db, kind, sourceId, targetId, ct);
+            moved = await MoveAndRemoveAsync(db, source, target.Contents, sourceIds, targetIds, ct);
         }
         else
         {
@@ -128,13 +130,96 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             var target = await db.Tags.SingleOrDefaultAsync(x => x.Id == targetId, ct)
                 ?? throw new CmsException("目標標籤不存在。");
             db.Entry(source).Property(x => x.Version).OriginalValue = version;
-            sourceIds = await db.Tags.Where(x => x.Id == sourceId).SelectMany(x => x.Contents)
+            var sourceIds = await db.Tags.Where(x => x.Id == sourceId).SelectMany(x => x.Contents)
                 .Select(x => x.Id).ToListAsync(ct);
-            targetIds = new HashSet<Guid>(await db.Tags.Where(x => x.Id == targetId).SelectMany(x => x.Contents)
+            var targetIds = new HashSet<Guid>(await db.Tags.Where(x => x.Id == targetId).SelectMany(x => x.Contents)
                 .Select(x => x.Id).ToListAsync(ct));
-            return await MoveAndRemoveAsync(db, source, target.Contents, sourceIds, targetIds, ct);
+            await MoveDefaultAsync(db, kind, sourceId, targetId, ct);
+            await MoveNavigationAsync(db, kind, sourceId, targetId, ct);
+            moved = await MoveAndRemoveAsync(db, source, target.Contents, sourceIds, targetIds, ct);
+        }
+        await transaction.CommitAsync(ct);
+        return moved;
+    }
+
+    /// <summary>
+    /// 把標籤轉為分類：沿用名稱、代稱與描述建立分類（已有同代稱或同名分類時直接沿用），
+    /// 關聯文章改指到該分類後刪除標籤；原已屬該分類者只移除標籤關聯。回傳目標分類。
+    /// </summary>
+    public async Task<TaxonomyItem> ConvertTagToCategoryAsync(Guid tagId, Guid version, CancellationToken ct = default)
+    {
+        await admin.RequireAsync(ct);
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        var tag = await db.Tags.SingleOrDefaultAsync(x => x.Id == tagId, ct) ?? throw new CmsException("標籤不存在。");
+        db.Entry(tag).Property(x => x.Version).OriginalValue = version;
+        var category = await db.Categories.FirstOrDefaultAsync(x => x.Slug == tag.Slug, ct)
+            ?? await db.Categories.FirstOrDefaultAsync(x => x.Name == tag.Name, ct);
+        if (category is null)
+        {
+            category = new Category { Name = tag.Name, Slug = tag.Slug, Description = tag.Description };
+            db.Categories.Add(category);
+        }
+        var categoryId = category.Id;
+        var existing = new HashSet<Guid>(await db.Categories.Where(x => x.Id == categoryId).SelectMany(x => x.Contents)
+            .Select(x => x.Id).ToListAsync(ct));
+        var contentIds = await db.Tags.Where(x => x.Id == tagId).SelectMany(x => x.Contents).Select(x => x.Id).ToListAsync(ct);
+        foreach (var contentId in contentIds.Where(x => !existing.Contains(x)))
+        {
+            // 只以識別 stub 建立目標關聯，不載入文章實體；stub 必須先 Attach，否則會被當成新內容插入。
+            var stub = new Content { Id = contentId, SiteId = db.CurrentSiteId };
+            db.Contents.Attach(stub);
+            category.Contents.Add(stub);
+        }
+        db.Tags.Remove(tag);
+        await db.SiteNavItems.Where(x => x.TagId == tagId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.CategoryId, categoryId)
+                .SetProperty(x => x.TagId, (Guid?)null)
+                .SetProperty(x => x.Version, Guid.NewGuid()), ct);
+        // 被刪除的標籤若是站點預設標籤，設定一併清空。
+        await ClearDefaultAsync(db, TaxonomyKind.Tag, tagId, ct);
+        await ContentRules.SaveAsync(db, ct);
+        await transaction.CommitAsync(ct);
+        return new TaxonomyItem(category.Id, category.Name, category.Slug, category.Version) { Description = category.Description };
+    }
+
+    /// <summary>刪除分類或標籤時，清空指向它的站點預設設定。</summary>
+    private static Task ClearDefaultAsync(CmsDbContext db, TaxonomyKind kind, Guid id, CancellationToken ct) =>
+        kind == TaxonomyKind.Category
+            ? db.Settings.Where(x => x.DefaultCategoryId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.DefaultCategoryId, (Guid?)null), ct)
+            : db.Settings.Where(x => x.DefaultTagId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.DefaultTagId, (Guid?)null), ct);
+
+    /// <summary>目標詞彙被刪除時移除失效導覽項目，並像手動刪除一樣把子項目提升到上層。</summary>
+    private static async Task RemoveNavigationAsync(CmsDbContext db, TaxonomyKind kind, Guid id, CancellationToken ct)
+    {
+        var ids = kind == TaxonomyKind.Category
+            ? await db.SiteNavItems.AsNoTracking().Where(x => x.CategoryId == id).Select(x => x.Id).ToListAsync(ct)
+            : await db.SiteNavItems.AsNoTracking().Where(x => x.TagId == id).Select(x => x.Id).ToListAsync(ct);
+        foreach (var navId in ids)
+        {
+            var parentId = await db.SiteNavItems.AsNoTracking().Where(x => x.Id == navId).Select(x => x.ParentId).SingleAsync(ct);
+            await db.SiteNavItems.Where(x => x.ParentId == navId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.ParentId, parentId)
+                    .SetProperty(x => x.Version, Guid.NewGuid()), ct);
+            await db.SiteNavItems.Where(x => x.Id == navId).ExecuteDeleteAsync(ct);
         }
     }
+
+    /// <summary>合併後來源被刪除：站點預設改指向目標，新文章不會因此失去預設值。</summary>
+    private static Task MoveDefaultAsync(CmsDbContext db, TaxonomyKind kind, Guid sourceId, Guid targetId, CancellationToken ct) =>
+        kind == TaxonomyKind.Category
+            ? db.Settings.Where(x => x.DefaultCategoryId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.DefaultCategoryId, targetId), ct)
+            : db.Settings.Where(x => x.DefaultTagId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.DefaultTagId, targetId), ct);
+
+    /// <summary>合併後把來源詞彙的導覽目標改指到目標詞彙。</summary>
+    private static Task MoveNavigationAsync(CmsDbContext db, TaxonomyKind kind, Guid sourceId, Guid targetId, CancellationToken ct) =>
+        kind == TaxonomyKind.Category
+            ? db.SiteNavItems.Where(x => x.CategoryId == sourceId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.CategoryId, targetId)
+                    .SetProperty(x => x.Version, Guid.NewGuid()), ct)
+            : db.SiteNavItems.Where(x => x.TagId == sourceId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.TagId, targetId)
+                    .SetProperty(x => x.Version, Guid.NewGuid()), ct);
 
     private static async Task<int> MoveAndRemoveAsync(CmsDbContext db, object source, ICollection<Content> targetContents,
         List<Guid> sourceIds, HashSet<Guid> targetIds, CancellationToken ct)
@@ -161,6 +246,7 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
         await admin.RequireAsync(ct);
         ValidateKind(kind);
         await using var db = await factory.CreateDbContextAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         if (kind == TaxonomyKind.Category)
         {
             var entity = await db.Categories.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("分類不存在。");
@@ -169,15 +255,20 @@ public sealed class TaxonomyService(IDbContextFactory<CmsDbContext> factory, Adm
             await db.Categories.Where(x => x.ParentId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.ParentId, entity.ParentId)
                     .SetProperty(x => x.Version, Guid.NewGuid()), ct);
+            await RemoveNavigationAsync(db, kind, id, ct);
             db.Categories.Remove(entity);
+            await ClearDefaultAsync(db, kind, id, ct);
         }
         else
         {
             var entity = await db.Tags.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new CmsException("標籤不存在。");
             db.Entry(entity).Property(x => x.Version).OriginalValue = version;
+            await RemoveNavigationAsync(db, kind, id, ct);
             db.Tags.Remove(entity);
+            await ClearDefaultAsync(db, kind, id, ct);
         }
         await ContentRules.SaveAsync(db, ct);
+        await transaction.CommitAsync(ct);
     }
 
     /// <summary>批次刪除分類或標籤：逐筆攜帶並發版本、逐筆回報結果；刪除只移除關聯，不刪文章。</summary>

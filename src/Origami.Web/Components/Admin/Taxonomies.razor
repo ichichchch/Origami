@@ -108,7 +108,7 @@
                 <div class="table-scroll"><table><caption class="sr-only">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.ListCaption", "{0} 列表"), Label)</caption><thead><tr><th scope="col" class="select-cell"><label class="sr-only" for="taxonomy-bulk-select-all">@UiText.T("Admin.Taxonomies.SelectPage", "全選本頁")</label><input id="taxonomy-bulk-select-all" type="checkbox" checked="@AllPageSelected" @onchange="ToggleAll" disabled="@EditBlocked" /></th><th scope="col">@UiText.T("Admin.Taxonomies.NameAndSlug", "名稱 / 代稱")</th><th scope="col">@UiText.T("Admin.Taxonomies.Actions", "操作")</th></tr></thead><tbody>
                 @foreach (var item in _result.Items)
                 {
-                    <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("taxonomy-bulk-" + item.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.SelectItem", "選擇 {0}"), item.Name)</label><input id="@("taxonomy-bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug@if (!string.IsNullOrEmpty(item.ParentName)) { <text> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.ParentLabel", "上層：{0}"), item.ParentName)</text> }</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Taxonomies.Edit", "編輯")<span class="sr-only"> @item.Name</span></button><button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">@UiText.T("Admin.Taxonomies.Merge", "合併")<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">@UiText.T("Admin.Taxonomies.Delete", "刪除")<span class="sr-only"> @item.Name</span></button></div></td></tr>
+                    <tr @key="item.Id"><td class="select-cell"><label class="sr-only" for="@("taxonomy-bulk-" + item.Id)">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.SelectItem", "選擇 {0}"), item.Name)</label><input id="@("taxonomy-bulk-" + item.Id)" type="checkbox" checked="@_selected.Contains(item.Id)" @onchange="e => ToggleSelect(item, e)" disabled="@EditBlocked" /></td><td class="title-cell"><strong>@item.Name</strong><span class="slug-text">@item.Slug@if (!string.IsNullOrEmpty(item.ParentName)) { <text> · @string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.ParentLabel", "上層：{0}"), item.ParentName)</text> }</span></td><td><div class="table-actions"><button class="text-button" disabled="@EditBlocked" @onclick="() => Edit(item)">@UiText.T("Admin.Taxonomies.Edit", "編輯")<span class="sr-only"> @item.Name</span></button>@if (_kind == TaxonomyKind.Tag) { <button class="text-button" disabled="@EditBlocked" @onclick="() => ConvertToCategory(item)">@UiText.T("Admin.Taxonomies.ToCategory", "轉為分類")<span class="sr-only"> @item.Name</span></button> }<button class="text-button" disabled="@EditBlocked" @onclick="() => BeginMerge(item)">@UiText.T("Admin.Taxonomies.Merge", "合併")<span class="sr-only"> @item.Name</span></button><button class="text-danger" disabled="@EditBlocked" @onclick="() => _delete = item">@UiText.T("Admin.Taxonomies.Delete", "刪除")<span class="sr-only"> @item.Name</span></button></div></td></tr>
                 }
                 </tbody></table></div>
                 @if (CanEdit)
@@ -262,6 +262,19 @@
             if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
         }, string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Deleted", "已永久刪除{0}，文章未被刪除。"), Label));
         _delete = null;
+    }
+    private async Task ConvertToCategory(TaxonomyItem item)
+    {
+        if (Blocked) return;
+        var ok = await RunEditAsync(async ct =>
+        {
+            _ = await Api.ConvertTagToCategoryAsync(item.Id, item.Version, ct)
+                ?? throw new CmsException(UiText.T("Admin.Taxonomies.ConvertFailed", "無法轉換，請重新載入後再試。"));
+            if (_edit.Id == item.Id) await NewEdit();
+            _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct);
+            if (_result is not null && _result.Items.Count == 0 && _page > 1) { _page--; _result = await Api.ListTaxonomiesAsync(_kind, _page, 50, ct); }
+        });
+        if (ok) Notice = string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Taxonomies.Converted", "已將「{0}」轉為分類，關聯文章已改指到該分類。"), item.Name);
     }
     private async Task BeginMerge(TaxonomyItem item)
     {

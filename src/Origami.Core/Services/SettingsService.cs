@@ -72,6 +72,10 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
             throw new CmsException("網站圖示不存在，請重新選擇。");
         if (input.LogoMediaId is { } logoId && !await db.MediaAssets.AsNoTracking().AnyAsync(x => x.Id == logoId, ct))
             throw new CmsException("網站標誌不存在，請重新選擇。");
+        if (input.DefaultCategoryId is { } defaultCategoryId && !await db.Categories.AsNoTracking().AnyAsync(x => x.Id == defaultCategoryId, ct))
+            throw new CmsException("預設分類不存在，請重新選擇。");
+        if (input.DefaultTagId is { } defaultTagId && !await db.Tags.AsNoTracking().AnyAsync(x => x.Id == defaultTagId, ct))
+            throw new CmsException("預設標籤不存在，請重新選擇。");
         var entity = await db.Settings.SingleAsync(x => x.Id == 1, ct);
         db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
         // pkg: 前綴的預設指向已安裝主題包：安裝存在性與儲存宣告都在此重驗（DB 值視為不可信）。
@@ -109,6 +113,8 @@ public sealed class SettingsService(IDbContextFactory<CmsDbContext> factory, Adm
         entity.CommentAutoApprove = input.CommentAutoApprove;
         entity.CommentBlockedWords = (input.CommentBlockedWords ?? "").Trim();
         entity.CommentCloseDays = input.CommentCloseDays;
+        entity.DefaultCategoryId = input.DefaultCategoryId;
+        entity.DefaultTagId = input.DefaultTagId;
         entity.ThemePreset = preset?.Name ?? presetName;
         entity.AccentColor = input.AccentColor.Trim().ToLowerInvariant();
         entity.ReadingWidth = input.ReadingWidth;

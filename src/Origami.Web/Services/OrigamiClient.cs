@@ -1,4 +1,4 @@
-namespace Origami.Web.Services;
+﻿namespace Origami.Web.Services;
 
 public sealed record PublicSiteSettings(string Name, string Description, int? PostsPerPage, int? FeedItems,
     bool? FeedShowFullText, string AuthorDisplayName, Guid? HomePageContentId, Guid? SiteIconMediaId, Guid? LogoMediaId = null)
@@ -600,6 +600,10 @@ public sealed class OrigamiClient
             new { kind = (int)kind, items = items.Select(x => new { x.Id, x.Version }).ToList() }, ct);
 
     private sealed record MergeTaxonomyResult(int Moved);
+
+    /// <summary>標籤轉分類：沿用名稱、代稱與描述，關聯文章改指到分類後刪除標籤；回傳目標分類。</summary>
+    public Task<TaxonomyItem?> ConvertTagToCategoryAsync(Guid id, Guid version, CancellationToken ct = default) =>
+        SendAsync<TaxonomyItem>(new(HttpMethod.Post, $"api/v1/admin/taxonomies/tags/{id}/to-category?version={version}"), new { }, ct);
 
     public async Task<PagedResult<MediaItem>?> ListMediaAsync(int page = 1, int pageSize = Limits.PageSize,
         string? search = null, MediaKind? kind = null, CancellationToken ct = default) =>

@@ -1,4 +1,4 @@
-@page "/posts/{Slug}"
+﻿@page "/posts/{Slug}"
 @page "/posts/{Year:int}/{Month:int}/{Slug}"
 @page "/posts/{Year:int}/{Month:int}/{Day:int}/{Slug}"
 @page "/archives/p/{PostId:guid}"
@@ -75,7 +75,7 @@ else if (_content is not null)
             @if (_content.Kind == ContentKind.Post && _content.Categories.Count > 0)
             {
                 <span aria-hidden="true"> › </span>
-                <a href="@("/?category=" + Uri.EscapeDataString(_content.Categories[0].Slug))">@_content.Categories[0].Title</a>
+                <a href="@("/category/" + Uri.EscapeDataString(_content.Categories[0].Slug))">@_content.Categories[0].Title</a>
             }
             else if (_content.Kind == ContentKind.Page && _breadcrumbs.Count > 1)
             {
@@ -135,7 +135,7 @@ else if (_content is not null)
                 }
                 @if (_content.Categories.Count > 0)
                 {
-                    <div class="chip-list" aria-label="@UiText.T("Public.ContentDetail.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/?category=" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
+                    <div class="chip-list" aria-label="@UiText.T("Public.ContentDetail.Categories", "分類")">@foreach (var category in _content.Categories) { <a class="chip" href="@("/category/" + Uri.EscapeDataString(category.Slug))">@category.Title</a> }</div>
                 }
             }
             @if (_canEdit)
@@ -190,7 +190,8 @@ else if (_content is not null)
             }
             @if (_content.Kind == ContentKind.Post && _content.Tags.Count > 0)
             {
-                <footer class="article-tags" aria-label="@UiText.T("Public.ContentDetail.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/?tag=" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
+                <footer class="article-tags" aria-label="@UiText.T("Public.ContentDetail.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/tag/" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
+            }
             }
         }
         @if (_content.Kind == ContentKind.Post && _neighbors.Count > 0)
@@ -505,7 +506,7 @@ else
                 ["@type"] = "ListItem",
                 ["position"] = 2,
                 ["name"] = firstCat.Title,
-                ["item"] = BaseUrl + "/?category=" + Uri.EscapeDataString(firstCat.Slug)
+                ["item"] = BaseUrl + "/category/" + Uri.EscapeDataString(firstCat.Slug)
             });
             breadcrumbItems.Add(new System.Text.Json.Nodes.JsonObject
             {

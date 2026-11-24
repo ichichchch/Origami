@@ -1,0 +1,78 @@
+@page "/category/{CategorySlug}"
+@page "/tag/{TagSlug}"
+@inject OrigamiClient Api
+@inject NavigationManager Navigation
+@inject ILogger<TermArchive> Logger
+
+@* 分類與標籤的獨立網址（/category/代稱、/tag/代稱）：與首頁共用同一個列表元件，
+   差別只在分頁沿用自己的路徑，並以該詞彙的正式網址作為 canonical。 *@
+<PageTitle>@(_taxonomy?.Title ?? _kindLabel)</PageTitle>
+@if (_taxonomy is not null)
+{
+    <HeadContent>
+        <link rel="alternate" type="application/rss+xml" title="@(_taxonomy.Title)" href="@FeedHref" />
+        @if (_taxonomy.Description.Length > 0)
+        {
+            <meta name="description" content="@_taxonomy.Description" />
+        }
+        <link rel="canonical" href="@(BaseUrl + Path)" />
+        <meta property="og:site_name" content="@_settings.Name" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="@(_taxonomy.Title)" />
+        <meta property="og:url" content="@(BaseUrl + Path)" />
+    </HeadContent>
+}
+@if (_serve)
+{
+    <PostList Page="@Page" Category="@CategorySlug" Tag="@TagSlug" ResolvedCategory="_categoryView" ResolvedTag="_tagView" PageSize="@(_settings.PostsPerPage ?? Limits.PageSize)" BasePath="@Path" TermArchive="true" />
+}
+
+@code {
+    [Parameter] public string? CategorySlug { get; set; }
+    [Parameter] public string? TagSlug { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public string? Page { get; set; }
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private PublicSiteSettings _settings = PublicSiteSettings.Default;
+    private TaxonomyView? _categoryView;
+    private TaxonomyView? _tagView;
+    private bool _serve;
+    private bool _isCategory => CategorySlug is not null;
+    private string? _rawSlug => _isCategory ? CategorySlug : TagSlug;
+    private TaxonomyView? _taxonomy => _isCategory ? _categoryView : _tagView;
+    private string _kindLabel => _isCategory ? UiText.T("Public.TermArchive.CategoryLabel", "分類") : UiText.T("Public.TermArchive.TagLabel", "標籤");
+    private string BaseUrl => HttpContext is null ? "" : HttpContext.Request.Scheme + "://" + HttpContext.Request.Host.Value;
+    // canonical 一律使用資料庫中的代稱寫法，網址列的大小寫差異不會產生重複的正式網址。
+    private string Path => (_isCategory ? "/category/" : "/tag/") + Uri.EscapeDataString(_taxonomy?.Slug ?? _rawSlug ?? "");
+    private string FeedHref => "/feed?" + (_isCategory ? "category=" : "tag=") + Uri.EscapeDataString(_taxonomy?.Slug ?? _rawSlug ?? "");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _serve = false;
+        _categoryView = null;
+        _tagView = null;
+        try
+        {
+            var ct = HttpContext?.RequestAborted ?? default;
+            if (string.IsNullOrEmpty(_rawSlug)) { Missing(); return; }
+            var view = await Api.GetTaxonomyViewAsync(_isCategory ? TaxonomyKind.Category : TaxonomyKind.Tag, _rawSlug, ct);
+            if (view is null) { Missing(); return; }
+            if (_isCategory) _categoryView = view;
+            else _tagView = view;
+            _settings = await Api.GetPublicSettingsAsync(ct) ?? _settings;
+            _serve = true;
+        }
+        catch (CmsException) { Missing(); }
+        catch (OperationCanceledException) when (HttpContext?.RequestAborted.IsCancellationRequested == true) { /* 訪客在渲染途中已斷線；無須處理。 */ }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Term archive unavailable");
+            if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 503;
+        }
+    }
+
+    private void Missing()
+    {
+        if (HttpContext?.Response.HasStarted == false) HttpContext.Response.StatusCode = 404;
+        Navigation.NotFound();
+    }
+}

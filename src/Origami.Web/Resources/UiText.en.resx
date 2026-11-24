@@ -4496,6 +4496,33 @@
   <data name="Admin.Marketplace.PreviewPostTitle" xml:space="preserve"><value>Sample article title</value></data>
   <data name="Admin.Marketplace.PreviewPostSummary" xml:space="preserve"><value>Sample summary: fonts, line height, cards and heading styles all come from the theme pack.</value></data>
   <data name="Admin.Marketplace.PreviewRead" xml:space="preserve"><value>Read full article</value></data>
+  <data name="Admin.Settings.DefaultCategory" xml:space="preserve">
+    <value>Default category (optional)</value>
+  </data>
+  <data name="Admin.Settings.DefaultTag" xml:space="preserve">
+    <value>Default tag (optional)</value>
+  </data>
+  <data name="Admin.Settings.DefaultTaxonomyHelp" xml:space="preserve">
+    <value>Applied automatically when a new post has no category or tag. The setting is cleared if the chosen term is deleted.</value>
+  </data>
+  <data name="Admin.Settings.NoDefaultTaxonomy" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Admin.Taxonomies.ConvertFailed" xml:space="preserve">
+    <value>Could not convert. Reload and try again.</value>
+  </data>
+  <data name="Admin.Taxonomies.Converted" xml:space="preserve">
+    <value>Converted "{0}" to a category; its posts now belong to that category.</value>
+  </data>
+  <data name="Admin.Taxonomies.ToCategory" xml:space="preserve">
+    <value>Convert to category</value>
+  </data>
+  <data name="Public.TermArchive.CategoryLabel" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="Public.TermArchive.TagLabel" xml:space="preserve">
+    <value>Tag</value>
+  </data>
   <data name="Admin.Navigation.AuthorSlug" xml:space="preserve">
     <value>Author slug</value>
   </data>

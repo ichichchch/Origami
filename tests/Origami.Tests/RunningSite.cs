@@ -8,6 +8,7 @@ internal sealed class RunningSite : IAsyncDisposable
     private readonly string certificatePassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     private readonly X509Certificate2 certificate;
     private readonly ConcurrentQueue<string> warningCategories = new();
+    private readonly ConcurrentQueue<string> siteResolutionLines = new();
     private readonly ConcurrentQueue<string> errorLines = new();
     private readonly string apiToken = "site-test-token-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
     private Process? process;
@@ -15,8 +16,12 @@ internal sealed class RunningSite : IAsyncDisposable
     public Uri Address { get; private set; } = null!;
     public Uri? HttpAddress { get; private set; }
     public IReadOnlyCollection<string> WarningCategories => warningCategories.ToArray();
+    /// <summary>站點解析的安全診斷摘要，僅保留原因與 HTTP 狀態，不含 Api 位址或憑證。</summary>
+    public IReadOnlyList<string> SiteResolutionLines => [.. siteResolutionLines];
     /// <summary>伺服器端錯誤輸出（含例外堆疊），供測試失敗時診斷 500 的根因。</summary>
     public IReadOnlyList<string> ErrorLines => [.. errorLines];
+    /// <summary>隔離 Api 主機的錯誤輸出，供 BFF 傳輸失敗時定位上游原因。</summary>
+    public IReadOnlyList<string> ApiErrorLines => api?.ConsoleErrors.ToArray() ?? [];
     public string StorageRoot => Path.Combine(root, "storage");
 
     public RunningSite(string connectionString)
@@ -103,6 +108,8 @@ internal sealed class RunningSite : IAsyncDisposable
                 // 只保留分類／事件 ID，絕不保留訊息本文、認證資訊或連線字串。
                 var end = line.IndexOf(']');
                 if (end >= 0) warningCategories.Enqueue(line[..(end + 1)]);
+                if (line.Contains("Origami.Web.Services.SiteResolver", StringComparison.Ordinal))
+                    siteResolutionLines.Enqueue(line.Length > 500 ? line[..500] : line);
                 capturingError = false;
             }
             else if (line?.StartsWith("fail: ", StringComparison.Ordinal) == true)

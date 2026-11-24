@@ -159,6 +159,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await db.Settings.ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.HomePageContentId, (Guid?)null)
             .SetProperty(x => x.PrivacyPageContentId, (Guid?)null)
+            .SetProperty(x => x.DefaultCategoryId, (Guid?)null)
+            .SetProperty(x => x.DefaultTagId, (Guid?)null)
             .SetProperty(x => x.SiteIconMediaId, (Guid?)null)
             .SetProperty(x => x.LogoMediaId, (Guid?)null), ct);
         await db.Contents.ExecuteUpdateAsync(setters => setters
@@ -508,6 +510,12 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             ? home.Id : null;
         settings.PrivacyPageContentId = site.GetString("privacyPageSlug") is { } privacySlug && contentsBySlug.GetValueOrDefault(privacySlug) is { Kind: ContentKind.Page, Status: ContentStatus.Published, IsProtected: false, IsPrivate: false } privacy
             ? privacy.Id : null;
+        settings.DefaultCategoryId = site.GetString("defaultCategorySlug") is { Length: > 0 } defaultCategorySlug
+            ? categoriesBySlug.GetValueOrDefault(defaultCategorySlug)?.Id ?? throw new CmsException($"匯入的預設分類不存在：{defaultCategorySlug}。")
+            : null;
+        settings.DefaultTagId = site.GetString("defaultTagSlug") is { Length: > 0 } defaultTagSlug
+            ? tagsBySlug.GetValueOrDefault(defaultTagSlug)?.Id ?? throw new CmsException($"匯入的預設標籤不存在：{defaultTagSlug}。")
+            : null;
         settings.EmailNotificationsEnabled = site.TryGetProperty("emailNotificationsEnabled", out var emailNotif) && emailNotif.ValueKind == JsonValueKind.True;
         var permalink = Bounded(site, "permalinkScheme", Limits.PermalinkScheme, "永久連結結構", optional: true);
         settings.PermalinkScheme = PermalinkRules.IsValidScheme(permalink) ? permalink : PermalinkRules.PostName;

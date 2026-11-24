@@ -425,6 +425,10 @@ public sealed class SiteSettings
     [StringLength(Limits.CommentBlockedWords)] public string CommentBlockedWords { get; set; } = "";
     /// <summary>文章發布超過指定天數後自動關閉評論；0 表示不自動關閉。</summary>
     public int CommentCloseDays { get; set; }
+    /// <summary>新文章未指派分類時自動套用的分類；null 或該分類已刪除時不套用。</summary>
+    public Guid? DefaultCategoryId { get; set; }
+    /// <summary>新文章未指派標籤時自動套用的標籤；null 或該標籤已刪除時不套用。</summary>
+    public Guid? DefaultTagId { get; set; }
     /// <summary>啟用維護模式；開啟時一般訪客看到 503 維護畫面，管理員仍可正常預覽。</summary>
     public bool MaintenanceMode { get; set; }
     /// <summary>維護模式自訂提示訊息。</summary>
