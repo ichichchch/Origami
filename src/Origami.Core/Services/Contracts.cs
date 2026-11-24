@@ -238,9 +238,21 @@ public sealed record PagePathContent(PublicContent Content, IReadOnlyList<string
     public IReadOnlyList<BreadcrumbNode> Breadcrumbs { get; init; } = [];
 }
 /// <summary>公開導覽中的已發布頁面，附階層指標。</summary>
-public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId, string? Url = null, bool IsExternal = false);
+public sealed record PageNavItem(Guid Id, string Title, string Slug, Guid? ParentId, string? Url = null, bool IsExternal = false)
+{
+    /// <summary>顯示於頁尾而非頁首（自訂導覽的位置設定）。</summary>
+    public bool IsFooter { get; init; }
+}
 /// <summary>受控導覽項目的管理端檢視。</summary>
-public sealed record NavItemView(Guid Id, string Title, Guid? ContentId, string Url, bool IsVisible, int Position, Guid Version);
+public sealed record NavItemView(Guid Id, string Title, Guid? ContentId, string Url, bool IsVisible, int Position, Guid Version)
+{
+    public Guid? ParentId { get; init; }
+    public int Location { get; init; }
+    public Guid? CategoryId { get; init; }
+    public Guid? TagId { get; init; }
+    public bool ToArchives { get; init; }
+    public string AuthorSlug { get; init; } = "";
+}
 /// <summary>編輯器與網站設定中選擇器的頁面候選。</summary>
 public sealed record PageOption(Guid Id, string Title, Guid? ParentId, ContentStatus Status,
     bool IsPrivate = false, bool IsProtected = false);

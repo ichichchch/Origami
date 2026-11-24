@@ -1492,9 +1492,6 @@
   <data name="Admin.Navigation.Title" xml:space="preserve">
     <value>Site navigation</value>
   </data>
-  <data name="Admin.Navigation.UseExternalLink" xml:space="preserve">
-    <value>No site page (use an external link instead)</value>
-  </data>
   <data name="Admin.Navigation.Visible" xml:space="preserve">
     <value>Visible</value>
   </data>
@@ -4499,4 +4496,58 @@
   <data name="Admin.Marketplace.PreviewPostTitle" xml:space="preserve"><value>Sample article title</value></data>
   <data name="Admin.Marketplace.PreviewPostSummary" xml:space="preserve"><value>Sample summary: fonts, line height, cards and heading styles all come from the theme pack.</value></data>
   <data name="Admin.Marketplace.PreviewRead" xml:space="preserve"><value>Read full article</value></data>
+  <data name="Admin.Navigation.AuthorSlug" xml:space="preserve">
+    <value>Author slug</value>
+  </data>
+  <data name="Admin.Navigation.AuthorSlugHelp" xml:space="preserve">
+    <value>The slug after /author/ in the author archive URL; the author must have published posts.</value>
+  </data>
+  <data name="Admin.Navigation.ChoosePage" xml:space="preserve">
+    <value>Choose a page…</value>
+  </data>
+  <data name="Admin.Navigation.ChooseTarget" xml:space="preserve">
+    <value>Choose…</value>
+  </data>
+  <data name="Admin.Navigation.KindArchives" xml:space="preserve">
+    <value>Monthly archives</value>
+  </data>
+  <data name="Admin.Navigation.KindAuthor" xml:space="preserve">
+    <value>Author archive</value>
+  </data>
+  <data name="Admin.Navigation.KindCategory" xml:space="preserve">
+    <value>Category</value>
+  </data>
+  <data name="Admin.Navigation.KindExternal" xml:space="preserve">
+    <value>External link</value>
+  </data>
+  <data name="Admin.Navigation.KindPage" xml:space="preserve">
+    <value>Site page</value>
+  </data>
+  <data name="Admin.Navigation.KindTag" xml:space="preserve">
+    <value>Tag</value>
+  </data>
+  <data name="Admin.Navigation.Location" xml:space="preserve">
+    <value>Position</value>
+  </data>
+  <data name="Admin.Navigation.LocationFooter" xml:space="preserve">
+    <value>Footer</value>
+  </data>
+  <data name="Admin.Navigation.LocationHeader" xml:space="preserve">
+    <value>Header</value>
+  </data>
+  <data name="Admin.Navigation.Parent" xml:space="preserve">
+    <value>Parent item (optional)</value>
+  </data>
+  <data name="Admin.Navigation.ParentHelp" xml:space="preserve">
+    <value>Navigation is at most two levels; child items appear under their parent.</value>
+  </data>
+  <data name="Admin.Navigation.TargetKind" xml:space="preserve">
+    <value>Target type</value>
+  </data>
+  <data name="Admin.Navigation.TopLevel" xml:space="preserve">
+    <value>Top level</value>
+  </data>
+  <data name="Layout.Main.FooterNavigation" xml:space="preserve">
+    <value>Footer navigation</value>
+  </data>
 </root>

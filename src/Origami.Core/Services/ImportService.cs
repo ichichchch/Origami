@@ -164,6 +164,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await db.Contents.ExecuteUpdateAsync(setters => setters
             .SetProperty(x => x.ParentId, (Guid?)null)
             .SetProperty(x => x.CoverMediaId, (Guid?)null), ct);
+        // 先刪導覽：內容刪除只會串聯刪除頁面項目，遺留子項目的 RESTRICT 父鍵會阻擋還原。
+        await db.SiteNavItems.ExecuteDeleteAsync(ct);
         // 關聯表、嵌入、工作、修訂版本、瀏覽與轉址隨當站內容串聯刪除。
         await db.Contents.ExecuteDeleteAsync(ct);
         await db.Categories.ExecuteDeleteAsync(ct);
@@ -179,8 +181,6 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             await db.ContentTypes.ExecuteDeleteAsync(ct);
         }
         await db.MediaAssets.ExecuteDeleteAsync(ct);
-        // 導覽項目隨內容一併取代；舊項目引用的頁面已不存在，留著只會是死連結。
-        await db.SiteNavItems.ExecuteDeleteAsync(ct);
         // 小工具先於受控包刪除（Restrict FK 由包指向小工具的方向是小工具→包，先刪依賴端）。
         await db.SiteWidgets.ExecuteDeleteAsync(ct);
         await db.SitePackages.ExecuteDeleteAsync(ct);
@@ -580,26 +580,113 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             }
         }
 
-        // 受控導覽項目：站內目標以頁面代稱還原；找不到目標的項目略過，避免死連結。
+        // 受控導覽項目：先依來源陣列索引建立全部節點，再指定父層，避免識別碼重建後關係錯位。
         if (document.RootElement.TryGetProperty("navigation", out var navigation) && navigation.ValueKind == JsonValueKind.Array)
         {
+            var nodes = navigation.EnumerateArray().ToList();
+            var itemsByIndex = new Dictionary<int, SiteNavItem>();
+            var parentLinks = new List<(int Index, SiteNavItem Item, int ParentIndex)>();
             var position = 0;
-            foreach (var node in navigation.EnumerateArray())
+            for (var index = 0; index < nodes.Count; index++)
             {
+                var node = nodes[index];
                 var title = Bounded(node, "title", Limits.NavTitle, "導覽文字");
                 var url = ContentRules.OptionalHttpUrl(
                     Bounded(node, "url", Limits.NavUrl, "導覽網址", optional: true), Limits.NavUrl, "導覽網址");
                 var visible = !node.TryGetProperty("isVisible", out var visibleNode) || visibleNode.ValueKind != JsonValueKind.False;
+                var location = 0;
+                if (node.TryGetProperty("location", out var locationNode))
+                {
+                    if (locationNode.ValueKind != JsonValueKind.Number || !locationNode.TryGetInt32(out var parsedLocation)
+                        || parsedLocation is not (0 or 1))
+                        throw new CmsException("導覽位置無效。");
+                    location = parsedLocation;
+                }
+
+                var toArchives = false;
+                if (node.TryGetProperty("toArchives", out var archivesNode))
+                {
+                    if (archivesNode.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        throw new CmsException("導覽歸檔目標無效。");
+                    toArchives = archivesNode.GetBoolean();
+                }
+
                 Guid? contentId = null;
                 if (node.GetString("pageSlug") is { } pageSlug && contentsBySlug.TryGetValue(pageSlug, out var page)
                     && page.Kind == ContentKind.Page)
                     contentId = page.Id;
-                if (contentId is null && string.IsNullOrEmpty(url)) continue;
-                db.SiteNavItems.Add(new SiteNavItem
+
+                Guid? categoryId = null;
+                if (node.GetString("categorySlug") is { Length: > 0 } categorySlug)
                 {
-                    SiteId = db.CurrentSiteId, Title = title, Url = contentId is null ? url : "",
-                    ContentId = contentId, IsVisible = visible, Position = position++
-                });
+                    if (!categoriesBySlug.TryGetValue(categorySlug, out var category))
+                        throw new CmsException("導覽分類目標不存在。");
+                    categoryId = category.Id;
+                }
+
+                Guid? tagId = null;
+                if (node.GetString("tagSlug") is { Length: > 0 } tagSlug)
+                {
+                    if (!tagsBySlug.TryGetValue(tagSlug, out var tag))
+                        throw new CmsException("導覽標籤目標不存在。");
+                    tagId = tag.Id;
+                }
+
+                var rawAuthorSlug = Bounded(node, "authorSlug", Limits.Slug, "導覽作者代稱", optional: true).Trim();
+                var authorSlug = rawAuthorSlug.Length == 0 ? "" : ContentRules.NormalizeSlug(rawAuthorSlug);
+                var hasExpandedTargets = categoryId is not null || tagId is not null || toArchives || authorSlug.Length > 0;
+                var targetCount = (contentId is not null ? 1 : 0) + (categoryId is not null ? 1 : 0)
+                    + (tagId is not null ? 1 : 0) + (toArchives ? 1 : 0) + (authorSlug.Length > 0 ? 1 : 0)
+                    + (url.Length > 0 ? 1 : 0);
+                // 舊 v3 只有頁面與外部網址，保留頁面優先、無目標則略過的行為。
+                if (!hasExpandedTargets && contentId is null && url.Length == 0) continue;
+                if (hasExpandedTargets && targetCount != 1)
+                    throw new CmsException("導覽必須恰有一個目標。");
+
+                var item = new SiteNavItem
+                {
+                    SiteId = db.CurrentSiteId,
+                    Title = title,
+                    Url = contentId is null && categoryId is null && tagId is null && !toArchives && authorSlug.Length == 0
+                        ? url : "",
+                    ContentId = contentId,
+                    Location = location,
+                    CategoryId = categoryId,
+                    TagId = tagId,
+                    ToArchives = toArchives,
+                    AuthorSlug = authorSlug,
+                    IsVisible = visible,
+                    Position = position++
+                };
+                db.SiteNavItems.Add(item);
+                itemsByIndex[index] = item;
+
+                if (node.TryGetProperty("parentIndex", out var parentNode))
+                {
+                    if (parentNode.ValueKind != JsonValueKind.Number || !parentNode.TryGetInt32(out var parentIndex)
+                        || parentIndex < 0 || parentIndex >= nodes.Count)
+                        throw new CmsException("導覽父層索引無效。");
+                    parentLinks.Add((index, item, parentIndex));
+                }
+            }
+
+            var parentIndexByIndex = parentLinks.ToDictionary(x => x.Index, x => x.ParentIndex);
+            foreach (var (index, item, parentIndex) in parentLinks)
+            {
+                if (parentIndex == index) throw new CmsException("導覽不可指向自己。");
+                var cursor = (int?)parentIndex;
+                var guard = 0;
+                while (cursor is { } current)
+                {
+                    if (current == index) throw new CmsException("導覽父層關係不可形成循環。");
+                    if (!itemsByIndex.ContainsKey(current)) throw new CmsException("導覽上層不在匯入資料中。");
+                    if (++guard > nodes.Count) throw new CmsException("導覽父層關係過深。");
+                    if (!parentIndexByIndex.TryGetValue(current, out var next)) break;
+                    cursor = next;
+                }
+                if (guard > 1) throw new CmsException("導覽最多兩層。");
+
+                item.ParentId = itemsByIndex[parentIndex].Id;
             }
         }
 

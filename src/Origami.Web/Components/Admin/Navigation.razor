@@ -1,4 +1,4 @@
-@page "/admin/navigation"
+﻿@page "/admin/navigation"
 @rendermode InteractiveServer
 @attribute [Authorize]
 @layout AdminLayout
@@ -21,16 +21,63 @@
             <fieldset disabled="@EditBlocked">
                 <div class="field"><label for="nav-title">@UiText.T("Admin.Navigation.DisplayText", "顯示文字") <span class="required">@UiText.T("Admin.Navigation.Required", "必填")</span></label><input id="nav-title" @bind="_edit.Title" @bind:event="oninput" maxlength="@Limits.NavTitle" required /></div>
                 <div class="field">
-                    <label for="nav-target">@UiText.T("Admin.Navigation.InternalPageOptional", "站內頁面（選填）")</label>
-                    <select id="nav-target" value="@(_edit.ContentId?.ToString() ?? "")" @onchange="TargetChanged" disabled="@EditBlocked">
-                        <option value="">@UiText.T("Admin.Navigation.UseExternalLink", "不使用站內頁面（改填外部連結）")</option>
-                        @foreach (var option in _pageOptions)
-                        {
-                            <option value="@option.Id">@option.Title</option>
-                        }
+                    <label for="nav-kind">@UiText.T("Admin.Navigation.TargetKind", "目標類型")</label>
+                    <select id="nav-kind" value="@_targetKind" @onchange="TargetKindChanged" disabled="@EditBlocked">
+                        <option value="page">@UiText.T("Admin.Navigation.KindPage", "站內頁面")</option>
+                        <option value="external">@UiText.T("Admin.Navigation.KindExternal", "外部連結")</option>
+                        <option value="category">@UiText.T("Admin.Navigation.KindCategory", "分類")</option>
+                        <option value="tag">@UiText.T("Admin.Navigation.KindTag", "標籤")</option>
+                        <option value="archives">@UiText.T("Admin.Navigation.KindArchives", "月度歸檔")</option>
+                        <option value="author">@UiText.T("Admin.Navigation.KindAuthor", "作者彙整頁")</option>
                     </select>
                 </div>
-                <div class="field"><label for="nav-url">@UiText.T("Admin.Navigation.ExternalLinkOptional", "外部連結（選填）")</label><input id="nav-url" @bind="_edit.Url" @bind:event="oninput" maxlength="@Limits.NavUrl" placeholder="https://example.com/" aria-describedby="nav-url-help" /><span id="nav-url-help" class="field-help">@UiText.T("Admin.Navigation.ExternalLinkHelp", "僅接受 http／https 的絕對網址；選擇站內頁面時此欄位會被忽略。")</span></div>
+                @if (_targetKind == "page")
+                {
+                    <div class="field">
+                        <label for="nav-target">@UiText.T("Admin.Navigation.InternalPageOptional", "站內頁面")</label>
+                        <select id="nav-target" value="@(_edit.ContentId?.ToString() ?? "")" @onchange="TargetChanged" disabled="@EditBlocked">
+                            <option value="">@UiText.T("Admin.Navigation.ChoosePage", "請選擇頁面…")</option>
+                            @foreach (var option in _pageOptions)
+                            {
+                                <option value="@option.Id">@option.Title</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else if (_targetKind == "external")
+                {
+                    <div class="field"><label for="nav-url">@UiText.T("Admin.Navigation.ExternalLinkOptional", "外部連結") <span class="required">@UiText.T("Admin.Navigation.Required", "必填")</span></label><input id="nav-url" @bind="_edit.Url" @bind:event="oninput" maxlength="@Limits.NavUrl" placeholder="https://example.com/" aria-describedby="nav-url-help" /><span id="nav-url-help" class="field-help">@UiText.T("Admin.Navigation.ExternalLinkHelp", "僅接受 http／https 的絕對網址。")</span></div>
+                }
+                else if (_targetKind == "category")
+                {
+                    <div class="field"><label for="nav-category">@UiText.T("Admin.Navigation.KindCategory", "分類")</label><select id="nav-category" value="@(_edit.CategoryId?.ToString() ?? "")" @onchange="CategoryChanged" disabled="@EditBlocked"><option value="">@UiText.T("Admin.Navigation.ChooseTarget", "請選擇…")</option>@foreach (var category in _categories) { <option value="@category.Id">@category.Name</option> }</select></div>
+                }
+                else if (_targetKind == "tag")
+                {
+                    <div class="field"><label for="nav-tag">@UiText.T("Admin.Navigation.KindTag", "標籤")</label><select id="nav-tag" value="@(_edit.TagId?.ToString() ?? "")" @onchange="TagChanged" disabled="@EditBlocked"><option value="">@UiText.T("Admin.Navigation.ChooseTarget", "請選擇…")</option>@foreach (var tag in _tags) { <option value="@tag.Id">@tag.Name</option> }</select></div>
+                }
+                else if (_targetKind == "author")
+                {
+                    <div class="field"><label for="nav-author">@UiText.T("Admin.Navigation.AuthorSlug", "作者代稱") <span class="required">@UiText.T("Admin.Navigation.Required", "必填")</span></label><input id="nav-author" @bind="_edit.AuthorSlug" @bind:event="oninput" maxlength="@Limits.Slug" placeholder="author-slug" aria-describedby="nav-author-help" /><span id="nav-author-help" class="field-help">@UiText.T("Admin.Navigation.AuthorSlugHelp", "作者彙整頁網址 /author/ 後面的代稱；作者須有已發布文章。")</span></div>
+                }
+                <div class="field">
+                    <label for="nav-location">@UiText.T("Admin.Navigation.Location", "顯示位置")</label>
+                    <select id="nav-location" value="@_edit.Location" @onchange="LocationChanged" disabled="@EditBlocked">
+                        <option value="0">@UiText.T("Admin.Navigation.LocationHeader", "頁首")</option>
+                        <option value="1">@UiText.T("Admin.Navigation.LocationFooter", "頁尾")</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="nav-parent">@UiText.T("Admin.Navigation.Parent", "上層項目（選填）")</label>
+                    <select id="nav-parent" value="@(_edit.ParentId?.ToString() ?? "")" @onchange="ParentChanged" disabled="@EditBlocked">
+                        <option value="">@UiText.T("Admin.Navigation.TopLevel", "最上層")</option>
+                        @foreach (var candidate in (_items ?? []).Where(x => x.ParentId is null && x.Id != _edit.Id))
+                        {
+                            <option value="@candidate.Id">@candidate.Title</option>
+                        }
+                    </select>
+                    <span class="field-help">@UiText.T("Admin.Navigation.ParentHelp", "導覽最多兩層；子項目顯示在上層項目之下。")</span>
+                </div>
                 <div class="field checkbox-field"><label for="nav-visible"><input id="nav-visible" type="checkbox" @bind="_edit.IsVisible" disabled="@EditBlocked" /> @UiText.T("Admin.Navigation.ShowInNavigation", "顯示於前台導覽")</label></div>
                 <div class="button-row">
                     <button type="submit" class="button">@(Busy ? UiText.T("Admin.Navigation.Saving", "儲存中…") : UiText.T("Admin.Navigation.SaveItem", "儲存項目"))</button>
@@ -102,8 +149,39 @@ else
         _items = await Api.ListNavigationAsync(ct) ?? [];
         _pageOptions = (await Api.PageOptionsAsync(ct) ?? [])
             .Where(x => x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected).ToList();
+        _categories = (await Api.ListTaxonomiesAsync(TaxonomyKind.Category, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
+        _tags = (await Api.ListTaxonomiesAsync(TaxonomyKind.Tag, 1, Limits.MaxPageSize, ct))?.Items.ToList() ?? [];
         _edit = new();
+        _targetKind = "page";
     });
+
+    private List<TaxonomyItem> _categories = [];
+    private List<TaxonomyItem> _tags = [];
+    // 目標類型只是表單狀態；送出的 NavItemInput 一律只帶所選類型的欄位。
+    private string _targetKind = "page";
+
+    private void TargetKindChanged(ChangeEventArgs args)
+    {
+        _targetKind = args.Value?.ToString() ?? "page";
+        if (_targetKind != "page") _edit.ContentId = null;
+        if (_targetKind != "external") _edit.Url = "";
+        if (_targetKind != "category") _edit.CategoryId = null;
+        if (_targetKind != "tag") _edit.TagId = null;
+        if (_targetKind != "author") _edit.AuthorSlug = "";
+        _edit.ToArchives = _targetKind == "archives";
+    }
+
+    private void CategoryChanged(ChangeEventArgs args) =>
+        _edit.CategoryId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+
+    private void TagChanged(ChangeEventArgs args) =>
+        _edit.TagId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
+
+    private void LocationChanged(ChangeEventArgs args) =>
+        _edit.Location = args.Value?.ToString() == "1" ? 1 : 0;
+
+    private void ParentChanged(ChangeEventArgs args) =>
+        _edit.ParentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
 
     private void TargetChanged(ChangeEventArgs args) =>
         _edit.ContentId = Guid.TryParse(args.Value?.ToString(), out var parsed) ? parsed : null;
@@ -113,14 +191,23 @@ else
         _edit = new NavigationService.NavItemInput
         {
             Id = item.Id, Title = item.Title, ContentId = item.ContentId,
-            Url = item.ContentId is null ? item.Url : "", IsVisible = item.IsVisible, Version = item.Version
+            Url = item.ContentId is null ? item.Url : "", IsVisible = item.IsVisible, Version = item.Version,
+            ParentId = item.ParentId, Location = item.Location, CategoryId = item.CategoryId, TagId = item.TagId,
+            ToArchives = item.ToArchives, AuthorSlug = item.AuthorSlug
         };
+        _targetKind = item.ContentId is not null ? "page"
+            : item.CategoryId is not null ? "category"
+            : item.TagId is not null ? "tag"
+            : item.ToArchives ? "archives"
+            : item.AuthorSlug.Length > 0 ? "author"
+            : "external";
     }
 
     private Task Save() => RunEditAsync(async ct =>
     {
         await Api.SaveNavigationAsync(_edit, ct);
         _edit = new();
+        _targetKind = "page";
         _items = await Api.ListNavigationAsync(ct) ?? [];
     }, UiText.T("Admin.Navigation.Saved", "導覽項目已儲存。"));
 

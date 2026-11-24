@@ -110,6 +110,34 @@ public sealed class NavigationServiceTests(IsolatedPostgres postgres) : ServiceT
     }
 
     [PostgresFact]
+    public async Task Public_navigation_keeps_internal_targets_and_skips_unsafe_legacy_links()
+    {
+        using var admin = await App.AdministratorAsync();
+        var pageId = await CreatePageAsync("分類頁面", "category-page");
+        await EnableCustomNavigationAsync();
+        var category = await admin.Taxonomy.SaveAsync(TaxonomyKind.Category, new TaxonomyEdit { Name = "生活" });
+        var navigation = admin.Services.GetRequiredService<NavigationService>();
+        await navigation.SaveAsync(new NavigationService.NavItemInput { Title = "關於", ContentId = pageId });
+        var categoryItem = await navigation.SaveAsync(new NavigationService.NavItemInput
+        {
+            Title = "生活", CategoryId = category.Id, ParentId = (await navigation.ListAsync())[0].Id
+        });
+
+        await using (var db = await App.CreateContextAsync())
+        {
+            db.SiteNavItems.Add(new SiteNavItem
+            {
+                Title = "舊資料危險連結", Url = "javascript:alert(1)", Position = 10
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var entries = await navigation.PublicAsync();
+        Assert.Equal("/category/" + Uri.EscapeDataString(category.Slug!), entries.Single(x => x.Id == categoryItem.Id).Url);
+        Assert.DoesNotContain(entries, x => x.Title == "舊資料危險連結");
+    }
+
+    [PostgresFact]
     public async Task Navigation_items_are_isolated_per_site()
     {
         var site = await CreateSiteAsync("navsite");

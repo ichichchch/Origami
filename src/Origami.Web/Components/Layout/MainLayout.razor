@@ -35,9 +35,9 @@
             <a href="/" aria-current="@(IsCurrentNav("/") ? "page" : null)">@UiText.T("Layout.Main.02", "首頁")</a>
             @foreach (var (page, depth) in NavOrder())
             {
-                // 自訂導覽項目自帶網址；頁面項目仍依階層網址。
-                var href = page.Url ?? PageHref(page);
-                <a class="@(depth > 0 ? "nav-child" : "")" href="@href" target="@(page.IsExternal ? "_blank" : null)" rel="@(page.IsExternal ? "noopener" : null)" aria-current="@(page.IsExternal ? null : IsCurrentNav(href) ? "page" : null)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
+                var (href, external) = NavigationHref(page);
+                if (href is null) continue;
+                <a class="@(depth > 0 ? "nav-child" : "")" href="@href" target="@(external ? "_blank" : null)" rel="@(external ? "noopener" : null)" aria-current="@(external ? null : IsCurrentNav(href) ? "page" : null)">@(depth > 0 ? "└ " : "")@(page.Title)</a>
             }
             <a href="/archives" aria-current="@(IsCurrentNav("/archives") ? "page" : null)">@UiText.T("Layout.Main.03", "歸檔")</a>
             <a href="/search" aria-current="@(IsCurrentNav("/search") ? "page" : null)">@UiText.T("Layout.Main.04", "搜尋文章")</a>
@@ -81,6 +81,19 @@
         }
     }
     <footer class="site-footer">
+        @if (_footerLinks.Count > 0)
+        {
+            <nav aria-label="@UiText.T("Layout.Main.FooterNavigation", "頁尾導覽")">
+                <ul class="footer-nav">
+                    @foreach (var link in _footerLinks)
+                    {
+                        var (href, external) = NavigationHref(link);
+                        if (href is null) continue;
+                        <li><a href="@href" target="@(external ? "_blank" : null)" rel="@(external ? "noopener" : null)">@link.Title</a></li>
+                    }
+                </ul>
+            </nav>
+        }
         @if (_footerWidgets.Count > 0)
         {
             <div class="footer-widgets">
@@ -123,12 +136,28 @@
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
     private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private List<PageNavItem> _pages = [];
+    private List<PageNavItem> _footerLinks = [];
     private List<WidgetService.PublicWidget> _sidebarWidgets = [];
     private List<WidgetService.PublicWidget> _footerWidgets = [];
     private bool _isMember;
 
     /// <summary>導覽當前頁指示：以請求路徑（已解碼、去尾斜線）比對導覽href（解碼後）；
     /// 僅供輔助呈現與 aria-current，不具授權意義。</summary>
+    private static bool IsExternalUrl(string? url) => url is { Length: > 0 }
+        && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && uri.Host.Length > 0;
+
+    private (string? Href, bool External) NavigationHref(PageNavItem page)
+    {
+        var external = page.IsExternal || IsExternalUrl(page.Url);
+        if (external) return (page.Url, true);
+        if (page.Url is { Length: > 0 } url)
+        {
+            var internalUrl = url[0] == '/' && (url.Length == 1 || (url[1] != '/' && url[1] != '\\'));
+            return (internalUrl ? url : null, false);
+        }
+        return (PageHref(page), false);
+    }
+
     private bool IsCurrentNav(string href)
     {
         if (!href.StartsWith('/')) return false;
@@ -141,13 +170,17 @@
     private List<(PageNavItem Page, int Depth)> NavOrder()
     {
         var byId = _pages.ToDictionary(x => x.Id);
+        var customNavigation = _pages.Any(x => x.Url is { Length: > 0 });
         var children = _pages.Where(x => x.ParentId is not null && byId.ContainsKey(x.ParentId.Value))
             .ToLookup(x => x.ParentId!.Value);
         List<(PageNavItem, int)> ordered = [];
         void Walk(PageNavItem page, int depth)
         {
             ordered.Add((page, depth));
-            foreach (var child in children[page.Id].OrderBy(c => c.Title).ThenBy(c => c.Id)) Walk(child, depth + 1);
+            var orderedChildren = customNavigation
+                ? children[page.Id]
+                : children[page.Id].OrderBy(c => c.Title).ThenBy(c => c.Id);
+            foreach (var child in orderedChildren) Walk(child, depth + 1);
         }
         foreach (var top in _pages.Where(x => x.ParentId is null || !byId.ContainsKey(x.ParentId.Value)))
             Walk(top, 0);

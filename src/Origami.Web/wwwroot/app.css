@@ -640,3 +640,6 @@ th { letter-spacing: .07em; text-transform: uppercase; font-size: .68rem; }
 .trend-fill { transform-origin: left; animation: trend-grow .7s cubic-bezier(.22,1,.36,1) both; }
 @keyframes trend-grow { from { transform: scaleX(0); } }
 
+.footer-nav { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; margin-bottom: .6rem; padding: 0; list-style: none; }
+.footer-nav a { color: var(--ink); text-decoration: none; }
+.footer-nav a:hover { color: var(--accent-ink); text-decoration: underline; }

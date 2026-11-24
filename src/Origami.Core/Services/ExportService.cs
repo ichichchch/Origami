@@ -33,6 +33,8 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
 
         // 內容識別碼絕不離站；slug 才是匯入時建立連結的穩定識別。
         var slugById = await db.Contents.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
+        var categorySlugById = await db.Categories.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
+        var tagSlugById = await db.Tags.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         var settings = await db.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, ct);
         writer.WriteStartObject("site");
         writer.WriteString("name", settings?.Name ?? "");
@@ -258,18 +260,29 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         }
         writer.WriteEndArray();
 
+        // 先完整列舉再建立索引，父子關係不依賴匯出時的資料庫識別碼或寫入順序。
+        var navigationItems = await db.SiteNavItems.AsNoTracking().OrderBy(x => x.Position).ThenBy(x => x.Id).ToListAsync(ct);
+        var navigationIndexById = navigationItems.Select((item, index) => (item.Id, index)).ToDictionary(x => x.Id, x => x.index);
         writer.WriteStartArray("navigation");
-        await foreach (var item in db.SiteNavItems.AsNoTracking().OrderBy(x => x.Position).ThenBy(x => x.Id)
-            .AsAsyncEnumerable().WithCancellation(ct))
+        foreach (var item in navigationItems)
         {
             writer.WriteStartObject();
             writer.WriteString("title", item.Title);
             writer.WriteString("url", item.Url);
             writer.WriteBoolean("isVisible", item.IsVisible);
             writer.WriteNumber("position", item.Position);
-            // 站內目標以頁面代稱表示，匯入時才解析成新的內容識別。
+            writer.WriteNumber("location", item.Location);
+            writer.WriteBoolean("toArchives", item.ToArchives);
+            if (item.ParentId is { } parentId && navigationIndexById.TryGetValue(parentId, out var parentIndex))
+                writer.WriteNumber("parentIndex", parentIndex);
+            // 站內目標以頁面、分類或標籤代稱表示，匯入時才解析成新的識別碼。
             if (item.ContentId is { } target && slugById.TryGetValue(target, out var pageSlug))
                 writer.WriteString("pageSlug", pageSlug);
+            if (item.CategoryId is { } categoryId && categorySlugById.TryGetValue(categoryId, out var navCategorySlug))
+                writer.WriteString("categorySlug", navCategorySlug);
+            if (item.TagId is { } tagId && tagSlugById.TryGetValue(tagId, out var tagSlug))
+                writer.WriteString("tagSlug", tagSlug);
+            if (item.AuthorSlug.Length > 0) writer.WriteString("authorSlug", item.AuthorSlug);
             writer.WriteEndObject();
         }
         writer.WriteEndArray();
