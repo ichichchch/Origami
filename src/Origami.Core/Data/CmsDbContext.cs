@@ -24,6 +24,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public DbSet<CustomTaxonomyTerm> CustomTaxonomyTerms => Set<CustomTaxonomyTerm>();
     public DbSet<ContentCustomTerm> ContentCustomTerms => Set<ContentCustomTerm>();
     public DbSet<CustomField> CustomFields => Set<CustomField>();
+    public DbSet<ContentTemplate> ContentTemplates => Set<ContentTemplate>();
+    public DbSet<ContentSnippet> ContentSnippets => Set<ContentSnippet>();
     public DbSet<ContentFieldValue> ContentFieldValues => Set<ContentFieldValue>();
     public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
     public DbSet<ContentSlugRedirect> SlugRedirects => Set<ContentSlugRedirect>();
@@ -348,16 +350,40 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Options).HasMaxLength(Limits.CustomFieldOptions).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
             e.HasIndex(x => new { x.SiteId, x.ContentTypeId, x.Key }).IsUnique();
+            // 內建文章／頁面的欄位沒有內容類型（外鍵為空時不參與唯一性），改以內容種類保證同站同鍵唯一。
+            e.HasIndex(x => new { x.SiteId, x.BuiltinKind, x.Key }).IsUnique();
             e.HasOne(x => x.ContentType).WithMany()
                 .HasForeignKey(x => new { x.SiteId, x.ContentTypeId })
-                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade);
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
             e.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
                 t.HasCheckConstraint("CK_CustomField_Key", "length(btrim(\"Key\")) > 0");
                 t.HasCheckConstraint("CK_CustomField_Type",
-                    "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox', 'url', 'select', 'media')");
+                    "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox', 'url', 'select', 'media', 'email', 'datetime', 'gallery', 'relation')");
+                // 欄位恰屬於一個內容類型或一種內建內容，不得兩者皆有或皆無。
+                t.HasCheckConstraint("CK_CustomField_Owner", "(\"ContentTypeId\" IS NULL) <> (\"BuiltinKind\" IS NULL)");
             });
+        });
+        builder.Entity<ContentTemplate>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.Property(x => x.Name).HasMaxLength(Limits.TemplateName).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(Limits.Title).IsRequired();
+            e.Property(x => x.Markdown).HasMaxLength(Limits.TemplateBody).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
+            // 自訂內容類型的範本隨類型刪除；內建文章／頁面的範本沒有類型。
+            e.HasOne<ContentType>().WithMany()
+                .HasForeignKey(x => new { x.SiteId, x.ContentTypeId })
+                .HasPrincipalKey(x => new { x.SiteId, x.Id }).OnDelete(DeleteBehavior.Cascade).IsRequired(false);
+            e.ToTable(t => t.HasCheckConstraint("CK_ContentTemplate_Kind", "\"Kind\" IN (0, 1)"));
+        });
+        builder.Entity<ContentSnippet>(e =>
+        {
+            ConfigureSiteEntity(e);
+            e.Property(x => x.Name).HasMaxLength(Limits.TemplateName).IsRequired();
+            e.Property(x => x.Markdown).HasMaxLength(Limits.SnippetBody).IsRequired();
+            e.Property(x => x.Version).IsConcurrencyToken();
         });
         builder.Entity<ContentFieldValue>(e =>
         {
@@ -497,6 +523,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         ["SiteMemberships"] = "站点成员表：用户在站点内的角色与署名。",
         ["SiteNavItems"] = "站点导航表：前台自定义导航项。",
         ["SiteWidgets"] = "站点小工具表：侧栏与页尾的声明式内容区块。",
+        ["ContentTemplates"] = "内容模板表：新建内容时套用的 Markdown 骨架。",
+        ["ContentSnippets"] = "文字片段表：编辑器可重复插入的 Markdown 片段。",
         ["SitePackages"] = "站点受控包表：主题包与小组件包的安装记录与声明。",
         ["ApiCredentials"] = "API 凭据表：站点级访问密钥（仅存摘要）。",
         ["Contents"] = "内容主表：文章/页面及其发布状态。",

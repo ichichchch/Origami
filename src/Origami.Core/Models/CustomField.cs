@@ -8,11 +8,14 @@ public sealed class CustomField
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid SiteId { get; set; } = SiteDefaults.DefaultSiteId;
-    public Guid ContentTypeId { get; set; }
+    /// <summary>所屬自訂內容類型；內建文章／頁面的欄位為 null。</summary>
+    public Guid? ContentTypeId { get; set; }
+    /// <summary>內建內容種類（文章或頁面）；自訂內容類型的欄位為 null。與 ContentTypeId 恰有一方有值。</summary>
+    public ContentKind? BuiltinKind { get; set; }
     public string Name { get; set; } = "";
     /// <summary>穩定鍵值；內容以此鍵保存輸入值，顯示名稱可自由修改。</summary>
     public string Key { get; set; } = "";
-    /// <summary>欄位種類：text／longtext／number／date／checkbox／url／select／media。</summary>
+    /// <summary>欄位種類：text／longtext／number／date／checkbox／url／select／media／email／datetime／gallery／relation。</summary>
     public string FieldType { get; set; } = CustomFieldTypes.Text;
     /// <summary>select 欄位的候選值清單（以逗號分隔）；其他欄位種類為空字串。</summary>
     [StringLength(Limits.CustomFieldOptions)] public string Options { get; set; } = "";
@@ -21,7 +24,7 @@ public sealed class CustomField
     public int Position { get; set; }
     public bool IsArchived { get; set; }
     public Guid Version { get; set; } = Guid.NewGuid();
-    public ContentType ContentType { get; set; } = null!;
+    public ContentType? ContentType { get; set; }
 }
 
 /// <summary>內容在自訂欄位上的值。</summary>
@@ -48,16 +51,21 @@ public static class CustomFieldTypes
     public const string Url = "url";
     public const string Select = "select";
     public const string Media = "media";
+    public const string Email = "email";
+    public const string DateTimeField = "datetime";
+    public const string Gallery = "gallery";
+    public const string Relation = "relation";
 
-    public static readonly IReadOnlyList<string> All = [Text, LongText, Number, Date, Checkbox, Url, Select, Media];
+    public static readonly IReadOnlyList<string> All = [Text, LongText, Number, Date, Checkbox, Url, Select, Media,
+        Email, DateTimeField, Gallery, Relation];
 
     public static bool IsValid(string? kind) =>
         kind is not null && All.Contains(kind, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>欄位值的長度上限；長文字欄位允許較長的內容。</summary>
+    /// <summary>欄位值的長度上限；長文字與多值欄位允許較長的內容。</summary>
     public static int MaxLength(string kind) => kind switch
     {
-        LongText => 2000,
+        LongText or Gallery or Relation => 2000,
         Url => Limits.UserUrl,
         _ => 200
     };
@@ -105,6 +113,32 @@ public static class CustomFieldRules
                 if (!text.StartsWith("/media/", StringComparison.Ordinal) || !ContentRules.IsSafeMediaFileNameAny(text["/media/".Length..]))
                     throw new CmsException("媒體欄位須為站內 /media/ 媒體路徑。");
                 break;
+            case CustomFieldTypes.Email:
+                if (!System.Net.Mail.MailAddress.TryCreate(text, out _))
+                    throw new CmsException("此欄位須為有效的電子郵件地址。");
+                break;
+            case CustomFieldTypes.DateTimeField:
+                if (!System.Text.RegularExpressions.Regex.IsMatch(text, @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})?$")
+                    || !DateTimeOffset.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out _))
+                    throw new CmsException("此欄位須為日期時間（yyyy-MM-ddTHH:mm）。");
+                break;
+            case CustomFieldTypes.Gallery:
+                foreach (var path in ParseList(text))
+                    if (!path.StartsWith("/media/", StringComparison.Ordinal) || !ContentRules.IsSafeMediaFileNameAny(path["/media/".Length..]))
+                        throw new CmsException("圖庫欄位的每一行都須為站內 /media/ 媒體路徑。");
+                break;
+            case CustomFieldTypes.Relation:
+                foreach (var id in ParseList(text))
+                    if (!Guid.TryParse(id, out _))
+                        throw new CmsException("關聯欄位的值須為內容識別碼。");
+                break;
         }
     }
+
+    /// <summary>多值欄位（圖庫、關聯）以換行或逗號分隔。</summary>
+    public static List<string> ParseList(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : [.. value.Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(x => x.Length > 0)];
 }

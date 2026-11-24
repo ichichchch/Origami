@@ -166,7 +166,11 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             if (field.Options.Length > 0) writer.WriteString("options", field.Options);
             writer.WriteBoolean("isRequired", field.IsRequired);
             writer.WriteNumber("position", field.Position);
-            writer.WriteString("contentType", typeSlugById.GetValueOrDefault(field.ContentTypeId, ""));
+            // 內建文章／頁面的欄位不屬於任何內容類型，以 builtin:post／builtin:page 標示。
+            writer.WriteString("contentType", field.ContentTypeId is { } fieldTypeId
+                ? typeSlugById.GetValueOrDefault(fieldTypeId, "")
+                : field.BuiltinKind == ContentKind.Page ? "builtin:page" : "builtin:post");
+            writer.WriteEndObject();
             writer.WriteEndObject();
         }
         writer.WriteEndArray();

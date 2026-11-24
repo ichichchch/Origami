@@ -310,17 +310,22 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
     /// <summary>某個內容類型底下的分類法與詞彙，供內容編輯器選擇。</summary>
     public sealed record TaxonomyTermsView(Guid TaxonomyId, string TaxonomyName, List<TermView> Terms);
 
-    public sealed record FieldView(Guid Id, Guid ContentTypeId, string Name, string Key, string FieldType,
+    public sealed record FieldView(Guid Id, Guid? ContentTypeId, string Name, string Key, string FieldType,
         bool IsRequired, int Position, bool IsArchived, string Options = "")
     {
         /// <summary>並發版本；刪除時須攜帶。</summary>
         public Guid Version { get; init; }
+        /// <summary>內建文章／頁面的欄位所屬的內容種類；自訂內容類型的欄位為 null。</summary>
+        public ContentKind? BuiltinKind { get; init; }
     }
 
     public sealed class FieldEdit
     {
         public Guid? Id { get; set; }
-        public Guid ContentTypeId { get; set; }
+        /// <summary>所屬自訂內容類型；內建文章／頁面的欄位為 null。</summary>
+        public Guid? ContentTypeId { get; set; }
+        /// <summary>內建內容種類（文章或頁面）；與 ContentTypeId 恰一方有值。</summary>
+        public ContentKind? BuiltinKind { get; set; }
         [Required, StringLength(Limits.CustomFieldName)] public string Name { get; set; } = "";
         [Required, StringLength(Limits.CustomFieldName)] public string Key { get; set; } = "";
         [Required, StringLength(20)] public string FieldType { get; set; } = CustomFieldTypes.Text;
@@ -339,7 +344,20 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         return await db.CustomFields.AsNoTracking().Where(x => x.ContentTypeId == contentTypeId)
             .OrderBy(x => x.Position).ThenBy(x => x.Name).ThenBy(x => x.Id)
             .Select(x => new FieldView(x.Id, x.ContentTypeId, x.Name, x.Key, x.FieldType, x.IsRequired,
-                x.Position, x.IsArchived, x.Options) { Version = x.Version })
+                x.Position, x.IsArchived, x.Options) { Version = x.Version, BuiltinKind = x.BuiltinKind })
+            .ToListAsync(ct);
+    }
+
+    /// <summary>內建文章／頁面的自訂欄位；不屬於任何內容類型，以內容種類區分。</summary>
+    public async Task<List<FieldView>> ListBuiltinFieldsAsync(ContentKind kind, CancellationToken ct = default)
+    {
+        await admin.RequireRoleAsync(SiteRole.Reader, ct);
+        if (kind is not (ContentKind.Post or ContentKind.Page)) throw new CmsException("內容種類無效。");
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.CustomFields.AsNoTracking().Where(x => x.BuiltinKind == kind)
+            .OrderBy(x => x.Position).ThenBy(x => x.Name).ThenBy(x => x.Id)
+            .Select(x => new FieldView(x.Id, x.ContentTypeId, x.Name, x.Key, x.FieldType, x.IsRequired,
+                x.Position, x.IsArchived, x.Options) { Version = x.Version, BuiltinKind = x.BuiltinKind })
             .ToListAsync(ct);
     }
 
@@ -348,32 +366,43 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         await admin.RequireAsync(ct);
         ContentRules.Validate(input);
         if (!CustomFieldTypes.IsValid(input.FieldType)) throw new CmsException("欄位種類無效。");
+        // 欄位必屬於一個內容類型或一種內建內容（文章／頁面），恰一方有值。
+        if ((input.ContentTypeId is null) == (input.BuiltinKind is null))
+            throw new CmsException("欄位須指定一個內容類型或內建內容種類。");
+        if (input.BuiltinKind is { } builtin && builtin is not (ContentKind.Post or ContentKind.Page))
+            throw new CmsException("內容種類無效。");
         var normalizedType = input.FieldType.ToLowerInvariant();
         var options = normalizedType == CustomFieldTypes.Select ? (input.Options ?? "").Trim() : "";
         if (normalizedType == CustomFieldTypes.Select && CustomFieldRules.ParseOptions(options).Count == 0)
             throw new CmsException("下拉選單欄位須提供至少一個選項（以逗號分隔）。");
         var key = ContentRules.NormalizeSlug(input.Key);
         await using var db = await factory.CreateDbContextAsync(ct);
-        if (!await db.ContentTypes.AsNoTracking().AnyAsync(x => x.Id == input.ContentTypeId, ct))
+        if (input.ContentTypeId is { } ownerId && !await db.ContentTypes.AsNoTracking().AnyAsync(x => x.Id == ownerId, ct))
             throw new CmsException("內容類型不存在。");
-        if (await db.CustomFields.AsNoTracking().AnyAsync(x => x.ContentTypeId == input.ContentTypeId
-            && x.Key == key && (!input.Id.HasValue || x.Id != input.Id.Value), ct))
+        var typeId = input.ContentTypeId;
+        var builtinKind = input.BuiltinKind;
+        var existingId = input.Id;
+        var duplicate = typeId is { }
+            ? await db.CustomFields.AsNoTracking().AnyAsync(x => x.ContentTypeId == typeId && x.Key == key && (!existingId.HasValue || x.Id != existingId.Value), ct)
+            : await db.CustomFields.AsNoTracking().AnyAsync(x => x.BuiltinKind == builtinKind && x.Key == key && (!existingId.HasValue || x.Id != existingId.Value), ct);
+        if (duplicate)
             throw new CmsException("欄位鍵值已存在，請改用其他鍵值。");
         var version = Guid.NewGuid();
         CustomField entity;
-        if (input.Id is { } existingId)
+        if (existingId is { } id)
         {
-            entity = await db.CustomFields.SingleOrDefaultAsync(x => x.Id == existingId, ct)
+            entity = await db.CustomFields.SingleOrDefaultAsync(x => x.Id == id, ct)
                 ?? throw new CmsException("自訂欄位不存在。");
             db.Entry(entity).Property(x => x.Version).OriginalValue = input.Version;
-            if (entity.ContentTypeId != input.ContentTypeId) throw new CmsException("不可將欄位改掛到其他內容類型。");
+            if (entity.ContentTypeId != typeId || entity.BuiltinKind != builtinKind) throw new CmsException("不可將欄位改掛到其他內容類型。");
         }
         else
         {
             entity = new CustomField();
             db.CustomFields.Add(entity);
         }
-        entity.ContentTypeId = input.ContentTypeId;
+        entity.ContentTypeId = typeId;
+        entity.BuiltinKind = builtinKind;
         entity.Name = input.Name.Trim();
         entity.Key = key;
         entity.FieldType = normalizedType;
@@ -387,7 +416,7 @@ public sealed class ContentTypeService(IDbContextFactory<CmsDbContext> factory, 
         input.Key = key;
         input.Version = version;
         return new(entity.Id, entity.ContentTypeId, entity.Name, entity.Key, entity.FieldType, entity.IsRequired,
-            entity.Position, entity.IsArchived, entity.Options) { Version = entity.Version };
+            entity.Position, entity.IsArchived, entity.Options) { Version = entity.Version, BuiltinKind = entity.BuiltinKind };
     }
 
     public async Task DeleteFieldAsync(Guid id, Guid version, CancellationToken ct = default)

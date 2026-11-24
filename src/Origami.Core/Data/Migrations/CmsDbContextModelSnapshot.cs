@@ -1143,6 +1143,108 @@ namespace Origami.Core.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.ContentSnippet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<string>("Markdown")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)")
+                        .HasComment("Markdown 正文。");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasComment("排序位置（值越小越靠前）。");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.ToTable("ContentSnippets", t =>
+                        {
+                            t.HasComment("文字片段表：编辑器可重复插入的 Markdown 片段。");
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<Guid?>("ContentTypeId")
+                        .HasColumnType("uuid")
+                        .HasComment("业务字段：ContentTypeId。");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasComment("类型枚举值。");
+
+                    b.Property<string>("Markdown")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("character varying(50000)")
+                        .HasComment("Markdown 正文。");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasComment("名称。");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasComment("排序位置（值越小越靠前）。");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasComment("标题。");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("并发版本号（乐观并发控制）。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "ContentTypeId");
+
+                    b.ToTable("ContentTemplates", t =>
+                        {
+                            t.HasComment("内容模板表：新建内容时套用的 Markdown 骨架。");
+
+                            t.HasCheckConstraint("CK_ContentTemplate_Kind", "\"Kind\" IN (0, 1)");
+                        });
+                });
+
             modelBuilder.Entity("Origami.Core.Models.ContentType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1249,7 +1351,11 @@ namespace Origami.Core.Data.Migrations
                         .HasColumnType("uuid")
                         .HasComment("主键 ID。");
 
-                    b.Property<Guid>("ContentTypeId")
+                    b.Property<int?>("BuiltinKind")
+                        .HasColumnType("integer")
+                        .HasComment("业务字段：BuiltinKind。");
+
+                    b.Property<Guid?>("ContentTypeId")
                         .HasColumnType("uuid")
                         .HasComment("业务字段：ContentTypeId。");
 
@@ -1301,6 +1407,9 @@ namespace Origami.Core.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SiteId", "BuiltinKind", "Key")
+                        .IsUnique();
+
                     b.HasIndex("SiteId", "ContentTypeId", "Key")
                         .IsUnique();
 
@@ -1312,7 +1421,9 @@ namespace Origami.Core.Data.Migrations
 
                             t.HasCheckConstraint("CK_CustomField_Name", "length(btrim(\"Name\")) > 0");
 
-                            t.HasCheckConstraint("CK_CustomField_Type", "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox', 'url', 'select', 'media')");
+                            t.HasCheckConstraint("CK_CustomField_Owner", "(\"ContentTypeId\" IS NULL) <> (\"BuiltinKind\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_CustomField_Type", "\"FieldType\" IN ('text', 'longtext', 'number', 'date', 'checkbox', 'url', 'select', 'media', 'email', 'datetime', 'gallery', 'relation')");
                         });
                 });
 
@@ -2580,6 +2691,30 @@ namespace Origami.Core.Data.Migrations
                     b.Navigation("Content");
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.ContentSnippet", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.ContentTemplate", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Origami.Core.Models.ContentType", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId", "ContentTypeId")
+                        .HasPrincipalKey("SiteId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("Origami.Core.Models.ContentType", b =>
                 {
                     b.HasOne("Origami.Core.Models.CmsSite", null)
@@ -2619,8 +2754,7 @@ namespace Origami.Core.Data.Migrations
                         .WithMany()
                         .HasForeignKey("SiteId", "ContentTypeId")
                         .HasPrincipalKey("SiteId", "Id")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("ContentType");
                 });

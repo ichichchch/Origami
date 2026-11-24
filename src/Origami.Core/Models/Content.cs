@@ -24,6 +24,12 @@ public static partial class Limits
     public const int ContentTypeName = 80;
     /// <summary>自訂欄位的名稱與鍵值上限。</summary>
     public const int CustomFieldName = 80;
+    /// <summary>內容範本與片段的名稱上限。</summary>
+    public const int TemplateName = 80;
+    /// <summary>內容範本 Markdown 骨架的長度上限。</summary>
+    public const int TemplateBody = 50_000;
+    /// <summary>可重複片段 Markdown 的長度上限。</summary>
+    public const int SnippetBody = 20_000;
     /// <summary>自訂內容類型的路由代稱上限。</summary>
     public const int ContentTypeSlug = 80;
     /// <summary>自訂分類法的名稱上限。</summary>
