@@ -60,6 +60,19 @@ public sealed class BackupServiceTests(IsolatedPostgres postgres) : ServiceTestB
     }
 
     [PostgresFact]
+    public async Task Manual_backup_worker_runs_for_the_default_site()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Content.SaveAsync(NewContent("手動備份文章"));
+
+        var completed = await App.Services.GetRequiredService<BackupWorker>().RunOnceAsync();
+
+        Assert.Equal(1, completed);
+        var backup = admin.Services.GetRequiredService<BackupService>();
+        Assert.Single(Directory.GetFiles(backup.BackupsDirectory, "origami-backup-*.zip"));
+    }
+
+    [PostgresFact]
     public async Task Backup_writes_only_the_current_sites_data_into_its_own_directory()
     {
         var site = await CreateSiteAsync("third");

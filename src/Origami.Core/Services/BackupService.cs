@@ -13,6 +13,18 @@ public sealed class BackupOptions
     public int Keep { get; set; } = 7;
     /// <summary>每日執行的 UTC 小時（0–23）。</summary>
     public int HourUtc { get; set; } = 3;
+    /// <summary>選用的 WebDAV 異地目的地；未設定網址時只保留本機備份。</summary>
+    public WebDavOptions WebDav { get; set; } = new();
+}
+
+/// <summary>WebDAV 備份目的地。密碼只由外部組態提供，不寫入日誌或匯出檔。</summary>
+public sealed class WebDavOptions
+{
+    public string Url { get; set; } = "";
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    /// <summary>目的地內的相對目錄；每個站點再依 SiteId 隔離。</summary>
+    public string Directory { get; set; } = "origami";
 }
 
 public sealed record BackupResult(string Path, long TotalBytes, int Retained);
@@ -21,7 +33,9 @@ public sealed record BackupResult(string Path, long TotalBytes, int Retained);
 /// 把「JSON＋媒體」完整封裝寫入當站儲存目錄下的 backups/，先落暫存檔再原子改名，
 /// 並保留最新幾份。備份屬系統操作，不經管理員授權（匯出核心不帶授權檢查）。
 /// </summary>
-public sealed partial class BackupService(ExportService export, StoragePaths storage, TimeProvider clock, ILogger<BackupService> logger, IHttpClientFactory? httpClients = null)
+public sealed partial class BackupService(
+    ExportService export, StoragePaths storage, TimeProvider clock, ILogger<BackupService> logger,
+    IHttpClientFactory? httpClients = null, WebDavBackupUploader? remote = null)
 {
     public string BackupsDirectory => Path.Combine(storage.SiteRoot, "backups");
 
@@ -75,6 +89,8 @@ public sealed partial class BackupService(ExportService export, StoragePaths sto
                 Log.UploadFailed(logger, error.GetType().Name);
             }
         }
+        if (remote is not null)
+            await remote.UploadAsync(options.WebDav, path, Math.Max(1, options.Keep), ct);
         return new(path, kept.Sum(x => new FileInfo(x).Length), kept.Count);
     }
 
@@ -93,6 +109,14 @@ public sealed partial class BackupWorker(
     IServiceProvider services, IOptions<BackupOptions> options, TimeProvider clock,
     ILogger<BackupWorker> logger) : BackgroundService
 {
+    public Task<int> RunOnceAsync(CancellationToken ct = default) => SiteWorkRunner.RunAsync(
+        services, "手動備份", async (siteServices, _, token) =>
+        {
+            var result = await siteServices.GetRequiredService<BackupService>().RunAsync(options.Value, token);
+            Log.Completed(logger, result.TotalBytes);
+            return 1;
+        }, logger, ct);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var settings = options.Value;
@@ -102,15 +126,7 @@ public sealed partial class BackupWorker(
             var delay = NextDelay(clock, settings.HourUtc);
             try { await Task.Delay(delay, stoppingToken); }
             catch (OperationCanceledException) { return; }
-            try
-            {
-                await SiteWorkRunner.RunAsync(services, "每日自動備份", async (siteServices, _, token) =>
-                {
-                    var result = await siteServices.GetRequiredService<BackupService>().RunAsync(settings, token);
-                    Log.Completed(logger, result.TotalBytes);
-                    return 1;
-                }, logger, stoppingToken);
-            }
+            try { await RunOnceAsync(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception ex)
             {

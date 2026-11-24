@@ -135,6 +135,8 @@ builder.Services.AddHostedService<MediaVariantBackfillService>();
 // 匯出服務讀取資料庫與媒體檔案；預設關閉，由 Backup 組態開啟。
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<BackupService>();
+builder.Services.AddHttpClient<WebDavBackupUploader>(client => client.Timeout = TimeSpan.FromMinutes(10))
+    .ConfigurePrimaryHttpMessageHandler<PublicNetworkHttpHandler>();
 builder.Services.AddOptions<BackupOptions>().BindConfiguration("Backup");
 // 匿名頁面輸出快取：僅無 Cookie 的 GET/HEAD 白名單路徑（見 PublicPageCachePolicy）。
 // Web 與 Api 是不同進程（BFF），發布事件只在 Api 進程內分發、沒有跨進程失效信號，
