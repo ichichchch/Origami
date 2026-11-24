@@ -65,11 +65,11 @@ public static class ApiEndpoints
 
     /// <summary>單篇已發布文章。</summary>
     private static async Task<IResult> GetPostAsync(string slug, string? lang, ContentService content, CancellationToken ct) =>
-        PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Post, slug, lang, ct));
+        PublishedOrNotFound(await content.WithRelationTargetsAsync(await content.GetPublishedAsync(ContentKind.Post, slug, lang, ct), ct));
 
     /// <summary>單篇已發布獨立頁面。</summary>
     private static async Task<IResult> GetPageAsync(string slug, string? lang, ContentService content, CancellationToken ct) =>
-        PublishedOrNotFound(await content.GetPublishedAsync(ContentKind.Page, slug, lang, ct));
+        PublishedOrNotFound(await content.WithRelationTargetsAsync(await content.GetPublishedAsync(ContentKind.Page, slug, lang, ct), ct));
 
     /// <summary>全站搜尋：缺少嵌入供應商時關鍵字比對仍可運作，僅語意搜尋這一環降級。</summary>
     private static async Task<IResult> SearchAsync(string? q, int? limit, int? page, bool? includePages,
@@ -177,11 +177,11 @@ public static class ApiEndpoints
     /// <summary>指定自訂內容類型的單篇已發布內容。</summary>
     private static async Task<IResult> GetTypeContentAsync(string slug, string contentSlug, ContentService content,
         CancellationToken ct) =>
-        PublishedOrNotFound(await content.GetPublishedByTypeAsync(slug, contentSlug, ct));
+        PublishedOrNotFound(await content.WithRelationTargetsAsync(await content.GetPublishedByTypeAsync(slug, contentSlug, ct), ct));
 
     /// <summary>依內容識別取得單篇已發布文章。</summary>
     private static async Task<IResult> GetPostByIdAsync(Guid id, ContentService content, CancellationToken ct) =>
-        PublishedOrNotFound(await content.GetPublishedPostByIdAsync(id, ct));
+        PublishedOrNotFound(await content.WithRelationTargetsAsync(await content.GetPublishedPostByIdAsync(id, ct), ct));
 
     /// <summary>文章數量最多的熱門分類清單。</summary>
     private static async Task<IResult> GetPopularCategoriesAsync(ContentService content, CancellationToken ct) =>

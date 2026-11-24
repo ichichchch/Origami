@@ -780,13 +780,17 @@ public sealed class OrigamiClient
         CancellationToken ct = default) =>
         await GetAsync<List<ContentTypeService.FieldView>>($"api/v1/admin/content-types/{contentTypeId}/fields", ct) ?? [];
 
+    public async Task<List<ContentTypeService.FieldView>> ListBuiltinFieldsAsync(ContentKind kind,
+        CancellationToken ct = default) =>
+        await GetAsync<List<ContentTypeService.FieldView>>($"api/v1/admin/builtin-content/{kind}/fields", ct) ?? [];
+
     public async Task<ContentTypeService.FieldView> SaveCustomFieldAsync(ContentTypeService.FieldEdit input,
         CancellationToken ct = default) =>
         await SendAsync<ContentTypeService.FieldView>(new(
             input.Id is null ? HttpMethod.Post : HttpMethod.Put,
-            input.Id is null
-                ? $"api/v1/admin/content-types/{input.ContentTypeId}/fields"
-                : $"api/v1/admin/custom-fields/{input.Id}"), input, ct)
+            input.Id is not null ? $"api/v1/admin/custom-fields/{input.Id}"
+                : input.BuiltinKind is { } builtinKind ? $"api/v1/admin/builtin-content/{builtinKind}/fields"
+                : $"api/v1/admin/content-types/{input.ContentTypeId}/fields"), input, ct)
         ?? throw new CmsException("無法儲存自訂欄位。");
 
     public async Task DeleteCustomFieldAsync(Guid id, Guid version, CancellationToken ct = default) =>

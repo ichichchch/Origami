@@ -153,6 +153,10 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var now = clock.GetUtcNow();
+        // 舊格式把 Relation 直接存成內容識別碼；同站還原時先記住代稱，跨站則無從反推。
+        Dictionary<Guid, string> legacySlugById = [];
+        if (document.RootElement.GetProperty("version").GetInt32() < 3)
+            legacySlugById = await db.Contents.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
 
         // 複合 Restrict FK 不可由資料庫清空 SiteId；先解除當站設定、階層與封面引用。
         // ExecuteUpdate／ExecuteDelete 均保留 query filters，不得清除其他站點的資料。
@@ -299,20 +303,28 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 db.CustomTaxonomyTerms.Add(term);
             }
         }
-        Dictionary<string, CustomField> fieldsByKey = [];
+        Dictionary<(Guid? ContentTypeId, ContentKind? BuiltinKind, string Key), CustomField> fieldsByOwnerKey = [];
         if (document.RootElement.TryGetProperty("customFields", out var fieldNodes) && fieldNodes.ValueKind == JsonValueKind.Array)
         {
             foreach (var node in fieldNodes.EnumerateArray())
             {
                 var key = Bounded(node, "key", Limits.CustomFieldName, "自訂欄位鍵值");
                 var typeSlug = node.GetString("contentType") ?? "";
-                if (!typesBySlug.TryGetValue(typeSlug, out var owner))
-                    throw new CmsException($"自訂欄位「{key}」所屬的內容類型不在匯入資料中：{typeSlug}。");
+                ContentKind? builtinKind = typeSlug == "builtin:post" ? ContentKind.Post
+                    : typeSlug == "builtin:page" ? ContentKind.Page : null;
+                Guid? ownerTypeId = null;
+                if (builtinKind is null)
+                {
+                    if (!typesBySlug.TryGetValue(typeSlug, out var owner))
+                        throw new CmsException($"自訂欄位「{key}」所屬的內容類型不在匯入資料中：{typeSlug}。");
+                    ownerTypeId = owner.Id;
+                }
                 var field = new CustomField
                 {
                     Id = Guid.NewGuid(),
                     SiteId = db.CurrentSiteId,
-                    ContentTypeId = owner.Id,
+                    ContentTypeId = ownerTypeId,
+                    BuiltinKind = builtinKind,
                     Key = key,
                     Version = Guid.NewGuid(),
                 };
@@ -321,8 +333,10 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 if (!CustomFieldTypes.IsValid(field.FieldType)) throw new CmsException($"自訂欄位「{key}」的種類無效。");
                 field.Options = Bounded(node, "options", Limits.CustomFieldOptions, "自訂欄位選項", optional: true);
                 field.IsRequired = node.TryGetProperty("isRequired", out var required) && required.GetBoolean();
+                field.IsArchived = node.TryGetProperty("isArchived", out var archived) && archived.GetBoolean();
                 field.Position = node.TryGetProperty("position", out var position) && position.ValueKind == JsonValueKind.Number ? position.GetInt32() : 0;
-                if (!fieldsByKey.TryAdd(key, field)) throw new CmsException($"匯入的自訂欄位鍵值重複：{key}。");
+                if (!fieldsByOwnerKey.TryAdd((ownerTypeId, builtinKind, key), field))
+                    throw new CmsException($"匯入的自訂欄位在相同內容範圍內鍵值重複：{key}。");
                 db.CustomFields.Add(field);
             }
         }
@@ -359,6 +373,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         // 第一輪：建立所有內容資料列；階層連結在記憶體中的實體上解析。
         Dictionary<string, Content> contentsBySlug = [];
         List<(Content Entity, string? ParentSlug)> hierarchy = [];
+        List<(Content Content, CustomField Field, IReadOnlyList<string> Targets)> pendingRelations = [];
         foreach (var node in document.RootElement.GetProperty("contents").EnumerateArray())
         {
             var kind = node.GetString("kind") == "page" ? ContentKind.Page : ContentKind.Post;
@@ -417,18 +432,55 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                     throw new CmsException($"內容「{content.Title}」引用了不存在的內容類型：{contentTypeSlug}。");
                 content.ContentTypeId = contentType.Id;
             }
+            var relationFieldIds = new HashSet<Guid>();
             if (node.TryGetProperty("fieldValues", out var fieldValues) && fieldValues.ValueKind == JsonValueKind.Object)
             {
                 foreach (var pair in fieldValues.EnumerateObject())
                 {
-                    if (!fieldsByKey.TryGetValue(pair.Name, out var field))
+                    if (!fieldsByOwnerKey.TryGetValue((content.ContentTypeId, content.ContentTypeId is null ? (ContentKind?)content.Kind : null, pair.Name), out var field))
                         throw new CmsException($"內容「{content.Title}」引用了不存在的自訂欄位：{pair.Name}。");
-                    CustomFieldRules.ValidateValue(field.FieldType, pair.Value.GetString(), field.IsRequired, field.Options);
+                    var value = (pair.Value.GetString() ?? "").Trim();
+                    if (field.FieldType == CustomFieldTypes.Relation)
+                    {
+                        // 舊格式直接保存內容識別碼；同站匯入時先換回 slug，跨站則在第二輪明確拒絕無法解析的代稱。
+                        var targets = CustomFieldRules.ParseList(value)
+                            .Select(target => Guid.TryParse(target, out var targetId) && legacySlugById.TryGetValue(targetId, out var slug) ? slug : target)
+                            .ToList();
+                        if (!relationFieldIds.Add(field.Id))
+                            throw new CmsException($"匯入的內容「{content.Title}」重複提供關聯欄位：{pair.Name}。");
+                        pendingRelations.Add((content, field, targets));
+                        continue;
+                    }
+                    CustomFieldRules.ValidateValue(field.FieldType, value, field.IsRequired, field.Options);
                     content.FieldValues.Add(new ContentFieldValue
                     {
                         Id = Guid.NewGuid(), SiteId = db.CurrentSiteId, ContentId = content.Id,
-                        FieldId = field.Id, Value = (pair.Value.GetString() ?? "").Trim()
+                        FieldId = field.Id, Value = value
                     });
+                }
+            }
+            if (node.TryGetProperty("fieldRelations", out var fieldRelations))
+            {
+                if (fieldRelations.ValueKind != JsonValueKind.Object)
+                    throw new CmsException($"匯入的內容「{content.Title}」關聯欄位格式無效。");
+                foreach (var pair in fieldRelations.EnumerateObject())
+                {
+                    var ownerKey = (content.ContentTypeId, content.ContentTypeId is null ? (ContentKind?)content.Kind : null, pair.Name);
+                    if (!fieldsByOwnerKey.TryGetValue(ownerKey, out var field) || field.FieldType != CustomFieldTypes.Relation)
+                        throw new CmsException($"匯入的內容「{content.Title}」使用了未宣告的關聯欄位：{pair.Name}。");
+                    if (pair.Value.ValueKind != JsonValueKind.Array)
+                        throw new CmsException($"匯入的內容「{content.Title}」關聯欄位「{pair.Name}」必須是內容代稱陣列。");
+                    var targets = new List<string>();
+                    foreach (var target in pair.Value.EnumerateArray())
+                    {
+                        var slug = target.GetString();
+                        if (string.IsNullOrWhiteSpace(slug) || slug.Length > Limits.Slug)
+                            throw new CmsException($"匯入的內容「{content.Title}」關聯欄位「{pair.Name}」含有無效的內容代稱。");
+                        targets.Add(slug);
+                    }
+                    if (!relationFieldIds.Add(field.Id))
+                        throw new CmsException($"匯入的內容「{content.Title}」重複提供關聯欄位：{pair.Name}。");
+                    pendingRelations.Add((content, field, targets));
                 }
             }
             if (node.TryGetProperty("terms", out var contentTermSlugs))
@@ -443,7 +495,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                     });
                 }
             }
-            if (content.Kind == ContentKind.Page && node.TryGetProperty("parentSlug", out var parent) && parent.ValueKind == JsonValueKind.String)            {
+            if (content.Kind == ContentKind.Page && node.TryGetProperty("parentSlug", out var parent) && parent.ValueKind == JsonValueKind.String)
+            {
                 var parentSlug = parent.GetString();
                 if (parentSlug == content.Slug) throw new CmsException($"頁面「{content.Title}」不可作為自己的上層。");
                 hierarchy.Add((content, parentSlug));
@@ -464,6 +517,25 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 if (++guard > 1000) throw new CmsException("匯入的頁面階層過深，請檢查上層設定。");
             }
             entity.ParentId = parent.Id;
+        }
+
+        // 第二輪：關聯欄位改用匯入後的內容識別碼，避免把來源站的識別碼帶到目標站。
+        foreach (var (content, field, targets) in pendingRelations)
+        {
+            var ids = new List<string>();
+            foreach (var target in targets)
+            {
+                if (!contentsBySlug.TryGetValue(target, out var related))
+                    throw new CmsException($"內容「{content.Title}」的關聯欄位「{field.Key}」指向不在匯入資料中的目標：{target}。");
+                ids.Add(related.Id.ToString());
+            }
+            var value = string.Join("\n", ids);
+            CustomFieldRules.ValidateValue(field.FieldType, value, field.IsRequired, field.Options);
+            content.FieldValues.Add(new ContentFieldValue
+            {
+                Id = Guid.NewGuid(), SiteId = db.CurrentSiteId, ContentId = content.Id,
+                FieldId = field.Id, Value = value
+            });
         }
 
         // 受控包：匯入檔的 manifest 一律重跑驗證（匯出檔不可信）；失敗的包跳過，
@@ -740,7 +812,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         if (root.ValueKind != JsonValueKind.Object
             || root.GetString("format") != "origami-export"
             || !root.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number
-            || version.GetInt32() is < 1 or > 2
+            || version.GetInt32() is < 1 or > 3
             || !root.TryGetProperty("site", out var siteNode) || siteNode.ValueKind != JsonValueKind.Object
             || !root.TryGetProperty("categories", out var categoriesNode) || categoriesNode.ValueKind != JsonValueKind.Array
             || !root.TryGetProperty("tags", out var tagsNode) || tagsNode.ValueKind != JsonValueKind.Array

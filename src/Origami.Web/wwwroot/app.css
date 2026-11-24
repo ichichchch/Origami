@@ -640,6 +640,11 @@ th { letter-spacing: .07em; text-transform: uppercase; font-size: .68rem; }
 .trend-fill { transform-origin: left; animation: trend-grow .7s cubic-bezier(.22,1,.36,1) both; }
 @keyframes trend-grow { from { transform: scaleX(0); } }
 
+.field-list .field-media { display: block; max-width: 320px; border-radius: 8px; }
+.field-list .field-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .5rem; }
+.field-list .field-gallery img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.field-list dd a { display: inline-block; margin-right: .6rem; }
+.checkbox-list { display: grid; gap: .35rem; max-height: 260px; overflow: auto; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: 7px; }
 .footer-nav { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; margin-bottom: .6rem; padding: 0; list-style: none; }
 .footer-nav a { color: var(--ink); text-decoration: none; }
 .footer-nav a:hover { color: var(--accent-ink); text-decoration: underline; }

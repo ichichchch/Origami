@@ -103,6 +103,23 @@ public static class ContentTypeEndpoints
                 await types.SaveFieldAsync(input, ct));
         });
 
+        // 內建文章／頁面的自訂欄位：不屬於任何內容類型，以內容種類（post／page）區分；更新與刪除沿用 /custom-fields/{id}。
+        group.MapGet("/builtin-content/{kind}/fields", async (string kind, ContentTypeService types, CancellationToken ct) =>
+            TryBuiltinKind(kind, out var builtin)
+                ? Results.Ok(await types.ListBuiltinFieldsAsync(builtin!.Value, ct))
+                : Results.BadRequest(new { message = "參數 kind 無效（post 或 page）。" }));
+
+        group.MapPost("/builtin-content/{kind}/fields", async (string kind, ContentTypeService.FieldEdit input,
+            ContentTypeService types, CancellationToken ct) =>
+        {
+            if (!TryBuiltinKind(kind, out var builtin))
+                return Results.BadRequest(new { message = "參數 kind 無效（post 或 page）。" });
+            input.Id = null;
+            input.ContentTypeId = null;
+            input.BuiltinKind = builtin!.Value;
+            return Results.Created($"/api/v1/admin/builtin-content/{kind}/fields", await types.SaveFieldAsync(input, ct));
+        });
+
         group.MapPut("/custom-fields/{id}", async (Guid id, ContentTypeService.FieldEdit input,
             ContentTypeService types, CancellationToken ct) =>
         {
@@ -116,5 +133,13 @@ public static class ContentTypeEndpoints
             await types.DeleteFieldAsync(id, version, ct);
             return Results.NoContent();
         });
+    }
+
+    private static bool TryBuiltinKind(string? kind, out ContentKind? parsed)
+    {
+        parsed = Enum.TryParse<ContentKind>(kind ?? "", ignoreCase: true, out var value) && value is ContentKind.Post or ContentKind.Page
+            ? value
+            : null;
+        return parsed is not null;
     }
 }

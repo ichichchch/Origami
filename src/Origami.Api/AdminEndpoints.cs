@@ -254,13 +254,13 @@ public static class AdminEndpoints
         {
             if (!Enum.TryParse<ContentKind>(kind, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
                 return Results.BadRequest(new { message = "參數 kind 無效。" });
-            return await content.GetPublishedAsync(parsed, slug, lang, ct) is { } detail
+            return await content.WithRelationTargetsAsync(await content.GetPublishedAsync(parsed, slug, lang, ct), ct) is { } detail
                 ? Results.Ok(detail)
                 : Results.NotFound();
         }).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 
         group.MapGet("/contents/published-by-id/{id:guid}", async (Guid id, ContentService content, CancellationToken ct) =>
-            await content.GetPublishedPostByIdAsync(id, ct) is { } detail
+            await content.WithRelationTargetsAsync(await content.GetPublishedPostByIdAsync(id, ct), ct) is { } detail
                 ? Results.Ok(detail)
                 : Results.NotFound()).RequireAuthorization(ServiceTokenAuth.BffOnlyPolicy);
 

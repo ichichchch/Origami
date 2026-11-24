@@ -93,6 +93,49 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => anonymousService.DeleteAsync(uploaded.Id, true));
     }
 
+    [PostgresTheory]
+    [InlineData(CustomFieldTypes.Media)]
+    [InlineData(CustomFieldTypes.Gallery)]
+    public async Task Custom_field_references_refuse_media_deletion_until_removed(string fieldType)
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var service = CreateService(admin, directory);
+        var asset = new MediaAsset
+        {
+            FileName = Guid.NewGuid().ToString("N") + ".png", OriginalName = "field-reference.png",
+            ContentType = "image/png", Size = 1, UploadedAt = DateTimeOffset.UtcNow
+        };
+        await using (var db = await App.CreateContextAsync())
+        {
+            db.MediaAssets.Add(asset);
+            await db.SaveChangesAsync();
+        }
+        Assert.True(ContentRules.IsSafeMediaFileNameAny(asset.FileName));
+        var field = await admin.Services.GetRequiredService<ContentTypeService>().SaveFieldAsync(new ContentTypeService.FieldEdit
+        {
+            BuiltinKind = ContentKind.Post, Name = "欄位媒體", Key = "field-media", FieldType = fieldType
+        });
+        var post = NewContent("自訂欄位引用媒體");
+        post.FieldValues = [new(field.Id, "/media/" + asset.FileName)];
+        var saved = await admin.Content.SaveAsync(post);
+
+        Assert.Equal(1, await service.CountReferencesAsync(asset.Id));
+        Assert.Equal(saved.Id, Assert.Single(await service.ListReferencesAsync(asset.Id)).ContentId);
+        var refused = await Assert.ThrowsAsync<CmsException>(() => service.DeleteAsync(asset.Id, confirmed: true));
+        Assert.Contains("自訂欄位引用媒體", refused.Message, StringComparison.Ordinal);
+        await using (var db = await App.CreateContextAsync())
+            Assert.True(await db.MediaAssets.AnyAsync(x => x.Id == asset.Id));
+
+        var edit = await admin.Content.GetEditAsync(saved.Id!.Value);
+        edit.FieldValues = [];
+        await admin.Content.UpdateAsync(edit);
+        Assert.Equal(0, await service.CountReferencesAsync(asset.Id));
+        await service.DeleteAsync(asset.Id, confirmed: true);
+        await using var verify = await App.CreateContextAsync();
+        Assert.False(await verify.MediaAssets.AnyAsync(x => x.Id == asset.Id));
+    }
+
     [PostgresFact]
     public async Task Backfill_regenerates_missing_variants_for_existing_images()
     {

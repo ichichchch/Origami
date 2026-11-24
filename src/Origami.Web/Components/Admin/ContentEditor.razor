@@ -159,6 +159,25 @@ else if (_model is not null)
                                         }
                                     </select>
                                     break;
+                                case CustomFieldTypes.Email:
+                                    <input id="field-@field.Id" type="email" maxlength="200" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                                case CustomFieldTypes.DateTimeField:
+                                    <input id="field-@field.Id" type="datetime-local" maxlength="200" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
+                                    break;
+                                case CustomFieldTypes.Gallery:
+                                    <textarea id="field-@field.Id" rows="3" maxlength="2000" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" placeholder="/media/圖片檔名" aria-describedby="field-@(field.Id)-help"></textarea>
+                                    <span id="field-@(field.Id)-help" class="field-help">@UiText.T("Admin.ContentEditor.GalleryHelp", "每行一個站內 /media/ 圖片路徑；前台以圖庫排列。")</span>
+                                    break;
+                                case CustomFieldTypes.Relation:
+                                    <div class="checkbox-list">
+                                        @foreach (var option in _relationOptions)
+                                        {
+                                            <label class="checkbox-field"><input type="checkbox" value="@option.Id" checked="@RelationSelected(field.Id, option.Id)" @onchange="args => ToggleRelation(field.Id, option.Id, args)" disabled="@Blocked" /> @(option.Kind == ContentKind.Page ? UiText.T("Admin.ContentEditor.PagePrefix", "頁面：") : "")@option.Title</label>
+                                        }
+                                    </div>
+                                    <span class="field-help">@UiText.T("Admin.ContentEditor.RelationHelp", "可勾選多筆已發布文章或頁面；清單只列出最近的內容，較舊的已選內容仍會保留。")</span>
+                                    break;
                                 case CustomFieldTypes.Media:
                                     <input id="field-@field.Id" type="text" placeholder="/media/..." maxlength="@CustomFieldTypes.MaxLength(field.FieldType)" value="@value" @onchange="args => FieldChanged(field.Id, args)" disabled="@Blocked" />
                                     break;
@@ -538,6 +557,7 @@ else if (_model is not null)
     private List<Guid> _selectedTermIds = [];
     private List<ContentTypeService.FieldView> _fields = [];
     private Dictionary<Guid, string> _fieldValues = [];
+    private List<ContentSummary> _relationOptions = [];
     private List<AuthorOption> _authors = [];
     private bool _linkPickerOpen;
     private string _linkQuery = "";
@@ -1014,8 +1034,9 @@ else if (_model is not null)
             : [];
         _fields = loaded.ContentTypeId is { } loadedFieldTypeId
             ? await Api.ListCustomFieldsAsync(loadedFieldTypeId, ct)
-            : [];
+            : await Api.ListBuiltinFieldsAsync(loaded.Kind, ct);
         _fieldValues = loaded.FieldValues.ToDictionary(x => x.FieldId, x => x.Value);
+        await LoadRelationOptionsAsync(ct);
         _editingHeldByOther = loaded.EditingByOther;
         _editingHolderName = loaded.EditingByName;
         if (CanEdit) _authors = await Api.AuthorOptionsAsync(ct) ?? [];
@@ -1049,8 +1070,9 @@ else if (_model is not null)
         _model.ContentTypeId = parsed;
         _selectedTermIds = [];
         _termGroups = parsed is { } typeId ? await Api.TermsForContentTypeAsync(typeId, ct) : [];
-        _fields = parsed is { } fieldTypeId ? await Api.ListCustomFieldsAsync(fieldTypeId, ct) : [];
+        _fields = parsed is { } fieldTypeId ? await Api.ListCustomFieldsAsync(fieldTypeId, ct) : await Api.ListBuiltinFieldsAsync(_model.Kind, ct);
         _fieldValues = [];
+        await LoadRelationOptionsAsync(ct);
     });
 
     private void FieldChanged(Guid fieldId, ChangeEventArgs args)
@@ -1058,6 +1080,29 @@ else if (_model is not null)
         var value = args.Value?.ToString() ?? "";
         if (value.Length == 0) _fieldValues.Remove(fieldId);
         else _fieldValues[fieldId] = value;
+    }
+
+    /// <summary>關聯欄位的勾選清單：只列出最近的已發布內容；值以換行分隔的內容識別碼保存。</summary>
+    private async Task LoadRelationOptionsAsync(CancellationToken ct)
+    {
+        _relationOptions = [];
+        if (!_fields.Any(f => f.FieldType == CustomFieldTypes.Relation)) return;
+        var posts = await Api.ListAdminAsync(ContentKind.Post, 1, 50, ContentStatus.Published, null, ct);
+        var pages = await Api.ListAdminAsync(ContentKind.Page, 1, 50, ContentStatus.Published, null, ct);
+        _relationOptions = [.. (posts?.Items ?? []), .. (pages?.Items ?? [])];
+    }
+
+    private bool RelationSelected(Guid fieldId, Guid contentId) =>
+        _fieldValues.TryGetValue(fieldId, out var value) && CustomFieldRules.ParseList(value).Contains(contentId.ToString(), StringComparer.OrdinalIgnoreCase);
+
+    private void ToggleRelation(Guid fieldId, Guid contentId, ChangeEventArgs args)
+    {
+        var selected = CustomFieldRules.ParseList(_fieldValues.GetValueOrDefault(fieldId))
+            .Where(id => Guid.TryParse(id, out _)).ToList();
+        if (args.Value is true && !selected.Contains(contentId.ToString(), StringComparer.OrdinalIgnoreCase)) selected.Add(contentId.ToString());
+        else if (args.Value is not true) selected.RemoveAll(id => id.Equals(contentId.ToString(), StringComparison.OrdinalIgnoreCase));
+        if (selected.Count == 0) _fieldValues.Remove(fieldId);
+        else _fieldValues[fieldId] = string.Join("\n", selected);
     }
 
     private void ToggleTerm(Guid termId, ChangeEventArgs args)

@@ -1,4 +1,4 @@
-namespace Origami.Core.Services;
+﻿namespace Origami.Core.Services;
 
 public sealed class CmsException(string message) : Exception(message);
 
@@ -6,7 +6,14 @@ public sealed class CmsException(string message) : Exception(message);
 public sealed record FieldValueInput(Guid FieldId, string Value);
 
 /// <summary>公開呈現的自訂欄位值；欄位名稱與種類隨內容一併輸出。</summary>
-public sealed record PublicFieldValue(string Name, string Key, string Value, string FieldType);
+public sealed record PublicFieldValue(string Name, string Key, string Value, string FieldType)
+{
+    /// <summary>關聯欄位指向的已發布內容（標題與路徑）；其他欄位種類為空清單。路徑為空字串者只顯示標題。</summary>
+    public IReadOnlyList<FieldTarget> Targets { get; init; } = [];
+}
+
+/// <summary>關聯欄位的目標內容。</summary>
+public sealed record FieldTarget(string Title, string Path);
 
 public sealed class ContentEdit
 {

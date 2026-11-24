@@ -97,10 +97,18 @@
         }
     </section>
 }
-@if (_selected is not null)
+<section class="panel">
+    <div class="panel-toolbar"><h2>@UiText.T("Admin.ContentTypes.BuiltinFieldsTitle", "內建內容的自訂欄位")</h2></div>
+    <p class="field-help">@UiText.T("Admin.ContentTypes.BuiltinFieldsHelp", "文章與獨立頁面不屬於任何內容類型，也能宣告自訂欄位：在編輯器填寫，前台顯示於內文之後。")</p>
+    <div class="button-row">
+        <button type="button" class="button button-secondary @(_builtin == ContentKind.Post ? "active" : "")" aria-pressed="@((_builtin == ContentKind.Post).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => SelectBuiltin(ContentKind.Post)">@UiText.T("Admin.ContentTypes.PostFields", "文章的欄位")</button>
+        <button type="button" class="button button-secondary @(_builtin == ContentKind.Page ? "active" : "")" aria-pressed="@((_builtin == ContentKind.Page).ToString().ToLowerInvariant())" disabled="@Blocked" @onclick="() => SelectBuiltin(ContentKind.Page)">@UiText.T("Admin.ContentTypes.PageFields", "獨立頁面的欄位")</button>
+    </div>
+</section>
+@if (_selected is not null || _builtin is not null)
 {
     <section class="panel">
-        <div class="panel-toolbar"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.FieldsOf", "{0} 的自訂欄位"), _selected.Name)</h2></div>
+        <div class="panel-toolbar"><h2>@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentTypes.FieldsOf", "{0} 的自訂欄位"), OwnerName)</h2></div>
         <p class="field-help">@UiText.T("Admin.ContentTypes.FieldsHelp", "宣告式擴充點：以資料定義欄位，不載入任何程式碼。")</p>
         <EditForm Model="_field" OnSubmit="SaveField" FormName="custom-field-editor">
             <fieldset disabled="@EditBlocked">
@@ -116,6 +124,10 @@
                         <option value="@CustomFieldTypes.Url">@UiText.T("Admin.ContentTypes.FieldTypeUrl", "網址（URL）")</option>
                         <option value="@CustomFieldTypes.Select">@UiText.T("Admin.ContentTypes.FieldTypeSelect", "下拉選單（Select）")</option>
                         <option value="@CustomFieldTypes.Media">@UiText.T("Admin.ContentTypes.FieldTypeMedia", "站內媒體（Media）")</option>
+                        <option value="@CustomFieldTypes.Email">@UiText.T("Admin.ContentTypes.FieldTypeEmail", "電子郵件")</option>
+                        <option value="@CustomFieldTypes.DateTimeField">@UiText.T("Admin.ContentTypes.FieldTypeDateTime", "日期時間")</option>
+                        <option value="@CustomFieldTypes.Gallery">@UiText.T("Admin.ContentTypes.FieldTypeGallery", "圖庫（多張站內圖片）")</option>
+                        <option value="@CustomFieldTypes.Relation">@UiText.T("Admin.ContentTypes.FieldTypeRelation", "關聯內容")</option>
                     </select>
                 </div>
                 @if (_field.FieldType == CustomFieldTypes.Select)
@@ -225,6 +237,10 @@
     private List<ContentTypeService.TermView>? _terms;
     private ContentTypeService.TermView? _pendingDeleteTerm;
     private List<ContentTypeService.FieldView>? _fields;
+    // 內建文章／頁面的欄位與內容類型的欄位共用同一套表單與清單；以 _selected（類型）或 _builtin（內建種類）區分。
+    private ContentKind? _builtin;
+    private string OwnerName => _selected?.Name
+        ?? (_builtin == ContentKind.Page ? UiText.T("Admin.ContentTypes.PageFields", "獨立頁面的欄位") : UiText.T("Admin.ContentTypes.PostFields", "文章的欄位"));
     private ContentTypeService.FieldEdit _field = new();
     private ContentTypeService.FieldView? _pendingDeleteField;
 
@@ -267,11 +283,24 @@
     private Task SelectType(ContentTypeService.TypeView type) => RunAsync(async ct =>
     {
         _selected = type;
+        _builtin = null;
         _taxonomy = new() { ContentTypeId = type.Id };
         _taxonomies = await Api.ListCustomTaxonomiesAsync(type.Id, ct);
         _field = new() { ContentTypeId = type.Id };
         _fields = await Api.ListCustomFieldsAsync(type.Id, ct);
     });
+
+    private Task SelectBuiltin(ContentKind kind) => RunAsync(async ct =>
+    {
+        _selected = null;
+        _builtin = kind;
+        _field = new() { BuiltinKind = kind };
+        _fields = await Api.ListBuiltinFieldsAsync(kind, ct);
+    });
+
+    private Task<List<ContentTypeService.FieldView>> ReloadFieldsAsync(CancellationToken ct) => _builtin is { } builtinKind
+        ? Api.ListBuiltinFieldsAsync(builtinKind, ct)
+        : _selected is { } owner ? Api.ListCustomFieldsAsync(owner.Id, ct) : Task.FromResult<List<ContentTypeService.FieldView>>([]);
 
     private Task SaveTaxonomy() => RunEditAsync(async ct =>
     {
@@ -315,8 +344,8 @@
     private Task SaveField() => RunEditAsync(async ct =>
     {
         await Api.SaveCustomFieldAsync(_field, ct);
-        _field = new() { ContentTypeId = _selected?.Id ?? Guid.Empty };
-        if (_selected is not null) _fields = await Api.ListCustomFieldsAsync(_selected.Id, ct);
+        _field = new() { ContentTypeId = _selected?.Id, BuiltinKind = _builtin };
+        _fields = await ReloadFieldsAsync(ct);
     }, UiText.T("Admin.ContentTypes.FieldSaved", "自訂欄位已儲存。"));
 
     private async Task DeleteField()
@@ -326,7 +355,7 @@
         {
             await Api.DeleteCustomFieldAsync(field.Id, field.Version, ct);
             _pendingDeleteField = null;
-            if (_selected is not null) _fields = await Api.ListCustomFieldsAsync(_selected.Id, ct);
+            _fields = await ReloadFieldsAsync(ct);
         }, UiText.T("Admin.ContentTypes.FieldDeleted", "自訂欄位已刪除。"));
         _pendingDeleteField = null;
     }

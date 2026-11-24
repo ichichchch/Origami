@@ -192,6 +192,46 @@ else if (_content is not null)
             {
                 <footer class="article-tags" aria-label="@UiText.T("Public.ContentDetail.Tags", "標籤")">@foreach (var tag in _content.Tags) { <a class="tag" href="@("/tag/" + Uri.EscapeDataString(tag.Slug))"># @tag.Title</a> }</footer>
             }
+            @if (_content.Fields.Any(field => field.Value.Length > 0))
+            {
+                @* 自訂欄位值：各類型以安全的形式輸出（網址與媒體路徑在儲存時已驗證）。 *@
+                <dl class="field-list" aria-label="@UiText.T("Public.TypeContent.Fields", "自訂欄位")">
+                    @foreach (var field in _content.Fields.Where(field => field.Value.Length > 0))
+                    {
+                        <div class="field-list-row">
+                            <dt>@field.Name</dt>
+                            <dd>
+                                @switch (field.FieldType)
+                                {
+                                    case CustomFieldTypes.Checkbox:
+                                        @(field.Value == "true" ? UiText.T("Public.TypeContent.Yes", "是") : UiText.T("Public.TypeContent.No", "否"))
+                                        break;
+                                    case CustomFieldTypes.Url:
+                                        <a href="@field.Value" rel="noopener nofollow" target="_blank">@field.Value</a>
+                                        break;
+                                    case CustomFieldTypes.Email:
+                                        <a href="@("mailto:" + field.Value)">@field.Value</a>
+                                        break;
+                                    case CustomFieldTypes.Media:
+                                        <img class="field-media" src="@field.Value" alt="" loading="lazy" />
+                                        break;
+                                    case CustomFieldTypes.Gallery:
+                                        <div class="field-gallery">@foreach (var path in CustomFieldRules.ParseList(field.Value)) { <img src="@path" alt="" loading="lazy" /> }</div>
+                                        break;
+                                    case CustomFieldTypes.Relation:
+                                        @foreach (var target in field.Targets)
+                                        {
+                                            @if (target.Path.Length > 0) { <a href="@target.Path">@target.Title</a> } else { <span>@target.Title</span> }
+                                        }
+                                        break;
+                                    default:
+                                        @field.Value
+                                        break;
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
             }
         }
         @if (_content.Kind == ContentKind.Post && _neighbors.Count > 0)

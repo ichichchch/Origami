@@ -4523,6 +4523,39 @@
   <data name="Public.TermArchive.TagLabel" xml:space="preserve">
     <value>Tag</value>
   </data>
+  <data name="Admin.ContentEditor.GalleryHelp" xml:space="preserve">
+    <value>One site /media/ image path per line; shown as a gallery on the site.</value>
+  </data>
+  <data name="Admin.ContentEditor.PagePrefix" xml:space="preserve">
+    <value>Page: </value>
+  </data>
+  <data name="Admin.ContentEditor.RelationHelp" xml:space="preserve">
+    <value>Select any number of published posts or pages. Only recent items are listed; older selections are kept.</value>
+  </data>
+  <data name="Admin.ContentTypes.BuiltinFieldsHelp" xml:space="preserve">
+    <value>Posts and pages do not belong to a content type but can still declare custom fields: fill them in the editor; the site shows them after the body.</value>
+  </data>
+  <data name="Admin.ContentTypes.BuiltinFieldsTitle" xml:space="preserve">
+    <value>Custom fields for built-in content</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeDateTime" xml:space="preserve">
+    <value>Date and time</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeEmail" xml:space="preserve">
+    <value>Email</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeGallery" xml:space="preserve">
+    <value>Gallery (multiple site images)</value>
+  </data>
+  <data name="Admin.ContentTypes.FieldTypeRelation" xml:space="preserve">
+    <value>Related content</value>
+  </data>
+  <data name="Admin.ContentTypes.PageFields" xml:space="preserve">
+    <value>Page fields</value>
+  </data>
+  <data name="Admin.ContentTypes.PostFields" xml:space="preserve">
+    <value>Post fields</value>
+  </data>
   <data name="Admin.Navigation.AuthorSlug" xml:space="preserve">
     <value>Author slug</value>
   </data>

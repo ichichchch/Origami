@@ -332,21 +332,23 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 .Select(term => term.Id).ToListAsync(ct);
             if (allowed.Count != termIds.Count) throw new CmsException("所選詞彙不存在或不屬於本內容類型。");
         }
-        // 自訂欄位值：欄位必須屬於本內容類型，值依欄位種類驗證；必填欄位不可留空。
+        // 自訂欄位值：欄位必須屬於本內容（內容類型或內建文章／頁面），值依欄位種類驗證；必填欄位不可留空。
         var fieldValues = input.FieldValues
             .GroupBy(x => x.FieldId)
             .Select(group => group.First())
             .ToList();
-        if (fieldValues.Count > 0 || contentType is not null)
-        {
-            if (contentType is null) throw new CmsException("內建文章與頁面不可使用自訂欄位。");
-            var fields = await db.CustomFields.AsNoTracking()
+        var fields = contentType is not null
+            ? await db.CustomFields.AsNoTracking()
                 .Where(field => field.ContentTypeId == contentType.Id)
-                .Select(field => new { field.Id, field.FieldType, field.IsRequired, field.Options })
-                .ToListAsync(ct);
+                .Select(field => new { field.Id, field.FieldType, field.IsRequired, field.Options }).ToListAsync(ct)
+            : await db.CustomFields.AsNoTracking()
+                .Where(field => field.BuiltinKind == entity.Kind)
+                .Select(field => new { field.Id, field.FieldType, field.IsRequired, field.Options }).ToListAsync(ct);
+        if (fields.Count > 0 || fieldValues.Count > 0)
+        {
             var supplied = fieldValues.Select(x => x.FieldId).ToHashSet();
             if (supplied.Except(fields.Select(x => x.Id)).Any())
-                throw new CmsException("所選自訂欄位不存在或不屬於本內容類型。");
+                throw new CmsException("所選自訂欄位不存在或不屬於此內容。");
             foreach (var value in fieldValues)
             {
                 var field = fields.First(x => x.Id == value.FieldId);
@@ -355,6 +357,18 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
             // 必填欄位若未送出值，等同留空，必須拒絕。
             foreach (var field in fields.Where(x => x.IsRequired && !supplied.Contains(x.Id)))
                 CustomFieldRules.ValidateValue(field.FieldType, "", required: true, field.Options);
+            // 關聯欄位的值是內容識別碼：一律須為本站現存、未進回收桶的內容。
+            var relationIds = fieldValues
+                .Where(value => fields.First(x => x.Id == value.FieldId).FieldType == CustomFieldTypes.Relation)
+                .SelectMany(value => CustomFieldRules.ParseList(value.Value))
+                .Select(id => Guid.TryParse(id, out var parsed) ? parsed : Guid.Empty).Where(id => id != Guid.Empty).Distinct().ToList();
+            if (relationIds.Count > 0)
+            {
+                var existingIds = new HashSet<Guid>(await db.Contents.AsNoTracking()
+                    .Where(x => relationIds.Contains(x.Id) && x.DeletedAt == null).Select(x => x.Id).ToListAsync(ct));
+                if (relationIds.Any(id => !existingIds.Contains(id)))
+                    throw new CmsException("關聯欄位指向的內容不存在。");
+            }
         }
         var currentValues = await db.ContentFieldValues.Where(x => x.ContentId == entity.Id).ToListAsync(ct);
         db.ContentFieldValues.RemoveRange(currentValues);
@@ -1541,6 +1555,37 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
                 Fields = x.FieldValues.OrderBy(v => v.Field.Position).ThenBy(v => v.Field.Key)
                     .Select(v => new PublicFieldValue(v.Field.Name, v.Field.Key, v.Value, v.Field.FieldType)).ToList() })
             .SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// 關聯欄位的值是內容識別碼；公開呈現時一併附上已發布目標的標題與路徑。
+    /// 草稿、回收桶、私密與受保護內容不露出；自訂內容類型的目標只列出標題。
+    /// </summary>
+    public async Task<PublicContent?> WithRelationTargetsAsync(PublicContent? content, CancellationToken ct = default)
+    {
+        if (content is null || !content.Fields.Any(f => f.FieldType == CustomFieldTypes.Relation && f.Value.Length > 0)) return content;
+        var ids = content.Fields.Where(f => f.FieldType == CustomFieldTypes.Relation)
+            .SelectMany(f => CustomFieldRules.ParseList(f.Value))
+            .Select(id => Guid.TryParse(id, out var parsed) ? parsed : Guid.Empty)
+            .Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0) return content;
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var targets = await db.Contents.AsNoTracking()
+            .Where(x => ids.Contains(x.Id) && x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected
+                && x.DeletedAt == null)
+            .Select(x => new { x.Id, x.Title, x.Slug, x.Kind, x.ContentTypeId }).ToListAsync(ct);
+        var lookup = targets.ToDictionary(x => x.Id, x => new FieldTarget(x.Title, x.ContentTypeId is not null ? ""
+            : x.Kind == ContentKind.Page ? "/pages/" + Uri.EscapeDataString(x.Slug) : "/posts/" + Uri.EscapeDataString(x.Slug)));
+        return content with
+        {
+            Fields = [.. content.Fields.Select(field => field.FieldType != CustomFieldTypes.Relation ? field
+                : field with
+                {
+                    Targets = [.. CustomFieldRules.ParseList(field.Value)
+                        .Select(id => Guid.TryParse(id, out var parsed) ? parsed : Guid.Empty)
+                        .Where(lookup.ContainsKey).Select(id => lookup[id])]
+                })]
+        };
     }
 
     /// <summary>

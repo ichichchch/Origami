@@ -28,7 +28,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         await using var writer = new Utf8JsonWriter(output);
         writer.WriteStartObject();
         writer.WriteString("format", "origami-export");
-        writer.WriteNumber("version", 2);
+        writer.WriteNumber("version", 3);
         writer.WriteString("exportedAt", DateTimeOffset.UtcNow);
 
         // 內容識別碼絕不離站；slug 才是匯入時建立連結的穩定識別。
@@ -171,6 +171,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteString("fieldType", field.FieldType);
             if (field.Options.Length > 0) writer.WriteString("options", field.Options);
             writer.WriteBoolean("isRequired", field.IsRequired);
+            writer.WriteBoolean("isArchived", field.IsArchived);
             writer.WriteNumber("position", field.Position);
             // 內建文章／頁面的欄位不屬於任何內容類型，以 builtin:post／builtin:page 標示。
             writer.WriteString("contentType", field.ContentTypeId is { } fieldTypeId
@@ -235,11 +236,31 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
             writer.WriteStartArray("terms");
             foreach (var slug in content.CustomTerms.Select(x => x.Term.Slug).OrderBy(x => x, StringComparer.Ordinal)) writer.WriteStringValue(slug);
             writer.WriteEndArray();
-            if (content.FieldValues.Count > 0)
+            var fieldValues = content.FieldValues.OrderBy(x => x.Field.Key, StringComparer.Ordinal).ToList();
+            var regularValues = fieldValues.Where(x => x.Field.FieldType != CustomFieldTypes.Relation).ToList();
+            if (regularValues.Count > 0)
             {
                 writer.WriteStartObject("fieldValues");
-                foreach (var value in content.FieldValues.OrderBy(x => x.Field.Key, StringComparer.Ordinal))
+                foreach (var value in regularValues)
                     writer.WriteString(value.Field.Key, value.Value);
+                writer.WriteEndObject();
+            }
+            var relationValues = fieldValues.Where(x => x.Field.FieldType == CustomFieldTypes.Relation).ToList();
+            if (relationValues.Count > 0)
+            {
+                // 關聯目標以站內唯一的 slug 同行，不帶內容識別碼；匯入完成後才解析為新識別碼。
+                writer.WriteStartObject("fieldRelations");
+                foreach (var value in relationValues)
+                {
+                    writer.WriteStartArray(value.Field.Key);
+                    foreach (var id in CustomFieldRules.ParseList(value.Value))
+                    {
+                        if (!Guid.TryParse(id, out var targetId) || !slugById.TryGetValue(targetId, out var targetSlug))
+                            throw new CmsException($"內容「{content.Title}」的關聯欄位「{value.Field.Key}」指向不存在的目標，無法匯出。");
+                        writer.WriteStringValue(targetSlug);
+                    }
+                    writer.WriteEndArray();
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndObject();

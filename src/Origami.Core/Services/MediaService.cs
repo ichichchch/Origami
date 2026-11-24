@@ -113,9 +113,29 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return db.Contents.AsNoTracking().Where(predicate);
     }
 
-    /// <summary>內嵌此圖片（含變體）或以它作為封面的內容，不限狀態。</summary>
+    /// <summary>以檔名標記參考此圖片的自訂欄位值查詢；不限欄位種類與內容狀態。</summary>
+    private static IQueryable<Content> ReferencedByFields(CmsDbContext db, string fileName)
+    {
+        var markers = ReferenceMarkers(fileName);
+        var parameter = Expression.Parameter(typeof(ContentFieldValue), "x");
+        var contains = typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+        Expression? body = null;
+        foreach (var marker in markers)
+        {
+            var value = Expression.Property(parameter, nameof(ContentFieldValue.Value));
+            var call = Expression.Call(value, contains, Expression.Constant(marker));
+            body = body is null ? call : Expression.OrElse(body, call);
+        }
+        var predicate = Expression.Lambda<Func<ContentFieldValue, bool>>(body!, parameter);
+        var contentIds = db.ContentFieldValues.AsNoTracking().Where(predicate).Select(x => x.ContentId);
+        return db.Contents.AsNoTracking().Where(x => contentIds.Contains(x.Id));
+    }
+
+    /// <summary>內嵌此圖片（含變體）、以它作為封面或由自訂欄位參考的內容，不限狀態。</summary>
     private static IQueryable<Content> ReferencedContents(CmsDbContext db, Guid mediaId, string fileName) =>
-        ReferencedByMarkdown(db, fileName).Union(db.Contents.AsNoTracking().Where(x => x.CoverMediaId == mediaId));
+        ReferencedByMarkdown(db, fileName)
+            .Union(ReferencedByFields(db, fileName))
+            .Union(db.Contents.AsNoTracking().Where(x => x.CoverMediaId == mediaId));
 
     private static async Task<List<MediaReference>> QueryReferencesAsync(CmsDbContext db, Guid mediaId, string fileName, CancellationToken ct)
     {
