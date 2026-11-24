@@ -70,7 +70,7 @@ public static class AdminCommand
         }
     }
 
-    private static string ReadPassword(string prompt)
+    internal static string ReadPassword(string prompt)
     {
         Console.Write(prompt);
         var buffer = new char[AdminProvisioner.MaximumPasswordLength];

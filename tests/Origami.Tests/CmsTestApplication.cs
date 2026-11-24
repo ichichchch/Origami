@@ -1,4 +1,4 @@
-namespace Origami.Tests;
+﻿namespace Origami.Tests;
 
 public sealed class MutableAuthenticationStateProvider : AuthenticationStateProvider
 {
@@ -9,6 +9,16 @@ public sealed class MutableAuthenticationStateProvider : AuthenticationStateProv
         principal = value;
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
+}
+
+public sealed class TestCliAuthenticationStateProvider(
+    MutableAuthenticationStateProvider fallback,
+    CliSession cli) : AuthenticationStateProvider
+{
+    public override Task<AuthenticationState> GetAuthenticationStateAsync() =>
+        cli.IsAuthenticated
+            ? Task.FromResult(new AuthenticationState(cli.Principal))
+            : fallback.GetAuthenticationStateAsync();
 }
 
 public sealed class CmsTestApplication : IAsyncDisposable
@@ -39,6 +49,10 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped<MutableAuthenticationStateProvider>();
         services.Replace(ServiceDescriptor.Scoped<AuthenticationStateProvider>(provider =>
             provider.GetRequiredService<MutableAuthenticationStateProvider>()));
+        services.AddSingleton<CliSession>();
+        services.AddScoped<TestCliAuthenticationStateProvider>();
+        services.Replace(ServiceDescriptor.Scoped<AuthenticationStateProvider>(provider =>
+            provider.GetRequiredService<TestCliAuthenticationStateProvider>()));
         services.AddSingleton(TimeProvider.System);
         services.AddScoped(provider => storageDirectory.Create(provider.GetRequiredService<SiteContext>()));
         services.AddScoped<SiteAdministrationService>();

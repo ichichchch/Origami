@@ -1,4 +1,5 @@
-var isCommand = args.Length > 0 && args[0] is "migrate" or "admin-init" or "admin-reset";
+﻿var isCommand = args.Length > 0 && args[0] is
+    "migrate" or "admin-init" or "admin-reset" or "backup" or "export" or "import" or "create-user";
 if (isCommand && args.Length != 1)
 {
     await Console.Error.WriteLineAsync("管理命令不接受額外參數；請勿將密碼放入命令列。");
@@ -76,6 +77,12 @@ builder.Services.AddScoped<CircuitHandler, SiteCircuitHandler>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents()
     .AddHubOptions(options => options.MaximumReceiveMessageSize = 2 * 1024 * 1024);
 builder.Services.AddCmsIdentity();
+if (isCommand)
+{
+    builder.Services.AddSingleton<CliSession>();
+    builder.Services.AddScoped<AuthenticationStateProvider, CliAuthenticationStateProvider>();
+    builder.Services.AddScoped<ImportService>();
+}
 builder.Services.AddExternalAuthentication(builder.Configuration);
 builder.Services.AddScoped<WebSignInFlow>();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -407,6 +414,9 @@ return 0;
 static async Task<int> RunCommandAsync(string[] args, WebApplication app)
 {
     await using var scope = app.Services.CreateAsyncScope();
+    if (args[0] == "backup") return await BackupCommand.RunAsync(scope.ServiceProvider);
+    if (args[0] is "export" or "import" or "create-user")
+        return await CliCommand.RunAsync(scope.ServiceProvider, args[0]);
     if (args[0] != "migrate") return await AdminCommand.RunAsync(scope.ServiceProvider, args[0]);
     try
     {
