@@ -37,6 +37,12 @@
                     <option value="@WidgetType.RssFeed">@UiText.T("Admin.Widgets.TypeRssFeed", "外部文章（RSS／Atom）")</option>
                     <option value="@WidgetType.TagCloud">@UiText.T("Admin.Widgets.TypeTagCloud", "標籤雲")</option>
                     <option value="@WidgetType.Calendar">@UiText.T("Admin.Widgets.TypeCalendar", "日曆")</option>
+                    <option value="@WidgetType.PageList">@UiText.T("Admin.Widgets.TypePageList", "頁面清單")</option>
+                    <option value="@WidgetType.MonthlyArchives">@UiText.T("Admin.Widgets.TypeMonthlyArchives", "月份歸檔")</option>
+                    <option value="@WidgetType.Image">@UiText.T("Admin.Widgets.TypeImage", "圖片")</option>
+                    <option value="@WidgetType.NavigationMenu">@UiText.T("Admin.Widgets.TypeNavigationMenu", "選單")</option>
+                    <option value="@WidgetType.SocialLinks">@UiText.T("Admin.Widgets.TypeSocialLinks", "社群連結")</option>
+                    <option value="@WidgetType.AudioVideo">@UiText.T("Admin.Widgets.TypeAudioVideo", "音訊／影片")</option>
                 </select>
                 <span class="field-help">@UiText.T("Admin.Widgets.TypeHelp", "文字小工具與文章走同一條安全 Markdown 管線，不解析原始 HTML；外部文章由伺服器定期抓取公開 https feed。")</span>
             </div>
@@ -44,6 +50,10 @@
             @if (_edit.Type == WidgetType.RecentPosts || _edit.Type == WidgetType.RecentComments || _edit.Type == WidgetType.RssFeed)
             {
                 <div class="field"><label for="widget-count">@UiText.T("Admin.Widgets.Count", "顯示篇數")</label><input id="widget-count" type="number" min="1" max="@Limits.WidgetRecentPosts" @bind="_edit.Count" /><span class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.CountHelp", "1–{0} 篇。"), Limits.WidgetRecentPosts)</span></div>
+            }
+            else if (_edit.Type == WidgetType.MonthlyArchives)
+            {
+                <div class="field"><label for="widget-count">@UiText.T("Admin.Widgets.ArchiveCount", "顯示月數")</label><input id="widget-count" type="number" min="1" max="24" @bind="_edit.Count" /><span class="field-help">@UiText.T("Admin.Widgets.ArchiveCountHelp", "1–24 個月；只列出有已發布文章的月份。")</span></div>
             }
             else if (_edit.Type == WidgetType.TagCloud)
             {
@@ -56,6 +66,11 @@
             else if (_edit.Type == WidgetType.Text)
             {
                 <div class="field"><label for="widget-markdown">@UiText.T("Admin.Widgets.Markdown", "文字內容（Markdown）") <span class="required">@UiText.T("Admin.Widgets.Required", "必填")</span></label><textarea id="widget-markdown" rows="6" maxlength="@Limits.WidgetMarkdown" @bind="_edit.Markdown" @bind:event="oninput" aria-describedby="widget-markdown-help"></textarea><span id="widget-markdown-help" class="field-help">@string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Widgets.MarkdownHelp", "最長 {0} 字，可使用連結、清單與圖片語法。"), Limits.WidgetMarkdown)</span></div>
+            }
+            @if (_edit.Type is WidgetType.Image or WidgetType.AudioVideo)
+            {
+                <div class="field"><label for="widget-media-url">@UiText.T("Admin.Widgets.MediaPath", "站內媒體路徑") <span class="required">@UiText.T("Admin.Widgets.Required", "必填")</span></label><input id="widget-media-url" @bind="_edit.Url" @bind:event="oninput" maxlength="200" placeholder="/media/…" aria-describedby="widget-media-help" /><span id="widget-media-help" class="field-help">@UiText.T("Admin.Widgets.MediaPathHelp", "只接受站內 /media/ 媒體：圖片為點陣圖，音訊／影片為 mp3、m4a、ogg、wav、mp4 或 webm；可從媒體庫複製連結。")</span></div>
+                <div class="field"><label for="widget-media-alt">@(_edit.Type == WidgetType.Image ? UiText.T("Admin.Widgets.MediaAlt", "替代文字") : UiText.T("Admin.Widgets.MediaCaption", "說明文字"))</label><input id="widget-media-alt" @bind="_edit.Markdown" @bind:event="oninput" maxlength="@Limits.AltText" /></div>
             }
             <div class="field checkbox-field"><label for="widget-visible"><input id="widget-visible" type="checkbox" @bind="_edit.IsVisible" /> @UiText.T("Admin.Widgets.Visible", "顯示於前台")</label></div>
             <div class="button-row">
@@ -76,7 +91,7 @@
         }
         else if (areaItems is not null)
         {
-            <div class="table-scroll"><table><caption class="sr-only">@heading</caption><thead><tr><th scope="col">@UiText.T("Admin.Widgets.Order", "順序")</th><th scope="col">@UiText.T("Admin.Widgets.Item", "項目")</th><th scope="col">@UiText.T("Admin.Widgets.Visible", "顯示")</th><th scope="col">@UiText.T("Admin.Widgets.Actions", "操作")</th></tr></thead><tbody>
+            <div class="table-scroll"><table><caption class="sr-only">@heading</caption><thead><tr><th scope="col">@UiText.T("Admin.Widgets.Order", "順序")</th><th scope="col">@UiText.T("Admin.Widgets.Item", "項目")</th><th scope="col">@UiText.T("Admin.Widgets.Visible", "顯示於前台")</th><th scope="col">@UiText.T("Admin.Widgets.Actions", "操作")</th></tr></thead><tbody>
             @for (var index = 0; index < areaItems.Count; index++)
             {
                 var item = areaItems[index];

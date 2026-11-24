@@ -9,7 +9,8 @@ public sealed class WidgetService(
     IDbContextFactory<CmsDbContext> factory,
     AdminAccess admin,
     IHttpClientFactory httpClients,
-    IMemoryCache cache)
+    IMemoryCache cache,
+    NavigationService? navigation = null)
 {
     /// <summary>外部 feed 的快取期間；抓取失敗時以較短暫的空清單降級。</summary>
     private static readonly TimeSpan FeedCacheTtl = TimeSpan.FromMinutes(10);
@@ -132,6 +133,28 @@ public sealed class WidgetService(
                 if (normalizedMarkdown.Length > Limits.WidgetMarkdown)
                     throw new CmsException($"文字小工具內容最長 {Limits.WidgetMarkdown} 字。");
                 break;
+            case WidgetType.MonthlyArchives:
+                normalizedCount ??= 12;
+                if (normalizedCount is < 1 or > 24) throw new CmsException("月份歸檔顯示月數須為 1–24。");
+                normalizedMarkdown = "";
+                normalizedUrl = "";
+                break;
+            case WidgetType.Image:
+            case WidgetType.AudioVideo:
+                normalizedCount = null;
+                // 圖片與音訊／影片小工具只接受站內 /media/ 媒體；Markdown 欄位作為替代文字或說明。
+                if (!IsSiteMedia(normalizedUrl, imageOnly: type == WidgetType.Image))
+                    throw new CmsException(type == WidgetType.Image ? "圖片小工具須選擇站內 /media/ 圖片。" : "音訊／影片小工具須選擇站內 /media/ 音訊或影片檔案。");
+                if (normalizedMarkdown.Length > (type == WidgetType.Image ? Limits.AltText : Limits.Caption))
+                    throw new CmsException(type == WidgetType.Image ? $"替代文字最長 {Limits.AltText} 字。" : $"說明文字最長 {Limits.Caption} 字。");
+                break;
+            case WidgetType.PageList:
+            case WidgetType.NavigationMenu:
+            case WidgetType.SocialLinks:
+                normalizedCount = null;
+                normalizedMarkdown = "";
+                normalizedUrl = "";
+                break;
             default:
                 normalizedCount = null;
                 normalizedMarkdown = "";
@@ -139,6 +162,16 @@ public sealed class WidgetService(
                 break;
         }
         return (normalizedCount, normalizedMarkdown, normalizedUrl);
+    }
+
+    /// <summary>站內媒體路徑：/media/ 加上安全的儲存檔名；圖片限點陣圖，音訊／影片限可播放的副檔名。</summary>
+    private static bool IsSiteMedia(string url, bool imageOnly)
+    {
+        if (!url.StartsWith("/media/", StringComparison.Ordinal)) return false;
+        var fileName = url["/media/".Length..];
+        if (!ContentRules.IsSafeMediaFileNameAny(fileName)) return false;
+        return imageOnly ? ContentRules.IsSafeMediaFileName(fileName)
+            : Path.GetExtension(fileName).ToLowerInvariant() is ".mp3" or ".m4a" or ".ogg" or ".wav" or ".mp4" or ".webm";
     }
 
     public async Task DeleteAsync(Guid id, Guid version, CancellationToken ct = default)
@@ -181,7 +214,24 @@ public sealed class WidgetService(
     public sealed record PublicWidget(Guid Id, WidgetArea Area, WidgetType Type, string Title, int Count,
         string Markdown, List<WidgetPostLink> RecentPosts, List<WidgetTermLink> Categories, List<WidgetTermLink> Tags,
         List<WidgetCommentLink> RecentComments, List<WidgetRssItem> RssItems,
-        List<WidgetTagCloudItem>? TagCloud = null, WidgetCalendar? Calendar = null);
+        List<WidgetTagCloudItem>? TagCloud = null, WidgetCalendar? Calendar = null)
+    {
+        /// <summary>頁面清單小工具：已發播頁面依選單權重與標題排序，附層級。</summary>
+        public List<WidgetPageLink> Pages { get; init; } = [];
+        /// <summary>月份歸檔小工具：最近幾個月的已發布文章數（UTC）。</summary>
+        public List<WidgetArchiveMonth> ArchiveMonths { get; init; } = [];
+        /// <summary>圖片與音訊／影片小工具的站內媒體路徑、替代文字或說明。</summary>
+        public string MediaUrl { get; init; } = "";
+        public string Alt { get; init; } = "";
+        public bool IsAudioVideo { get; init; }
+        /// <summary>社群連結小工具：站點設定中的社群網址。</summary>
+        public List<WidgetSocialLink> SocialLinks { get; init; } = [];
+        /// <summary>選單小工具：站台導覽（頁首位置），Depth 為層級。</summary>
+        public List<WidgetTermLink> MenuItems { get; init; } = [];
+    }
+    public sealed record WidgetPageLink(string Title, string Path, int Depth);
+    public sealed record WidgetArchiveMonth(int Year, int Month, int Count);
+    public sealed record WidgetSocialLink(string Name, string Url);
     public sealed record WidgetPostLink(string Title, string Slug, DateTimeOffset? PublishedAt);
     public sealed record WidgetTermLink(string Name, string Slug, int Depth);
     public sealed record WidgetCommentLink(string AuthorName, string Excerpt, DateTimeOffset CreatedAt,
@@ -293,6 +343,53 @@ public sealed class WidgetService(
             calendar = new WidgetCalendar(today.Year, today.Month, dayRows);
         }
 
+        // 頁面清單：已發布、非私密的獨立頁面，依選單權重與標題排序，附上層級（連結為平面網址，階層網址由前台 301 導向）。
+        List<WidgetPageLink> pageList = [];
+        if (widgets.Any(x => x.Type == WidgetType.PageList))
+        {
+            var rows = await db.Contents.AsNoTracking()
+                .Where(x => x.Kind == ContentKind.Page && x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected)
+                .Select(x => new { x.Id, x.Title, x.Slug, x.ParentId, x.MenuOrder }).ToListAsync(ct);
+            var lookup = rows.ToDictionary(x => x.Id, x => x.ParentId);
+            pageList = [.. rows.OrderBy(x => x.MenuOrder).ThenBy(x => x.Title).ThenBy(x => x.Id).Select(x =>
+                new WidgetPageLink(x.Title, "/pages/" + Uri.EscapeDataString(x.Slug), NavDepth(lookup, x.ParentId)))];
+        }
+
+        // 月份歸檔：已發布文章依 UTC 年月彙整，取最近 N 個月（N 為所有月份歸檔小工具的最大值）。
+        var archiveMax = widgets.Where(x => x.Type == WidgetType.MonthlyArchives)
+            .Select(x => EffectiveArchiveCount(WidgetTypes.ParseConfig(x.ConfigJson).Count)).DefaultIfEmpty(12).Max();
+        List<WidgetArchiveMonth> archiveMonths = [];
+        if (widgets.Any(x => x.Type == WidgetType.MonthlyArchives))
+        {
+            var grouped = await db.Contents.AsNoTracking()
+                .Where(x => x.Kind == ContentKind.Post && x.Status == ContentStatus.Published && !x.IsPrivate && !x.IsProtected
+                    && x.ContentTypeId == null && x.PublishedAt != null)
+                .GroupBy(x => new { x.PublishedAt!.Value.Year, x.PublishedAt.Value.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() }).ToListAsync(ct);
+            archiveMonths = [.. grouped.OrderByDescending(x => x.Year).ThenByDescending(x => x.Month).Take(archiveMax)
+                .Select(x => new WidgetArchiveMonth(x.Year, x.Month, x.Count))];
+        }
+
+        // 社群連結：站點設定中的三個社群網址，未設定者不出現。
+        List<WidgetSocialLink> socialLinks = [];
+        if (widgets.Any(x => x.Type == WidgetType.SocialLinks))
+        {
+            var site = await db.Settings.AsNoTracking().Where(x => x.Id == 1)
+                .Select(x => new { x.SocialGithubUrl, x.SocialXUrl, x.SocialMastodonUrl }).SingleOrDefaultAsync(ct);
+            socialLinks = [.. SiteSocialLink("GitHub", site?.SocialGithubUrl), .. SiteSocialLink("X", site?.SocialXUrl),
+                .. SiteSocialLink("Mastodon", site?.SocialMastodonUrl)];
+        }
+
+        // 選單：沿用站台導覽的公開投影（頁首位置），與頁首導覽同一份資料。
+        List<WidgetTermLink> menuItems = [];
+        if (widgets.Any(x => x.Type == WidgetType.NavigationMenu) && navigation is not null)
+        {
+            var nav = await navigation.PublicAsync(ct);
+            var navById = nav.ToDictionary(x => x.Id);
+            menuItems = [.. nav.Where(x => !x.IsFooter).Select(x => new WidgetTermLink(x.Title,
+                x.Url ?? "/pages/" + Uri.EscapeDataString(x.Slug), x.ParentId is { } owner && navById.ContainsKey(owner) ? 1 : 0))];
+        }
+
         List<PublicWidget> result = new(widgets.Count);
         foreach (var x in widgets)
         {
@@ -304,9 +401,34 @@ public sealed class WidgetService(
                 recent.Take(EffectiveCount(config.Count)).ToList(), categories, tags,
                 recentComments.Take(EffectiveCount(config.Count)).ToList(), rss,
                 x.Type == WidgetType.TagCloud ? tagCloud.Take(EffectiveTagCloudCount(config.Count)).ToList() : null,
-                x.Type == WidgetType.Calendar ? calendar : null));
+                x.Type == WidgetType.Calendar ? calendar : null)
+            {
+                Pages = x.Type == WidgetType.PageList ? pageList : [],
+                ArchiveMonths = x.Type == WidgetType.MonthlyArchives ? [.. archiveMonths.Take(EffectiveArchiveCount(config.Count))] : [],
+                MediaUrl = x.Type is WidgetType.Image or WidgetType.AudioVideo ? config.Url ?? "" : "",
+                Alt = x.Type is WidgetType.Image or WidgetType.AudioVideo ? config.Markdown ?? "" : "",
+                IsAudioVideo = x.Type == WidgetType.AudioVideo,
+                SocialLinks = x.Type == WidgetType.SocialLinks ? socialLinks : [],
+                MenuItems = x.Type == WidgetType.NavigationMenu ? menuItems : []
+            });
         }
         return result;
+    }
+
+    private static IEnumerable<WidgetSocialLink> SiteSocialLink(string name, string? url) =>
+        ContentRules.IsHttpUrl(url) ? [new WidgetSocialLink(name, url!)] : [];
+
+    /// <summary>頁面在上層鏈中的深度；祖先缺漏時以 0 起算，最多追 10 層。</summary>
+    private static int NavDepth(Dictionary<Guid, Guid?> lookup, Guid? parent)
+    {
+        var depth = 0;
+        var guard = 0;
+        while (parent is { } cursor && lookup.TryGetValue(cursor, out var next) && ++guard <= 10)
+        {
+            depth++;
+            parent = next;
+        }
+        return depth;
     }
 
     /// <summary>抓取並快取外部 feed；失敗時以短暫的空清單降級，不讓小工具拖垮公開頁面。</summary>
@@ -351,6 +473,9 @@ public sealed class WidgetService(
 
     /// <summary>渲染端篇數夾持：組態來自資料庫（匯入檔可能未經服務層驗證），下界夾回 1 以免 Take 拋出例外。</summary>
     private static int EffectiveCount(int? count) => Math.Clamp(count ?? 5, 1, Limits.WidgetRecentPosts);
+
+    /// <summary>月份歸檔的顯示月數夾持（1–24）；理由同 EffectiveCount。</summary>
+    private static int EffectiveArchiveCount(int? count) => Math.Clamp(count ?? 12, 1, 24);
 
     /// <summary>標籤雲的標籤數夾持；理由同上，資料庫組態可能未經服務層驗證。</summary>
     private static int EffectiveTagCloudCount(int? count) => Math.Clamp(count ?? Limits.WidgetTagCloudMax, 1, Limits.WidgetTagCloudMax);

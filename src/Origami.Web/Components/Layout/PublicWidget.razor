@@ -1,4 +1,4 @@
-@inject MarkdownService Markdown
+﻿@inject MarkdownService Markdown
 
 @* 受控小工具的前台渲染：型別固定為內建宣告式型別，文字小工具走與內容相同的安全 Markdown 管線。 *@
 <section class="widget widget-@Widget.Type.ToString().ToLowerInvariant()" aria-label="@Heading">
@@ -79,6 +79,61 @@
                 </nav>
             }
             break;
+        case WidgetType.PageList:
+            <ul class="widget-list">
+                @foreach (var link in Widget.Pages)
+                {
+                    <li><a style="@(link.Depth > 0 ? $"padding-inline-start:{link.Depth * 0.9}rem" : null)" href="@link.Path">@(link.Depth > 0 ? "└ " : "")@link.Title</a></li>
+                }
+            </ul>
+            break;
+        case WidgetType.MonthlyArchives:
+            <ul class="widget-list">
+                @foreach (var month in Widget.ArchiveMonths)
+                {
+                    <li><a href="@($"/archives/{month.Year}/{month.Month}")">@string.Format(CultureInfo.CurrentCulture, UiText.T("Public.Widget.ArchiveMonth", "{0} 年 {1} 月"), month.Year, month.Month) <span class="muted">(@month.Count)</span></a></li>
+                }
+            </ul>
+            break;
+        case WidgetType.Image:
+            @if (Widget.MediaUrl.Length > 0)
+            {
+                <img class="widget-image" src="@Widget.MediaUrl" alt="@Widget.Alt" loading="lazy" />
+            }
+            break;
+        case WidgetType.AudioVideo:
+            @if (Widget.MediaUrl.Length > 0)
+            {
+                var extension = System.IO.Path.GetExtension(Widget.MediaUrl).ToLowerInvariant();
+                <figure class="widget-media">
+                    @if (extension is ".mp4" or ".webm")
+                    {
+                        <video controls preload="metadata" src="@Widget.MediaUrl"></video>
+                    }
+                    else
+                    {
+                        <audio controls preload="metadata" src="@Widget.MediaUrl"></audio>
+                    }
+                    @if (Widget.Alt.Length > 0) { <figcaption>@Widget.Alt</figcaption> }
+                </figure>
+            }
+            break;
+        case WidgetType.NavigationMenu:
+            <ul class="widget-list">
+                @foreach (var entry in Widget.MenuItems)
+                {
+                    <li><a style="@(entry.Depth > 0 ? $"padding-inline-start:{entry.Depth * 0.9}rem" : null)" href="@entry.Slug">@(entry.Depth > 0 ? "└ " : "")@entry.Name</a></li>
+                }
+            </ul>
+            break;
+        case WidgetType.SocialLinks:
+            <ul class="widget-socials">
+                @foreach (var link in Widget.SocialLinks)
+                {
+                    <li><a href="@link.Url" target="_blank" rel="noopener nofollow">@link.Name</a></li>
+                }
+            </ul>
+            break;
         case WidgetType.Search:
             <form class="widget-search" method="get" action="/search" role="search">
                 <label class="sr-only" for="widget-search-q">@UiText.T("Public.Widget.SearchLabel", "搜尋文章")</label>
@@ -129,6 +184,10 @@
         WidgetType.Search => UiText.T("Public.Widget.Search", "搜尋"),
         WidgetType.RecentComments => UiText.T("Public.Widget.RecentComments", "最新評論"),
         WidgetType.RssFeed => UiText.T("Public.Widget.RssFeed", "外部文章"),
+        WidgetType.PageList => UiText.T("Public.Widget.PageList", "頁面"),
+        WidgetType.MonthlyArchives => UiText.T("Public.Widget.MonthlyArchives", "月份歸檔"),
+        WidgetType.NavigationMenu => UiText.T("Public.Widget.NavigationMenu", "選單"),
+        WidgetType.SocialLinks => UiText.T("Public.Widget.SocialLinks", "社群連結"),
         _ => UiText.T("Public.Widget.Text", "文字")
     };
 

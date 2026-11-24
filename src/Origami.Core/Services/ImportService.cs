@@ -781,6 +781,23 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 var type = node.GetString("type") is { } t && Enum.TryParse<WidgetType>(t, ignoreCase: true, out var parsedType)
                     && WidgetTypes.IsValid(parsedType) ? parsedType : (WidgetType?)null;
                 if (area is null || type is null) continue;
+                var configJson = Bounded(node, "configJson", Limits.WidgetConfig, "小工具組態", optional: true);
+                WidgetTypes.WidgetConfig config;
+                try
+                {
+                    config = JsonSerializer.Deserialize<WidgetTypes.WidgetConfig>(
+                        string.IsNullOrWhiteSpace(configJson) ? "{}" : configJson,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                        ?? throw new CmsException("小工具組態不是有效的 JSON。");
+                }
+                catch (JsonException)
+                {
+                    throw new CmsException("小工具組態不是有效的 JSON。");
+                }
+
+                var (count, markdown, url) = WidgetService.NormalizeConfig(type.Value, config.Count, config.Markdown, config.Url);
+                var normalizedConfigJson = WidgetTypes.SerializeConfig(new(
+                    count, string.IsNullOrEmpty(markdown) ? null : markdown, string.IsNullOrEmpty(url) ? null : url));
                 // 包來源代稱對應到本次匯入重建的包；對應不上（包被跳過）則保留為獨立小工具。
                 var packageSlug = node.GetString("packageSlug");
                 db.SiteWidgets.Add(new SiteWidget
@@ -789,7 +806,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                     Area = area.Value,
                     Type = type.Value,
                     Title = Bounded(node, "title", Limits.WidgetTitle, "小工具標題", optional: true),
-                    ConfigJson = Bounded(node, "configJson", Limits.WidgetConfig, "小工具組態", optional: true),
+                    ConfigJson = normalizedConfigJson,
                     IsVisible = !node.TryGetProperty("isVisible", out var widgetVisible) || widgetVisible.ValueKind != JsonValueKind.False,
                     Position = position++,
                     PackageId = packageSlug is { Length: > 0 } && packagesBySlug.TryGetValue(packageSlug, out var package)

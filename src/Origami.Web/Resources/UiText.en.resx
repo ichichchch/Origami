@@ -4329,9 +4329,7 @@
   <data name="Admin.Widgets.Count" xml:space="preserve"><value>Number of posts</value></data>
   <data name="Admin.Widgets.CountHelp" xml:space="preserve"><value>1–{0} posts, published posts only.</value></data>
   <data name="Admin.Widgets.Markdown" xml:space="preserve"><value>Text content (Markdown)</value></data>
-  <data name="Admin.Widgets.Required" xml:space="preserve"><value>Required</value></data>
   <data name="Admin.Widgets.MarkdownHelp" xml:space="preserve"><value>Up to {0} characters; links, lists and image syntax are supported.</value></data>
-  <data name="Admin.Widgets.Visible" xml:space="preserve"><value>Show on the public site</value></data>
   <data name="Admin.Widgets.VisibleShort" xml:space="preserve"><value>Visible</value></data>
   <data name="Admin.Widgets.Hidden" xml:space="preserve"><value>Hidden</value></data>
   <data name="Admin.Widgets.Saving" xml:space="preserve"><value>Saving…</value></data>
@@ -4339,9 +4337,6 @@
   <data name="Admin.Widgets.CancelOrAdd" xml:space="preserve"><value>Cancel / add</value></data>
   <data name="Admin.Widgets.EmptyTitle" xml:space="preserve"><value>No widgets in the {0} area yet</value></data>
   <data name="Admin.Widgets.EmptyHelp" xml:space="preserve"><value>Once added, the area appears on the public site; when no visible items remain, the sidebar hides itself.</value></data>
-  <data name="Admin.Widgets.Order" xml:space="preserve"><value>Order</value></data>
-  <data name="Admin.Widgets.Item" xml:space="preserve"><value>Item</value></data>
-  <data name="Admin.Widgets.Actions" xml:space="preserve"><value>Actions</value></data>
   <data name="Admin.Widgets.MoveUp" xml:space="preserve"><value>Move up</value></data>
   <data name="Admin.Widgets.MoveDown" xml:space="preserve"><value>Move down</value></data>
   <data name="Admin.Widgets.Edit" xml:space="preserve"><value>Edit</value></data>
@@ -4355,6 +4350,21 @@
   <data name="Admin.Widgets.Reordered" xml:space="preserve"><value>Widget order updated.</value></data>
   <data name="Admin.Settings.SearchEngineBlocked" xml:space="preserve"><value>Ask search engines not to index this site</value></data>
   <data name="Admin.Settings.SearchEngineBlockedHelp" xml:space="preserve"><value>When enabled, robots.txt disallows the entire site and every public response carries a noindex header. Pages already indexed by search engines are not removed immediately.</value></data>
+  <data name="Admin.Widgets.Required" xml:space="preserve">
+    <value>Required</value>
+  </data>
+  <data name="Admin.Widgets.Visible" xml:space="preserve">
+    <value>Show on the public site</value>
+  </data>
+  <data name="Admin.Widgets.Order" xml:space="preserve">
+    <value>Order</value>
+  </data>
+  <data name="Admin.Widgets.Item" xml:space="preserve">
+    <value>Item</value>
+  </data>
+  <data name="Admin.Widgets.Actions" xml:space="preserve">
+    <value>Actions</value>
+  </data>
   <data name="Admin.Settings.ShowViewCounts" xml:space="preserve"><value>Show view counts on the public site</value></data>
   <data name="Admin.Settings.ShowViewCountsHelp" xml:space="preserve"><value>When enabled, article pages show the cumulative view count next to the byline.</value></data>
   <data name="Admin.Settings.IndexNowEnabled" xml:space="preserve"><value>Enable IndexNow search engine pings</value></data>
@@ -4607,7 +4617,58 @@
   <data name="Admin.Navigation.TopLevel" xml:space="preserve">
     <value>Top level</value>
   </data>
+  <data name="Admin.Widgets.ArchiveCount" xml:space="preserve">
+    <value>Months to show</value>
+  </data>
+  <data name="Admin.Widgets.ArchiveCountHelp" xml:space="preserve">
+    <value>1–24 months; only months with published posts are listed.</value>
+  </data>
+  <data name="Admin.Widgets.MediaAlt" xml:space="preserve">
+    <value>Alt text</value>
+  </data>
+  <data name="Admin.Widgets.MediaCaption" xml:space="preserve">
+    <value>Caption</value>
+  </data>
+  <data name="Admin.Widgets.MediaPath" xml:space="preserve">
+    <value>Site media path</value>
+  </data>
+  <data name="Admin.Widgets.MediaPathHelp" xml:space="preserve">
+    <value>Only site /media/ files: bitmap images, or mp3, m4a, ogg, wav, mp4, webm for audio/video; copy the link from the media library.</value>
+  </data>
+  <data name="Admin.Widgets.TypeAudioVideo" xml:space="preserve">
+    <value>Audio / video</value>
+  </data>
+  <data name="Admin.Widgets.TypeImage" xml:space="preserve">
+    <value>Image</value>
+  </data>
+  <data name="Admin.Widgets.TypeMonthlyArchives" xml:space="preserve">
+    <value>Monthly archives</value>
+  </data>
+  <data name="Admin.Widgets.TypeNavigationMenu" xml:space="preserve">
+    <value>Menu</value>
+  </data>
+  <data name="Admin.Widgets.TypePageList" xml:space="preserve">
+    <value>Page list</value>
+  </data>
+  <data name="Admin.Widgets.TypeSocialLinks" xml:space="preserve">
+    <value>Social links</value>
+  </data>
   <data name="Layout.Main.FooterNavigation" xml:space="preserve">
     <value>Footer navigation</value>
+  </data>
+  <data name="Public.Widget.ArchiveMonth" xml:space="preserve">
+    <value>{0}-{1}</value>
+  </data>
+  <data name="Public.Widget.MonthlyArchives" xml:space="preserve">
+    <value>Archives</value>
+  </data>
+  <data name="Public.Widget.NavigationMenu" xml:space="preserve">
+    <value>Menu</value>
+  </data>
+  <data name="Public.Widget.PageList" xml:space="preserve">
+    <value>Pages</value>
+  </data>
+  <data name="Public.Widget.SocialLinks" xml:space="preserve">
+    <value>Social links</value>
   </data>
 </root>

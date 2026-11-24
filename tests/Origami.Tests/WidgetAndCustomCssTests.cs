@@ -215,6 +215,72 @@ public sealed class WidgetAndCustomCssTests(IsolatedPostgres postgres) : Service
     }
 
     [PostgresFact]
+    public async Task Import_revalidates_widget_configs_and_rolls_back_malicious_entries()
+    {
+        using var admin = await App.AdministratorAsync();
+        var existing = await admin.Content.SaveAsync(NewContent("匯入前文章", status: ContentStatus.Published));
+        var widgets = admin.Services.GetRequiredService<WidgetService>();
+        var sentinel = await widgets.SaveAsync(new WidgetService.WidgetInput
+        {
+            Area = WidgetArea.Sidebar, Type = WidgetType.RecentPosts, Count = 2, Title = "保留小工具"
+        });
+
+        using var buffer = new MemoryStream();
+        await admin.Services.GetRequiredService<ExportService>().WriteAsync(buffer);
+        var exported = JsonNode.Parse(buffer.ToArray())!;
+        var importer = admin.Services.GetRequiredService<ImportService>();
+        var malicious = new[]
+        {
+            (Type: "image", ConfigJson: "{\"url\":\"https://evil.example/a.png\"}"),
+            (Type: "audiovideo", ConfigJson: "{\"url\":\"https://evil.example/a.mp4\"}"),
+            (Type: "recentposts", ConfigJson: "{\"count\":0}"),
+            (Type: "text", ConfigJson: "{\"markdown\":\" \"}"),
+            (Type: "recentposts", ConfigJson: "{not-json"),
+            (Type: "recentposts", ConfigJson: "{\"count\":\"many\"}")
+        };
+
+        foreach (var testCase in malicious)
+        {
+            var document = exported.DeepClone();
+            document["widgets"] = new JsonArray(new JsonObject
+            {
+                ["area"] = "sidebar",
+                ["type"] = testCase.Type,
+                ["title"] = "惡意小工具",
+                ["configJson"] = testCase.ConfigJson
+            });
+            using var input = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(document.ToJsonString()));
+            await Assert.ThrowsAsync<CmsException>(() => importer.ApplyAsync(input, confirmed: true));
+
+            // 每筆拒絕都必須回復整個交易，既有內容與小工具不可被刪除或部分取代。
+            await using var db = await App.CreateContextAsync();
+            Assert.True(await db.Contents.AsNoTracking().AnyAsync(x => x.Id == existing.Id));
+            var restored = await db.SiteWidgets.AsNoTracking().SingleAsync();
+            Assert.Equal(sentinel.Id, restored.Id);
+            Assert.Equal("保留小工具", restored.Title);
+            Assert.Equal(sentinel.Count, WidgetTypes.ParseConfig(restored.ConfigJson).Count);
+        }
+
+        // 合法組態仍依型別正規化：無關欄位清除，保留有效篇數。
+        var normalized = exported.DeepClone();
+        normalized["widgets"] = new JsonArray(new JsonObject
+        {
+            ["area"] = "sidebar",
+            ["type"] = "recentposts",
+            ["title"] = "正規化小工具",
+            ["configJson"] = "{\"count\":2,\"markdown\":\"discard\",\"url\":\"https://discard.example\",\"ignored\":true}"
+        });
+        using var normalizedInput = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(normalized.ToJsonString()));
+        await importer.ApplyAsync(normalizedInput, confirmed: true);
+        await using var normalizedDb = await App.CreateContextAsync();
+        var imported = await normalizedDb.SiteWidgets.AsNoTracking().SingleAsync();
+        var config = WidgetTypes.ParseConfig(imported.ConfigJson);
+        Assert.Equal(2, config.Count);
+        Assert.Null(config.Markdown);
+        Assert.Null(config.Url);
+    }
+
+    [PostgresFact]
     public async Task Recent_comments_widget_shows_only_approved_comments_on_public_posts()
     {
         using var admin = await App.AdministratorAsync();

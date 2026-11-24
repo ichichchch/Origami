@@ -193,4 +193,38 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         using var client = site.CreateClient();
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/favicon.ico")).StatusCode);
     }
+
+    [PostgresFact]
+    public async Task Widget_media_references_block_deletion_until_the_widget_is_removed()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var service = CreateService(admin, directory);
+        MediaItem uploaded;
+        await using (var stream = new MemoryStream(Png(640, 320)))
+            uploaded = await service.UploadAsync(stream, "widget-reference.png");
+        var widgets = admin.Services.GetRequiredService<WidgetService>();
+        var widget = await widgets.SaveAsync(new WidgetService.WidgetInput
+        {
+            Area = WidgetArea.Sidebar,
+            Type = WidgetType.Image,
+            Title = "側欄圖片",
+            Url = "/media/" + uploaded.FileName,
+            IsVisible = false
+        });
+
+        Assert.Equal(1, await service.CountReferencesAsync(uploaded.Id));
+        Assert.Equal(1, (await service.ReferenceCountsAsync([uploaded.Id]))[uploaded.Id]);
+        var reference = Assert.Single(await service.ListReferencesAsync(uploaded.Id));
+        Assert.Equal(widget.Id, reference.WidgetId);
+        Assert.Null(reference.Kind);
+        Assert.Null(reference.Status);
+        var refused = await Assert.ThrowsAsync<CmsException>(() => service.DeleteAsync(uploaded.Id, true));
+        Assert.Contains("側欄圖片", refused.Message, StringComparison.Ordinal);
+
+        await widgets.DeleteAsync(widget.Id, widget.Version);
+        Assert.Equal(0, await service.CountReferencesAsync(uploaded.Id));
+        await service.DeleteAsync(uploaded.Id, true);
+    }
+
 }

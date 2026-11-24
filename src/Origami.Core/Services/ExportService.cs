@@ -312,7 +312,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
         }
         writer.WriteEndArray();
 
-        // 受控小工具：以宣告資料原樣同行（區域、型別、組態 JSON 與順序），匯入時逐項驗證。
+        // 受控小工具：宣告資料同行；匯入時依型別重新正規化並驗證組態 JSON。
         var packageSlugById = await db.SitePackages.AsNoTracking().ToDictionaryAsync(x => x.Id, x => x.Slug, ct);
         writer.WriteStartArray("widgets");
         await foreach (var widget in db.SiteWidgets.AsNoTracking().OrderBy(x => x.Area).ThenBy(x => x.Position).ThenBy(x => x.Id)

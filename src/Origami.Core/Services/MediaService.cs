@@ -47,9 +47,12 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     public static string VariantName(string fileName, int width) =>
         Path.GetFileNameWithoutExtension(fileName) + "_w" + width + Path.GetExtension(fileName);
 
-    public sealed record MediaReference(Guid ContentId, string Title, ContentKind Kind, ContentStatus Status);
+    public sealed record MediaReference(Guid ContentId, string Title, ContentKind? Kind, ContentStatus? Status)
+    {
+        public Guid? WidgetId { get; init; }
+    }
 
-    /// <summary>Markdown 內嵌此圖片的內容，不限狀態——草稿或回收桶內容仍持有引用。</summary>
+    /// <summary>引用此媒體的內容或小工具，不限狀態；草稿、回收桶與隱藏小工具仍持有引用。</summary>
     public async Task<List<MediaReference>> ListReferencesAsync(Guid mediaId, CancellationToken ct = default)
     {
         await admin.RequireRoleAsync(SiteRole.Reader, ct);
@@ -65,7 +68,8 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         await using var db = await factory.CreateDbContextAsync(ct);
         var fileName = await db.MediaAssets.Where(x => x.Id == mediaId).Select(x => x.FileName).SingleOrDefaultAsync(ct)
             ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
-        return await ReferencedContents(db, mediaId, fileName).CountAsync(ct);
+        return await ReferencedContents(db, mediaId, fileName).CountAsync(ct)
+            + await ReferencedByWidgets(db, fileName).CountAsync(ct);
     }
 
     /// <summary>
@@ -82,7 +86,11 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
             .ToDictionaryAsync(x => x.Id, x => x.FileName, ct);
         var counts = new Dictionary<Guid, int>();
         foreach (var id in mediaIds)
-            counts[id] = names.TryGetValue(id, out var fileName) ? await ReferencedContents(db, id, fileName).CountAsync(ct) : 0;
+        {
+            if (!names.TryGetValue(id, out var fileName)) { counts[id] = 0; continue; }
+            counts[id] = await ReferencedContents(db, id, fileName).CountAsync(ct)
+                + await ReferencedByWidgets(db, fileName).CountAsync(ct);
+        }
         return counts;
     }
 
@@ -131,6 +139,26 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         return db.Contents.AsNoTracking().Where(x => contentIds.Contains(x.Id));
     }
 
+    private static IQueryable<SiteWidget> ReferencedByWidgets(CmsDbContext db, string fileName)
+    {
+        var markers = ReferenceMarkers(fileName)
+            .SelectMany(marker => new[] { marker, marker.Replace("/media/", @"\/media\/", StringComparison.Ordinal) })
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var parameter = Expression.Parameter(typeof(SiteWidget), "x");
+        var contains = typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!;
+        Expression? body = null;
+        foreach (var marker in markers)
+        {
+            var config = Expression.Property(parameter, nameof(SiteWidget.ConfigJson));
+            var call = Expression.Call(config, contains, Expression.Constant(marker));
+            body = body is null ? call : Expression.OrElse(body, call);
+        }
+        var predicate = Expression.Lambda<Func<SiteWidget, bool>>(body!, parameter);
+        return db.SiteWidgets.AsNoTracking().Where(predicate).Where(x =>
+            x.Type == WidgetType.Image || x.Type == WidgetType.AudioVideo || x.Type == WidgetType.Text);
+    }
+
     /// <summary>內嵌此圖片（含變體）、以它作為封面或由自訂欄位參考的內容，不限狀態。</summary>
     private static IQueryable<Content> ReferencedContents(CmsDbContext db, Guid mediaId, string fileName) =>
         ReferencedByMarkdown(db, fileName)
@@ -139,9 +167,16 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
 
     private static async Task<List<MediaReference>> QueryReferencesAsync(CmsDbContext db, Guid mediaId, string fileName, CancellationToken ct)
     {
-        return await ReferencedContents(db, mediaId, fileName)
+        var contents = await ReferencedContents(db, mediaId, fileName)
             .OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id)
             .Select(x => new MediaReference(x.Id, x.Title, x.Kind, x.Status)).ToListAsync(ct);
+        var widgets = await ReferencedByWidgets(db, fileName)
+            .OrderBy(x => x.Area).ThenBy(x => x.Position).ThenBy(x => x.Id)
+            .Select(x => new MediaReference(Guid.Empty, x.Title.Length == 0 ? x.Type.ToString() : x.Title, null, null)
+            {
+                WidgetId = x.Id
+            }).ToListAsync(ct);
+        return [.. contents, .. widgets];
     }
 
     /// <summary>設定的網站圖示背後的儲存檔與內容類型；未設定時為 null。</summary>
@@ -397,7 +432,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
         if (references.Count > 0)
         {
             var titles = string.Join("、", references.Take(3).Select(x => "「" + x.Title + "」"));
-            var more = references.Count > 3 ? "等共 " + references.Count + " 篇內容" : "";
+            var more = references.Count > 3 ? "等共 " + references.Count + " 個引用" : "";
             throw new CmsException("圖片仍被 " + titles + more + " 引用，請先移除引用或更換圖片後再刪除。");
         }
         db.MediaAssets.Remove(asset);
