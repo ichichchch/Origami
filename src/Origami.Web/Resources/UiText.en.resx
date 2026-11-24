@@ -4515,6 +4515,126 @@
   <data name="Admin.Security.SessionDevice" xml:space="preserve">
     <value>Device</value>
   </data>
+  <data name="Admin.ContentEditor.Bold" xml:space="preserve">
+    <value>Bold</value>
+  </data>
+  <data name="Admin.ContentEditor.BoldPlaceholder" xml:space="preserve">
+    <value>bold text</value>
+  </data>
+  <data name="Admin.ContentEditor.CodePlaceholder" xml:space="preserve">
+    <value>code</value>
+  </data>
+  <data name="Admin.ContentEditor.FindCaseSensitive" xml:space="preserve">
+    <value>Match case</value>
+  </data>
+  <data name="Admin.ContentEditor.FindCount" xml:space="preserve">
+    <value>{0} matches</value>
+  </data>
+  <data name="Admin.ContentEditor.FindNext" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Admin.ContentEditor.FindNone" xml:space="preserve">
+    <value>No matches found</value>
+  </data>
+  <data name="Admin.ContentEditor.FindReplace" xml:space="preserve">
+    <value>Find &amp; replace</value>
+  </data>
+  <data name="Admin.ContentEditor.FindTerm" xml:space="preserve">
+    <value>Find text</value>
+  </data>
+  <data name="Admin.ContentEditor.FocusMode" xml:space="preserve">
+    <value>Focus mode</value>
+  </data>
+  <data name="Admin.ContentEditor.FocusModeHelp" xml:space="preserve">
+    <value>Focus mode: press Esc to leave, Ctrl/Cmd+S to save.</value>
+  </data>
+  <data name="Admin.ContentEditor.FormatToolbar" xml:space="preserve">
+    <value>Formatting and insert toolbar</value>
+  </data>
+  <data name="Admin.ContentEditor.Heading2" xml:space="preserve">
+    <value>Heading 2</value>
+  </data>
+  <data name="Admin.ContentEditor.Heading3" xml:space="preserve">
+    <value>Heading 3</value>
+  </data>
+  <data name="Admin.ContentEditor.InlineCode" xml:space="preserve">
+    <value>Inline code</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertBlock" xml:space="preserve">
+    <value>Insert block…</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertBulletList" xml:space="preserve">
+    <value>Bullet list</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertButtons" xml:space="preserve">
+    <value>Button row</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertCard" xml:space="preserve">
+    <value>Card</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertCodeBlock" xml:space="preserve">
+    <value>Code block</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertColumns" xml:space="preserve">
+    <value>Columns</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertExceedsBodyLimit" xml:space="preserve">
+    <value>Inserting this would exceed the body length limit. Shorten the content first.</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertGallery" xml:space="preserve">
+    <value>Gallery</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertHorizontalRule" xml:space="preserve">
+    <value>Horizontal rule</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertOrderedList" xml:space="preserve">
+    <value>Numbered list</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertTable" xml:space="preserve">
+    <value>Table</value>
+  </data>
+  <data name="Admin.ContentEditor.InsertTabs" xml:space="preserve">
+    <value>Tabs</value>
+  </data>
+  <data name="Admin.ContentEditor.Italic" xml:space="preserve">
+    <value>Italic</value>
+  </data>
+  <data name="Admin.ContentEditor.ItalicPlaceholder" xml:space="preserve">
+    <value>italic text</value>
+  </data>
+  <data name="Admin.ContentEditor.Link" xml:space="preserve">
+    <value>Insert link</value>
+  </data>
+  <data name="Admin.ContentEditor.LinkPlaceholder" xml:space="preserve">
+    <value>link text</value>
+  </data>
+  <data name="Admin.ContentEditor.Quote" xml:space="preserve">
+    <value>Quote</value>
+  </data>
+  <data name="Admin.ContentEditor.Replace" xml:space="preserve">
+    <value>Replace</value>
+  </data>
+  <data name="Admin.ContentEditor.ReplaceAll" xml:space="preserve">
+    <value>Replace all</value>
+  </data>
+  <data name="Admin.ContentEditor.ReplaceDone" xml:space="preserve">
+    <value>Replaced one match and selected the next one.</value>
+  </data>
+  <data name="Admin.ContentEditor.ReplaceHint" xml:space="preserve">
+    <value>Match selected; press Replace to confirm.</value>
+  </data>
+  <data name="Admin.ContentEditor.ReplaceWith" xml:space="preserve">
+    <value>Replace with</value>
+  </data>
+  <data name="Admin.ContentEditor.ReplacedAll" xml:space="preserve">
+    <value>Replaced {0} occurrences</value>
+  </data>
+  <data name="Admin.ContentEditor.StrikePlaceholder" xml:space="preserve">
+    <value>strikethrough text</value>
+  </data>
+  <data name="Admin.ContentEditor.Strikethrough" xml:space="preserve">
+    <value>Strikethrough</value>
+  </data>
   <data name="Admin.Settings.DefaultCategory" xml:space="preserve">
     <value>Default category (optional)</value>
   </data>

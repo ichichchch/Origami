@@ -205,20 +205,83 @@ else if (_model is not null)
                         }
                     }
                 </section>
-                <section class="panel markdown-panel">
-                    <div class="panel-toolbar">
+                @{
+                    // 工具列按鈕以圖示字母呈現，完整名稱放在 aria-label／title。
+                    var boldLabel = UiText.T("Admin.ContentEditor.Bold", "粗體");
+                    var italicLabel = UiText.T("Admin.ContentEditor.Italic", "斜體");
+                    var strikeLabel = UiText.T("Admin.ContentEditor.Strikethrough", "刪除線");
+                    var codeLabel = UiText.T("Admin.ContentEditor.InlineCode", "行內程式碼");
+                    var heading2Label = UiText.T("Admin.ContentEditor.Heading2", "二級標題");
+                    var heading3Label = UiText.T("Admin.ContentEditor.Heading3", "三級標題");
+                    var quoteLabel = UiText.T("Admin.ContentEditor.Quote", "引用");
+                    var linkLabel = UiText.T("Admin.ContentEditor.Link", "插入連結");
+                    var insertBlockLabel = UiText.T("Admin.ContentEditor.InsertBlock", "插入區塊…");
+                    var findLabel = UiText.T("Admin.ContentEditor.FindReplace", "尋找取代");
+                    var focusLabel = UiText.T("Admin.ContentEditor.FocusMode", "專注模式");
+                }
+                <section class="panel markdown-panel" id="markdown-panel">
+                    <div class="panel-toolbar editor-toolbar">
                         <div class="button-row">
                             <button type="button" class="tab-button @(!_preview ? "active" : "")" aria-pressed="@((!_preview).ToString().ToLowerInvariant())" @onclick="() => _preview = false">Markdown</button>
                             <button type="button" class="tab-button @(_preview ? "active" : "")" aria-pressed="@_preview.ToString().ToLowerInvariant()" disabled="@ChildBusy" @onclick="Preview">@UiText.T("Admin.ContentEditor.Preview", "預覽")</button>
                         </div>
                         <div class="button-row">
-                            <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertToc">@UiText.T("Admin.ContentEditor.InsertToc", "插入目錄 [toc]")</button>
+                            @if (_focus)
+                            {
+                                <span class="field-help editor-focus-hint">@UiText.T("Admin.ContentEditor.FocusModeHelp", "專注模式：按 Esc 離開，Ctrl／Cmd＋S 儲存。")</span>
+                            }
+                        </div>
+                        <div class="button-row editor-tools" role="toolbar" aria-label="@UiText.T("Admin.ContentEditor.FormatToolbar", "格式與插入工具列")">
+                            <button type="button" class="format-button" aria-label="@boldLabel" title="@boldLabel" disabled="@Blocked" @onclick='() => FormatAsync("bold")'><strong aria-hidden="true">B</strong></button>
+                            <button type="button" class="format-button" aria-label="@italicLabel" title="@italicLabel" disabled="@Blocked" @onclick='() => FormatAsync("italic")'><em aria-hidden="true">I</em></button>
+                            <button type="button" class="format-button" aria-label="@strikeLabel" title="@strikeLabel" disabled="@Blocked" @onclick='() => FormatAsync("strike")'><s aria-hidden="true">S</s></button>
+                            <button type="button" class="format-button" aria-label="@codeLabel" title="@codeLabel" disabled="@Blocked" @onclick='() => FormatAsync("code")'><code aria-hidden="true">code</code></button>
+                            <span class="toolbar-separator" aria-hidden="true"></span>
+                            <button type="button" class="format-button" aria-label="@heading2Label" title="@heading2Label" disabled="@Blocked" @onclick='() => FormatAsync("h2")'>H2</button>
+                            <button type="button" class="format-button" aria-label="@heading3Label" title="@heading3Label" disabled="@Blocked" @onclick='() => FormatAsync("h3")'>H3</button>
+                            <button type="button" class="format-button" aria-label="@quoteLabel" title="@quoteLabel" disabled="@Blocked" @onclick='() => FormatAsync("quote")'><span aria-hidden="true">&quot;</span></button>
+                            <button type="button" class="format-button format-button-wide" aria-label="@linkLabel" title="@linkLabel" disabled="@Blocked" @onclick='() => FormatAsync("link")'>@linkLabel</button>
+                            <span class="toolbar-separator" aria-hidden="true"></span>
+                            <select id="editor-insert-block" class="insert-select" aria-label="@insertBlockLabel" disabled="@Blocked" @bind="_insertChoice" @bind:after="InsertBlockFromMenuAsync">
+                                <option value="">@insertBlockLabel</option>
+                                <option value="table">@UiText.T("Admin.ContentEditor.InsertTable", "表格")</option>
+                                <option value="code">@UiText.T("Admin.ContentEditor.InsertCodeBlock", "程式碼區塊")</option>
+                                <option value="ul">@UiText.T("Admin.ContentEditor.InsertBulletList", "項目清單")</option>
+                                <option value="ol">@UiText.T("Admin.ContentEditor.InsertOrderedList", "編號清單")</option>
+                                <option value="columns">@UiText.T("Admin.ContentEditor.InsertColumns", "分欄")</option>
+                                <option value="card">@UiText.T("Admin.ContentEditor.InsertCard", "卡片")</option>
+                                <option value="buttons">@UiText.T("Admin.ContentEditor.InsertButtons", "按鈕列")</option>
+                                <option value="tabs">@UiText.T("Admin.ContentEditor.InsertTabs", "頁籤")</option>
+                                <option value="gallery">@UiText.T("Admin.ContentEditor.InsertGallery", "圖庫")</option>
+                                <option value="hr">@UiText.T("Admin.ContentEditor.InsertHorizontalRule", "水平線")</option>
+                            </select>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertCallout">@UiText.T("Admin.ContentEditor.InsertCallout", "插入提示框")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertDetails">@UiText.T("Admin.ContentEditor.InsertDetails", "插入摺疊塊")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="ToggleInternalLinks">@UiText.T("Admin.ContentEditor.InsertInternalLink", "站內連結")</button>
                             <button type="button" class="button button-secondary button-small" disabled="@_mediaBusy" @onclick="ToggleMedia">@UiText.T("Admin.ContentEditor.InsertImage", "插入圖片")</button>
+                            <button type="button" class="button button-secondary button-small" disabled="@Blocked" @onclick="InsertToc">@UiText.T("Admin.ContentEditor.InsertToc", "插入目錄 [toc]")</button>
+                            <span class="toolbar-separator" aria-hidden="true"></span>
+                            <button type="button" class="format-button format-button-wide @(_findOpen ? "active" : "")" aria-label="@findLabel" title="@findLabel" aria-expanded="@(_findOpen ? "true" : "false")" aria-controls="editor-find" disabled="@Blocked" @onclick="ToggleFindAsync">@findLabel</button>
+                            <button type="button" class="format-button format-button-wide @(_focus ? "active" : "")" aria-label="@focusLabel" title="@focusLabel" aria-pressed="@(_focus ? "true" : "false")" disabled="@Blocked" @onclick="ToggleFocusModeAsync">@focusLabel</button>
                         </div>
                     </div>
+                    @if (_findOpen)
+                    {
+                        <div class="editor-find" id="editor-find" role="search" aria-label="@findLabel">
+                            <div class="find-row">
+                                <input id="editor-find-term" type="search" maxlength="200" placeholder="@UiText.T("Admin.ContentEditor.FindTerm", "尋找文字")" aria-label="@UiText.T("Admin.ContentEditor.FindTerm", "尋找文字")" @bind="_findTerm" @bind:event="oninput" @bind:after="FindNextAsync" @onkeydown="FindEnterAsync" disabled="@Blocked" />
+                                <label class="checkbox-inline"><input id="editor-find-case" type="checkbox" @bind="_findCase" @bind:after="FindNextAsync" disabled="@Blocked" /> @UiText.T("Admin.ContentEditor.FindCaseSensitive", "區分大小寫")</label>
+                                <button type="button" class="text-button" disabled="@Blocked" @onclick="FindNextAsync">@UiText.T("Admin.ContentEditor.FindNext", "下一個")</button>
+                                <button type="button" class="text-button" disabled="@Blocked" @onclick="() => _findOpen = false">@UiText.T("Admin.ContentEditor.Close", "關閉")</button>
+                            </div>
+                            <div class="find-row">
+                                <input id="editor-replace-term" type="text" maxlength="200" placeholder="@UiText.T("Admin.ContentEditor.ReplaceWith", "取代為")" aria-label="@UiText.T("Admin.ContentEditor.ReplaceWith", "取代為")" @bind="_replaceTerm" @bind:event="oninput" @onkeydown="ReplaceEnterAsync" disabled="@Blocked" />
+                                <button type="button" class="text-button" disabled="@Blocked" @onclick="ReplaceNextAsync">@UiText.T("Admin.ContentEditor.Replace", "取代")</button>
+                                <button type="button" class="text-button" disabled="@Blocked" @onclick="ReplaceAllAsync">@UiText.T("Admin.ContentEditor.ReplaceAll", "全部取代")</button>
+                            </div>
+                            <span class="field-help" role="status">@_findMessage</span>
+                        </div>
+                    }
                     <InputFile id="editor-inline-upload" OnChange="UploadInlineFilesAsync" multiple class="sr-only" disabled="@Blocked" />
                     @if (_linkPickerOpen)
                     {
@@ -563,6 +626,20 @@ else if (_model is not null)
     private string _linkQuery = "";
     private List<ContentSummary> _linkResults = [];
     private IJSObjectReference? _editorUploadModule;
+    // 工具列、尋找取代、專注模式與貼上轉換的狀態；實際改值由 ContentEditor.razor.js 執行。
+    private DotNetObjectReference<ContentEditor>? _editorRef;
+    private ElementReference _previewRef;
+    private bool _previewEnhance;
+    private bool _focus;
+    private bool _findOpen;
+    private string _findTerm = "";
+    private string _replaceTerm = "";
+    private bool _findCase;
+    private string _findMessage = "";
+    private string _insertChoice = "";
+    private sealed record FindResult(int Index, int Total);
+    private sealed record ReplaceResult(string? Value, bool Replaced, bool Found);
+    private sealed record ReplaceAllResult(string? Value, int Count);
     private bool ChildBusy => _mediaBusy || _categoryBusy || _tagBusy;
     // 不要把 ChildBusy 串入外層 fieldset 或子元件的 Disabled 參數：
     // 每個子元件都必須能完成自己的操作與回呼，不能被父層連帶停用。
@@ -691,7 +768,11 @@ else if (_model is not null)
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
+        if (!firstRender)
+        {
+            await WireEditorScriptAsync();
+            return;
+        }
         // 排程輸入欄位以訪客自身的時區解讀。
         try { _timeZoneId = await JavaScript.InvokeAsync<string>("eval", "Intl.DateTimeFormat().resolvedOptions().timeZone"); }
         catch (JSException) { _timeZoneId = ""; }
@@ -714,11 +795,7 @@ else if (_model is not null)
         }
         if (EditAllowed)
         {
-            try
-            {
-                _editorUploadModule = await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Admin/ContentEditor.razor.js");
-                await _editorUploadModule.InvokeVoidAsync("wireEditorUpload", "content-markdown", "editor-inline-upload");
-            }
+            try { await WireEditorScriptAsync(); }
             catch (JSException) { }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
@@ -746,6 +823,8 @@ else if (_model is not null)
             try { _ = _editorUploadModule.DisposeAsync(); } catch { }
             _editorUploadModule = null;
         }
+        _editorRef?.Dispose();
+        _editorRef = null;
         // 離開編輯器時盡力釋放占用；釋放失敗時占用會在期限後自然逾期。
         if (_model?.Id is { } releasedId) _ = ReleaseEditingBestEffortAsync(releasedId);
     }
@@ -1158,7 +1237,7 @@ else if (_model is not null)
     private async Task SelectMedia(MediaItem item)
     {
         if (_coverPickerOpen) await SelectCover(item);
-        else InsertMedia(item);
+        else await InsertMedia(item);
     }
     private Task SelectCover(MediaItem item)
     {
@@ -1232,7 +1311,7 @@ else if (_model is not null)
         _preview = true;
         return Task.CompletedTask;
     });
-    private void InsertMedia(MediaItem item)
+    private async Task InsertMedia(MediaItem item)
     {
         if (_model is null || Blocked) return;
         if ((_model.Markdown?.Length ?? 0) + item.Markdown.Length + 4 > Limits.Body)
@@ -1265,6 +1344,203 @@ else if (_model is not null)
         if ((_model.Markdown?.Length ?? 0) + snippet.Length > Limits.Body) return;
         _model.Markdown = (_model.Markdown ?? "").TrimEnd() + snippet;
         _preview = false;
+    }
+
+    // ---- 工具列、尋找取代、專注模式與貼上轉換 ----
+
+    /// <summary>本文 textarea 在預覽切換後會重新建立，每次渲染都重新掛上腳本；腳本端以標記避免重複綁定。</summary>
+    private async Task WireEditorScriptAsync()
+    {
+        if (!EditAllowed || _preview) return;
+        _editorUploadModule ??= await JavaScript.InvokeAsync<IJSObjectReference>("import", "./Components/Admin/ContentEditor.razor.js");
+        _editorRef ??= DotNetObjectReference.Create(this);
+        try
+        {
+            await _editorUploadModule.InvokeVoidAsync("wireEditorUpload", "content-markdown", "editor-inline-upload");
+            await _editorUploadModule.InvokeVoidAsync("wireEditorKeys", "content-markdown", _editorRef, new
+            {
+                bold = UiText.T("Admin.ContentEditor.BoldPlaceholder", "粗體文字"),
+                italic = UiText.T("Admin.ContentEditor.ItalicPlaceholder", "斜體文字"),
+                link = UiText.T("Admin.ContentEditor.LinkPlaceholder", "連結文字")
+            });
+            await _editorUploadModule.InvokeVoidAsync("wireFindPanel", "editor-find");
+        }
+        catch (JSException) { }
+        catch (ObjectDisposedException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    /// <summary>呼叫編輯器腳本並取回新本文；腳本不可用或執行失敗時回 null，呼叫端維持原狀。</summary>
+    private async Task<T?> EditorCallAsync<T>(string identifier, params object?[] args) where T : class
+    {
+        if (_editorUploadModule is null) return null;
+        try { return await _editorUploadModule.InvokeAsync<T>(identifier, args); }
+        catch (JSException) { return null; }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    private Task<string?> ApplyFormatAsync(string identifier, params object?[] args) =>
+        EditorCallAsync<string>(identifier, ["content-markdown", .. args]);
+
+    private Task FormatAsync(string kind) => kind switch
+    {
+        "bold" => WrapAsync("**", "**", UiText.T("Admin.ContentEditor.BoldPlaceholder", "粗體文字")),
+        "italic" => WrapAsync("*", "*", UiText.T("Admin.ContentEditor.ItalicPlaceholder", "斜體文字")),
+        "strike" => WrapAsync("~~", "~~", UiText.T("Admin.ContentEditor.StrikePlaceholder", "刪除線文字")),
+        "code" => WrapAsync("`", "`", UiText.T("Admin.ContentEditor.CodePlaceholder", "程式碼")),
+        "link" => WrapAsync("[", "](https://)", UiText.T("Admin.ContentEditor.LinkPlaceholder", "連結文字")),
+        "h2" => PrefixAsync("## ", "^#{1,6} "),
+        "h3" => PrefixAsync("### ", "^#{1,6} "),
+        _ => PrefixAsync("> ", null),
+    };
+
+    private async Task WrapAsync(string before, string after, string placeholder)
+    {
+        var value = await ApplyFormatAsync("wrapSelection", before, after, placeholder);
+        AdoptEditorValue(value);
+    }
+
+    private async Task PrefixAsync(string prefix, string? stripPattern)
+    {
+        var value = await ApplyFormatAsync("prefixLines", prefix, stripPattern);
+        AdoptEditorValue(value);
+    }
+
+    /// <summary>腳本回傳的本文只有在未超過長度上限時才採用。</summary>
+    private void AdoptEditorValue(string? value)
+    {
+        if (_model is null || value is null || value.Length > Limits.Body) return;
+        _model.Markdown = value;
+    }
+
+    private async Task InsertBlockAsync(string block)
+    {
+        if (_model is null || Blocked) return;
+        if ((_model.Markdown?.Length ?? 0) + block.Length + 4 > Limits.Body)
+        {
+            Error = UiText.T("Admin.ContentEditor.InsertExceedsBodyLimit", "插入後將超過本文長度上限，請先縮短內容。");
+            return;
+        }
+        _preview = false;
+        var value = await ApplyFormatAsync("insertBlock", block);
+        if (value is not null)
+        {
+            AdoptEditorValue(value);
+            return;
+        }
+        // 腳本不可用時退回加在結尾，插入功能不因此失效。
+        var appended = (_model.Markdown ?? "").TrimEnd() + "\n\n" + block + "\n\n";
+        if (appended.Length <= Limits.Body) _model.Markdown = appended;
+    }
+
+    private Task InsertBlockFromMenuAsync()
+    {
+        var choice = _insertChoice;
+        _insertChoice = "";
+        if (choice.Length == 0) return Task.CompletedTask;
+        return InsertBlockAsync(BlockSnippet(choice));
+    }
+
+    /// <summary>插入選單的區塊骨架；容器語法見 MarkdownService.Layout.cs。</summary>
+    private static string BlockSnippet(string choice) => choice switch
+    {
+        "table" => "| 欄位 1 | 欄位 2 | 欄位 3 |\n| --- | --- | --- |\n| 內容 | 內容 | 內容 |",
+        "code" => "```csharp\n// 程式碼寫在這裡\n```",
+        "ul" => "- 項目一\n- 項目二\n- 項目三",
+        "ol" => "1. 第一項\n2. 第二項",
+        "columns" => "::: column\n左欄內容\n:::\n::: column\n右欄內容\n:::",
+        "card" => "::: card 卡片標題\n卡片內容寫在這裡。\n:::",
+        "buttons" => "::: buttons\n[按鈕文字](https://example.com)\n[站內連結按鈕](/posts/代稱)\n:::",
+        "tabs" => "::: tab 第一頁\n第一頁內容\n:::\n::: tab 第二頁\n第二頁內容\n:::",
+        "gallery" => "::: gallery\n![圖片一](/media/圖片檔名 \"圖說一\")\n![圖片二](/media/圖片檔名 \"圖說二\")\n:::",
+        "hr" => "---",
+        _ => "",
+    };
+
+    private async Task ToggleFindAsync()
+    {
+        _findOpen = !_findOpen;
+        if (_findOpen) await FindNextAsync();
+    }
+
+    private async Task FindNextAsync()
+    {
+        if (!_findOpen || _model is null) return;
+        if (_findTerm.Length == 0)
+        {
+            _findMessage = "";
+            return;
+        }
+        var result = await EditorCallAsync<FindResult>("findText", "content-markdown", _findTerm, _findCase);
+        _findMessage = result is null || result.Index < 0
+            ? UiText.T("Admin.ContentEditor.FindNone", "找不到相符文字")
+            : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.FindCount", "共 {0} 處"), result.Total);
+    }
+
+    private async Task ReplaceNextAsync()
+    {
+        if (!_findOpen || _model is null || _findTerm.Length == 0) return;
+        var result = await EditorCallAsync<ReplaceResult>("replaceNext", "content-markdown", _findTerm, _replaceTerm, _findCase);
+        if (result is null) return;
+        AdoptEditorValue(result.Value);
+        _findMessage = !result.Found
+            ? UiText.T("Admin.ContentEditor.FindNone", "找不到相符文字")
+            : result.Replaced
+                ? UiText.T("Admin.ContentEditor.ReplaceDone", "已取代一處，並選取下一處相符文字。")
+                : UiText.T("Admin.ContentEditor.ReplaceHint", "已選取相符文字；按「取代」確認。");
+    }
+
+    private async Task ReplaceAllAsync()
+    {
+        if (!_findOpen || _model is null || _findTerm.Length == 0) return;
+        var result = await EditorCallAsync<ReplaceAllResult>("replaceAll", "content-markdown", _findTerm, _replaceTerm, _findCase);
+        if (result is null) return;
+        AdoptEditorValue(result.Value);
+        _findMessage = string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.ContentEditor.ReplacedAll", "已取代 {0} 處"), result.Count);
+    }
+
+    // 尋找／取代輸入框位於 EditForm 內，Enter 預設會送出表單（儲存）。
+    // Razor 的 :preventDefault 只接受固定布林、無法依按鍵判斷，因此由腳本在面板上攔截 Enter（見 wireFindPanel）。
+    private Task FindEnterAsync(KeyboardEventArgs args) => args.Key == "Enter" ? FindNextAsync() : Task.CompletedTask;
+    private Task ReplaceEnterAsync(KeyboardEventArgs args) => args.Key == "Enter" ? ReplaceNextAsync() : Task.CompletedTask;
+
+    private async Task ToggleFocusModeAsync()
+    {
+        _focus = !_focus;
+        if (_editorUploadModule is null) return;
+        try { await _editorUploadModule.InvokeVoidAsync("setFocusMode", "markdown-panel", _focus); }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    [JSInvokable]
+    public async Task ShortcutSaveAsync()
+    {
+        if (Blocked || SaveBlocked) return;
+        await InvokeAsync(SaveCurrent);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task ShortcutEscapeAsync() => InvokeAsync(() =>
+    {
+        _focus = false;
+        _findOpen = false;
+        return _editorUploadModule is null ? Task.CompletedTask : SetFocusModeAsync(false);
+    });
+
+    [JSInvokable]
+    public Task OpenFindAsync() => InvokeAsync(async () =>
+    {
+        _findOpen = true;
+        await FindNextAsync();
+    });
+
+    private async Task SetFocusModeAsync(bool on)
+    {
+        try { await _editorUploadModule!.InvokeVoidAsync("setFocusMode", "markdown-panel", on); }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
     }
 
     private Task SuggestSummaryWithAiAsync() => RunSaveAsync(async ct =>
@@ -1324,13 +1600,9 @@ else if (_model is not null)
             if (uploaded.Count == 0)
                 throw new CmsException(results.FirstOrDefault()?.Message ?? "檔案上傳失敗。");
             foreach (var item in uploaded)
-                InsertMedia(item);
+                await InsertMedia(item);
         }, UiText.T("Admin.ContentEditor.InlineUploadSuccess", "已上傳並插入媒體語法。"));
     }
-    /// <summary>
-    /// 以本文目前的選取範圍作為手寫摘要（WP「more 切點」的在地化形式）：
-    /// 選取文字先轉為純文字，超過上限時截斷。沒有選取時提示而非猜測。
-    /// </summary>
     // ── AI 寫作輔助側欄（D 批）：產出僅為建議，確認後才插入，且仍須人工儲存。 ──
     private bool _aiPanelOpen;
     private string _aiInstruction = "";
@@ -1394,14 +1666,19 @@ else if (_model is not null)
         return Task.CompletedTask;
     }
 
+    /// <summary>以本文目前的選取範圍作為手寫摘要；選取文字先轉為純文字，超過上限時截斷。</summary>
     private async Task ExcerptFromSelection()
     {
         if (_model is null || Blocked) return;
         string? selected;
         try
         {
-            selected = await JavaScript.InvokeAsync<string?>("eval",
-                "(()=>{const el=document.getElementById('content-markdown');return el?el.value.slice(el.selectionStart,el.selectionEnd):'';})()");
+            if (_editorUploadModule is null)
+            {
+                Error = UiText.T("Admin.ContentEditor.SelectionReadFailed", "無法讀取本文選取範圍，請手動把摘要複製到欄位中。");
+                return;
+            }
+            selected = await _editorUploadModule.InvokeAsync<string?>("getSelection", "content-markdown");
         }
         catch (JSException)
         {

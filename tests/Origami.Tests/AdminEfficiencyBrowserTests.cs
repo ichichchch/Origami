@@ -77,8 +77,8 @@ public sealed class AdminEfficiencyBrowserTests(IsolatedPostgres postgres) : Ser
             }
             catch (PlaywrightException)
             {
-                var pickerHtml = await page.Locator(".media-picker").InnerHTMLAsync();
-                Assert.Fail($"選圖器列表未出現。picker HTML 前段：{pickerHtml[..Math.Min(800, pickerHtml.Length)]}");
+                Assert.Fail("選圖器列表未出現；path=" + new Uri(page.Url).AbsolutePath
+                    + "; errors=" + string.Join(" | ", pageErrors.Take(8)));
             }
             await page.Locator("#picker-search").FillAsync("city");
             await page.Locator("#picker-search").PressAsync("Tab");
@@ -88,8 +88,8 @@ public sealed class AdminEfficiencyBrowserTests(IsolatedPostgres postgres) : Ser
             }
             catch (PlaywrightException)
             {
-                var html = await page.Locator(".media-picker").InnerHTMLAsync();
-                Assert.Fail($"搜尋後列表未過濾。picker HTML 前段：{html[..Math.Min(800, html.Length)]}");
+                Assert.Fail("搜尋後列表未過濾；path=" + new Uri(page.Url).AbsolutePath
+                    + "; errors=" + string.Join(" | ", pageErrors.Take(8)));
             }
             Assert.Contains("city.png", await page.Locator(".picker-grid").InnerHTMLAsync(), StringComparison.Ordinal);
 
