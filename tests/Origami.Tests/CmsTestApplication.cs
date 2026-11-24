@@ -43,6 +43,7 @@ public sealed class CmsTestApplication : IAsyncDisposable
         services.AddScoped(provider => storageDirectory.Create(provider.GetRequiredService<SiteContext>()));
         services.AddScoped<SiteAdministrationService>();
         services.AddScoped<ApiCredentialService>();
+        services.AddScoped<StorageMutationCoordinator>();
         services.AddScoped<MediaService>();
         // 以單例假物件讓各測試的組態變更，對背景工作自建的 scope 也可見。
         services.AddSingleton<FakeEmbeddingGateway>();

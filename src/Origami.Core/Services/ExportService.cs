@@ -6,7 +6,8 @@ namespace Origami.Core.Services;
 /// 讓密碼門檻在匯入往返後仍可運作。WriteArchiveAsync 另提供
 /// 「JSON＋媒體檔案」的 ZIP 封裝，供一檔完整搬遷與備份。
 /// </summary>
-public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, StoragePaths storage)
+public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin,
+    StoragePaths storage, StorageMutationCoordinator storageMutations)
 {
     /// <summary>
     /// 匯出站點資料；可依內容類型（僅文章／僅頁面）與分類篩選文章。篩選匯出內容不完整，
@@ -391,6 +392,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
     /// </summary>
     internal async Task WriteArchiveUncheckedAsync(Stream output, CancellationToken ct)
     {
+        await using var mutation = await storageMutations.AcquireAsync(storage.SiteId, ct);
         await using var db = await factory.CreateDbContextAsync(ct);
         var assets = await db.MediaAssets.AsNoTracking().OrderBy(x => x.UploadedAt).ThenBy(x => x.Id)
             .Select(x => new { x.FileName, x.Kind }).ToListAsync(ct);

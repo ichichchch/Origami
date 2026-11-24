@@ -15,7 +15,29 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
     private static MediaService CreateService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
         actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
-        actor.Services.GetRequiredService<IHttpClientFactory>());
+        actor.Services.GetRequiredService<IHttpClientFactory>(),
+        actor.Services.GetRequiredService<StorageMutationCoordinator>());
+
+    [PostgresFact]
+    public async Task Storage_mutations_are_serialized_across_request_scopes()
+    {
+        using var firstAdmin = await App.AdministratorAsync();
+        using var secondAdmin = await App.AdministratorAsync();
+        var first = firstAdmin.Services.GetRequiredService<StorageMutationCoordinator>();
+        var second = secondAdmin.Services.GetRequiredService<StorageMutationCoordinator>();
+        var firstLease = await first.AcquireAsync(SiteDefaults.DefaultSiteId);
+        try
+        {
+            var waiting = second.AcquireAsync(SiteDefaults.DefaultSiteId);
+            await Assert.ThrowsAsync<TimeoutException>(() => waiting.WaitAsync(TimeSpan.FromMilliseconds(250)));
+            await firstLease.DisposeAsync();
+            await using var secondLease = await waiting.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await firstLease.DisposeAsync();
+        }
+    }
 
     [PostgresFact]
     public async Task Uploads_generate_variant_files_and_rendering_emits_srcset()
@@ -227,4 +249,72 @@ public sealed class MediaClosureTests(IsolatedPostgres postgres) : ServiceTestBa
         await service.DeleteAsync(uploaded.Id, true);
     }
 
+    [PostgresFact]
+    public async Task Content_save_holds_the_site_storage_mutation_lock_until_commit()
+    {
+        using var directory = new TemporaryMediaStorage();
+        using var admin = await App.AdministratorAsync();
+        var gate = new SaveGate();
+        var service = new ContentService(
+            new InterceptingContextFactory(App.ConnectionString, gate),
+            admin.Services.GetRequiredService<AdminAccess>(),
+            TimeProvider.System,
+            storageMutations: admin.Services.GetRequiredService<StorageMutationCoordinator>());
+        var edit = NewContent("儲存鎖文章");
+        edit.Markdown = "儲存期間持有站點儲存鎖。";
+        var coordinator = admin.Services.GetRequiredService<StorageMutationCoordinator>();
+        Task<ContentEdit>? saving = null;
+        Task<IAsyncDisposable>? waiting = null;
+        try
+        {
+            saving = service.SaveAsync(edit);
+            await gate.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            waiting = coordinator.AcquireAsync(SiteDefaults.DefaultSiteId);
+            await Assert.ThrowsAsync<TimeoutException>(() => waiting.WaitAsync(TimeSpan.FromMilliseconds(250)));
+            gate.Release.TrySetResult();
+            var saved = await saving.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(edit.Title, saved.Title);
+            await using var lease = await waiting.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.NotNull(lease);
+        }
+        finally
+        {
+            gate.Release.TrySetResult();
+            if (saving is not null) await ObserveAsync(saving);
+            if (waiting is not null)
+            {
+                try { await using var lease = await waiting.WaitAsync(TimeSpan.FromSeconds(30)); }
+                catch { /* 測試失敗時仍需觀察並釋放已完成的等候工作。 */ }
+            }
+        }
+    }
+
+    private static async Task ObserveAsync(Task task)
+    {
+        try { await task.WaitAsync(TimeSpan.FromSeconds(30)); }
+        catch { /* 清理時保留原始測試失敗。 */ }
+    }
+
+    private sealed class InterceptingContextFactory(string connectionString, IInterceptor interceptor) : IDbContextFactory<CmsDbContext>
+    {
+        public CmsDbContext CreateDbContext() => new(new DbContextOptionsBuilder<CmsDbContext>().UseNpgsql(connectionString, o => o.UseVector())
+            .ConfigureWarnings(warnings => warnings.Throw(RelationalEventId.MultipleCollectionIncludeWarning))
+            .AddInterceptors(interceptor).Options);
+
+        public Task<CmsDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) => Task.FromResult(CreateDbContext());
+    }
+
+    private sealed class SaveGate : SaveChangesInterceptor
+    {
+        public TaskCompletionSource Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            Ready.TrySetResult();
+            await Release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            return result;
+        }
+    }
 }

@@ -6,11 +6,12 @@ public sealed class StoragePaths
 
     public string Root { get; }
     // scope 可能先建立、稍後才解析站點；不可在建構時快取站點路徑。
+    public Guid SiteId => siteContext?.SiteId ?? SiteDefaults.DefaultSiteId;
     public string SiteRoot
     {
         get
         {
-            var siteId = siteContext?.SiteId ?? SiteDefaults.DefaultSiteId;
+            var siteId = SiteId;
             if (siteId == Guid.Empty) throw new InvalidOperationException("尚未解析目前站點，無法存取儲存目錄。");
             return siteId == SiteDefaults.DefaultSiteId ? Root : Path.Combine(Root, "sites", siteId.ToString("N"));
         }

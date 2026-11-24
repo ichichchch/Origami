@@ -27,7 +27,8 @@ public sealed class PersistenceTests : ServiceTestBase
         {
             var service = new MediaService(actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
                 actor.Services.GetRequiredService<AdminAccess>(), storage, TimeProvider.System,
-                NullLogger<MediaService>.Instance, actor.Services.GetRequiredService<IHttpClientFactory>());
+                NullLogger<MediaService>.Instance, actor.Services.GetRequiredService<IHttpClientFactory>(),
+                actor.Services.GetRequiredService<StorageMutationCoordinator>());
             using var image = new MemoryStream(CreateImage());
             media = await service.UploadAsync(image, "persistence.png");
             post = NewContent("Persistent published post", status: ContentStatus.Published);

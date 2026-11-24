@@ -1,7 +1,9 @@
 namespace Origami.Core.Services;
 
-public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, StoragePaths storage)
+public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock,
+    StoragePaths storage, StorageMutationCoordinator storageMutations)
 {
+
     public sealed record ImportPreview(string SiteName, int Categories, int Tags, int Posts, int Pages, int Media);
 
     /// <summary>統計匯入將還原的內容，不動任何資料。接受 JSON 或「JSON＋媒體」的 ZIP。</summary>
@@ -21,6 +23,7 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
     public async Task<ImportPreview> ApplyAsync(Stream input, bool confirmed, CancellationToken ct = default)
     {
         await admin.RequireRoleAsync(SiteRole.Administrator, ct);
+        await using var mutation = await storageMutations.AcquireAsync(storage.SiteId, ct);
         if (!confirmed) throw new CmsException("請先確認匯入將取代站內全部文字資料。");
         using var payload = await BufferAsync(input, ct);
         using var parsed = await ParseContainerAsync(payload, ct);

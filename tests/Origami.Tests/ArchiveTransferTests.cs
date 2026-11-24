@@ -1,4 +1,4 @@
-namespace Origami.Tests;
+﻿namespace Origami.Tests;
 
 /// <summary>完整備份封裝：匯出打包媒體、ZIP 匯入還原資料與圖片檔案、缺檔整體拒絕。</summary>
 [Collection(PostgresCollection.Name)]
@@ -29,7 +29,8 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
         using var admin = await App.AdministratorAsync();
         var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
             admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
-            admin.Services.GetRequiredService<IHttpClientFactory>());
+            admin.Services.GetRequiredService<IHttpClientFactory>(),
+            admin.Services.GetRequiredService<StorageMutationCoordinator>());
         MediaItem image;
         await using (var stream = new MemoryStream(Png(1200, 400)))
         {
@@ -69,7 +70,8 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
         await admin.Content.SaveAsync(NewContent("既有內容"));
         var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
             admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
-            admin.Services.GetRequiredService<IHttpClientFactory>());
+            admin.Services.GetRequiredService<IHttpClientFactory>(),
+            admin.Services.GetRequiredService<StorageMutationCoordinator>());
         await using (var stream = new MemoryStream(Png(900, 300)))
         {
             await media.UploadAsync(stream, "must-ship.png");

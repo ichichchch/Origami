@@ -90,6 +90,7 @@ builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<CommentService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<CmsEventBus>();
+builder.Services.AddScoped<StorageMutationCoordinator>();
 builder.Services.AddScoped<MediaService>();
 builder.Services.AddSingleton<MarkdownService>();
 builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));

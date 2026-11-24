@@ -1,6 +1,6 @@
 namespace Origami.Core.Services;
 
-public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null, IndexNowService? indexNow = null)
+public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin, TimeProvider clock, WebhookService? webhooks = null, IEmailSender? emailSender = null, CmsEventBus? events = null, IndexNowService? indexNow = null, StorageMutationCoordinator? storageMutations = null)
 {
     // 保護密碼與管理員帳號使用同一個 Identity 雜湊器處理。
     private static readonly PasswordHasher<Content> ProtectionHasher = new();
@@ -153,6 +153,9 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         ValidateSaveInput(input, requestedKind);
         var slug = ContentRules.NormalizeSlug(id is null && string.IsNullOrWhiteSpace(input.Slug) ? input.Title : input.Slug);
         await using var db = await factory.CreateDbContextAsync(ct);
+        await using var mutation = storageMutations is null
+            ? null
+            : await storageMutations.AcquireAsync(db.CurrentSiteId, ct);
         var now = clock.GetUtcNow();
         var entity = await LoadOrCreateAsync(db, input, id, requestedKind, now, ct);
         // 作者只能編輯本人未排程的草稿／待審；發布與排程仍由編輯者核准。
@@ -481,6 +484,8 @@ public sealed class ContentService(IDbContextFactory<CmsDbContext> factory, Admi
         // EF Core 會把內容更新與兩個關聯表的更新包進同一個交易。
         await ContentRules.SaveAsync(db, ct);
         if (hierarchyTransaction is not null) await hierarchyTransaction.CommitAsync(ct);
+        // 外部通知不得延長站點儲存鎖；租約可提前釋放，作用域結束時會冪等再處置。
+        if (mutation is not null) await mutation.DisposeAsync();
         if (entity.Status == ContentStatus.Published && !wasPublished && webhooks is not null)
         {
             await webhooks.DispatchAsync("content.published", new

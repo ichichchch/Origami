@@ -38,7 +38,8 @@ public sealed class SiteLogoTests(IsolatedPostgres postgres) : ServiceTestBase(p
         var deleter = new MediaService(
             admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
             admin.Services.GetRequiredService<AdminAccess>(), directory.Create(),
-            TimeProvider.System, NullLogger<MediaService>.Instance, admin.Services.GetRequiredService<IHttpClientFactory>());
+            TimeProvider.System, NullLogger<MediaService>.Instance, admin.Services.GetRequiredService<IHttpClientFactory>(),
+            admin.Services.GetRequiredService<StorageMutationCoordinator>());
         var refused = await Assert.ThrowsAsync<CmsException>(() => deleter.DeleteAsync(asset.Id, confirmed: true));
         Assert.Contains("網站圖示或標誌", refused.Message, StringComparison.Ordinal);
 

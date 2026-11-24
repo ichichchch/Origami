@@ -25,7 +25,8 @@ public sealed class CoverImageTests(IsolatedPostgres postgres) : ServiceTestBase
     private static MediaService CreateMediaService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
         actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
-        actor.Services.GetRequiredService<IHttpClientFactory>());
+        actor.Services.GetRequiredService<IHttpClientFactory>(),
+        actor.Services.GetRequiredService<StorageMutationCoordinator>());
 
     [PostgresFact]
     public async Task Cover_round_trips_through_edit_save_and_public_reads()

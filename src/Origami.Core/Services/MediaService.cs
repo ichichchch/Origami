@@ -1,7 +1,8 @@
-namespace Origami.Core.Services;
+﻿namespace Origami.Core.Services;
 
 public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory, AdminAccess admin,
-    StoragePaths storage, TimeProvider clock, ILogger<MediaService> logger, IHttpClientFactory httpClients)
+    StoragePaths storage, TimeProvider clock, ILogger<MediaService> logger, IHttpClientFactory httpClients,
+    StorageMutationCoordinator storageMutations)
 {
     private static readonly SemaphoreSlim DecodeSlots = new(2);
 
@@ -216,6 +217,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     public async Task<MediaItem> UploadFileAsync(Stream stream, string originalName, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
+        await using var mutation = await storageMutations.AcquireAsync(storage.SiteId, ct);
         var safeName = ValidateOriginalName(originalName);
         var head = new byte[4096];
         var read = await stream.ReadAsync(head, ct);
@@ -417,6 +419,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     public async Task DeleteAsync(Guid mediaId, bool confirmed, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
+        await using var mutation = await storageMutations.AcquireAsync(storage.SiteId, ct);
         if (!confirmed) throw new CmsException("請先確認刪除圖片。");
         await using var db = await factory.CreateDbContextAsync(ct);
         var asset = await db.MediaAssets.SingleOrDefaultAsync(x => x.Id == mediaId, ct) ?? throw new CmsException("圖片不存在，請重新載入媒體庫。");
@@ -453,6 +456,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     /// <summary>系統操作：為變體功能出現前上傳的圖片重新產生缺少的變體檔。</summary>
     public async Task<int> BackfillVariantsAsync(CancellationToken ct = default)
     {
+        await using var mutation = await storageMutations.AcquireAsync(storage.SiteId, ct);
         var repaired = 0;
         await using var db = await factory.CreateDbContextAsync(ct);
         var assets = await db.MediaAssets.AsNoTracking()
@@ -522,6 +526,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     public async Task<MediaItem> UploadAsync(Stream stream, string originalName, CancellationToken ct = default)
     {
         await admin.RequireAsync(ct);
+        await using var mutation = await storageMutations.AcquireAsync(storage.SiteId, ct);
         var originalExtension = ValidateFileName(originalName);
 
         await DecodeSlots.WaitAsync(ct);

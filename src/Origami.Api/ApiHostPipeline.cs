@@ -82,6 +82,7 @@ public static class ApiHostPipeline
         builder.Services.AddScoped<ImportService>();
         // 上傳檔案持久化到網站在 /media 提供服務的同一個站點儲存目錄。
         builder.Services.AddScoped<StoragePaths>();
+        builder.Services.AddScoped<StorageMutationCoordinator>();
         builder.Services.AddScoped<MediaService>();
         builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
         builder.Services.AddOptions<BackupOptions>().BindConfiguration("Backup");

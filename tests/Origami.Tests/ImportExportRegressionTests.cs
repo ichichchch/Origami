@@ -254,7 +254,8 @@ public sealed class ImportExportRegressionTests(IsolatedPostgres postgres) : Ser
     private static MediaService CreateMediaService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
         actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
-        actor.Services.GetRequiredService<IHttpClientFactory>());
+        actor.Services.GetRequiredService<IHttpClientFactory>(),
+        actor.Services.GetRequiredService<StorageMutationCoordinator>());
 
     private static byte[] Png(int width, int height)
     {

@@ -17,7 +17,8 @@ public sealed class AdminEfficiencyBrowserTests(IsolatedPostgres postgres) : Ser
         using var mediaStorage = new TemporaryMediaStorage();
         var media = new MediaService(actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
             actor.Services.GetRequiredService<AdminAccess>(), mediaStorage.CreateWithRoot(site.StorageRoot),
-            TimeProvider.System, NullLogger<MediaService>.Instance, actor.Services.GetRequiredService<IHttpClientFactory>());
+            TimeProvider.System, NullLogger<MediaService>.Instance, actor.Services.GetRequiredService<IHttpClientFactory>(),
+            actor.Services.GetRequiredService<StorageMutationCoordinator>());
         await using (var stream = new MemoryStream(Png(600, 400)))
         {
             await media.UploadAsync(stream, "city.png");

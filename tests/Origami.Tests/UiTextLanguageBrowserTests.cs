@@ -26,7 +26,8 @@ public sealed class UiTextLanguageBrowserTests(IsolatedPostgres postgres) : Serv
         {
             var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
                 admin.Services.GetRequiredService<AdminAccess>(), mediaStorage.CreateWithRoot(site.StorageRoot),
-                TimeProvider.System, NullLogger<MediaService>.Instance, admin.Services.GetRequiredService<IHttpClientFactory>());
+                TimeProvider.System, NullLogger<MediaService>.Instance, admin.Services.GetRequiredService<IHttpClientFactory>(),
+                admin.Services.GetRequiredService<StorageMutationCoordinator>());
             using var bitmap = new SKBitmap(new SKImageInfo(512, 512));
             bitmap.Erase(SKColors.SteelBlue);
             using var image = SKImage.FromBitmap(bitmap);

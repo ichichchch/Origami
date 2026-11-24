@@ -7,7 +7,8 @@ public sealed class MediaFileUploadTests(IsolatedPostgres postgres) : ServiceTes
     private static MediaService CreateMediaService(TestActor actor, TemporaryMediaStorage directory) => new(
         actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
         actor.Services.GetRequiredService<AdminAccess>(), directory.Create(), TimeProvider.System, NullLogger<MediaService>.Instance,
-        actor.Services.GetRequiredService<IHttpClientFactory>());
+        actor.Services.GetRequiredService<IHttpClientFactory>(),
+        actor.Services.GetRequiredService<StorageMutationCoordinator>());
 
     private static byte[] Pdf() => "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray();
 
