@@ -363,7 +363,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     }
 
     /// <summary>以魔數判定非圖片媒體的種類；不认识的內容一律視為不支援。</summary>
-    private static (MediaKind Kind, string Extension, string ContentType)? DetectFileKind(ReadOnlySpan<byte> head)
+    internal static (MediaKind Kind, string Extension, string ContentType)? DetectFileKind(ReadOnlySpan<byte> head)
     {
         if (head.Length >= 5 && head[..5].SequenceEqual("%PDF-"u8))
             return (MediaKind.Document, ".pdf", "application/pdf");
@@ -417,7 +417,7 @@ public sealed partial class MediaService(IDbContextFactory<CmsDbContext> factory
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>CSV 全檔驗證：UTF-8（允許 BOM）且無控制字元；Big5／GBK 等其他編碼與二進位內容在此拒絕。</summary>
-    private static bool IsValidCsvFile(byte[] bytes)
+    internal static bool IsValidCsvFile(byte[] bytes)
     {
         if (!LooksLikeCsvHead(bytes)) return false;
         try { _ = StrictUtf8.GetString(bytes); return true; }

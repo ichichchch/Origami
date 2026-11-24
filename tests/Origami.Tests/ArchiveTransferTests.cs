@@ -64,6 +64,114 @@ public sealed class ArchiveTransferTests(IsolatedPostgres postgres) : ServiceTes
     }
 
     [PostgresFact]
+    public async Task Archive_import_restores_non_image_files_and_metadata()
+    {
+        using var admin = await App.AdministratorAsync();
+        var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
+            admin.Services.GetRequiredService<IHttpClientFactory>(),
+            admin.Services.GetRequiredService<StorageMutationCoordinator>());
+        var bytes = "%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray();
+        MediaItem document;
+        await using (var stream = new MemoryStream(bytes))
+            document = await media.UploadFileAsync(stream, "manual.pdf");
+        await media.UpdateMetaAsync(document.Id, "文件替代文字", "文件說明");
+        await admin.Content.SaveAsync(NewContent("文件備份文章"));
+
+        var archive = await ArchiveOfAsync(admin);
+        foreach (var path in Directory.EnumerateFiles(App.Storage.Files)) File.Delete(path);
+        using var restore = new MemoryStream(archive);
+        var preview = await admin.Services.GetRequiredService<ImportService>().ApplyAsync(restore, confirmed: true);
+
+        Assert.Equal(1, preview.Media);
+        await using var db = await App.CreateContextAsync();
+        var restored = await db.MediaAssets.AsNoTracking().SingleAsync();
+        Assert.Equal(MediaKind.Document, restored.Kind);
+        Assert.Equal("文件替代文字", restored.AltText);
+        Assert.Equal("文件說明", restored.Caption);
+        Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine(App.Storage.Files, restored.FileName)));
+    }
+
+    [PostgresFact]
+    public async Task Invalid_archived_file_is_rejected_before_database_changes()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Content.SaveAsync(NewContent("保留內容"));
+        var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
+            admin.Services.GetRequiredService<IHttpClientFactory>(),
+            admin.Services.GetRequiredService<StorageMutationCoordinator>());
+        var validBytes = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray();
+        await using (var stream = new MemoryStream(validBytes))
+            await media.UploadFileAsync(stream, "keep.pdf");
+        var archive = await ArchiveOfAsync(admin);
+
+        var container = new MemoryStream();
+        using (var source = new ZipArchive(new MemoryStream(archive), ZipArchiveMode.Read))
+        using (var target = new ZipArchive(container, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var output = target.CreateEntry(entry.FullName).Open();
+                await using (output)
+                {
+                    if (entry.FullName.StartsWith("files/", StringComparison.Ordinal))
+                    {
+                        await output.WriteAsync("not-a-pdf"u8.ToArray());
+                        continue;
+                    }
+                    await using var input = entry.Open();
+                    await input.CopyToAsync(output);
+                }
+            }
+        }
+
+        using var payload = new MemoryStream(container.ToArray());
+        var error = await Assert.ThrowsAsync<CmsException>(() =>
+            admin.Services.GetRequiredService<ImportService>().ApplyAsync(payload, confirmed: true));
+        Assert.Contains("格式", error.Message, StringComparison.Ordinal);
+        var posts = await admin.Content.ListAdminAsync(ContentKind.Post);
+        Assert.Equal("保留內容", posts.Items.Single().Title);
+        var stored = await GetMediaAsync(admin);
+        Assert.Equal(validBytes, await File.ReadAllBytesAsync(Path.Combine(App.Storage.Files, stored.FileName)));
+    }
+
+    [PostgresFact]
+    public async Task Locked_media_destination_cancels_import_and_preserves_database_and_file()
+    {
+        using var admin = await App.AdministratorAsync();
+        await admin.Content.SaveAsync(NewContent("鎖定保留內容"));
+        var media = new MediaService(admin.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>(),
+            admin.Services.GetRequiredService<AdminAccess>(), App.Storage, TimeProvider.System, NullLogger<MediaService>.Instance,
+            admin.Services.GetRequiredService<IHttpClientFactory>(),
+            admin.Services.GetRequiredService<StorageMutationCoordinator>());
+        var validBytes = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n"u8.ToArray();
+        MediaItem document;
+        await using (var stream = new MemoryStream(validBytes))
+            document = await media.UploadFileAsync(stream, "locked.pdf");
+        var archive = await ArchiveOfAsync(admin);
+        var destination = Path.Combine(App.Storage.Files, document.FileName);
+        using var locked = new FileStream(destination, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        using var payload = new MemoryStream(archive);
+        var error = await Assert.ThrowsAsync<CmsException>(() =>
+            admin.Services.GetRequiredService<ImportService>().ApplyAsync(payload, confirmed: true));
+        Assert.Contains("匯入已取消", error.Message, StringComparison.Ordinal);
+        var posts = await admin.Content.ListAdminAsync(ContentKind.Post);
+        Assert.Equal("鎖定保留內容", posts.Items.Single().Title);
+        var stored = await GetMediaAsync(admin);
+        Assert.Equal(document.Id, stored.Id);
+        locked.Dispose();
+        Assert.Equal(validBytes, await File.ReadAllBytesAsync(destination));
+    }
+
+    private static async Task<MediaAsset> GetMediaAsync(TestActor actor)
+    {
+        await using var db = await actor.Services.GetRequiredService<IDbContextFactory<CmsDbContext>>().CreateDbContextAsync();
+        return await db.MediaAssets.AsNoTracking().SingleAsync();
+    }
+
+    [PostgresFact]
     public async Task Zip_missing_required_media_is_rejected_before_any_data_changes()
     {
         using var admin = await App.AdministratorAsync();

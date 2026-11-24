@@ -391,6 +391,7 @@ public sealed class ExportService(IDbContextFactory<CmsDbContext> factory, Admin
                 _ => "image"
             });
             writer.WriteString("altText", asset.AltText);
+            writer.WriteString("caption", asset.Caption);
             writer.WriteNumber("size", asset.Size);
             writer.WriteNumber("width", asset.Width);
             writer.WriteNumber("height", asset.Height);

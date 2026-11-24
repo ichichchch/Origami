@@ -17,8 +17,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
 
     /// <summary>
     /// 還原式匯入：在單一交易內以匯出檔取代現行設定、分類標籤、內容與媒體
-    /// 中繼資料。帳號一律不在此檔案內。JSON 模式不改動圖片檔案；
-    /// ZIP 模式（完整備份）另在交易成功後還原圖片並清理清單外的孤兒檔。
+    /// 中繼資料。帳號一律不在此檔案內。JSON 模式不改動媒體檔案；
+    /// ZIP 模式（完整備份）先在暫存目錄完成解壓與格式驗證，再更新資料庫與媒體檔案。
     /// </summary>
     public async Task<ImportPreview> ApplyAsync(Stream input, bool confirmed, CancellationToken ct = default)
     {
@@ -27,9 +27,11 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         if (!confirmed) throw new CmsException("請先確認匯入將取代站內全部文字資料。");
         using var payload = await BufferAsync(input, ct);
         using var parsed = await ParseContainerAsync(payload, ct);
-        if (parsed.Archive is not null) ValidateArchiveFiles(parsed.Archive, parsed.Document);
-        var preview = await ApplyCoreAsync(parsed.Document, ct);
-        if (parsed.Archive is not null) await RestoreArchiveFilesAsync(parsed.Archive, parsed.Document, ct);
+        using var staged = parsed.Archive is null
+            ? null
+            : await StageArchiveFilesAsync(parsed.Archive, parsed.Document, ct);
+        var preview = await ApplyCoreAsync(parsed.Document, staged, ct);
+        if (staged is not null) CleanupArchiveFiles(staged);
         return preview;
     }
 
@@ -70,88 +72,256 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         return new(await ParseJsonAsync(payload, ct), null);
     }
 
-    /// <summary>清單內的每個媒體都必須在 ZIP 有對應檔案；缺檔在動資料庫之前整體拒絕。</summary>
-    private static void ValidateArchiveFiles(ZipArchive archive, JsonDocument document)
+    private sealed class StagedArchive : IDisposable
     {
-        List<string> missing = [];
-        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
+        public StagedArchive(string root)
         {
-            var fileName = node.GetString("fileName");
-            if (fileName is null || !ContentRules.IsSafeMediaFileName(fileName)) continue;
-            if (archive.GetEntry("media/" + fileName) is null) missing.Add(fileName);
+            Root = root;
+            Directory.CreateDirectory(Path.Combine(root, "media"));
+            Directory.CreateDirectory(Path.Combine(root, "files"));
         }
-        if (missing.Count > 0)
+
+        public string Root { get; }
+        public List<(string Temp, string Final)> Files { get; } = [];
+        public HashSet<string> ExpectedImages { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> ExpectedFiles { get; } = new(StringComparer.Ordinal);
+        public List<(string Final, string Backup)> Backups { get; } = [];
+        public HashSet<string> Installed { get; } = new(StringComparer.Ordinal);
+        public bool Preserve { get; private set; }
+
+        public void Restore()
         {
-            var sample = string.Join("、", missing.Take(3));
-            var more = missing.Count > 3 ? $" 等共 {missing.Count} 個" : "";
-            throw new CmsException($"ZIP 缺少媒體檔案，無法完整還原：{sample}{more}。");
+            var failures = new List<string>();
+            foreach (var final in Installed.Reverse())
+            {
+                try { File.Delete(final); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failures.Add(Path.GetFileName(final)); }
+            }
+            foreach (var (final, backup) in Backups.AsEnumerable().Reverse())
+            {
+                try { File.Move(backup, final, overwrite: true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failures.Add(Path.GetFileName(final)); }
+            }
+            if (failures.Count > 0)
+            {
+                Preserve = true;
+                throw new CmsException($"媒體還原已取消，但部分檔案回復失敗；暫存與原始備份保留在 {Root}。");
+            }
+            Installed.Clear();
+            Backups.Clear();
+        }
+
+        public void Dispose()
+        {
+            if (Preserve) return;
+            try { Directory.Delete(Root, recursive: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
     }
 
-    /// <summary>交易成功後把 ZIP 內的圖片還原到儲存目錄，並清理清單外的孤兒檔。</summary>
-    private async Task RestoreArchiveFilesAsync(ZipArchive archive, JsonDocument document, CancellationToken ct)
+    private async Task<StagedArchive> StageArchiveFilesAsync(
+        ZipArchive archive, JsonDocument document, CancellationToken ct)
     {
-        var expected = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
-        {
-            var fileName = node.GetString("fileName");
-            if (fileName is null || !ContentRules.IsSafeMediaFileName(fileName)) continue;
-            expected.Add(fileName);
-            foreach (var width in Limits.ImageVariantWidths)
-                expected.Add(MediaService.VariantName(fileName, width));
-        }
-        // 固定本次作業的當站目錄；解壓與孤兒清理都不列舉全域 Root 或其他站點。
-        var images = storage.Images;
-        var stagingRoot = Path.Combine(storage.Staging, "import-" + Guid.NewGuid().ToString("N"));
+        var staged = new StagedArchive(Path.Combine(storage.Staging, "import-" + Guid.NewGuid().ToString("N")));
         try
         {
-            Directory.CreateDirectory(stagingRoot);
-            var staged = new List<(string Temp, string Final)>();
-            // 解壓後的累計位元組數；條目標頭宣稱的大小不可信，以實際讀取為準。
+            var mediaByFileName = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            var missing = new List<string>();
+            foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
+            {
+                var fileName = node.GetString("fileName");
+                if (fileName is null || !ContentRules.IsSafeMediaFileNameAny(fileName))
+                    throw new CmsException($"匯入的媒體檔名不合法：{fileName}。");
+                if (!mediaByFileName.TryAdd(fileName, node))
+                    throw new CmsException($"匯入的媒體檔名重複：{fileName}。");
+                if (MediaKindOf(node) == MediaKind.Image)
+                {
+                    staged.ExpectedImages.Add(fileName);
+                    foreach (var width in Limits.ImageVariantWidths)
+                        staged.ExpectedImages.Add(MediaService.VariantName(fileName, width));
+                    if (archive.GetEntry("media/" + fileName) is null) missing.Add(fileName);
+                }
+                else
+                {
+                    staged.ExpectedFiles.Add(fileName);
+                    if (archive.GetEntry("files/" + fileName) is null) missing.Add(fileName);
+                }
+            }
+            if (missing.Count > 0)
+            {
+                var sample = string.Join("、", missing.Take(3));
+                var more = missing.Count > 3 ? $" 等共 {missing.Count} 個" : "";
+                throw new CmsException($"ZIP 缺少媒體檔案，無法完整還原：{sample}{more}。");
+            }
+
+            Directory.CreateDirectory(storage.Images);
+            Directory.CreateDirectory(storage.Files);
             long totalBytes = 0;
             foreach (var entry in archive.Entries)
             {
-                if (!entry.FullName.StartsWith("media/", StringComparison.Ordinal)) continue;
-                var name = entry.FullName["media/".Length..];
-                // 清單與變體以外的項目一律不落地，檔名也必須仍是安全的圖片名。
-                if (!expected.Contains(name) || !ContentRules.IsSafeMediaFileName(name)) continue;
-                var temp = Path.Combine(stagingRoot, name);
+                var imageEntry = entry.FullName.StartsWith("media/", StringComparison.Ordinal);
+                var fileEntry = entry.FullName.StartsWith("files/", StringComparison.Ordinal);
+                if (!imageEntry && !fileEntry) continue;
+                var prefix = imageEntry ? "media/" : "files/";
+                var name = entry.FullName[prefix.Length..];
+                var expected = imageEntry ? staged.ExpectedImages : staged.ExpectedFiles;
+                if (!expected.Contains(name)) continue;
+                if (imageEntry ? !ContentRules.IsSafeMediaFileName(name) : !ContentRules.IsSafeMediaFileNameAny(name))
+                    throw new CmsException($"封裝內的媒體路徑不合法：{entry.FullName}。");
+                var temp = Path.Combine(staged.Root, prefix, name);
                 await using (var source = entry.Open())
                 await using (var target = File.Create(temp))
                     totalBytes = await ArchiveGuard.CopyBoundedAsync(source, target, totalBytes, Limits.ArchiveMaxBytes,
                         $"封裝解壓後總量超過 {Limits.ArchiveMaxBytes / 1024 / 1024} MB 上限，請確認檔案由本站匯出且未遭竄改。", ct);
-                staged.Add((temp, Path.Combine(images, name)));
+                if (imageEntry)
+                {
+                    JsonElement? mediaNode = mediaByFileName.TryGetValue(name, out var media) ? media : null;
+                    await ValidateStagedImageAsync(temp, name, mediaNode, ct);
+                }
+                else
+                    ValidateStagedFile(temp, name, mediaByFileName[name]);
+                staged.Files.Add((temp, Path.Combine(imageEntry ? storage.Images : storage.Files, name)));
             }
-            // 解壓全部成功後才覆寫正式檔案；單檔失敗會回報但資料庫還原不受影響。
-            var failed = new List<string>();
-            foreach (var (temp, final) in staged)
+            return staged;
+        }
+        catch
+        {
+            staged.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task ValidateStagedImageAsync(
+        string path, string fileName, JsonElement? node, CancellationToken ct)
+    {
+        var size = new FileInfo(path).Length;
+        if (size is 0 or > Limits.UploadBytes)
+            throw new CmsException($"封裝內的圖片大小不合法：{fileName}。");
+        var bytes = await File.ReadAllBytesAsync(path, ct);
+        using var data = SKData.CreateCopy(bytes);
+        using var codec = SKCodec.Create(data);
+        if (codec is null) throw new CmsException($"封裝內的圖片無法解碼：{fileName}。");
+        var extension = codec.EncodedFormat switch
+        {
+            SKEncodedImageFormat.Png => ".png",
+            SKEncodedImageFormat.Jpeg => ".jpg",
+            SKEncodedImageFormat.Webp => ".webp",
+            _ => throw new CmsException($"封裝內的圖片格式不在允許清單：{fileName}。")
+        };
+        if (Path.GetExtension(fileName).ToLowerInvariant() != extension)
+            throw new CmsException($"封裝內的圖片副檔名與實際格式不符：{fileName}。");
+        var info = codec.Info;
+        if (info.Width <= 0 || info.Height <= 0 || info.Width > Limits.ImageDimension || info.Height > Limits.ImageDimension
+            || (long)info.Width * info.Height > Limits.ImagePixels || codec.FrameCount > 1)
+            throw new CmsException($"封裝內的圖片尺寸過大或含動畫：{fileName}。");
+        using var decoded = new SKBitmap();
+        if (!decoded.TryAllocPixels(new SKImageInfo(info.Width, info.Height, SKColorType.Bgra8888, SKAlphaType.Premul))
+            || codec.GetPixels(decoded.Info, decoded.GetPixels()) != SKCodecResult.Success)
+            throw new CmsException($"封裝內的圖片資料不完整：{fileName}。");
+        if (node is not null)
+        {
+            if (node.Value.TryGetProperty("size", out var declaredSize) && declaredSize.ValueKind == JsonValueKind.Number
+                && declaredSize.GetInt64() > 0 && declaredSize.GetInt64() != size)
+                throw new CmsException($"封裝內的圖片大小與媒體資料不符：{fileName}。");
+            if (node.Value.TryGetProperty("width", out var width) && width.ValueKind == JsonValueKind.Number
+                && width.GetInt32() > 0 && width.GetInt32() != info.Width)
+                throw new CmsException($"封裝內的圖片寬度與媒體資料不符：{fileName}。");
+            if (node.Value.TryGetProperty("height", out var height) && height.ValueKind == JsonValueKind.Number
+                && height.GetInt32() > 0 && height.GetInt32() != info.Height)
+                throw new CmsException($"封裝內的圖片高度與媒體資料不符：{fileName}。");
+        }
+    }
+
+    private static void ValidateStagedFile(string path, string fileName, JsonElement node)
+    {
+        var size = new FileInfo(path).Length;
+        if (size is 0 or > Limits.FileUploadBytes)
+            throw new CmsException($"封裝內的檔案大小不合法：{fileName}。");
+        using var stream = File.OpenRead(path);
+        var head = new byte[4096];
+        var read = stream.Read(head);
+        var detected = MediaService.DetectFileKind(head.AsSpan(0, read))
+            ?? throw new CmsException($"封裝內的檔案格式不在允許清單：{fileName}。");
+        if (detected.Kind != MediaKindOf(node)
+            || detected.Extension != Path.GetExtension(fileName).ToLowerInvariant()
+            || (node.TryGetProperty("contentType", out var contentType)
+                && contentType.ValueKind == JsonValueKind.String
+                && contentType.GetString() is { Length: > 0 } declared
+                && declared != detected.ContentType))
+            throw new CmsException($"封裝內的檔案格式與媒體資料不符：{fileName}。");
+        if (node.TryGetProperty("size", out var declaredSize) && declaredSize.ValueKind == JsonValueKind.Number
+            && declaredSize.GetInt64() > 0 && declaredSize.GetInt64() != size)
+            throw new CmsException($"封裝內的檔案大小與媒體資料不符：{fileName}。");
+        if (detected.Extension == ".csv" && !MediaService.IsValidCsvFile(File.ReadAllBytes(path)))
+            throw new CmsException($"封裝內的 CSV 不是合法的 UTF-8 純文字：{fileName}。");
+    }
+
+    private static void CommitArchiveFilesAsync(StagedArchive staged, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var backupDirectory = Path.Combine(staged.Root, "backup");
+        Directory.CreateDirectory(backupDirectory);
+        try
+        {
+            foreach (var (temp, final) in staged.Files)
             {
-                try { File.Move(temp, final, overwrite: true); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failed.Add(Path.GetFileName(final)); }
+                ct.ThrowIfCancellationRequested();
+                if (File.Exists(final))
+                {
+                    var backup = Path.Combine(backupDirectory, Guid.NewGuid().ToString("N"));
+                    File.Move(final, backup);
+                    staged.Backups.Add((final, backup));
+                }
+                File.Move(temp, final);
+                staged.Installed.Add(final);
             }
-            if (failed.Count > 0)
-                throw new CmsException($"資料已還原，但以下圖片檔案寫入失敗，請檢查儲存目錄權限後重試：{string.Join("、", failed.Take(5))}。");
         }
-        finally
+        catch (OperationCanceledException)
         {
-            try { Directory.Delete(stagingRoot, recursive: true); } catch (IOException) { /* 暫存清理盡力而為。 */ }
+            staged.Restore();
+            throw;
         }
-        // 取代式還原：僅清理當站圖片目錄內、不在清單（含變體）內的舊圖檔，不遞迴。
-        foreach (var path in Directory.EnumerateFiles(images))
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            var name = Path.GetFileName(path);
-            if (!expected.Contains(name) && ContentRules.IsSafeMediaFileName(name))
+            staged.Restore();
+            throw new CmsException("媒體檔案寫入失敗，匯入已取消；請檢查儲存目錄權限後重試。");
+        }
+    }
+
+    private void CleanupArchiveFiles(StagedArchive staged)
+    {
+        var candidates = Directory.EnumerateFiles(storage.Images).Select(path => (Path: path, Name: Path.GetFileName(path))).ToList();
+        foreach (var (path, name) in candidates)
+        {
+            if (!staged.ExpectedImages.Contains(name) && ContentRules.IsSafeMediaFileName(name))
             {
-                try { File.Delete(path); } catch (IOException) { /* 清理盡力而為。 */ }
+                try { File.Delete(path); } catch (IOException) { }
+            }
+        }
+        candidates = Directory.EnumerateFiles(storage.Files).Select(path => (Path: path, Name: Path.GetFileName(path))).ToList();
+        foreach (var (path, name) in candidates)
+        {
+            if (!staged.ExpectedFiles.Contains(name) && ContentRules.IsSafeMediaFileNameAny(name))
+            {
+                try { File.Delete(path); } catch (IOException) { }
             }
         }
     }
+
+    private static MediaKind MediaKindOf(JsonElement node) => node.GetString("kind") switch
+    {
+        "document" => MediaKind.Document,
+        "audio" => MediaKind.Audio,
+        "video" => MediaKind.Video,
+        _ => MediaKind.Image
+    };
 
     /// <summary>
     /// 還原式匯入的核心：在單一交易內以匯出資料取代現行設定、分類標籤、
     /// 內容與媒體中繼資料；已發布內容重新進入嵌入管道。
     /// </summary>
-    private async Task<ImportPreview> ApplyCoreAsync(JsonDocument document, CancellationToken ct)
+    private async Task<ImportPreview> ApplyCoreAsync(JsonDocument document, StagedArchive? staged, CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
@@ -406,8 +576,8 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
         foreach (var node in document.RootElement.GetProperty("media").EnumerateArray())
         {
             var fileName = Bounded(node, "fileName", 80, "媒體檔名");
-            // 儲存檔名稍後會變成檔案路徑；僅允許匯入單純的圖片檔名。
-            if (!ContentRules.IsSafeMediaFileName(fileName))
+            // 儲存檔名稍後會變成檔案路徑；僅允許匯入單純且副檔名受白名單控制的媒體檔名。
+            if (!ContentRules.IsSafeMediaFileNameAny(fileName))
                 throw new CmsException($"匯入的媒體檔名不合法：{fileName}。");
             if (!mediaByFileName.TryAdd(fileName, new MediaAsset
             {
@@ -416,14 +586,9 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
                 FileName = fileName,
                 OriginalName = Bounded(node, "originalName", 200, "媒體原始名稱"),
                 ContentType = Bounded(node, "contentType", 40, "媒體類型"),
-                Kind = node.GetString("kind") switch
-                {
-                    "document" => MediaKind.Document,
-                    "audio" => MediaKind.Audio,
-                    "video" => MediaKind.Video,
-                    _ => MediaKind.Image
-                },
+                Kind = MediaKindOf(node),
                 AltText = Bounded(node, "altText", Limits.AltText, "媒體替代文字", optional: true),
+                Caption = Bounded(node, "caption", Limits.Caption, "媒體說明文字", optional: true),
                 Size = node.TryGetProperty("size", out var size) && size.ValueKind == JsonValueKind.Number ? size.GetInt64() : 0,
                 Width = node.TryGetProperty("width", out var width) && width.ValueKind == JsonValueKind.Number ? width.GetInt32() : 0,
                 Height = node.TryGetProperty("height", out var height) && height.ValueKind == JsonValueKind.Number ? height.GetInt32() : 0,
@@ -878,8 +1043,17 @@ public sealed class ImportService(IDbContextFactory<CmsDbContext> factory, Admin
             }
         }
 
-        await ContentRules.SaveAsync(db, ct);
-        await transaction.CommitAsync(ct);
+        try
+        {
+            if (staged is not null) CommitArchiveFilesAsync(staged, ct);
+            await ContentRules.SaveAsync(db, ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            if (staged is not null) staged.Restore();
+            throw;
+        }
         return PreviewOf(document);
     }
 
