@@ -4637,6 +4637,18 @@
   <data name="Admin.ContentEditor.Strikethrough" xml:space="preserve">
     <value>Strikethrough</value>
   </data>
+  <data name="Public.ContentDetail.CopyLink" xml:space="preserve">
+    <value>Copy link</value>
+  </data>
+  <data name="Public.ContentDetail.LinkCopied" xml:space="preserve">
+    <value>Link copied</value>
+  </data>
+  <data name="Public.ContentDetail.Share" xml:space="preserve">
+    <value>Share this article</value>
+  </data>
+  <data name="Public.ContentDetail.ShareEmail" xml:space="preserve">
+    <value>Email</value>
+  </data>
   <data name="Admin.Settings.DefaultCategory" xml:space="preserve">
     <value>Default category (optional)</value>
   </data>

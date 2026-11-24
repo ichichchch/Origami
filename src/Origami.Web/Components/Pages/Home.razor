@@ -8,13 +8,14 @@
     <link rel="alternate" type="application/rss+xml" title="@_settings.Name" href="/feed" />
     <link rel="search" type="application/opensearchdescription+xml" title="@_settings.Name" href="/opensearch.xml" />
     <meta name="description" content="@HomeDescription" />
-    @* 帶篩選的列表以單純的首頁網址作為 canonical，避免產生重複內容的網址。 *@
-    <link rel="canonical" href="@BaseUrl/" />
+    @* 帶篩選的列表以單純的首頁網址作為 canonical，避免產生重複內容的網址；
+       單一分類或標籤篩選已有獨立網址（/category/、/tag/），canonical 改指向該處。 *@
+    <link rel="canonical" href="@(BaseUrl + CanonicalPath)" />
     <meta property="og:site_name" content="@_settings.Name" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="@HeadTitle" />
     <meta property="og:description" content="@HomeDescription" />
-    <meta property="og:url" content="@BaseUrl/" />
+    <meta property="og:url" content="@(BaseUrl + CanonicalPath)" />
     @if (WebSiteStructuredData.Length > 0)
     {
         <script type="application/ld+json">@((MarkupString)WebSiteStructuredData)</script>
@@ -38,6 +39,12 @@ else
     [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
     [SupplyParameterFromQuery(Name = "tag")] public string? Tag { get; set; }
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
+    private string CanonicalPath => (Category, Tag, Page) switch
+    {
+        ({ } category, null, null or "1") => "/category/" + Uri.EscapeDataString(category),
+        (null, { } tag, null or "1") => "/tag/" + Uri.EscapeDataString(tag),
+        _ => "/"
+    };
     private PublicSiteSettings _settings = PublicSiteSettings.Default;
     private PublicContent? _homePage;
     private string _homePageHtml = "";

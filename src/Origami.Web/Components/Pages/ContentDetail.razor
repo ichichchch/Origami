@@ -41,6 +41,26 @@
             <meta property="og:site_name" content="@_settings.Name" />
             <meta property="og:title" content="@_content.Title" />
             <meta property="og:type" content="@(_content.Kind == ContentKind.Post ? "article" : "website")" />
+            <meta name="twitter:card" content="@(_firstImage is not null ? "summary_large_image" : "summary")" />
+            <meta name="twitter:title" content="@_content.Title" />
+            <meta name="twitter:description" content="@MetaDescription" />
+            @if (_firstImage is not null)
+            {
+                <meta name="twitter:image" content="@AbsoluteImage" />
+            }
+            @* 每個譯本以自己的正式網址互相宣告替代網址；產品預設語言的版本作為 x-default。 *@
+            @if (_content.Language.Length > 0)
+            {
+                <link rel="alternate" hreflang="@_content.Language" href="@ShareUrl" />
+            }
+            @foreach (var option in _content.AvailableTranslations)
+            {
+                <link rel="alternate" hreflang="@option.Language" href="@TranslationUrl(option)" />
+            }
+            @if (_content.Language.Length > 0 || _content.AvailableTranslations.Count > 0)
+            {
+                <link rel="alternate" hreflang="x-default" href="@DefaultLanguageUrl" />
+            }
             <meta property="og:url" content="@Canonical" />
             <meta property="og:description" content="@MetaDescription" />
             @if (_firstImage is not null)
@@ -237,6 +257,18 @@ else if (_content is not null)
                     }
                 </dl>
             }
+        }
+        @if (!_locked && !_isPrivate && _content.Kind == ContentKind.Post)
+        {
+            @* 分享連結是純靜態錨點，不載入任何第三方腳本；網址一律指向第一頁的正式網址。 *@
+            <nav class="share-links" aria-label="@UiText.T("Public.ContentDetail.Share", "分享這篇文章")">
+                <span class="muted">@UiText.T("Public.ContentDetail.Share", "分享這篇文章")</span>
+                <a href="@("https://www.facebook.com/sharer/sharer.php?u=" + Uri.EscapeDataString(ShareUrl))" target="_blank" rel="noopener nofollow">Facebook</a>
+                <a href="@("https://line.me/R/msg/text/?" + Uri.EscapeDataString(_content.Title + "\n" + ShareUrl))" target="_blank" rel="noopener nofollow">LINE</a>
+                <a href="@("https://twitter.com/intent/tweet?url=" + Uri.EscapeDataString(ShareUrl) + "&text=" + Uri.EscapeDataString(_content.Title))" target="_blank" rel="noopener nofollow">X</a>
+                <a href="@("mailto:?subject=" + Uri.EscapeDataString(_content.Title) + "&body=" + Uri.EscapeDataString(ShareUrl))">@UiText.T("Public.ContentDetail.ShareEmail", "電子郵件")</a>
+                <button type="button" class="text-button share-copy" data-share-url="@ShareUrl" data-copied-label="@UiText.T("Public.ContentDetail.LinkCopied", "已複製連結")">@UiText.T("Public.ContentDetail.CopyLink", "複製連結")</button>
+            </nav>
         }
         @if (_content.Kind == ContentKind.Post && _neighbors.Count > 0)
         {
@@ -467,6 +499,22 @@ else
         Navigation.NotFound();
     }
     private string Canonical => BaseUrl + DetailPath + (_pageIndex > 1 ? "?page=" + _pageIndex : "");
+    /// <summary>分享用的正式網址（第一頁，不帶分頁參數）。</summary>
+    private string ShareUrl => BaseUrl + DetailPath;
+    /// <summary>結構化資料的內容語言：有譯本標記時以內容為準，未標記時退回產品預設語言。</summary>
+    private string ContentLanguage => _content is null || _content.Language.Length == 0 ? UiTextLanguages.Default : _content.Language;
+    private string TranslationUrl(PublicTranslationOption option) =>
+        BaseUrl + (_content?.Kind == ContentKind.Page ? "/pages/" : "/posts/") + Uri.EscapeDataString(option.Slug);
+    /// <summary>x-default 指向產品預設語言的譯本；同組沒有該語言時退回目前頁面。</summary>
+    private string DefaultLanguageUrl
+    {
+        get
+        {
+            if (_content is null || _content.Language == UiTextLanguages.Default) return ShareUrl;
+            var fallback = _content.AvailableTranslations.FirstOrDefault(x => x.Language == UiTextLanguages.Default);
+            return fallback is null ? ShareUrl : TranslationUrl(fallback);
+        }
+    }
     /// <summary>內容的相對網址；分頁連結與 canonical 都以它為基礎。</summary>
     private string DetailPath => _content?.Kind == ContentKind.Page
         ? "/pages/" + string.Join("/", _canonicalSegments.Select(Uri.EscapeDataString))
@@ -536,7 +584,7 @@ else
             ["headline"] = _content.Title,
             ["description"] = MetaDescription,
             ["url"] = Canonical,
-            ["inLanguage"] = "zh-Hant",
+            ["inLanguage"] = ContentLanguage,
             ["mainEntityOfPage"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "WebPage", ["@id"] = Canonical },
             ["publisher"] = new System.Text.Json.Nodes.JsonObject { ["@type"] = "Organization", ["name"] = _settings.Name }
         };

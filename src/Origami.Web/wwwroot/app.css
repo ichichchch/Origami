@@ -697,6 +697,9 @@ th { letter-spacing: .07em; text-transform: uppercase; font-size: .68rem; }
 .field-list .field-gallery img { display: block; width: 100%; height: auto; border-radius: 8px; }
 .field-list dd a { display: inline-block; margin-right: .6rem; }
 .checkbox-list { display: grid; gap: .35rem; max-height: 260px; overflow: auto; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: 7px; }
+.share-links { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 1.6rem 0 .4rem; font-size: .85rem; }
+.share-links a { display: inline-flex; align-items: center; min-height: 36px; padding: .3rem .85rem; border: 1px solid var(--border); border-radius: 999px; color: var(--ink); text-decoration: none; }
+.share-links a:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
 .widget .widget-image { display: block; max-width: 100%; border-radius: 8px; }
 .widget .widget-media video { display: block; width: 100%; border-radius: 8px; }
 .widget .widget-media audio { display: block; width: 100%; }

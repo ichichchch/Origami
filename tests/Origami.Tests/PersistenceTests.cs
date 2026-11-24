@@ -198,8 +198,10 @@ public sealed class PersistenceTests : ServiceTestBase
         // 屬登入態差異而非內容差異；持久化比對前連同外殼統一移除，登入與匿名讀取才可比。
         foreach (var editLink in article.QuerySelectorAll("a.text-button").ToList())
             (editLink.Closest(".byline") ?? editLink).Remove();
-        // 比較整篇渲染後的文章位元組，排除文件中每次請求都不同的框架
-        // 狀態／防偽 token；原始 Markdown 也已在 PostgreSQL 端比對。
+        // 分享網址含目前 Host（重啟後 HTTPS 埠會變），複製按鈕與防偽 token 也隨請求而變；
+        // 移除這些動態片段，但保留標題、正文、圖片及其餘渲染結果做完整位元組比對。
+        foreach (var dynamic in article.QuerySelectorAll(".share-links, .share-copy, input[name='__RequestVerificationToken']").ToList())
+            dynamic.Remove();
         return Encoding.UTF8.GetBytes(article.OuterHtml);
     }
 
