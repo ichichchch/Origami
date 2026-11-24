@@ -24,6 +24,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
     public DbSet<CustomTaxonomyTerm> CustomTaxonomyTerms => Set<CustomTaxonomyTerm>();
     public DbSet<ContentCustomTerm> ContentCustomTerms => Set<ContentCustomTerm>();
     public DbSet<CustomField> CustomFields => Set<CustomField>();
+    public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
+    public DbSet<LoginEvent> LoginEvents => Set<LoginEvent>();
     public DbSet<ContentTemplate> ContentTemplates => Set<ContentTemplate>();
     public DbSet<ContentSnippet> ContentSnippets => Set<ContentSnippet>();
     public DbSet<ContentFieldValue> ContentFieldValues => Set<ContentFieldValue>();
@@ -391,6 +393,22 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
             e.Property(x => x.Markdown).HasMaxLength(Limits.SnippetBody).IsRequired();
             e.Property(x => x.Version).IsConcurrencyToken();
         });
+        builder.Entity<EmailLog>(e =>
+        {
+            ConfigureSiteEntity(e, nameof(EmailLog.Site));
+            e.Property(x => x.Recipient).HasMaxLength(256).IsRequired();
+            e.Property(x => x.Subject).HasMaxLength(300).IsRequired();
+            e.Property(x => x.Error).HasMaxLength(300).IsRequired();
+            e.HasIndex(x => new { x.SiteId, x.CreatedAt });
+        });
+        builder.Entity<LoginEvent>(e =>
+        {
+            e.Property(x => x.UserId).HasMaxLength(256).IsRequired();
+            e.Property(x => x.UserName).HasMaxLength(256).IsRequired();
+            e.Property(x => x.RemoteIp).HasMaxLength(64).IsRequired();
+            e.Property(x => x.UserAgent).HasMaxLength(256).IsRequired();
+            e.HasIndex(x => new { x.UserId, x.CreatedAt });
+        });
         builder.Entity<ContentFieldValue>(e =>
         {
             ConfigureSiteEntity(e);
@@ -531,6 +549,8 @@ public sealed class CmsDbContext(DbContextOptions<CmsDbContext> options, SiteCon
         ["SiteWidgets"] = "站点小工具表：侧栏与页尾的声明式内容区块。",
         ["ContentTemplates"] = "内容模板表：新建内容时套用的 Markdown 骨架。",
         ["ContentSnippets"] = "文字片段表：编辑器可重复插入的 Markdown 片段。",
+        ["EmailLogs"] = "寄信纪录表：对外邮件的收件人、主旨与结果。",
+        ["LoginEvents"] = "登录事件表：账号登录成功与失败的摘要。",
         ["SitePackages"] = "站点受控包表：主题包与小组件包的安装记录与声明。",
         ["ApiCredentials"] = "API 凭据表：站点级访问密钥（仅存摘要）。",
         ["Contents"] = "内容主表：文章/页面及其发布状态。",

@@ -1555,6 +1555,54 @@ namespace Origami.Core.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Origami.Core.Models.EmailLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
+
+                    b.Property<string>("Error")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasComment("业务字段：Error。");
+
+                    b.Property<string>("Recipient")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：Recipient。");
+
+                    b.Property<Guid>("SiteId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid")
+                        .HasComment("所属站点 ID（租户隔离键）。");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasComment("业务字段：Subject。");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：Succeeded。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId", "CreatedAt");
+
+                    b.ToTable("EmailLogs", t =>
+                        {
+                            t.HasComment("寄信纪录表：对外邮件的收件人、主旨与结果。");
+                        });
+                });
+
             modelBuilder.Entity("Origami.Core.Models.EmbeddingJob", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1591,6 +1639,55 @@ namespace Origami.Core.Data.Migrations
                     b.ToTable("EmbeddingJobs", t =>
                         {
                             t.HasComment("向量生成任务表：嵌入计算队列。");
+                        });
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.LoginEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasComment("主键 ID。");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasComment("创建时间。");
+
+                    b.Property<string>("RemoteIp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasComment("业务字段：RemoteIp。");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("boolean")
+                        .HasComment("业务字段：Succeeded。");
+
+                    b.Property<string>("UserAgent")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：UserAgent。");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComment("用户 ID。");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasComment("业务字段：UserName。");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("LoginEvents", t =>
+                        {
+                            t.HasComment("登录事件表：账号登录成功与失败的摘要。");
                         });
                 });
 
@@ -2869,6 +2966,17 @@ namespace Origami.Core.Data.Migrations
                     b.Navigation("Parent");
 
                     b.Navigation("Taxonomy");
+                });
+
+            modelBuilder.Entity("Origami.Core.Models.EmailLog", b =>
+                {
+                    b.HasOne("Origami.Core.Models.CmsSite", "Site")
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Site");
                 });
 
             modelBuilder.Entity("Origami.Core.Models.EmbeddingJob", b =>
