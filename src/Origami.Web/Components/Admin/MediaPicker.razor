@@ -101,6 +101,8 @@
                 var file = args.File;
                 if (file.Size > Limits.UploadBytes) throw new CmsException(string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.MediaPicker.ImageTooLarge", "圖片超過 {0} MB 上限，請選擇較小的檔案。"), Limits.UploadBytes / 1024 / 1024));
                 _uploadName = file.Name;
+                // 設定檔名後立即重繪：上傳期間才看得到「正在上傳」，否則得等下一次重繪，而那時上傳往往已結束。
+                StateHasChanged();
                 await using var stream = file.OpenReadStream(Limits.UploadBytes, ct);
                 using var buffer = new MemoryStream();
                 await stream.CopyToAsync(buffer, ct);

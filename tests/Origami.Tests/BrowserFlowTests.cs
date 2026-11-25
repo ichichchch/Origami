@@ -125,8 +125,17 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(page.Locator(".notice-success")).ToContainTextAsync("已儲存標籤");
 
         await VisitAsync(page, "/admin/media");
-        await SetFileAndNotifyAsync(page.Locator("#media-upload"),
-            new FilePayload { Name = "journey.png", MimeType = "image/png", Buffer = ImageBytes() });
+        await using (var connection = new NpgsqlConnection(App.ConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+            await using var hold = new NpgsqlCommand("LOCK TABLE \"MediaAssets\" IN SHARE MODE", connection, transaction);
+            await hold.ExecuteNonQueryAsync();
+            await SetFileAndNotifyAsync(page.Locator("#media-upload"),
+                new FilePayload { Name = "journey.png", MimeType = "image/png", Buffer = ImageBytes() });
+            await Expect(page.GetByText("正在上傳：journey.png", new() { Exact = true })).ToBeVisibleAsync();
+            await transaction.RollbackAsync();
+        }
         await Expect(page.Locator("#uploaded-markdown")).ToBeVisibleAsync();
         var imageMarkdown = await page.Locator("#uploaded-markdown").InputValueAsync();
         Assert.Contains("/media/", imageMarkdown);
@@ -192,8 +201,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await visitor.SetViewportSizeAsync(390, 844);
         Assert.True(await visitor.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
         await VisitAsync(visitor, "/posts/first-journey");
-        await Expect(visitor.Locator("article img")).ToBeVisibleAsync();
-        Assert.True(await visitor.Locator("article img").EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0"));
+        await Expect(visitor.Locator("article a.img-lightbox img")).ToBeVisibleAsync();
+        Assert.True(await visitor.Locator("article a.img-lightbox img").EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0"));
         Assert.True(await visitor.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= innerWidth"));
         await SaveScreenshotAsync(visitor, "public-mobile.png");
 
@@ -322,14 +331,14 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         Assert.NotNull(imagePath);
         using var publicClient = site.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await publicClient.GetAsync(imagePath)).StatusCode);
-        var expectedMarkdown = bodyDuringUpload + "\n\n![圖片](" + imagePath + ")\n\n";
+        var expectedMarkdown = bodyDuringUpload + "\n\n![圖片](" + imagePath + ")";
         await choice.ClickAsync();
         await Expect(picker).ToHaveCountAsync(0);
         await Expect(markdown).ToHaveValueAsync(expectedMarkdown);
         await Expect(page.Locator("#content-title")).ToHaveValueAsync(title);
         await page.GetByRole(AriaRole.Button, new() { Name = "預覽", Exact = true }).ClickAsync();
         await Expect(page.Locator(".editor-preview")).ToContainTextAsync("本文不可遺失");
-        await Expect(page.Locator(".editor-preview img")).ToHaveAttributeAsync("src", imagePath);
+        await Expect(page.Locator(".editor-preview a.img-lightbox img")).ToHaveAttributeAsync("src", imagePath);
         await SaveScreenshotAsync(page, "inline-authoring.png");
         await page.GetByRole(AriaRole.Button, new() { Name = "Markdown", Exact = true }).ClickAsync();
         await Expect(markdown).ToHaveValueAsync(expectedMarkdown);
@@ -361,10 +370,10 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
         await Expect(visitor.GetByRole(AriaRole.Heading, new() { Name = title, Exact = true })).ToBeVisibleAsync();
         await Expect(visitor.Locator("article .prose")).ToContainTextAsync("本文不可遺失");
         await Expect(visitor.Locator("article .prose")).ToContainTextAsync("上傳期間繼續寫作。");
-        await Expect(visitor.GetByRole(AriaRole.Link, new() { Name = "編輯器分類", Exact = true })).ToBeVisibleAsync();
-        await Expect(visitor.GetByRole(AriaRole.Link, new() { Name = "# 編輯器標籤", Exact = true })).ToBeVisibleAsync();
-        await Expect(visitor.Locator("article img")).ToHaveAttributeAsync("src", imagePath);
-        Assert.True(await visitor.Locator("article img").EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0"));
+        await Expect(visitor.Locator("article .chip-list").GetByRole(AriaRole.Link, new() { Name = "編輯器分類", Exact = true })).ToBeVisibleAsync();
+        await Expect(visitor.Locator("article .article-tags").GetByRole(AriaRole.Link, new() { Name = "# 編輯器標籤", Exact = true })).ToBeVisibleAsync();
+        await Expect(visitor.Locator("article a.img-lightbox img")).ToHaveAttributeAsync("src", imagePath);
+        Assert.True(await visitor.Locator("article a.img-lightbox img").EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0"));
         Assert.Empty(pageErrors);
     }
 
@@ -648,6 +657,8 @@ public sealed class BrowserFlowTests(IsolatedPostgres postgres) : ServiceTestBas
     /// （與 Media.razor.js 的拖放轉發同一機制），上傳管線因此可被穩定驅動。</summary>
     private static async Task SetFileAndNotifyAsync(ILocator input, FilePayload file)
     {
+        // InputFile 在互動電路啟動前會停用；等它啟用後才注入合成事件。
+        await Expect(input).ToBeEnabledAsync();
         var base64 = Convert.ToBase64String(file.Buffer);
         const string script =
             "(el, payload) => {" +

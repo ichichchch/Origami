@@ -289,6 +289,8 @@
             if (files.Count > Limits.MediaBatchMax)
                 throw new CmsException(string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.BatchLimit", "單次最多上傳 {0} 張圖片，請分批上傳。"), Limits.MediaBatchMax));
             _uploadName = files.Count == 1 ? files[0].Name : string.Format(CultureInfo.CurrentCulture, UiText.T("Admin.Media.FileCount", "{0} 個檔案"), files.Count);
+            // 設定檔名後立即重繪：上傳期間才看得到「正在上傳」，否則得等下一次重繪，而那時上傳往往已結束。
+            StateHasChanged();
             var results = await Api.UploadMediaBatchAsync(files, ct) ?? throw new CmsException(UiText.T("Admin.Media.BatchUploadFailed", "批次上傳失敗，請重新嘗試。"));
             _batchResults = results;
             _uploaded = results.LastOrDefault(x => x.Succeeded)?.Item;
