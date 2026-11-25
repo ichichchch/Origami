@@ -355,26 +355,28 @@ public sealed class TenancyApiTests(IsolatedPostgres postgres) : ServiceTestBase
         using var bff = api.CreateBffClient(token, await App.AdminUserIdAsync(), await App.AdminSecurityStampAsync());
         using var pat = api.CreateCredentialClient(first.Token, SiteDefaults.DefaultSiteId);
 
-        // BFF 服務通行證不受限流：超過 PAT 上限的連續呼叫全部成功。
-        for (var attempt = 0; attempt < 130; attempt++)
-        {
-            using var ok = await bff.GetAsync("/api/v1/admin/access");
-            Assert.True(ok.StatusCode == HttpStatusCode.OK,
-                $"BFF 不應被限流（第 {attempt + 1} 次得到 {ok.StatusCode}）。");
-        }
+        // BFF 服務通行證不受限流：超過 PAT 上限的平行呼叫全部成功。
+        await Parallel.ForEachAsync(Enumerable.Range(1, 130), new ParallelOptions { MaxDegreeOfParallelism = 16 },
+            async (attempt, ct) =>
+            {
+                using var ok = await bff.GetAsync("/api/v1/admin/access", ct);
+                Assert.True(ok.StatusCode == HttpStatusCode.OK,
+                    $"BFF 不應被限流（第 {attempt} 次得到 {ok.StatusCode}）。");
+            });
 
-        // PAT 以憑證為單位限流（120/分）；限額用盡後收到 429。
+        // PAT 以憑證為單位限流（120/分）；平行提交避免循序資料庫查詢跨過固定視窗。
         var accepted = 0;
         var rejected = 0;
-        for (var attempt = 0; attempt < 130; attempt++)
-        {
-            using var response = await pat.GetAsync("/api/v1/admin/contents?kind=Post");
-            if (response.StatusCode == HttpStatusCode.OK) accepted++;
-            else if (response.StatusCode == HttpStatusCode.TooManyRequests) rejected++;
-            else Assert.Fail("PAT 收到非預期狀態碼：" + response.StatusCode);
-        }
-        Assert.True(rejected > 0, "PAT 必須在限額用盡後收到 429。");
-        Assert.True(accepted <= 120, $"PAT 限額應為 120/分，實際通過 {accepted} 次。");
+        await Parallel.ForEachAsync(Enumerable.Range(0, 130), new ParallelOptions { MaxDegreeOfParallelism = 16 },
+            async (_, ct) =>
+            {
+                using var response = await pat.GetAsync("/api/v1/admin/contents?kind=Post", ct);
+                if (response.StatusCode == HttpStatusCode.OK) Interlocked.Increment(ref accepted);
+                else if (response.StatusCode == HttpStatusCode.TooManyRequests) Interlocked.Increment(ref rejected);
+                else throw new InvalidOperationException("PAT 收到非預期狀態碼：" + response.StatusCode);
+            });
+        Assert.Equal(10, rejected);
+        Assert.Equal(120, accepted);
 
         // 限流以憑證為分區：另一張憑證不受第一張超額的影響。
         using var otherPat = api.CreateCredentialClient(second.Token, SiteDefaults.DefaultSiteId);
